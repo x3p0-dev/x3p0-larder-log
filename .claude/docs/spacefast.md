@@ -391,3 +391,260 @@ a legal capsule — useful for staging a port.
 
 `AGENTS.md` refers to `sf create my-form --runtime zero --template contact`.
 The command is `sf init`; there is no `sf create`.
+
+## 2026-08-24 — Planning the first publish (`--dry-run` findings)
+
+Everything below came from `sf publish --dry-run` before anything was uploaded.
+Nothing has been published yet. The dry run earned its keep three times over.
+
+### 👎 Framework detection silently beats the `runtime` block
+
+`sf publish --dry-run` at the project root plans this:
+
+```
+Framework       vite
+Install         npm ci
+Build           vite build
+Output          dist
+```
+
+That is the **wrong artifact entirely**. `sf.jsonc` declares
+`runtime: { kind: "zero", server: …, client: … }`, and `sf dev` honours it — but
+publish framework-detects Vite and plans to build and deploy the static
+prototype instead of compiling the capsule. No warning, no mention of the
+capsule anywhere in the plan; a `--dry-run`-less publish would have gone live
+with the wrong app and a capsule that was never compiled.
+
+The detection is **`package.json`-driven, not file-driven**. Deleting
+`vite.config.js` and `index.html` changed nothing; removing `package.json`
+switched it to the capsule build immediately. So any Zero project that keeps
+Vite in `devDependencies` — a port in progress, a monorepo, a docs site
+alongside the app — is exposed to this.
+
+**What we'd suggest:** an explicit `runtime` block should win over framework
+detection, or at minimum the plan should say
+`Framework vite (overriding runtime.kind=zero)` so the conflict is visible.
+
+### 👎 Direct publish ignores `.gitignore` and ships the whole directory
+
+With `--prebuilt` (which *does* find the capsule), the plan was **149 files,
+3.5 MB**. The capsule sources (`client/`, `server/`, `shared/`) are consumed by
+the compiler and correctly not served. Everything else in the directory ships as
+public static files:
+
+- `.ideas/` — 82 files of abandoned prototype code, **gitignored**
+- `.idea/` — PhpStorm config including `workspace.xml`, **gitignored**
+- `.claude/docs/` — including this feedback file
+- `CLAUDE.md`, `docs/*` — every internal design document
+- `src/`, `dist/`, `package-lock.json`, `tsconfig.json`, `vite.config.js`
+
+The walker uses a fixed ignore list (`.git`, `node_modules`, `.ssh`, `.aws`,
+`.cache`, a few tool dirs) plus sensitive-filename patterns. Credentials are
+genuinely well covered — `.env*`, `*.pem`, `*.key`, `id_rsa*` are all pattern-
+blocked, and that is good, careful work. But `.gitignore` is never read on this
+path, even though the CLI reads it elsewhere (`SOURCE_ARCHIVE_EXCLUDED_*` for
+remote builds is a different, stricter code path).
+
+The asymmetry is the problem: `--remote` respects one exclusion policy, direct
+publish another, and the looser one is the default. "It's gitignored" is the
+assumption every developer will make.
+
+**What we'd suggest:** honour `.gitignore` by default on the direct path too, or
+support a `.spacefastignore`. `.vercelignore` / `.nowignore` / `.assetsignore`
+already appear as strings in the CLI bundle; none is documented for Zero.
+
+### 😕 The capsule compile needs `node_modules`, but treats the deps as platform
+
+Publishing a staged directory without `node_modules` fails with
+`Could not resolve "lucide-preact"` (10 errors). Fair enough — except that
+`lucide-preact` is then emitted as
+`_spacefast/platform/<hash>/lucide.js`, i.e. the compiler treats it as a
+*platform* module in the output while requiring it to be *locally installed* at
+build time. Worth documenting which is which; `AGENTS.md` says platform modules
+don't count against the bundle budget but doesn't say they must still resolve.
+
+Also emitted: `recharts.js` (928 KB) and `zero-charts.js`, even though nothing
+in this app imports `@spacefast/zero/charts` or `/kit`. `AGENTS.md` says
+platform modules "aren't in your bundle at all: they're served from the
+platform's own immutable URLs" and "anything you don't import is never
+fetched" — the *fetched* part is presumably still true, but they are plainly
+uploaded per-space rather than served from a shared platform URL. 1.1 MB of our
+1.77 MB plan is charts and icons this app never references. Harmless, since
+they're outside the bundle cap and a browser won't request them, but "aren't in
+your bundle at all" reads as stronger than what the publish plan shows.
+
+### 😕 `statePath` resolves outside the project
+
+The JSON plan reports where publish state — including the anonymous space's
+claim key — will be written. From the project root it chose:
+
+```
+/Applications/XAMPP/xamppfiles/htdocs/wp/wp-content/plugins/.spacefast/state.json
+```
+
+The **parent** directory, not the project, despite `./.spacefast/` already
+existing (from `sf dev`). From a staged directory it correctly chose
+`<stage>/.spacefast/state.json`. Whatever the walk-up rule is, it put the claim
+key for our space one level above the repo, in a directory belonging to
+something else entirely. For an anonymous space the claim key *is* the space —
+lose it and it's orphaned — so where it lands should be predictable and inside
+the project.
+
+### 👍 A staged publish produces exactly what it should
+
+Copying `client/`, `server/`, `shared/`, `sf.jsonc`, `theme.json` into a clean
+directory (no `package.json`, `node_modules` symlinked in) gives a 19-file plan:
+
+```
+client.js        98,982      zero.css          40,274
+index.html        1,889      (generated app shell — the capsule's, not ours)
+_spacefast/platform/…        recharts, lucide, preact, zero-client, zero-kit
+sf.jsonc, theme.json         (config, served as-is)
+```
+
+Total 1.77 MB, well under the 8 MiB client cap. Nothing from the repo leaks.
+`--dry-run --json` giving a full per-file manifest with sizes and SHA-256s is
+excellent — it is the only reason any of the above was caught before upload.
+
+## 2026-08-24 — First `sf publish`: the CLI dies at finalize
+
+The first real publish. Anonymous space, publishing the staged directory
+described above. It got most of the way and then broke, and the failure mode is
+bad enough to be the headline of this whole log.
+
+### 🐞 `sf publish` exits mid-finalize with an unsettled top-level await
+
+```
+✓ Creating space    stage (spc_dc67347c82b9485f8c9608b72b201aaf)
+✓ Creating version  ver_2a43c5fdf29747aa96c30a22748dcf0a
+✓ Uploading files   19 files
+⠋ Finalizing version
+Finalize request is still running; polling version status...
+Warning: Detected unsettled top-level await at
+file:///…/node_modules/spacefast/dist/cli.js:6
+await import("./cli-main.js");
+```
+
+The process then exits. Non-zero work completed — space created, version
+created, all 19 files uploaded — but the version was never activated, and
+`https://stage.view.fast/` serves `503 This space hasn't been published yet.`
+
+This is not a network blip: it reproduces. The moment the CLI has to *poll*
+for something, the awaited promise never settles and Node exits with the event
+loop empty. Adding `--wait --wait-timeout 420` makes no difference — the exit
+happens during finalize, before any wait logic.
+
+Running `sf publish` again to recover hits the same bug one step earlier:
+
+```
+✓ Updating space  stage (spc_dc67347c82b9485f8c9608b72b201aaf)
+Waiting for the previous publish of stage to settle before creating a version...
+Warning: Detected unsettled top-level await at …
+```
+
+So the first stuck finalize now blocks every subsequent publish, and the command
+that reports the block dies the same way. Environment: `spacefast/0.0.26`,
+`darwin-arm64`, `node-v24.14.1`.
+
+### 🐞 An anonymous space cannot be diagnosed at all
+
+With the version stuck, the obvious next move is to look at it. Every route is
+closed:
+
+```
+$ sf versions ls
+Claim this space into a managed principal before using this endpoint.
+Your account doesn't have access to this resource.
+Learn more: https://spacefast.com/docs/errors/space_unclaimed
+```
+
+`sf versions`, `sf rollback`, `sf runtime status`, `sf logs` — all of them
+require a claimed space. The anonymous flow is presented as the low-friction way
+to try the platform, and it is, right up until something goes wrong; then there
+is no `ls`, no status, no log, and no way to cancel a stuck version. The only
+tool an anonymous publisher has is `sf publish` again, which is exactly the
+command that is jammed.
+
+The error message is also slightly wrong about the remedy: it suggests
+`sf teams ls`, which has the same problem.
+
+**What we'd suggest:** let the claim token authorize read-only inspection of its
+own space — `versions ls` and `runtime status` at minimum. An anonymous space
+you cannot observe is worse than no anonymous space, because it fails silently
+and looks like your app is broken.
+
+### 😕 The space slug comes from the directory name
+
+We published a staged copy from a scratch directory, so the space is named
+`stage` and lives at `stage.view.fast`. `sf.jsonc` says `"name": "Larder Log"`
+and the compiled artifact says `"appName": "larder-log"`; neither was consulted.
+Minor, and `--slug` / `-n` would have avoided it — but the config file that
+names the app is right there.
+
+### 😕 Anonymous claim tokens expire the same day
+
+`state.json` records `expiresAt` about six hours out:
+
+```json
+{ "spaceId": "spc_…", "claimToken": "sfc_…", "expiresAt": "2026-08-24T22:40:47Z" }
+```
+
+Reasonable in principle. Worth knowing that it is hours, not days — and worth
+printing in the publish output, because right now it is only discoverable by
+reading `.spacefast/state.json`. Combined with the finalize bug, the clock is
+running on a space that has never served a request.
+
+### 🐞 The finalize bug is not a Node version artifact
+
+Worth ruling out, since Node 24 is newer than the CLI's `engines: ">=20.3"`.
+Ran the same publish under Node 20.18.3 and 22.22.0 (both via the CLI's own
+`dist/cli.js`, same `spacefast/0.0.26`):
+
+- **Node 24.14.1** — prints `Detected unsettled top-level await` and exits.
+- **Node 20.18.3** — no warning at all. Exits silently at exactly the same
+  point, after `Waiting for the previous publish of stage to settle…`.
+
+So Node 24 is only *diagnosing* the bug; the awaited promise never settles on
+any version. On Node 20 a stuck publish looks like a command that succeeded and
+returned, which is worse.
+
+### 🐞 A stuck publish deadlocks the claim flow
+
+The state we're now in:
+
+- The space has a version created and 19 files uploaded, never activated.
+- The site serves `503 This space hasn't been published yet.`
+- Clicking **Claim** at the claim URL answers:
+  *"Finish or cancel the active publish before claiming this space."*
+- Every CLI route to finish or cancel it requires a claimed space.
+
+That is a closed loop: **claim requires finishing the publish; finishing the
+publish requires the CLI command that crashes; diagnosing it requires the claim.**
+
+`sf api` doesn't break it either — the raw passthrough is authenticated by the
+same principal, so the space key gets the same 403:
+
+```
+$ sf api GET /v1/spaces/spc_…/versions --include
+HTTP 403 Forbidden
+{"type":"…/errors/space_unclaimed","title":"Space unclaimed",
+ "detail":"Claim this space into a managed principal before using this endpoint."}
+```
+
+Meanwhile `sf status` — which *does* work unauthenticated — cheerfully reports
+`Claim: pending (expires 2026-08-24T22:40:47.735Z)` without mentioning that
+there is an active publish blocking that claim, which is the one fact that
+matters.
+
+**What we'd suggest, in priority order:**
+
+1. Fix the poll so `sf publish` cannot exit with an unsettled await.
+2. Give the space key read access to its own space's versions and status. An
+   anonymous space is not a security boundary against its own key holder.
+3. Add `sf publish --cancel` (or let a stuck publish time out server-side) so a
+   crashed CLI is recoverable without an account.
+4. Have `sf status` report an active publish, since that is what blocks claiming.
+
+For a platform whose anonymous flow is explicitly pitched at agents, this is the
+worst possible failure: the happy path is genuinely excellent, and the first
+unhappy step leaves an agent with no move that isn't "ask a human to log in".
