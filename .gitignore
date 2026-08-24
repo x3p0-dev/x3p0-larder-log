@@ -1,0 +1,25 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+
+# Secrets. `.env.server` is Spacefast Zero's server-only variable file and is
+# synced on publish -- it must never be committed.
+.env
+.env.*
+!.env.example
+
+# Spacefast local space state. Holds the space id and claim key, which is a
+# bearer credential.
+/.spacefast
+
+# Editors
+/.idea
+.DS_Store
+
+# Abandoned WordPress prototyping. Kept on disk for reference only.
+/.ideas
+
+# Local Claude Code skills
+/.claude/skills/x3p0-*

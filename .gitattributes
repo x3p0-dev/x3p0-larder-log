@@ -1,0 +1,27 @@
+###
+## Git Attributes configuration file.
+##
+## @link https://git-scm.com/docs/gitattributes
+###
+
+## -----------------------------------------------------------------------------
+## Normalize line endings on checkin.
+## @link https://help.github.com/articles/dealing-with-line-endings/
+## -----------------------------------------------------------------------------
+
+* text=auto
+
+## -----------------------------------------------------------------------------
+## Denote all files that are truly binary and should not be modified.
+## -----------------------------------------------------------------------------
+
+*.gif   binary
+*.ico   binary
+*.jpg   binary
+*.png   binary
+*.webp  binary
+*.eot   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.zip   binary
