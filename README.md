@@ -11,7 +11,7 @@ typed server capsule, database and Gravatar sign-in included.
 
 **Phase 2 — real data layer, done.** A Preact + TypeScript client in `client/`,
 pure domain logic in `shared/`, and a server capsule in `server/` holding the
-full schema, two live queries, and fifteen mutations. Data lives in the
+full schema, two live queries, and sixteen mutations. Data lives in the
 database; the only thing still in `localStorage` is the per-device theme
 override, which belongs there.
 

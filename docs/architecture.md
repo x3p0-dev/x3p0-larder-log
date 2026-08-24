@@ -25,7 +25,7 @@ larder-log/
       useSystemTheme.ts
     lib/               # theme derivation, icon components, taxonomy action shape
   server/
-    index.ts           # capsule(): 2 queries, 15 mutations
+    index.ts           # capsule(): 2 queries, 16 mutations
     schema.ts          # the tables, plus ReadDb / WriteDb derived from them
     auth.ts            # membershipState / requireMembership / requireCapability
   shared/              # imports NOTHING — see below

@@ -23,7 +23,7 @@ WordPress, say so rather than building it.
 **Phase 2 is done. Phase 3 is next.** A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`docs/data-model.md`, two live queries, and fifteen mutations.
+`docs/data-model.md`, two live queries, and sixteen mutations.
 
 Data lives in the database. The **only** remaining `localStorage` call site is
 the per-device theme override, and that is correct there (D25) — a dark-mode

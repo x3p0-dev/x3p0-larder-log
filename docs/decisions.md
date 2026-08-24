@@ -197,8 +197,14 @@ milestone the roadmap calls risky — has one less thing to change, and the
 "never sort by these in the database" rule already has a working client-side
 implementation to point at.
 
-**Consequence:** the localStorage key is `larder.v3.*`; v2 data from the Vite
-prototype is not read.
+**Consequence at the time:** the localStorage key was `larder.v3.*`; v2 data from
+the Vite prototype was not read.
+
+**Superseded by Phase 2.** Quantities live in the database now, and the only
+localStorage key left is `larder.v4.<userId>.theme` — the per-device theme
+override ([D25](#d25-no-preferences-table)). The version bump to v4 abandons
+every v3 key rather than migrating them; the data they held is in the database
+or was never real.
 
 ---
 
