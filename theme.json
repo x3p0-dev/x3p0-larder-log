@@ -1,0 +1,39 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/theme.json",
+	"version": 3,
+	"settings": {
+		"color": {
+			"palette": [
+				{ "slug": "canvas", "name": "Page", "color": "#F5F2EA" },
+				{ "slug": "surface", "name": "Surface", "color": "#FFFFFF" },
+				{ "slug": "surface-alt", "name": "Surface alt", "color": "#FAF8F2" },
+				{ "slug": "line", "name": "Border", "color": "#DED6C3" },
+				{ "slug": "ink", "name": "Text", "color": "#20241E" },
+				{ "slug": "ink-muted", "name": "Muted text", "color": "#8A8265" },
+				{ "slug": "accent", "name": "Accent", "color": "#3C4A32" },
+				{ "slug": "success", "name": "In stock", "color": "#3C6B3C" },
+				{ "slug": "warning", "name": "Low", "color": "#96631A" },
+				{ "slug": "danger", "name": "Out", "color": "#8C2F2F" }
+			]
+		},
+		"typography": {
+			"fontFamilies": [
+				{
+					"slug": "disp",
+					"name": "Display",
+					"fontFamily": "Fraunces, ui-serif, Georgia, serif"
+				},
+				{
+					"slug": "sans",
+					"name": "Body",
+					"fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif"
+				},
+				{
+					"slug": "mono",
+					"name": "Mono",
+					"fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, monospace"
+				}
+			]
+		}
+	}
+}

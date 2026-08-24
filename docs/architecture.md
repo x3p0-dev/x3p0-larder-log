@@ -16,18 +16,30 @@ updates** — with no infrastructure to run.
 ```
 larder-log/
   client/
-    index.tsx          # exports App; the Preact UI
+    index.tsx          # exports App: the sign-in gate and nothing else
+    Pantry.tsx         # the signed-in application
     components/        # ported from the Vite prototype
-    lib/               # theme tokens, status derivation, icon maps
+    hooks/             # usePersistentState, useSystemTheme
+    lib/               # theme derivation, icon maps, taxonomy CRUD, row ids
+    data/seed.ts       # first-run sample data
   server/
-    index.ts           # default-exports capsule(): schema + handlers
-  shared/              # types used by both sides
+    index.ts           # default-exports capsule(); schema empty until Phase 2
+  shared/
+    types.ts           # Item, Term, Settings — the domain vocabulary
+    qty.ts             # the string <-> integer boundary (D4)
+    status.ts          # out / low / ok derivation (D9)
+  src/                 # the React/Vite prototype; deleted in Phase 2
   docs/                # these documents
-  .claude/docs/        # mockup + platform feedback log
+  .claude/docs/        # mockup, platform feedback log, Zero's own AGENTS.md
   sf.jsonc             # runtime config
-  theme.json           # palette/typography the Tailwind utilities compile against
-  .env.server          # server-only secrets, synced on publish
+  theme.json           # WordPress theme.json v3 — see Styling
+  tsconfig.json        # strict; `npm run typecheck` is the main verification
+  .env.server          # server-only secrets, synced on publish (none yet)
 ```
+
+`shared/` is the important one. It imports nothing — not Preact, not the Zero
+runtime — so the capsule can use the same `normalizeQty` the form uses instead
+of a second copy of the rule that drifts from it.
 
 `sf.jsonc` must name both entries or the publish fails:
 
@@ -60,6 +72,13 @@ useMutation("addItem") ────►    mutation(ctx, args)      ────�
 `useQuery()` subscribes. Any mutation that touches the underlying rows
 re-renders every open tab — which is exactly the two-people-editing-at-once
 requirement, for free.
+
+**Queries take arguments.** Every `query()` example in the public docs takes
+only `ctx`, which made this look impossible and shaped an early design detour.
+The type declarations settle it: `useQuery(name, ...args)` is supported, as is
+`usePaginatedQuery(name, argsRecord)`. Household switching can therefore take a
+household id as a parameter rather than needing server-side "active household"
+state.
 
 **All validation lives on the server.** The client never writes rows directly.
 Every mutation trims, clamps, and authorizes before it touches `ctx.db`.
@@ -120,24 +139,58 @@ These are hard limits of the runtime, not preferences:
 
 Tailwind utility classes go directly in JSX on the `class` attribute — nothing
 to install or configure. Zero compiles every class used in `client/`, `server/`,
-and `shared/`, light and dark variants included.
+and `shared/`, light and dark variants included. Arbitrary values and responsive
+variants both work: `md:grid-cols-[190px_1fr]` and `tracking-[0.02em]` compile.
 
-We keep the prototype's hand-rolled theme tokens (the "ink → tint/ring"
-derivation in `lib/theme.js`) rather than adopting `@spacefast/zero/kit`
-wholesale, because that color system *is* the app's visual identity. The kit and
-`@spacefast/zero/charts` remain available for anything generic.
+**Class names must be static strings.** Zero finds classes by *scanning source
+text*, so a computed `bg-${tone}-500` produces no CSS and the app ships
+unstyled. Branch to whole literals instead. `theme.json`'s `settings.safelist`
+is the escape hatch for classes only ever assembled at runtime.
+
+That rule is why [D7](decisions.md#d7-keep-the-prototypes-theme-system-dont-adopt-the-kit-wholesale)
+survived the port intact rather than becoming a problem: **a user-picked hex can
+never be a utility class here.** The prototype already derived its colors into
+inline `style` objects, so every location, type, store, and status still gets
+its palette from one stored `ink` value with nothing to compile.
+
+`theme.json` is **WordPress theme.json v3** — undocumented publicly; we
+recovered the shape from `@spacefast/zero-compile`. Palette entries become
+color tokens, `fontFamilies` become font tokens, each reading the runtime custom
+property with the literal as a fallback:
+
+```
+--font-disp: var(--wp--preset--font-family--disp, Fraunces, ui-serif, Georgia, serif);
+```
+
+Its `fontFace` block is **ignored**, so there is currently no way to ship a
+webfont — see [notes](notes.md). Note also that Zero's semantic palette uses
+`ink` for body text, which collides with this app's older use of "ink" to mean a
+term's base hex. Ours are inline styles, so nothing actually conflicts.
+
+The kit and `@spacefast/zero/charts` remain available for anything generic.
+Icons come from `lucide-preact` directly rather than the kit's `Icon`
+([D11](decisions.md#d11-lucide-preact-directly-not-the-kits-icon)).
 
 ## Porting from the Vite prototype
 
-The current React 19 + Vite app in `src/` is a UI prototype built from
-`.claude/docs/pantry-tracker-mockup.jsx`. It gets ported into `client/` and then
-retired. Mechanical differences:
+Done as of Phase 1. The React 19 + Vite app in `src/` is still on disk and still
+runs (`npm run prototype`); it gets deleted in Phase 2. What changed:
 
 - `className` → `class`
 - `useState` etc. from `preact/hooks`
-- `onChange` on text inputs → `onInput`
-- `lucide-react` → `Icon` from `@spacefast/zero/kit` (same Lucide set)
-- `usePersistentState` (localStorage) → `useQuery` / `useMutation`
-- Item `open` state stays client-side; it is UI state, not data
+- `onChange` on text inputs → `onInput`; `e.target` → `e.currentTarget`
+- `lucide-react` → `lucide-preact` (same icon names, Preact build)
+- `.disp` / `.mono` CSS classes → `font-disp` / `font-mono` from `theme.json`
+- JS → TypeScript, with the domain types in `shared/`
+  ([D10](decisions.md#d10-typescript-for-the-port-with-the-domain-types-in-shared))
+- `qty` / `threshold` → decimal strings, parsed at the edges
+  ([D12](decisions.md#d12-quantities-become-strings-in-phase-1-not-phase-2))
+- Item `open` → a single `openId` in component state
+  ([D13](decisions.md#d13-accordion-state-is-not-part-of-an-item))
 
-The component tree, theme system, and status derivation carry over intact.
+Still to change in Phase 2:
+
+- `usePersistentState` (localStorage) → `useQuery` / `useMutation`
+- Taxonomy references by **name** → by **id**, which is the bulk of the work
+
+The component tree, theme system, and status derivation carried over intact.

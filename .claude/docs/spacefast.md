@@ -166,3 +166,228 @@ Things we'll have opinions about once we actually build:
   alongside a custom color system
 - Rollback behavior when code and schema disagree
 - Backups (`sf db export`) and whether restore is a real path
+
+---
+
+## 2026-08-24 — Phase 1: CLI, scaffold, and the first `sf dev`
+
+Context: installing the toolchain, scaffolding the Zero project into the
+existing repo, porting the React prototype to Preact, and running the capsule
+locally for the first time. CLI version `spacefast/0.0.26`, Node v24.14.1,
+darwin-arm64.
+
+### 👍 The CLI is on npm, so it can be a pinned devDependency
+
+`setup.md` advertises exactly one install path:
+`curl -fsSL https://spacefast.com/install.sh | bash`. But the CLI is also
+published as the plain `spacefast` package, which exposes both `spacefast` and
+`sf` bins:
+
+```bash
+npm install --save-dev spacefast@0.0.26   # provides `sf`
+```
+
+That is strictly better for a project: the version is pinned in
+`package-lock.json`, every clone gets the same CLI, and nothing pipes a remote
+script into a shell. **Worth advertising in the docs** — the curl installer is
+right for a laptop, but a repo wants the dependency.
+
+### 👎 `sf --help` hides the four commands the Zero docs use most
+
+The top-level command list shows only `publish`, `status`, `versions`,
+`rollback`, `spaces claim`, `login`, `init`, `docs`. Missing: **`dev`, `db`,
+`logs`, `storage`** — which are the commands `/docs/zero` tells you to run.
+
+They all exist and work (`sf dev --help`, `sf db --help`, …), and `sf db`'s own
+help lists its `console` / `dump` / `export` / `migrate` subcommands. But an
+agent that reads `sf --help` to discover the surface concludes `sf dev` isn't a
+thing. `sf docs "theme.json"` also returns "No essential docs match".
+
+### 👍 `sf init --runtime zero` writes an excellent `AGENTS.md`
+
+The scaffold drops a ~113-line `AGENTS.md` that is **denser and more useful
+than `/docs/zero.md`**, and documents constraints that appear nowhere public:
+
+- "Class names must be static strings… a computed class like `bg-${tone}-500`
+  produces no CSS and the capsule ships unstyled."
+- The semantic token vocabulary (`canvas`, `surface`, `ink`, `ink-muted`,
+  `line`, `accent`, `success`, `warning`, `danger`) and the shadcn aliases.
+- "Server code imports `@spacefast/zero/server` and its own files, nothing
+  else" — npm packages bundle on the client only.
+- "Outbound `fetch` works only inside actions."
+- Platform modules (kit, charts, preact, recharts, lucide) are served from
+  immutable platform URLs and **don't count against the 8 MB client budget**.
+
+Copied to `.claude/docs/zero-agent-rules.md`. **Suggestion: publish this page.**
+It is the best single document about the runtime and it is currently only
+discoverable by scaffolding a throwaway project.
+
+### ✅ Resolved: queries *can* take arguments
+
+Open question #1 from the first session is answered, though not by the docs —
+by the type declarations in `@spacefast/zero/dist/public-client.d.ts`:
+
+> Reads a query. The canonical form takes the query-options object the typed
+> client builds — `useQuery(api.messages({ topic }))`; the Lakebed string form
+> `useQuery("messages", topic)` stays supported and means the same thing.
+
+So `useQuery(name, ...args)` is real, and `usePaginatedQuery(name, args, …)`
+takes an args record outright. Every `query()` example in `/docs/zero.md` takes
+only `ctx`, which is what made this look impossible. **One example with an
+argument would have saved a design detour** — we architected around the
+possibility that queries were argument-less.
+
+### ❓ `theme.json` is WordPress theme.json v3, and that is documented nowhere
+
+This is a genuinely nice decision that no one can find. `/docs/zero.md` says
+only "A `theme.json` at the project root adjusts the palette and typography the
+utilities compile against." It does not say what shape the file takes, and:
+
+- `https://spacefast.com/schemas/theme.json` → **404**
+- `https://spacefast.com/docs/zero/theme.md` → **404**
+- `sf docs theme --all` → one error-code page
+
+We recovered the format by reading
+`node_modules/@spacefast/zero-compile/dist/tailwind-core.js`, whose comment
+says "`theme.json` v3 settings for the utility compile: palette entries become
+`colors`, font families `fontFamilies`, font sizes `fontSizes`, and literal
+safelist entries cover classes assembled only at runtime."
+
+The working shape:
+
+```json
+{
+  "version": 3,
+  "settings": {
+    "color": { "palette": [{ "slug": "canvas", "color": "#F5F2EA" }] },
+    "typography": {
+      "fontFamilies": [{ "slug": "disp", "fontFamily": "Fraunces, ui-serif, serif" }],
+      "fontSizes":    [{ "slug": "step-1", "size": "1.25rem" }]
+    },
+    "safelist": ["bg-danger", "bg-success"]
+  }
+}
+```
+
+Each preset becomes a Tailwind token that reads the runtime custom property
+first and falls back to the literal: `--font-disp: var(--wp--preset--font-family--disp, Fraunces, …)`.
+Confirmed working — `font-disp`, `font-mono`, and every color slug compiled.
+
+**Two asks:** publish the schema at the advertised URL, and mention the
+`settings.safelist` escape hatch in the Zero docs. It is the documented answer
+to the static-class-names rule and it is invisible.
+
+### 🐛 `fontFace` in `theme.json` is silently ignored — no webfont path
+
+WordPress theme.json v3 supports `settings.typography.fontFamilies[].fontFace`
+with a `src`, which is how you'd expect to load Fraunces and IBM Plex Mono. The
+Zero compile reads only `slug` and `fontFamily` and drops everything else:
+
+- No `@font-face` rule appears in `zero.css`.
+- `/__spacefast_generated/theme.css` — the stylesheet `style.d.ts` says the
+  runtime emits from `theme.json` — **404s on `sf dev`** (it falls through to
+  the SPA shell), and the generated `index.html` never links it.
+
+So on the local dev server there is **no way to load a webfont at all**: no
+`index.html` to add a `<link>` to, no CSS file to `@import` from, `@plugin` and
+`@config` rejected, and `fontFace` ignored. A font that isn't installed on the
+machine simply falls back.
+
+Our prototype's identity is Fraunces + IBM Plex Mono, so this is a real loss.
+We've kept the families declared with full fallback stacks and accepted the
+fallback for now. **This is the biggest concrete gap we've hit.** Either honor
+`fontFace`, or document the intended way to ship a webfont.
+
+### ❓ The `ink` semantic token collides with our domain vocabulary
+
+Zero's palette uses `ink` for body text (`text-ink`, `text-ink-muted`). This app
+has used "ink" since the prototype to mean *a taxonomy term's base hex*, the
+color every tint and ring derives from. Not Spacefast's fault, and it cost us
+nothing — our colors are inline styles, never classes — but it is worth knowing
+that `ink` is a reserved-ish name.
+
+### 👍 The static-class-names rule did not bite, and here's why that matters
+
+Our entire visual system derives per-term colors from a user-picked hex. Had
+those been Tailwind classes, `bg-${hex}` would have compiled to nothing and the
+app would have shipped unstyled — exactly the failure `AGENTS.md` warns about.
+They were already inline `style` objects, so the port was unaffected.
+
+The general lesson for the docs: **user-chosen colors can never be utility
+classes on this platform.** That deserves to be stated positively ("compute
+colors into inline styles") rather than only as a warning about what breaks.
+
+### 👎 `sf dev` has no sign-in: `signInPath` and `signInUrl` are both null
+
+`GET /__spacefast/zero/config` on the local dev server returns:
+
+```json
+{ "auth": { "provider": "gravatar", "signInPath": null, "signInUrl": null,
+            "signOutPath": null, "signOutUrl": null } }
+```
+
+The docs say "`sf dev` supplies a local guest identity, so authorization logic
+works the same locally and hosted." That is true for *authorization* — a guest
+has a stable `userId` a handler can scope rows to. It is not true for
+*authentication*: there is no local sign-in flow, so `auth.isGuest` is
+permanently `true` and `<SignInWithGoogle />` has nowhere to go.
+
+For an app that requires sign-in (our D2), that means **the entire signed-in
+surface is unreachable on `sf dev`**. Ours is a two-person household app whose
+whole point is a shared, authenticated household, and we cannot exercise any of
+it locally.
+
+**What we'd suggest:** a `sf dev --sign-in-as <name>` flag, or a dev-only stub
+sign-in page that mints an authenticated identity. Without one, every
+sign-in-gated Zero app has to build its own local bypass, and each one is a
+hand-rolled hole in its own auth gate.
+
+We then did exactly that, which is the point: `client/index.tsx` now lets a
+guest through when `location.hostname` is a loopback address, with a permanent
+on-screen badge so a local session can't be mistaken for a real one
+([D14](../../docs/decisions.md)). It works, and it is inert on a published
+space — but it is a hole in the only auth boundary the app has, written by hand,
+because the platform gave us no other way to see our own UI. That is a bad thing
+to make every developer of a gated app invent for themselves.
+
+Concretely: **`sf dev --sign-in-as "Justin"` would have replaced a security
+decision with a flag.**
+
+### 👎 The dev server's capability handshake needs an `Origin` header
+
+`sf dev` prints a private URL with a `#zero-dev-capability=<token>` fragment.
+Every path except `/` returns `401 {"error":"unauthorized"}` until the browser
+POSTs that token to `/__spacefast/zero/bootstrap`, which sets an `HttpOnly`
+`spacefast_zero_dev_<port>` cookie.
+
+Good design — but the bootstrap POST returns **403** unless an `Origin` header
+is present (CSRF protection, reasonably). That combination makes the dev server
+awkward to inspect from a script or a headless check:
+
+```bash
+CAP=...   # from the sf dev banner
+curl -X POST -H "authorization: Bearer $CAP" -H "origin: http://127.0.0.1:4173" \
+  http://127.0.0.1:4173/__spacefast/zero/bootstrap   # 204 + Set-Cookie
+curl -b "spacefast_zero_dev_4173=$CAP" http://127.0.0.1:4173/zero.css
+```
+
+Nothing here is wrong, but none of it is documented, and the 403 is opaque —
+it says `forbidden` with no hint that the missing `Origin` is the reason. A
+`--no-capability` flag for loopback-only dev would help CI and agents a lot.
+
+### 👍 The compile itself is fast and correct
+
+Everything we threw at it worked on the first run: 27 TypeScript files across
+`client/`, `server/`, and `shared/`; a 92 KB `client.js`; a 40 KB `zero.css`.
+Arbitrary-value utilities compiled correctly, including responsive variants and
+underscore-encoded spaces (`md:grid-cols-[190px_1fr]`, `max-h-[80vh]`,
+`tracking-[0.02em]`). Editing `theme.json` triggered "Reloaded Zero dev runtime
+after 1 file change(s)" within a second.
+
+`capsule({ schema: {} })` is accepted, so a scaffold phase with no tables yet is
+a legal capsule — useful for staging a port.
+
+### 👍 The docs inconsistency worth one line
+
+`AGENTS.md` refers to `sf create my-form --runtime zero --template contact`.
+The command is `sf init`; there is no `sf create`.

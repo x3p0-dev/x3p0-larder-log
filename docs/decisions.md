@@ -128,3 +128,114 @@ reference.
 
 **Why:** a stored status is a second source of truth that drifts the moment
 someone edits a threshold. The computation is trivial.
+
+---
+
+## D10. TypeScript for the port, with the domain types in `shared/`
+
+**Decided:** 2026-08-24
+
+The prototype is plain JS/JSX. The port to `client/` is TypeScript, and the
+domain vocabulary (`Item`, `Term`, `Settings`) plus the pure helpers (`toInt`,
+`statusKeyFor`) live in `shared/`, which both the client and the capsule import.
+
+**Why:** this codebase encodes numbers as strings and joins taxonomies by name,
+which are exactly the mistakes a type checker catches and a reviewer doesn't.
+`shared/` is also where the server's validation has to live in Phase 2 — a
+mutation that clamps `qty` should call the same `normalizeQty` the form does,
+not a second copy of the rule.
+
+`npm run typecheck` (`tsc --noEmit`) is now the cheapest real verification this
+project has, since there is no test runner.
+
+**Rejected:** porting as plain `.jsx`. It would have been a faster afternoon and
+a worse Phase 2.
+
+---
+
+## D11. `lucide-preact` directly, not the kit's `Icon`
+
+**Decided:** 2026-08-24
+
+[Architecture](architecture.md) originally said icons would come from `Icon` in
+`@spacefast/zero/kit`. They come from `lucide-preact` instead.
+
+**Why:** the prototype imports named icon components and passes `size`, and
+`lucide-preact` is already a dependency of `@spacefast/zero`, so it costs
+nothing. Platform modules — kit, charts, preact, lucide — are served from
+Spacefast's immutable URLs and don't count against the 8 MB client budget, so
+there is no bundle argument either way. Named imports kept the port mechanical.
+
+---
+
+## D12. Quantities become strings in Phase 1, not Phase 2
+
+**Decided:** 2026-08-24
+
+[D4](#d4-numbers-are-strings) is forced by the platform, but nothing forced it
+to land during the port rather than with the schema. It landed during the port:
+`qty` and `threshold` are decimal strings in `shared/types.ts` today, parsed
+through `toInt` and written through `normalizeQty`.
+
+**Why:** the encoding is cheap to adopt while the only data is a seed array and
+expensive to retrofit once rows exist. Doing it now also means Phase 2 — the
+milestone the roadmap calls risky — has one less thing to change, and the
+"never sort by these in the database" rule already has a working client-side
+implementation to point at.
+
+**Consequence:** the localStorage key is `larder.v3.*`; v2 data from the Vite
+prototype is not read.
+
+---
+
+## D13. Accordion state is not part of an item
+
+**Decided:** 2026-08-24
+
+The prototype stores `open` on each item row and closes the others by mapping
+over the whole list. The port holds a single `openId` in component state.
+
+**Why:** [data-model.md](data-model.md) already said `open` is UI, not data, so
+the schema was never going to have it. Keeping it on the row would have meant
+either writing it to the database on every expand — a mutation, a live-query
+refresh, and a re-render in every open tab for an animation — or stripping it at
+the edge. A single `openId` is also a more honest model of an accordion.
+
+---
+
+## D14. A loopback-only bypass in the sign-in gate
+
+**Decided:** 2026-08-24
+
+`sf dev` ships no sign-in flow — its runtime config reports
+`signInPath: null` and `signInUrl: null`, so `auth.isGuest` is permanently true
+on the dev server. With [D2](#d2-require-sign-in-no-guest-mode) that hides the
+whole application from its own developer.
+
+`client/index.tsx` therefore accepts the dev guest as the working identity
+**when `location.hostname` is a loopback address**, and shows a persistent
+orange "Dev guest · not signed in" badge whenever it does.
+
+**Why this is acceptable:** a published space is served from a real hostname, so
+the condition is false in production and the gate applies exactly as written.
+The guest identity Zero hands out has a stable `userId`, which is all the app
+needs — Phase 2's server-side household resolution will work locally against it
+without a second code path.
+
+**Why the badge:** the only failure mode that matters is someone mistaking a
+local session for a real one. Making the state loud costs nothing.
+
+**Deliberately not included:** LAN addresses. `sf dev --host 0.0.0.0
+--allow-network` binds one, and anything another machine can reach gets the real
+gate.
+
+**Rejected:**
+- *Build Phase 2 blind.* Every change lands unverified, on the milestone the
+  roadmap already calls the risky one.
+- *Publish early instead.* Still worth doing — a real Gravatar sign-in is the
+  only way to close Phase 1's "done when", and Phase 2's two-browser live-query
+  test needs a live space. But it makes the day-to-day loop a publish, which is
+  the wrong iteration speed for porting a UI.
+
+**Revisit when:** Spacefast ships a local sign-in stub (`sf dev --sign-in-as`,
+or similar). At that point this bypass should come straight out.

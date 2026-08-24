@@ -5,24 +5,33 @@ gets answered.
 
 ## Platform behavior we haven't confirmed
 
-- **Can queries take arguments?** The Zero docs show `mutation(async (ctx, text:
-  string) => …)` with typed args, but every `query()` example takes only `ctx`,
-  and `useQuery("entries")` is always called without arguments. If queries can't
-  take arguments, household switching has to work some other way (a server-side
-  "active household" on the membership row, most likely). Our current design
-  sidesteps this by resolving the household from `ctx.auth`, so it isn't
-  blocking — but it decides how Phase "later" household switching works.
+- **How do we verify sign-in at all?** `sf dev` reports
+  `auth: { provider: "gravatar", signInPath: null, signInUrl: null }` — there is
+  no local sign-in flow, so `auth.isGuest` never goes false on the dev server.
+  Local development is unblocked by
+  [D14](decisions.md#d14-a-loopback-only-bypass-in-the-sign-in-gate)'s
+  loopback bypass, but that sidesteps authentication rather than exercising it.
+  **Nothing has confirmed that Gravatar sign-in works, that `signOut()` returns
+  to the gate, or that `useAuth()` reports a real identity the way the types
+  say.** All three need a `sf publish` to a real space, which is also what
+  Phase 1's "done when" requires. Worth doing before Phase 2 leans on
+  `ctx.auth.userId` for every household check.
+- **Can we ship a webfont at all?** `theme.json`'s `fontFace` is ignored — the
+  compile reads only `slug` and `fontFamily`. There is no `index.html` to add a
+  `<link>` to, no CSS entry point, and `@plugin` / `@config` are rejected.
+  `/__spacefast_generated/theme.css` — which `style.d.ts` describes as the
+  runtime's `theme.json`-derived stylesheet — 404s under `sf dev`. Unknown
+  whether it exists once published. Until then Fraunces and IBM Plex Mono fall
+  back to `ui-serif` / `ui-monospace` and the prototype's typographic identity
+  is lost.
 - **What does a handler throwing actually do to the client?** Our
-  `requireHousehold()` helper throws. Unclear how that surfaces in `useQuery` /
-  `useMutation` — exception, rejected promise, silent empty result? Affects all
-  error handling.
+  `requireHousehold()` helper will throw. Unclear how that surfaces in
+  `useQuery` / `useMutation` — exception, rejected promise, silent empty result?
+  Affects all error handling, and it is the first thing Phase 2 will hit.
 - **Are there compound index ranges?** Docs only show `range.eq("field", value)`
   on a single field. If `.eq().eq()` chains work, some queries get cheaper.
 - **Migration granularity.** "Normal additive changes apply during `sf publish`"
   — is adding an index additive? Is widening a default?
-- **Does `sf dev` give a persistent guest identity across restarts?** Docs say
-  it "supplies a local guest identity"; unclear whether it's stable, which
-  matters for testing multi-member flows locally.
 
 ## Product questions
 
@@ -45,7 +54,9 @@ gets answered.
 - **Can one person belong to multiple households?** The schema allows it —
   `memberships` is a plain join. But `requireHousehold()` takes `.first()`,
   which silently picks one. Either enforce one-household-per-user for now or
-  design the switcher sooner.
+  design the switcher sooner. (Now unblocked either way: queries *can* take
+  arguments, so a household id can be a query parameter rather than server-side
+  "active household" state.)
 - **Per-user vs per-household settings.** `defaultThreshold` is on the household
   (shared). Theme override is per-device (localStorage). Is there anything that
   should be per-user-but-synced? If so, we need a `preferences` table.
@@ -53,11 +64,24 @@ gets answered.
   has no representation. Is that fine? (Probably — but it's the kind of thing
   that gets discovered in week three of real use.)
 
+## Known cost carried into Phase 2
+
+- **Taxonomies are still joined by name, not by id.** `Item.category` is a
+  location *name*, and `types` / `stores` are arrays of names. The real schema
+  joins by `id("locations")` and through the `itemTypes` / `itemStores` tables.
+  That conversion touches every filter, every lookup, and the whole taxonomy
+  rename path — renaming a term stops rewriting every item that references it
+  and becomes a single-row update. This was the deliberate cost of keeping the
+  Phase 1 port mechanical; it is the largest single piece of Phase 2.
+- **`makeTaxonomyActions` writes to two stores at once** (the term list and the
+  items that reference it) because renames cascade by name. Once terms have ids,
+  most of that function disappears rather than being ported to mutations.
+
 ## Technical debt carried in from the prototype
 
 - The stale-closure duplicate guard bug fixed in `src/lib/taxonomy.js` also
   exists in `.claude/docs/pantry-tracker-mockup.jsx`. The mockup is a design
-  reference, not code we run, so it's cosmetic — but don't copy from it blindly
-  during the port.
+  reference, not code we run, so it's cosmetic — but don't copy from it blindly.
+  The fix carried into `client/lib/taxonomy.ts`.
 - `LICENSE.md` is GPL-3.0, inherited from the WordPress plugin convention.
   Worth deciding deliberately for a hosted app.
