@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"target": "es2022",
+		"strict": true,
+		"skipLibCheck": true,
+		"outDir": ".test-out",
+		"rootDir": "."
+	},
+	"include": ["tests/**/*.ts", "shared/**/*.ts"]
+}

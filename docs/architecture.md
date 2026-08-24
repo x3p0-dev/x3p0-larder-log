@@ -18,28 +18,46 @@ larder-log/
   client/
     index.tsx          # exports App: the sign-in gate and nothing else
     Pantry.tsx         # the signed-in application
-    components/        # ported from the Vite prototype
-    hooks/             # usePersistentState, useSystemTheme
-    lib/               # theme derivation, icon maps, taxonomy CRUD, row ids
-    data/seed.ts       # first-run sample data
+    components/
+    hooks/
+      usePantryData.ts # the ONLY module importing @spacefast/zero/client
+      usePersistentState.ts  # theme override only — everything else is server
+      useSystemTheme.ts
+    lib/               # theme derivation, icon components, taxonomy action shape
   server/
-    index.ts           # default-exports capsule(); schema empty until Phase 2
-  shared/
-    types.ts           # Item, Term, Settings — the domain vocabulary
+    index.ts           # capsule(): 2 queries, 15 mutations
+    schema.ts          # the tables, plus ReadDb / WriteDb derived from them
+    auth.ts            # membershipState / requireMembership / requireCapability
+  shared/              # imports NOTHING — see below
+    types.ts           # Item, Term, QueryState — the domain vocabulary
+    roles.ts           # the D20 capability matrix; can()
+    identity.ts        # who counts as signed in (the dev-guest bypass)
+    membership.ts      # D18's one-household rule; D22's last-owner guard
+    invite.ts          # code generation, 14-day expiry (D24)
+    term.ts            # name/ink validation
+    icons.ts           # icon KEYS (the components live in client/lib) (D23)
+    seed.ts            # starter taxonomies for a new household
     qty.ts             # the string <-> integer boundary (D4)
     status.ts          # out / low / ok derivation (D9)
-  src/                 # the React/Vite prototype; deleted in Phase 2
+  tests/shared.test.ts # 81 assertions; `npm test`, no runner
   docs/                # these documents
   .claude/docs/        # mockup, platform feedback log, Zero's own AGENTS.md
   sf.jsonc             # runtime config
   theme.json           # WordPress theme.json v3 — see Styling
-  tsconfig.json        # strict; `npm run typecheck` is the main verification
+  tsconfig.json        # strict; `npm run typecheck`
   .env.server          # server-only secrets, synced on publish (none yet)
 ```
 
 `shared/` is the important one. It imports nothing — not Preact, not the Zero
 runtime — so the capsule can use the same `normalizeQty` the form uses instead
-of a second copy of the rule that drifts from it.
+of a second copy of the rule that drifts from it. It is also the only part of
+the app that is directly testable, which is why the authorization matrix, the
+one-household rule, the last-owner guard, and the dev-guest bypass all live
+there rather than in `server/`.
+
+`client/hooks/usePantryData.ts` is the other boundary worth protecting: it is
+the only module that imports `@spacefast/zero/client`. Components take plain
+data and callbacks, so nothing below it knows the platform exists.
 
 `sf.jsonc` must name both entries or the publish fails:
 
@@ -222,8 +240,13 @@ Icons come from `lucide-preact` directly rather than the kit's `Icon`
 
 ## Porting from the Vite prototype
 
-Done as of Phase 1. The React 19 + Vite app in `src/` is still on disk and still
-runs (`npm run prototype`); it gets deleted in Phase 2. What changed:
+Complete. The React 19 + Vite app in `src/` was deleted at the end of Phase 2,
+along with `index.html`, `vite.config.js`, and the react / react-dom /
+lucide-react / tailwindcss / vite dependencies — Zero compiles Tailwind itself,
+so nothing was left needing them. It remains in git history from `c6e8901`.
+
+Recorded because the same conversions apply to anything still being read from
+`.claude/docs/pantry-tracker-mockup.jsx`, which is React and name-based:
 
 - `className` → `class`
 - `useState` etc. from `preact/hooks`
@@ -237,9 +260,14 @@ runs (`npm run prototype`); it gets deleted in Phase 2. What changed:
 - Item `open` → a single `openId` in component state
   ([D13](decisions.md#d13-accordion-state-is-not-part-of-an-item))
 
-Still to change in Phase 2:
+Phase 2 then changed the two things the port had deliberately deferred:
 
-- `usePersistentState` (localStorage) → `useQuery` / `useMutation`
-- Taxonomy references by **name** → by **id**, which is the bulk of the work
+- `usePersistentState` (localStorage) → `useQuery` / `useMutation`, via
+  `client/hooks/usePantryData.ts`. The one surviving call site is the per-device
+  theme override ([D25](decisions.md#d25-no-preferences-table))
+- Taxonomy references by **name** → by **id**, which was the bulk of the work.
+  Watch for the failure mode it introduced: an id rendered where a name belongs
+  **typechecks**, because both are `string`, and only shows up as a UUID on
+  screen. Term references reaching the DOM go through `termNameFor()`
 
 The component tree, theme system, and status derivation carried over intact.

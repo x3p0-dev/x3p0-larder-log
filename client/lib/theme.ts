@@ -72,12 +72,24 @@ export function fallbackInk(name: string): string {
 }
 
 /**
- * Resolves any named taxonomy term (location, type, or store) to its themed
- * colors, falling back to a stable hashed color for terms that no longer exist.
+ * Resolves a taxonomy term to its themed colors.
+ *
+ * Terms are matched by **id** now, not by name — a rename no longer changes a
+ * term's identity, so its color no longer jumps when someone fixes a typo.
+ *
+ * The hashed fallback stays for ids that resolve to nothing. That should be
+ * unreachable: D16 refuses to delete a location while items reference it. But
+ * `id()` is not a foreign key, so nothing in the database enforces it, and a
+ * bug in `deleteTerm` would land here rather than crashing.
  */
-export function entityColorFor(name: string, list: Term[], dark: boolean): ThemedColor {
-	const found = list.find((e) => e.name === name);
-	return themed(found?.ink || fallbackInk(name), dark);
+export function entityColorFor(id: string, list: Term[], dark: boolean): ThemedColor {
+	const found = list.find((e) => e.id === id);
+	return themed(found?.ink || fallbackInk(id), dark);
+}
+
+/** The display name for a term id, or a visible marker if it resolves to nothing. */
+export function termNameFor(id: string, list: Term[]): string {
+	return list.find((e) => e.id === id)?.name ?? 'Unknown';
 }
 
 /** Derives the status *and* its colors. The derivation itself lives in shared/. */

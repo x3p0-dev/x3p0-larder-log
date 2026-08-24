@@ -833,3 +833,243 @@ it. There is no `index.html` to add a `<link>` to, no CSS entry point, and
 already implies it) or document plainly that webfonts are unsupported. Right now
 the config accepts a font family it cannot deliver, which reads as a bug in your
 own app until you go looking.
+
+## 2026-08-24 — Phase 2 spike: schema, handler runtime, and a scanner false positive
+
+Ran a throwaway spike capsule (temporary `/api/spike/*` endpoints, curled via
+the documented bootstrap dance) to answer the platform questions Phase 2's
+design depended on. Then built the real schema and handler layer on the answers.
+
+### good — endpoints are a usable probe harness
+
+`endpoint()` gets a **writable** `ctx.db`, so a spike can insert, read back, and
+report without a browser. That made six open questions answerable in one
+`sf dev` session. Worth documenting as a technique — the docs show endpoints
+only for webhooks.
+
+### good — the bundled `.d.ts` is better than the published docs
+
+`node_modules/@spacefast/zero/dist/server.d.ts` answered more than
+`docs/zero.md` did, and answered it precisely:
+
+- `IndexRange` exposes `.eq()`, `.gt()`, `.gte()`, `.lt()`, `.lte()`, each
+  returning `IndexRange` — so range chaining is a supported API, not a guess.
+  The public docs only ever show a single `.eq()`.
+- `insert()` returns the **whole row**, not an id.
+- `ReadDatabaseOf<TDefinition>` / `WriteDatabaseOf<TDefinition>` are exported,
+  which is what lets handler helpers live in their own module with real types
+  instead of `any`. Neither appears in the public docs.
+- The `invalidate()` doc comment is the only place that says live queries
+  **refetch rather than diff**. That is a first-order architectural fact — it
+  decides whether a one-payload query is viable — and it is not in `zero.md`
+  at all.
+
+**Suggestion:** promote the `invalidate()` comment and the `IndexRange` surface
+into `docs/zero.md`. A reader who only has the public docs cannot design query
+granularity correctly.
+
+### confirmed behaviors (all against `sf dev`)
+
+- **`Date` works server-side.** `new Date()`, `Date.now()`, `.toISOString()`.
+- **`createdAt` / `updatedAt` are ISO 8601 UTC.** Verified exactly:
+  `new Date(row.createdAt).toISOString() === row.createdAt`. Row ids are UUIDs.
+  Undocumented — `zero.md` only says "strings".
+- **Compound index ranges filter on every chained field.** `.index("by_a_b",
+  ["a","b"])` + `range.eq("a",x).eq("b",y)` returned 1 of 3 seeded rows, not the
+  2 that a silently-ignored second `.eq()` would give.
+
+### unclear — `id("table")` is not a foreign key
+
+An `items` insert whose `householdId` **and** `locationId` both pointed at
+nonexistent rows **succeeded**. `id(table)` is a type hint only.
+
+Reasonable as a design choice, but it deserves an explicit line in the docs
+next to the `id()` description. Combined with "no row-level security", it means
+an app has *no* database-level integrity backstop of any kind — every
+referential and ownership rule is hand-written or absent. We had assumed `id()`
+bought us something; it does not.
+
+### unclear — a thrown handler error is echoed to the client verbatim
+
+`throw new Error("Sign in required")` from an endpoint returns **HTTP 500** with
+an RFC 7807 body whose `detail` is the thrown message verbatim:
+
+```json
+{"type":"https://spacefast.com/docs/errors/zero_dev_endpoint_failed",
+ "title":"Zero dev endpoint failed","status":500,
+ "detail":"Sign in required","code":"zero_dev_endpoint_failed"}
+```
+
+Convenient, but it means **every thrown string is user-visible**, so an
+incidental `throw new Error(someInternalDetail)` leaks. Worth saying out loud in
+the docs, and worth a documented way to distinguish "expected, show this" from
+"unexpected, log it and show something generic". We ended up with our own
+`AccessError` class purely as a discipline marker.
+
+Also unclear whether a `query()` / `mutation()` throw surfaces the same way to
+`useQuery` / `useMutation` — that needs a browser, so it is still open for us.
+
+### bug — the server-global scanner false-positives on object literal keys
+
+This cost the most time of anything here. `sf dev` refused to start:
+
+```
+Zero source server/index.ts references unsupported server global location.
+Error: Zero source server/index.ts references unsupported server global location.
+```
+
+The offending line contained no global. It was an object literal **key**:
+
+```ts
+const TERM_TABLES = { location: 'locations', type: 'types', store: 'stores' } as const;
+```
+
+Quoting the key fixes it completely:
+
+```ts
+const TERM_TABLES = { 'location': 'locations', type: 'types', store: 'stores' } as const;
+```
+
+So the scanner is matching identifiers textually rather than resolving them —
+an object property key named `location` (or presumably `history`, `navigator`,
+`document`, `screen`, …) is treated as a reference to the browser global.
+
+Three problems with this, in order of severity:
+
+1. **It is a false positive on valid code.** `{ location: ... }` is an
+   extremely natural key name in an inventory app.
+2. **The error names a file, not a line or column.** In a 600-line capsule that
+   is a manual search for a word appearing 20 times in strings, comments, and
+   property accesses — all of which are fine, and only one of which is not.
+3. **The message describes the wrong thing.** "references unsupported server
+   global location" is false; nothing references a global. It sent us looking
+   for an import or a stray browser API.
+
+**Suggestion:** resolve identifiers properly (a property key in a non-computed
+member expression or object literal is never a global reference), and failing
+that, at minimum report line and column. A one-line fix in the message would
+have turned a 20-minute hunt into 20 seconds.
+
+## 2026-08-24 — wiring the client: two client-runtime behaviors worth documenting
+
+Both found by reading `node_modules/@spacefast/zero/dist/client.js`, because
+neither is in `docs/zero.md`. Both changed our design rather than merely
+informing it.
+
+### bug (or at least a sharp edge) — `useQuery` seeds every query with `[]`
+
+```js
+const [value, setValue] = useState(() => getQueryValue(name, ...args) ?? []);
+```
+
+The pre-result value is a hardcoded empty **array**, whatever the query's return
+type is. The example app in the docs returns `Entry[]`, so `[]` reads as a
+natural "nothing yet" — but for a query returning an object it is simply the
+wrong type, and `result.items.map(...)` throws on first render.
+
+We settled on `Array.isArray(result)` as the loading check, since our queries
+always return objects. That works, but it is a coincidence of our schema, not an
+API. **A query that legitimately returns an array has no way to distinguish
+"still loading" from "loaded, empty".**
+
+**Suggestion:** seed with `undefined` (typed `T | undefined`), or expose the
+subscription state the way every other data library does — `{ data, isLoading }`
+or similar. The current shape forces every caller to invent a sentinel.
+
+### bug — a failing query is invisible to the client, forever
+
+`handleMessage` has exactly one query branch:
+
+```js
+if (message.op === "query.result" && typeof message.name === "string") { … }
+```
+
+There is no `query.error`. A query handler that throws never emits, so
+`useQuery` keeps returning its initial `[]` indefinitely. There is no rejection,
+no callback, no flag — from the client's side "the query threw" and "the query
+hasn't answered yet" are the same observable state.
+
+Mutations are handled properly, for contrast: `mutation.result` with `ok: false`
+rejects the promise with the server's message intact, which is exactly right.
+
+This is a genuine asymmetry and it has real consequences. Our natural design was
+a `requireHousehold()` helper that throws — reused by both queries and
+mutations, one authorization path. That turns out to be **unusable in a query**:
+a first-run user with no household would sit on a permanently blank screen with
+no signal to route them to setup, and no error anywhere to debug it with.
+
+We had to split the helper in two — `membershipState()` returning a
+discriminated union for queries, `requireMembership()` throwing for mutations —
+and give every query a `QueryState` return type encoding `ready` / `guest` /
+`no-household` / `blocked`. That is a defensible design, but we arrived at it by
+reading the client bundle, not from the docs, and only after writing the
+throwing version first.
+
+**Suggestion:** deliver query failures. Even a `query.error` message that let
+`useQuery` expose a rejection would be enough. Failing that, please document the
+behavior loudly — "a query that throws never resolves on the client" is the kind
+of thing that produces a blank page and a very long debugging session.
+
+### good — `invalidate()` narrowing works as documented
+
+Now that there are two live queries (`household`, `pantry`), declaring what each
+mutation touched keeps an item edit from refetching the member list. The doc
+comment on `InvalidateQueries` is the clearest thing in the type definitions;
+it deserves to be in the public docs.
+
+## 2026-08-24 — end of Phase 2: dev-server identity
+
+### friction — `sf dev` issues one fixed identity, and no way to change it
+
+`sf dev`'s guest auth is a constant:
+
+```js
+function zeroGuestAuth() {
+  return { user: null, userId: "guest:local", displayName: "Local",
+           provider: "guest", isGuest: true, isAuthenticated: false };
+}
+```
+
+Two consequences we had to design around.
+
+**1. A strict server-side guest check locks the app out of local development.**
+Our capsule refuses guests, per the app's own "sign-in required" rule. That is
+correct in production and fatal locally, because `isGuest` is permanently true.
+We already had a client-side loopback bypass for the sign-in gate; Phase 2 forced
+a second one on the server.
+
+There is no clean signal to key it on. `ctx.env` is **empty** under `sf dev`, and
+`sf dev --help` exposes no way to inject a variable — so an environment-keyed
+switch was not available. We ended up matching the literal identity above,
+field by field, on the reasoning that `guest:local` is produced by the CLI and
+by the client's no-auth fallback and therefore should never come from a hosted
+runtime.
+
+That reasoning is sound but unverifiable from here, and it is an *authentication*
+bypass, which is an uncomfortable thing to ship on an inference.
+
+**Suggestion:** either a `sf dev --sign-in-as <email>` stub that produces a
+non-guest identity, or an env var the dev server sets that a capsule can check
+(`ctx.env.SPACEFAST_DEV === "1"`). Either removes the guesswork entirely. The
+second is a one-line change and would let every app express "guests allowed in
+dev only" honestly.
+
+**2. One identity means multi-user behavior cannot be tested locally at all.**
+Two browser tabs on `sf dev` are the same `userId`, so they share a household.
+That is enough to watch a live query refresh after a mutation, and useless for
+anything about membership: invites, roles, the last-owner guard, per-member
+permissions. All of it has to go to a published space.
+
+For an app whose whole point is two people sharing a pantry, that pushes the
+first real test of the core feature onto production. A second seeded dev identity
+— even just `guest:local` and `guest:local2` switchable by a query parameter —
+would make Phase 3 testable before it ships.
+
+### good — dependency footprint after dropping the prototype
+
+Retiring the Vite prototype left `package.json` at three runtime dependencies
+(`@spacefast/zero`, `lucide-preact`, `preact`) and two dev ones (`spacefast`,
+`typescript`). No bundler, no Tailwind install, no PostCSS config — Zero
+compiles the CSS itself from classes it scans out of source. For an app with a
+real database, live queries, auth, and a full component tree, that is a genuinely
+small surface, and it is the clearest thing the platform does well.

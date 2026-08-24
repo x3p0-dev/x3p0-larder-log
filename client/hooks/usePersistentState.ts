@@ -2,9 +2,13 @@ import { useEffect, useState } from 'preact/hooks';
 
 /**
  * useState that mirrors its value into localStorage, so a page reload picks up
- * where the last one left off. Stands in for a real back end for now; Phase 2
- * replaces every call site with `useQuery` / `useMutation` except the theme
- * override, which is deliberately per-device and stays here.
+ * where the last one left off.
+ *
+ * Phase 2 moved every other call site to `useQuery` / `useMutation`. **The
+ * theme override is the only thing left here, and that is deliberate** — a
+ * dark-mode choice made on a phone should not follow you to a desktop, so it is
+ * per-device rather than per-user (D25). If a second call site ever appears,
+ * check that it really is a device preference and not data.
  */
 export function usePersistentState<T>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
 	const [value, setValue] = useState<T>(() => read(key, initial));

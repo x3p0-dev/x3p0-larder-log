@@ -47,6 +47,20 @@ household switcher. The UI assumes "your household".
 migration, which Zero deliberately makes awkward. Adding a switcher later is
 purely additive. Pay the cheap cost now to avoid the expensive one later.
 
+**Amendment, 2026-08-24 — households are named at creation.** `households.name`
+existed from the first schema but nothing set it; first run hardcoded
+"My Pantry" and no screen ever showed it. That is fine for one household and
+useless for two, and a name applied retroactively is worse than one chosen at
+the moment the thing is made.
+
+So the first-run screen asks for a name, Settings can rename it (owner-only,
+`household:settings`), and the header shows it under the app title. The header
+placement is the part that matters: it is the line a switcher will eventually
+replace, and until it exists the name has somewhere to be seen — otherwise
+naming a household is a form field with no consequence.
+
+No schema change; the column was always there.
+
 ---
 
 ## D4. Numbers are strings
@@ -298,6 +312,15 @@ touching stored data.
 **Consequence:** the Settings copy "deleting doesn't remove items" stays true,
 but it now needs a second sentence — deleting is refused rather than silent.
 
+**Confirmed 2026-08-24, and it raises the stakes:** `id("locations")` does **not**
+enforce referential integrity. A spike inserted an `items` row whose
+`householdId` and `locationId` both pointed at nothing, and it succeeded — `id()`
+is a type hint, not a foreign key. So this rule is enforced by `deleteTerm` or
+not at all; the database will not catch a bug that lets a dangling reference
+through. The client already renders a fallback box for an unresolvable location,
+which means such a bug would be **invisible rather than loud**. Worth a
+consistency check if items ever start rendering as boxes.
+
 **Rejected:**
 - *Reassign to a reserved "Unsorted" location.* Friendlier, and the likely
   upgrade if blocking turns out to be annoying in real use. It needs a
@@ -449,8 +472,7 @@ a real distinction in a CMS and noise in a two-person pantry.
 level, so the level is fixed when the code is minted rather than guessed at
 redemption.
 
-**Who may mint what:** an invite may only grant a role **strictly below** its
-creator's.
+**Who may mint what:**
 
 | Creator | May invite |
 |---|---|
@@ -460,6 +482,15 @@ creator's.
 
 Editors mint viewer invites and nothing else. **The editor tier can only grow by
 owner action** — there is no path by which an editor produces another editor.
+
+**This table is the rule; it is not "strictly below your own level."** Owners may
+invite co-owners, because [D22](#d22-ownership-is-a-role-not-a-column) wants more
+than one owner so a lost account never leaves a household unadministered. Any
+rank formula that yields both the owner row and the editor row is a formula
+fitted to three hardcoded cases, so `shared/roles.ts` encodes the table
+literally. (An earlier draft of this decision asserted the "strictly below"
+generalization above the table it contradicted — writing `invitableRoles()` is
+what caught it.)
 
 ### Promotion and invitation are different paths
 
@@ -596,12 +627,15 @@ ourselves has a format we control.
 **`""` means never.** Nothing mints such a code today, but reserving the empty
 string costs nothing and keeps the escape hatch from needing a migration.
 
-**Depends on an unconfirmed platform fact:** that `Date` is available inside a
-capsule handler. Every `Date` call in the Zero docs is client-side, and server
-code may import only `@spacefast/zero/server` and its own files. If the server
-runtime has no clock, expiry has to be computed client-side and validated
-against something else — a materially worse design. See [notes](notes.md); this
-belongs in the Phase 2 spike.
+**Confirmed 2026-08-24** against `sf dev`: `Date` *is* available in a capsule
+handler — `new Date()`, `Date.now()`, and `.toISOString()` all work server-side,
+so expiry is computed where it should be.
+
+The same spike found that Zero's own `createdAt` / `updatedAt` are **already ISO
+8601 UTC** (`new Date(row.createdAt).toISOString() === row.createdAt` is true).
+So the format choice here matches the platform's rather than introducing a
+second convention — and the argument against deriving expiry from `createdAt`
+now rests on policy-at-mint-time alone, not on format uncertainty.
 
 ---
 
@@ -636,25 +670,63 @@ with a handful of join rows, plus perhaps 30 taxonomy terms — call it 2,000 sm
 rows, a few hundred KB at the very top end. That is unremarkable for a single
 subscription.
 
-**The real risk is not size, it's re-send.** If Zero pushes the whole result set
-on every change rather than a diff, then `adjustQty` — explicitly the hottest
-path in [the query surface](data-model.md#query-surface-initial) — re-transmits
-the entire pantry on every `+1`. **This is unconfirmed** and it is the thing that
-would actually decide the question, so it goes in the Phase 2 spike. Everything
-below assumes it turns out fine.
+**The real risk is not size, it's re-send** — and the 2026-08-24 spike confirmed
+the bad case. Zero's live queries **refetch; they do not diff.** From
+`@spacefast/zero/dist/server.d.ts`, on `invalidate()`:
 
-**Why deferring is safe:** splitting a query is client-side refactoring. No
-schema change, no migration, no stored data affected. This is the rare decision
-that can be reversed at any point for the cost of writing it, which is exactly
-why it should not be pre-optimized now.
+> Declaring nothing is the safe default, not a mistake — every live query on the
+> page refreshes. That is correct and it is also why a page with a dozen
+> subscriptions refetches all twelve on every write, so a mutation that knows
+> what it touched should say so.
 
-**The tripwire.** Split when either is true:
+`invalidate()` takes **query names**, so it narrows *which subscriptions* refresh
+— it cannot narrow *what a refreshed query returns*. With `pantry` as a single
+query there is nothing to narrow: every write re-runs it in full.
 
-- a single `adjustQty` produces visible lag at real row counts, or
-- the payload crosses ~100 KB.
+**Two consequences:**
 
-**The seam to split on**, when it comes: taxonomies are small and change rarely;
-items are large and change constantly. Separating those two subscriptions takes
-the taxonomy re-send out of the hot path and is very likely sufficient on its
-own. Splitting items from their join rows is a distant second resort — it would
-push the join back into the client.
+1. **`invalidate()` discipline is mandatory regardless of shape.** Every mutation
+   must declare what it touched, or every subscription on the page refetches.
+2. **The single-payload shape is the worst case for this runtime**, because it
+   maximizes bytes per write. Whether that matters is a question of scale — see
+   the amendment below.
+
+### Amendment, 2026-08-24: the decision stands, for a different reason
+
+The refetch finding looked like it should reverse this. Working the numbers says
+otherwise, and it corrects the seam this decision originally named.
+
+Rough payload, JSON, at two scales:
+
+| | items | join rows | taxonomies | total |
+|---|---|---|---|---|
+| typical (150 items) | ~18 KB | ~36 KB | ~2 KB | **~56 KB** |
+| large (500 items) | ~60 KB | ~108 KB | ~2 KB | **~170 KB** |
+
+**The join rows dominate — the taxonomies are noise.** So the seam this decision
+first proposed (split taxonomies from items) saves ~2 KB and is close to
+pointless. And the split that *would* matter — items apart from their join rows —
+buys nothing either, because any item mutation invalidates both and they refetch
+together regardless.
+
+There is no shape that makes `adjustQty` cheap. Zero has no partial subscription:
+a live query is re-run whole or not at all. Splitting `pantry` therefore trades
+real complexity for savings that round to zero, which makes **one payload the
+right call** — not as the simple-until-proven-otherwise default it was, but as
+the option that survives knowing how the runtime actually behaves.
+
+**What does the work instead: `invalidate()` discipline.** With more than one
+query on the page (`household` and `pantry` at minimum), an undeclared mutation
+refetches all of them. Every mutation names what it touched:
+
+- item and taxonomy mutations → `invalidate("pantry")`, so the member list does
+  not refetch on every `+1`
+- membership and settings mutations → `invalidate("household")`
+
+**The real tripwire, revised.** Not payload size — that is unavoidable at any
+shape — but whether the refetch-per-write is *perceptible* on the hot path.
+Watch a held-down `+1` at real row counts. If it stutters, the fix is
+client-side (debounce or coalesce the mutation), **not** a different query shape.
+
+**Why this remains cheap to revisit:** splitting a query is client-side
+refactoring. No schema change, no migration, no stored data affected.

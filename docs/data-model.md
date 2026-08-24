@@ -68,9 +68,9 @@ invites: table({
   .index("by_creator", ["createdBy"])
 ```
 
-`role` is fixed when the code is minted and must be **strictly below** the
-creator's own level — owners mint any level, editors mint `viewer` only, viewers
-mint nothing ([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
+`role` is fixed when the code is minted: owners mint any level (co-owners
+included), editors mint `viewer` only, viewers mint nothing
+([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
 `by_creator` exists so demoting or removing a member can revoke the invites they
 created — without it, an owner demoted to editor keeps minting editors through
 codes issued before the demotion.
@@ -212,8 +212,8 @@ authority for ownership — `households.createdBy` is never consulted
 | `member:remove` | ✓ | — | — |
 | `household:delete` | ✓ | — | — |
 
-¹ An editor may mint **viewer invites only** — an invite grants a role strictly
-below its creator's ([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
+¹ An editor may mint **viewer invites only**. Owners mint any level, co-owners
+included ([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
 
 ² Promoting or demoting an existing member is owner-only. Combined with ¹, this
 means **the editor tier can only grow by owner action**: neither path to editor

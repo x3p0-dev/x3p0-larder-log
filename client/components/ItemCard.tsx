@@ -2,22 +2,22 @@ import { Plus, Minus, ChevronDown, Pencil, Check, Store as StoreIcon } from 'luc
 
 import { ItemFields } from './ItemFields';
 import type { Theme } from '../lib/theme';
-import { entityColorFor, statusFor } from '../lib/theme';
+import { entityColorFor, statusFor, termNameFor } from '../lib/theme';
 import { locationIconFor, typeIconFor } from '../lib/icons';
 import type { Item, ItemDraft, Term } from '../../shared/types';
-import type { TaxonomyActionSet } from '../lib/actions';
+import type { TaxonomyActions } from '../lib/actions';
 
 type Props = {
 	item: Item;
 	open: boolean;
-	categories: Term[];
+	locations: Term[];
 	types: Term[];
 	stores: Term[];
 	dark: boolean;
 	theme: Theme;
 	editForm: ItemDraft | null;
 	onEditFormChange: (next: ItemDraft) => void;
-	taxonomyActions: TaxonomyActionSet;
+	taxonomy: TaxonomyActions;
 	onToggleOpen: () => void;
 	onAdjustQty: (delta: number) => void;
 	onRemove: () => void;
@@ -27,14 +27,15 @@ type Props = {
 };
 
 export function ItemCard({
-	item, open, categories, types, stores, dark, theme,
-	editForm, onEditFormChange, taxonomyActions,
+	item, open, locations, types, stores, dark, theme,
+	editForm, onEditFormChange, taxonomy,
 	onToggleOpen, onAdjustQty, onRemove, onStartEdit, onSaveEdit, onCancelEdit,
 }: Props) {
-	const c = entityColorFor(item.category, categories, dark);
+	const c = entityColorFor(item.locationId, locations, dark);
 	const s = statusFor(item.qty, item.threshold, dark);
-	const category = categories.find((cat) => cat.name === item.category);
-	const LocationIcon = locationIconFor(category?.icon);
+	const location = locations.find((l) => l.id === item.locationId);
+	const locationName = termNameFor(item.locationId, locations);
+	const LocationIcon = locationIconFor(location?.icon);
 	const isEditing = Boolean(editForm);
 
 	return (
@@ -63,29 +64,29 @@ export function ItemCard({
 					</div>
 
 					<div class="flex items-center gap-1.5 flex-wrap mt-1.5">
-						<span title={item.category} class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: c.bg, color: c.ink }}>
+						<span title={locationName} class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: c.bg, color: c.ink }}>
 							<LocationIcon size={13} />
 						</span>
 
-						{item.types.map((name) => {
-							const tc = entityColorFor(name, types, dark);
-							const TypeIcon = typeIconFor(types.find((t) => t.name === name)?.icon);
+						{item.typeIds.map((id) => {
+							const tc = entityColorFor(id, types, dark);
+							const TypeIcon = typeIconFor(types.find((t) => t.id === id)?.icon);
 							return (
-								<span key={name} title={name} class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: tc.bg, color: tc.ink }}>
+								<span key={id} title={termNameFor(id, types)} class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: tc.bg, color: tc.ink }}>
 									<TypeIcon size={13} />
 								</span>
 							);
 						})}
 
-						{item.stores.map((name) => {
-							const sc = entityColorFor(name, stores, dark);
+						{item.storeIds.map((id) => {
+							const sc = entityColorFor(id, stores, dark);
 							return (
 								<span
-									key={name}
+									key={id}
 									class="text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1 border"
 									style={{ borderColor: sc.ring, color: sc.ink, background: 'transparent' }}
 								>
-									<StoreIcon size={9} />{name}
+									<StoreIcon size={9} />{termNameFor(id, stores)}
 								</span>
 							);
 						})}
@@ -139,10 +140,8 @@ export function ItemCard({
 				<div class="px-4 py-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ background: theme.surfaceAlt, borderTop: `1px solid ${c.ink}` }}>
 					<ItemFields
 						value={editForm} onChange={onEditFormChange}
-						categories={categories} types={types} stores={stores}
-						onCreateCategory={taxonomyActions.createCategory}
-						onCreateType={taxonomyActions.createType}
-						onCreateStore={taxonomyActions.createStore}
+						locations={locations} types={types} stores={stores}
+						taxonomy={taxonomy}
 						dark={dark} theme={theme}
 					/>
 					<div class="sm:col-span-2 flex gap-2 justify-end">

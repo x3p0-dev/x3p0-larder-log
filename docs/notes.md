@@ -5,6 +5,104 @@ gets answered.
 
 ## Platform behavior we haven't confirmed
 
+**Spike run 2026-08-24** against `sf dev` (schema compiled, probes curled
+through temporary `/api/spike/*` endpoints, since endpoints get a writable
+`ctx.db`). Six questions answered, one still open, one new risk found. The
+answers are in [decisions.md](decisions.md) where they changed a decision, and
+summarized here.
+
+### Answered
+
+- **Is `Date` available in a capsule handler? Yes.** `new Date()`, `Date.now()`,
+  and `.toISOString()` all work server-side.
+  [D24](decisions.md#d24-invites-expire-after-14-days)'s server-computed expiry
+  is safe as designed.
+- **What format are `createdAt` / `updatedAt`? ISO 8601 UTC.** Confirmed exactly:
+  `new Date(row.createdAt).toISOString() === row.createdAt` is **true**, so they
+  round-trip and compare correctly as plain strings. Row ids are UUIDs.
+- **Are there compound index ranges? Yes.** `.index("by_a_b", ["a","b"])` with
+  `range.eq("a", x).eq("b", y)` filters on **both** fields — verified by seeding
+  three rows and getting exactly the one match back, not the two that a silently
+  ignored second `.eq()` would return. `IndexRange` also exposes `.gt()`,
+  `.gte()`, `.lt()`, `.lte()`, all chainable.
+- **What does a throwing handler do?** On the endpoint path it becomes
+  **HTTP 500** with an RFC 7807 `application/problem+json` body — and the thrown
+  message is copied verbatim into `detail`. **Error messages are visible to the
+  client, so they must be safe to show and must not leak internals.** The
+  `useQuery` / `useMutation` side is not proven by this; see below.
+- **`insert()` returns the whole row**, not an id — `createdAt` and the new `id`
+  come back without a follow-up `get()`.
+
+### The new risk
+
+- **`id("table")` does not enforce referential integrity.** An `items` row
+  inserted with `householdId` and `locationId` both pointing at nonexistent rows
+  **succeeded**. `id()` is a type hint, not a foreign key. Consequences:
+  - [D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it)'s
+    blocked location delete is enforced by our handler **or not at all** — the
+    database will not catch a bug that lets one through.
+  - The same is true of every `householdId` on every row. There is no backstop
+    under the authorization model, only the hand-written checks.
+
+### Answered by the Phase 2 client work (2026-08-24)
+
+- **What does a handler throwing do to the client? It depends on the handler
+  kind, and the difference is load-bearing.**
+  - **Mutations reject.** `useMutation` returns a promise that rejects with
+    `new Error(serverMessage)` — the message survives intact, so a `try/catch`
+    at the call site can show it. This is why every `throw` in a handler is
+    written as user-facing copy.
+  - **Queries fail silently, and there is no way to detect it.** The client
+    handles `query.result` **only**; there is no `query.error` branch anywhere.
+    A query that throws simply never emits, and `useQuery` keeps returning its
+    initial value forever — indistinguishable from "still loading".
+
+  Consequence, and it shaped the whole query layer: **a query must never throw
+  for an expected condition.** `household` and `pantry` return a discriminated
+  `QueryState` (`ready` / `guest` / `no-household` / `blocked`) instead. Before
+  this, a first-run user with no household would have sat on a blank screen
+  forever with nothing to route them to setup.
+
+- **What does `useQuery` return before the first result?** A hardcoded empty
+  **array** — `useState(() => getQueryValue(name, ...args) ?? [])` — regardless
+  of the query's actual return type. Our queries return objects, so
+  `Array.isArray(result)` is the loading check, and it is the only one
+  available. A query that legitimately returns an array would have no way at all
+  to tell "loading" from "empty".
+
+### Still open
+
+- **Is the server-side dev-guest bypass inert in production?** `sf dev` has no
+  sign-in, so `ctx.auth.isGuest` is permanently true locally and a strict guest
+  check locks the app out of its own dev environment — the server half of the
+  problem [D14](decisions.md#d14-a-loopback-only-bypass-in-the-sign-in-gate)
+  solved for the client. `shared/identity.ts` therefore accepts the exact
+  identity `sf dev` issues (`guest:local` / `Local` / `guest` / not
+  authenticated, all four matched).
+
+  That value comes from `zeroGuestAuth()` in the **`spacefast` CLI** and from
+  the client's no-auth fallback — dev tooling, not the hosted runtime — so it
+  should never appear on a published space. **But unlike D14's client bypass,
+  this has not been verified against the live space.** D14 was confirmed inert
+  by loading the published URL signed out; this needs the same check, and until
+  it has one it is the weaker of the two holes. If a published space ever did
+  issue `guest:local`, every anonymous visitor would share one household.
+  `ctx.env` is empty under `sf dev` and the CLI has no env-injection flag, so a
+  cleaner environment-keyed switch was not available.
+
+- **Migration granularity.** "Normal additive changes apply during `sf publish`"
+  — is adding an index additive? Is widening a default? Not answerable on
+  `sf dev`, whose state is in-memory and resets; it needs a deliberate publish
+  against the live space, which would replace the working Phase 1 app.
+- **Does a *query* throw surface like an endpoint throw?** The 500 +
+  problem+json result above is the endpoint path. How it reaches `useQuery` /
+  `useMutation` — thrown, rejected promise, empty result — still needs a
+  browser.
+- **Does the space's public visibility survive a publish?** Unchanged from
+  before; see below.
+
+### Unchanged from earlier
+
 - **Does the space's public visibility survive a publish?** The space was made
   publicly viewable from the Spacefast dashboard, but `sf spaces get` still
   reports `config: {}` — so that setting lives outside the published config.
@@ -21,58 +119,43 @@ gets answered.
   point, and `@plugin` / `@config` are rejected.
   `/__spacefast_generated/theme.css` 404s on the published space just as it does
   under `sf dev`, and the shipped `zero.css` contains **zero `@font-face`
-  rules** — it defines `--font-disp` / `--font-sans` / `--font-mono` as tokens
-  and nothing ever loads a face for them. So Fraunces and IBM Plex Mono fall
-  back to `ui-serif` / `ui-monospace`, and the prototype's typographic identity
-  is lost until Spacefast offers a font mechanism. This is the Phase 4
-  typography decision, and it now has an answer rather than an unknown.
-- **What does a handler throwing actually do to the client?** Our
-  `requireHousehold()` helper will throw. Unclear how that surfaces in
-  `useQuery` / `useMutation` — exception, rejected promise, silent empty result?
-  Affects all error handling, and it is the first thing Phase 2 will hit.
-- **Are there compound index ranges?** Docs only show `range.eq("field", value)`
-  on a single field. If `.eq().eq()` chains work, some queries get cheaper.
-- **Is `Date` available inside a capsule handler?** Every `Date` call in the Zero
-  docs is client-side, and server code may import only `@spacefast/zero/server`
-  and its own files. [D24](decisions.md#d24-invites-expire-after-14-days)
-  computes invite expiry server-side and depends on this. If the server runtime
-  has no clock, that design has to change.
-- **What format are `createdAt` / `updatedAt`?** Undocumented. Zero's examples
-  only ever pass them to `new Date()` client-side, which parses non-ISO formats
-  in implementation-defined ways. D24 sidesteps this by writing its own ISO 8601
-  `expiresAt`, but anything else that compares or sorts by row timestamps needs
-  the answer first.
-- **Do live queries diff, or re-send the whole result set on every change?**
-  This is what decides whether
-  [D26](decisions.md#d26-pantry-stays-one-payload) holds: if `pantry` re-sends
-  everything, the hottest path in the app (`adjustQty`, a `+1`) re-transmits the
-  entire pantry. Cheapest thing to measure in the spike, and the most consequential.
-- **Migration granularity.** "Normal additive changes apply during `sf publish`"
-  — is adding an index additive? Is widening a default?
+  rules**. Fraunces and IBM Plex Mono fall back to `ui-serif` / `ui-monospace`.
+  This is the Phase 4 typography decision, and it has an answer rather than an
+  unknown.
 
 ## Product questions
 
 All settled as of 2026-08-24 — see [decisions.md](decisions.md), D16-D26.
 Nothing product-shaped is currently blocking Phase 2.
 
-## Known cost carried into Phase 2
+## Paid off in Phase 2
 
-- **Taxonomies are still joined by name, not by id.** `Item.category` is a
-  location *name*, and `types` / `stores` are arrays of names. The real schema
-  joins by `id("locations")` and through the `itemTypes` / `itemStores` tables.
-  That conversion touches every filter, every lookup, and the whole taxonomy
-  rename path — renaming a term stops rewriting every item that references it
-  and becomes a single-row update. This was the deliberate cost of keeping the
-  Phase 1 port mechanical; it is the largest single piece of Phase 2.
-- **`makeTaxonomyActions` writes to two stores at once** (the term list and the
-  items that reference it) because renames cascade by name. Once terms have ids,
-  most of that function disappears rather than being ported to mutations.
+Both of the costs this section used to track are gone.
+
+- **Taxonomies join by id, not by name.** `items.locationId` is an
+  `id("locations")` and types/stores go through the `itemTypes` / `itemStores`
+  join tables. The client speaks ids everywhere — filters, chips, item forms,
+  cards, the taxonomy manager, the shopping list. Renaming a term is now a
+  single-row update instead of a rewrite of every item that mentioned it.
+
+  One bug came out of the conversion and is worth remembering, because the class
+  of it will recur: `FacetSection` rendered its active filter by printing the
+  value directly, which was a name and became an id. **It typechecked perfectly**
+  — both are `string` — and only showed up as a UUID on screen. Anywhere a term
+  reference reaches the DOM, it has to go through `termNameFor()`.
+
+- **`makeTaxonomyActions` is gone**, along with `client/lib/taxonomy.ts` and
+  `client/data/seed.ts`. The twelve flattened taxonomy callbacks collapsed to
+  three server mutations parameterized by kind, exactly as predicted.
 
 ## Technical debt carried in from the prototype
 
-- The stale-closure duplicate guard bug fixed in `src/lib/taxonomy.js` also
-  exists in `.claude/docs/pantry-tracker-mockup.jsx`. The mockup is a design
-  reference, not code we run, so it's cosmetic — but don't copy from it blindly.
-  The fix carried into `client/lib/taxonomy.ts`.
+- The stale-closure duplicate guard bug still exists in
+  `.claude/docs/pantry-tracker-mockup.jsx`. Both files that once carried the fix
+  — `src/lib/taxonomy.js` and `client/lib/taxonomy.ts` — are now deleted:
+  duplicate checking moved server-side into `createTerm` / `updateTerm`, where
+  it is a query against the household's existing terms rather than a closure
+  over client state. The mockup is a design reference, not code we run, so this
+  is cosmetic — but don't copy from it blindly.
 - `LICENSE.md` is GPL-3.0, inherited from the WordPress plugin convention.
   Worth deciding deliberately for a hosted app.

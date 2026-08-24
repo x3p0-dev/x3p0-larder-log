@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Plus, Search, Menu, ShoppingCart } from 'lucide-preact';
+import { Plus, Search, Menu, ShoppingCart, X } from 'lucide-preact';
 
 import { Sidebar } from './components/Sidebar';
 import { StatusChip } from './components/StatusChip';
@@ -13,17 +13,14 @@ import { UndoToast } from './components/UndoToast';
 
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
+import { usePantryData } from './hooks/usePantryData';
 
-import { getTheme, statusFor } from './lib/theme';
-import { DEFAULT_LOCATION_ICON, DEFAULT_TYPE_ICON } from './lib/icons';
-import { makeTaxonomyActions } from './lib/taxonomy';
-import type { TaxonomyActionSet } from './lib/actions';
-import { newId } from './lib/id';
-import { seedItems, seedCategories, seedTypes, seedStores, emptyItem } from './data/seed';
+import { getTheme, statusFor, termNameFor } from './lib/theme';
+import type { TaxonomyActions } from './lib/actions';
 
 import type { StatusKey } from '../shared/status';
-import type { Item, ItemDraft, Settings, Term } from '../shared/types';
-import { fromInt, normalizeQty, toInt } from '../shared/qty';
+import type { Item, ItemDraft, ThemeOverride } from '../shared/types';
+import { toInt } from '../shared/qty';
 
 const PAGE_SIZE = 20;
 const UNDO_MS = 6000;
@@ -35,24 +32,15 @@ const STATUS_CHIPS: { key: StatusKey; label: string }[] = [
 ];
 
 /**
- * Storage keys are namespaced by the signed-in identity, so signing out and
- * back in as someone else shows their pantry rather than the last one open on
- * this device. Versioned so a shape change (v3: string quantities, string ids,
- * accordion state lifted out of the row) starts clean rather than reviving data
- * the current code can't read.
+ * The theme override is the **only** thing still in localStorage, and
+ * deliberately so: a dark-mode choice made on a phone should not follow you to
+ * a desktop. Everything else now lives in the database (D25).
+ *
+ * Namespaced per identity so signing in as someone else picks up their choice.
  */
-function keysFor(userId: string) {
-	const prefix = `larder.v3.${userId}`;
-	return {
-		items: `${prefix}.items`,
-		categories: `${prefix}.categories`,
-		types: `${prefix}.types`,
-		stores: `${prefix}.stores`,
-		settings: `${prefix}.settings`,
-	};
+function themeKeyFor(userId: string) {
+	return `larder.v4.${userId}.theme`;
 }
-
-const DEFAULT_SETTINGS: Settings = { themeOverride: 'system', defaultThreshold: '1' };
 
 type Props = {
 	userId: string;
@@ -62,35 +50,30 @@ type Props = {
 };
 
 export function Pantry({ userId, displayName, email, onSignOut }: Props) {
-	const KEYS = useMemo(() => keysFor(userId), [userId]);
-
 	const systemDark = useSystemTheme();
-	const [settings, setSettings] = usePersistentState<Settings>(KEYS.settings, DEFAULT_SETTINGS);
-	const { themeOverride, defaultThreshold } = settings;
+	const themeKey = useMemo(() => themeKeyFor(userId), [userId]);
+	const [themeOverride, setThemeOverride] = usePersistentState<ThemeOverride>(themeKey, 'system');
+
 	const dark = themeOverride === 'system' ? systemDark : themeOverride === 'dark';
 	const theme = getTheme(dark);
 
-	// A first sign-in finds nothing stored and falls through to the seed, which
-	// is what stands in for "create a household and seed its taxonomies" until
-	// Phase 2 gives those a server to live on.
-	const [items, setItems] = usePersistentState<Item[]>(KEYS.items, seedItems);
-	const [categories, setCategories] = usePersistentState<Term[]>(KEYS.categories, seedCategories);
-	const [types, setTypes] = usePersistentState<Term[]>(KEYS.types, seedTypes);
-	const [stores, setStores] = usePersistentState<Term[]>(KEYS.stores, seedStores);
+	const api = usePantryData();
 
-	const [activeCat, setActiveCat] = useState('All');
+	// Filters and view state are all client-side; none of it is data.
+	const [activeLocation, setActiveLocation] = useState<string | null>(null);
 	const [activeType, setActiveType] = useState<string | null>(null);
 	const [activeStore, setActiveStore] = useState<string | null>(null);
 	const [activeStatus, setActiveStatus] = useState<StatusKey | null>(null);
-	const [query, setQuery] = useState('');
+	const [search, setSearch] = useState('');
 
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [sortMenuOpen, setSortMenuOpen] = useState(false);
 	const [sortBy, setSortBy] = useState<SortKey>('default');
 
 	const [showForm, setShowForm] = useState(false);
-	const [form, setForm] = useState<ItemDraft>({ ...emptyItem, category: seedCategories[2].name });
+	const [form, setForm] = useState<ItemDraft | null>(null);
 	const [formError, setFormError] = useState('');
+	const [saving, setSaving] = useState(false);
 
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editForm, setEditForm] = useState<ItemDraft | null>(null);
@@ -101,67 +84,48 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+	/**
+	 * D17: undo is a client-held tombstone, not a soft delete.
+	 *
+	 * The removed row is kept here for the length of the window and re-inserted
+	 * by re-running `addItem`. That means undo produces a **new row id** and
+	 * does not survive a reload — both accepted, because the alternative is a
+	 * `deletedAt` column every query in the app would have to filter forever.
+	 */
 	const [pendingRemoval, setPendingRemoval] = useState<Item | null>(null);
 	const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
 	const [shoppingListOpen, setShoppingListOpen] = useState(false);
 	const [shoppingStore, setShoppingStore] = useState<string | null>(null);
 
-	const setSetting = (patch: Partial<Settings>) => setSettings((prev) => ({ ...prev, ...patch }));
+	const ready = api.status.state === 'ready' ? api.status : null;
+	const pantry = ready?.pantry;
+	const household = ready?.household;
 
-	// --- Taxonomy CRUD -----------------------------------------------------
+	const items = pantry?.items ?? [];
+	const locations = pantry?.locations ?? [];
+	const types = pantry?.types ?? [];
+	const stores = pantry?.stores ?? [];
+	const defaultThreshold = household?.household.defaultThreshold ?? '1';
+	const householdName = household?.household.name ?? '';
 
-	const categoryActions = makeTaxonomyActions({
-		setList: setCategories, setItems,
-		field: 'category', multi: false, defaultIcon: DEFAULT_LOCATION_ICON,
-		onTermRenamed: (oldName, newName) => {
-			setForm((f) => f.category === oldName ? { ...f, category: newName } : f);
-			if (activeCat === oldName) setActiveCat(newName);
-		},
-		onTermDeleted: (name) => { if (activeCat === name) setActiveCat('All'); },
-	});
-
-	const typeActions = makeTaxonomyActions({
-		setList: setTypes, setItems,
-		field: 'types', multi: true, defaultIcon: DEFAULT_TYPE_ICON,
-		onTermRenamed: (oldName, newName) => { if (activeType === oldName) setActiveType(newName); },
-		onTermDeleted: (name) => { if (activeType === name) setActiveType(null); },
-	});
-
-	const storeActions = makeTaxonomyActions({
-		setList: setStores, setItems,
-		field: 'stores', multi: true,
-		onTermRenamed: (oldName, newName) => {
-			if (activeStore === oldName) setActiveStore(newName);
-			if (shoppingStore === oldName) setShoppingStore(newName);
-		},
-		onTermDeleted: (name) => {
-			if (activeStore === name) setActiveStore(null);
-			if (shoppingStore === name) setShoppingStore(null);
-		},
-	});
-
-	// Flattened for the components that need to create or manage terms.
-	const taxonomyActions: TaxonomyActionSet = {
-		createCategory: categoryActions.create, renameCategory: categoryActions.rename,
-		recolorCategory: categoryActions.recolor, deleteCategory: categoryActions.remove,
-		createType: typeActions.create, renameType: typeActions.rename,
-		recolorType: typeActions.recolor, deleteType: typeActions.remove,
-		createStore: storeActions.create, renameStore: storeActions.rename,
-		recolorStore: storeActions.recolor, deleteStore: storeActions.remove,
-	};
+	const taxonomy: TaxonomyActions = useMemo(() => ({
+		create: api.createTerm,
+		update: api.updateTerm,
+		remove: api.deleteTerm,
+	}), [api.createTerm, api.updateTerm, api.deleteTerm]);
 
 	// --- Filtering / sorting -----------------------------------------------
 
 	// Location/type/store/search only — the status chips count against this set
 	// so their numbers don't collapse to zero once a status is picked.
 	const preStatusFiltered = useMemo(() => items.filter((it) => {
-		const matchesCat = activeCat === 'All' || it.category === activeCat;
-		const matchesType = ! activeType || it.types.includes(activeType);
-		const matchesStore = ! activeStore || it.stores.includes(activeStore);
-		const matchesQuery = it.name.toLowerCase().includes(query.toLowerCase());
-		return matchesCat && matchesType && matchesStore && matchesQuery;
-	}), [items, activeCat, activeType, activeStore, query]);
+		const matchesLocation = ! activeLocation || it.locationId === activeLocation;
+		const matchesType = ! activeType || it.typeIds.includes(activeType);
+		const matchesStore = ! activeStore || it.storeIds.includes(activeStore);
+		const matchesSearch = it.name.toLowerCase().includes(search.toLowerCase());
+		return matchesLocation && matchesType && matchesStore && matchesSearch;
+	}), [items, activeLocation, activeType, activeStore, search]);
 
 	const statusCounts = useMemo(() => {
 		const counts: Record<StatusKey, number> = { ok: 0, low: 0, out: 0 };
@@ -178,7 +142,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const sorted = useMemo(() => {
 		const arr = [...filtered];
 		// Quantity sorts parse first: these are strings, and "10" sorts before
-		// "2". The same rule will apply to the database in Phase 2.
+		// "2". The database can't sort them either, for the same reason (D4).
 		if (sortBy === 'name-asc') arr.sort((a, b) => a.name.localeCompare(b.name));
 		else if (sortBy === 'name-desc') arr.sort((a, b) => b.name.localeCompare(a.name));
 		else if (sortBy === 'qty-asc') arr.sort((a, b) => toInt(a.qty) - toInt(b.qty));
@@ -188,16 +152,16 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 
 	const visibleItems = sorted.slice(0, visibleCount);
 
-	const catCounts = useMemo(() => Object.fromEntries(
-		categories.map((cat) => [cat.name, items.filter((i) => i.category === cat.name).length])
-	), [items, categories]);
+	const locationCounts = useMemo(() => Object.fromEntries(
+		locations.map((loc) => [loc.id, items.filter((i) => i.locationId === loc.id).length])
+	), [items, locations]);
 
 	const anyFilterActive = Boolean(
-		activeCat !== 'All' || activeType || activeStore || activeStatus || query.trim()
+		activeLocation || activeType || activeStore || activeStatus || search.trim()
 	);
 
 	// Reset pagination whenever the active filter set changes.
-	useEffect(() => { setVisibleCount(PAGE_SIZE); }, [activeCat, activeType, activeStore, activeStatus, query]);
+	useEffect(() => { setVisibleCount(PAGE_SIZE); }, [activeLocation, activeType, activeStore, activeStatus, search]);
 
 	// Infinite scroll: grow visibleCount when the sentinel enters the viewport.
 	useEffect(() => {
@@ -215,23 +179,29 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	// Don't leave the undo timer running after unmount.
 	useEffect(() => () => clearTimeout(undoTimeoutRef.current), []);
 
+	/**
+	 * A filter pointing at a term someone else just deleted would silently hide
+	 * every item. Live queries make that a real race, not a hypothetical.
+	 */
+	useEffect(() => {
+		if (activeLocation && ! locations.some((l) => l.id === activeLocation)) setActiveLocation(null);
+		if (activeType && ! types.some((t) => t.id === activeType)) setActiveType(null);
+		if (activeStore && ! stores.some((s) => s.id === activeStore)) setActiveStore(null);
+		if (shoppingStore && ! stores.some((s) => s.id === shoppingStore)) setShoppingStore(null);
+	}, [locations, types, stores, activeLocation, activeType, activeStore, shoppingStore]);
+
 	const shoppingItems = useMemo(() => {
 		if (! shoppingStore) return [];
 		return items
-			.filter((it) => it.stores.includes(shoppingStore) && statusFor(it.qty, it.threshold, dark).key !== 'ok')
+			.filter((it) => it.storeIds.includes(shoppingStore) && statusFor(it.qty, it.threshold, dark).key !== 'ok')
 			.sort((a, b) => (toInt(a.qty) <= 0 ? -1 : 1) - (toInt(b.qty) <= 0 ? -1 : 1));
 	}, [items, shoppingStore, dark]);
 
 	// --- Item actions ------------------------------------------------------
 
 	function clearAllFilters() {
-		setActiveCat('All'); setActiveType(null); setActiveStore(null); setActiveStatus(null); setQuery('');
-	}
-
-	function adjustQty(id: string, delta: number) {
-		setItems((prev) => prev.map((it) => (
-			it.id === id ? { ...it, qty: fromInt(Math.max(0, toInt(it.qty) + delta)) } : it
-		)));
+		setActiveLocation(null); setActiveType(null); setActiveStore(null);
+		setActiveStatus(null); setSearch('');
 	}
 
 	function toggleOpen(id: string) {
@@ -240,45 +210,82 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		if (editingId === id) cancelEdit();
 	}
 
-	function removeItem(id: string) {
+	async function removeItem(id: string) {
 		const item = items.find((i) => i.id === id);
 		if (! item) return;
-		setItems((prev) => prev.filter((i) => i.id !== id));
+
 		if (editingId === id) cancelEdit();
 		if (openId === id) setOpenId(null);
+
+		await api.removeItem(id);
+
 		clearTimeout(undoTimeoutRef.current);
 		setPendingRemoval(item);
 		undoTimeoutRef.current = setTimeout(() => setPendingRemoval(null), UNDO_MS);
 	}
 
-	function undoRemove() {
+	async function undoRemove() {
 		if (! pendingRemoval) return;
-		setItems((prev) => [pendingRemoval, ...prev]);
+
+		const restore = pendingRemoval;
 		clearTimeout(undoTimeoutRef.current);
 		setPendingRemoval(null);
+
+		// Re-insert rather than un-delete. The row comes back with a new id
+		// (D17), which nothing references.
+		await api.addItem({
+			name: restore.name,
+			locationId: restore.locationId,
+			typeIds: restore.typeIds,
+			storeIds: restore.storeIds,
+			qty: restore.qty,
+			threshold: restore.threshold,
+			notes: restore.notes,
+		});
+	}
+
+	function emptyDraft(): ItemDraft {
+		return {
+			name: '',
+			locationId: activeLocation ?? locations[0]?.id ?? '',
+			typeIds: [],
+			storeIds: [],
+			qty: '1',
+			threshold: defaultThreshold,
+			notes: '',
+		};
 	}
 
 	function openAddForm() {
-		if (! showForm) setForm((f) => ({ ...f, threshold: defaultThreshold }));
+		if (! showForm) {
+			setForm(emptyDraft());
+			setFormError('');
+		}
 		setShowForm((s) => ! s);
 	}
 
-	function addItem() {
+	async function addItem() {
+		if (! form) return;
+
 		if (! form.name.trim()) {
 			setFormError('Give the item a name first.');
 			return;
 		}
-		setItems((prev) => [{
-			id: newId(),
-			name: form.name.trim(),
-			category: form.category || categories[0]?.name || '',
-			types: form.types,
-			stores: form.stores,
-			qty: normalizeQty(form.qty),
-			threshold: normalizeQty(form.threshold),
-			notes: form.notes.trim(),
-		}, ...prev]);
-		setForm({ ...emptyItem, category: form.category, threshold: defaultThreshold });
+
+		if (! form.locationId) {
+			setFormError('Pick a location first.');
+			return;
+		}
+
+		setSaving(true);
+		const id = await api.addItem(form);
+		setSaving(false);
+
+		// The server refused. `api.error` already says why, so keep the draft
+		// rather than discarding what was typed.
+		if (! id) return;
+
+		setForm(emptyDraft());
 		setFormError('');
 		setShowForm(false);
 	}
@@ -286,25 +293,20 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	function startEdit(item: Item) {
 		setEditingId(item.id);
 		setEditForm({
-			name: item.name, category: item.category,
-			types: [...item.types], stores: [...item.stores],
-			qty: item.qty, threshold: item.threshold, notes: item.notes,
+			name: item.name,
+			locationId: item.locationId,
+			typeIds: [...item.typeIds],
+			storeIds: [...item.storeIds],
+			qty: item.qty,
+			threshold: item.threshold,
+			notes: item.notes,
 		});
 	}
 
-	function saveEdit(id: string) {
+	async function saveEdit(id: string) {
 		if (! editForm || ! editForm.name.trim()) return;
-		const draft = editForm;
-		setItems((prev) => prev.map((it) => it.id === id ? {
-			...it,
-			name: draft.name.trim(),
-			category: draft.category,
-			types: draft.types,
-			stores: draft.stores,
-			qty: normalizeQty(draft.qty),
-			threshold: normalizeQty(draft.threshold),
-			notes: draft.notes.trim(),
-		} : it));
+
+		await api.updateItem(id, editForm);
 		cancelEdit();
 	}
 
@@ -313,16 +315,17 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		setEditForm(null);
 	}
 
-	function resetToSampleData() {
-		setItems(seedItems);
-		setCategories(seedCategories);
-		setTypes(seedTypes);
-		setStores(seedStores);
-		clearAllFilters();
-		cancelEdit();
-		setOpenId(null);
-		setShoppingStore(null);
-		setSettingsOpen(false);
+	// --- Non-ready states ---------------------------------------------------
+
+	if (api.status.state !== 'ready') {
+		return (
+			<Gate
+				status={api.status}
+				dark={dark}
+				onCreateHousehold={api.createHousehold}
+				onSignOut={onSignOut}
+			/>
+		);
 	}
 
 	return (
@@ -336,7 +339,20 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		>
 			<header class="transition-colors duration-200">
 				<div class="max-w-5xl mx-auto px-6 pt-5 pb-3 flex items-center justify-between flex-wrap gap-3">
-					<h1 class="font-disp text-lg sm:text-xl font-semibold leading-none" style={{ color: theme.textStrong }}>Larder Log</h1>
+					{/*
+					  * The household name sits under the app name rather than
+					  * replacing it. The schema has always been multi-household
+					  * (D3), so once a switcher exists this line is what tells
+					  * two of them apart — it needs a home before then.
+					  */}
+					<div class="min-w-0">
+						<h1 class="font-disp text-lg sm:text-xl font-semibold leading-none" style={{ color: theme.textStrong }}>Larder Log</h1>
+						{householdName && (
+							<p class="font-mono tracking-[0.02em] text-xs mt-1 truncate" style={{ color: theme.textFaint }}>
+								{householdName}
+							</p>
+						)}
+					</div>
 					<div class="flex items-center gap-2 flex-wrap">
 						{STATUS_CHIPS.map(({ key, label }) => (
 							<StatusChip
@@ -357,16 +373,38 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				</div>
 			</header>
 
+			{/*
+			  * Mutation failures are the only server errors that reach the client
+			  * at all — a query that fails never emits — and every message a
+			  * handler throws is written to be read by a person.
+			  */}
+			{api.error && (
+				<div class="max-w-5xl mx-auto px-6">
+					<div
+						role="alert"
+						class="flex items-start justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
+						style={{
+							background: theme.surfaceAlt,
+							color: theme.dangerText,
+							border: `1px solid ${theme.dangerText}`,
+						}}
+					>
+						<span>{api.error}</span>
+						<button onClick={api.dismissError} aria-label="Dismiss" class="shrink-0">
+							<X size={15} />
+						</button>
+					</div>
+				</div>
+			)}
+
 			<div class="max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-[190px_1fr] gap-6">
 				<Sidebar
-					items={items} categories={categories} types={types} stores={stores}
-					activeCat={activeCat} setActiveCat={setActiveCat}
+					items={items} locations={locations} types={types} stores={stores}
+					activeLocation={activeLocation} setActiveLocation={setActiveLocation}
 					activeType={activeType} setActiveType={setActiveType}
 					activeStore={activeStore} setActiveStore={setActiveStore}
-					catCounts={catCounts} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
-					onCreateCategory={categoryActions.create}
-					onCreateType={typeActions.create}
-					onCreateStore={storeActions.create}
+					locationCounts={locationCounts} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
+					taxonomy={taxonomy}
 					theme={theme} dark={dark}
 				/>
 
@@ -375,8 +413,8 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						<div class="flex items-center gap-2 px-3 py-2 rounded-md flex-1 min-w-[180px]" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
 							<Search size={15} style={{ color: theme.textMuted }} />
 							<input
-								value={query}
-								onInput={(e) => setQuery(e.currentTarget.value)}
+								value={search}
+								onInput={(e) => setSearch(e.currentTarget.value)}
 								placeholder="Search items…"
 								aria-label="Search items"
 								class="text-sm outline-none flex-1 bg-transparent"
@@ -395,7 +433,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					{activeStore && (
 						<div class="mb-4 flex items-center justify-between gap-2 px-3 py-2 rounded-md" style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}>
 							<span class="text-xs" style={{ color: theme.textMuted }}>
-								Filtering by <strong style={{ color: theme.text }}>{activeStore}</strong>
+								Filtering by <strong style={{ color: theme.text }}>{termNameFor(activeStore, stores)}</strong>
 							</span>
 							<button
 								onClick={() => { setShoppingStore(activeStore); setShoppingListOpen(true); }}
@@ -407,14 +445,12 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						</div>
 					)}
 
-					{showForm && (
+					{showForm && form && (
 						<div class="mb-5 p-4 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
 							<ItemFields
 								value={form} onChange={setForm} error={formError}
-								categories={categories} types={types} stores={stores}
-								onCreateCategory={categoryActions.create}
-								onCreateType={typeActions.create}
-								onCreateStore={storeActions.create}
+								locations={locations} types={types} stores={stores}
+								taxonomy={taxonomy}
 								dark={dark} theme={theme}
 							/>
 							<div class="sm:col-span-2 flex gap-2 justify-end">
@@ -429,10 +465,11 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 								<button
 									type="button"
 									onClick={addItem}
-									class="px-4 py-2 rounded text-sm font-medium"
+									disabled={saving}
+									class="px-4 py-2 rounded text-sm font-medium disabled:opacity-50"
 									style={{ background: theme.inkBg, color: theme.inkText }}
 								>
-									Save item
+									{saving ? 'Saving…' : 'Save item'}
 								</button>
 							</div>
 						</div>
@@ -454,15 +491,15 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 							<ItemCard
 								key={it.id}
 								item={it} open={openId === it.id}
-								categories={categories} types={types} stores={stores}
-								dark={dark} theme={theme} taxonomyActions={taxonomyActions}
+								locations={locations} types={types} stores={stores}
+								dark={dark} theme={theme} taxonomy={taxonomy}
 								editForm={editingId === it.id ? editForm : null}
 								onEditFormChange={setEditForm}
 								onToggleOpen={() => toggleOpen(it.id)}
-								onAdjustQty={(delta) => adjustQty(it.id, delta)}
-								onRemove={() => removeItem(it.id)}
+								onAdjustQty={(delta) => void api.adjustQty(it.id, delta)}
+								onRemove={() => void removeItem(it.id)}
 								onStartEdit={() => startEdit(it)}
-								onSaveEdit={() => saveEdit(it.id)}
+								onSaveEdit={() => void saveEdit(it.id)}
 								onCancelEdit={cancelEdit}
 							/>
 						))}
@@ -476,24 +513,135 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				</main>
 			</div>
 
-			<UndoToast item={pendingRemoval} onUndo={undoRemove} theme={theme} />
+			<UndoToast item={pendingRemoval} onUndo={() => void undoRemove()} theme={theme} />
 
 			<SettingsDrawer
 				open={settingsOpen} onClose={() => setSettingsOpen(false)}
-				themeOverride={themeOverride} setThemeOverride={(v) => setSetting({ themeOverride: v })}
-				defaultThreshold={defaultThreshold} setDefaultThreshold={(v) => setSetting({ defaultThreshold: v })}
-				categories={categories} types={types} stores={stores} taxonomyActions={taxonomyActions}
+				themeOverride={themeOverride} setThemeOverride={setThemeOverride}
+				householdName={householdName}
+				setHouseholdName={(v) => void api.updateHousehold({ name: v })}
+				defaultThreshold={defaultThreshold}
+				setDefaultThreshold={(v) => void api.updateHousehold({ defaultThreshold: v })}
+				locations={locations} types={types} stores={stores} taxonomy={taxonomy}
 				shoppingStore={shoppingStore} setShoppingStore={setShoppingStore}
 				onViewShoppingList={() => { setShoppingListOpen(true); setSettingsOpen(false); }}
-				onResetSampleData={resetToSampleData}
 				accountName={displayName} accountEmail={email} onSignOut={onSignOut}
 				dark={dark} theme={theme}
 			/>
 
 			<ShoppingListModal
-				open={shoppingListOpen} store={shoppingStore} items={shoppingItems}
+				open={shoppingListOpen}
+				store={shoppingStore ? termNameFor(shoppingStore, stores) : null}
+				items={shoppingItems}
 				onClose={() => setShoppingListOpen(false)} dark={dark} theme={theme}
 			/>
 		</div>
+	);
+}
+
+/**
+ * Everything that isn't a working pantry: loading, first run, and the states a
+ * query reports instead of throwing.
+ *
+ * These have to be values rather than exceptions because Zero never delivers a
+ * failed query to the client — it simply never emits, leaving `useQuery` on its
+ * initial value forever. Without an explicit `no-household` state a first-run
+ * user would stare at a blank screen. See `QueryState` in `shared/types.ts`.
+ */
+function Gate({
+	status,
+	dark,
+	onCreateHousehold,
+	onSignOut,
+}: {
+	status: ReturnType<typeof usePantryData>['status'];
+	dark: boolean;
+	onCreateHousehold: (name: string) => Promise<void>;
+	onSignOut: () => void;
+}) {
+	const theme = getTheme(dark);
+
+	// Named at creation rather than assigned a default and renamed later. The
+	// schema has always been multi-household (D3), so a household's name is the
+	// thing that will tell two of them apart once a switcher exists.
+	const [name, setName] = useState('My Pantry');
+	const [creating, setCreating] = useState(false);
+
+	const frame = (children: preact.ComponentChildren) => (
+		<div
+			class="font-sans min-h-screen w-full flex items-center justify-center px-6"
+			style={{ background: theme.pageBg, color: theme.text, colorScheme: dark ? 'dark' : 'light' }}
+		>
+			<div class="max-w-sm w-full text-center">{children}</div>
+		</div>
+	);
+
+	if (status.state === 'loading') {
+		return frame(
+			<p class="font-mono text-xs uppercase tracking-widest" style={{ color: theme.textFaint }}>
+				Loading&hellip;
+			</p>
+		);
+	}
+
+	if (status.state === 'no-household') {
+		const submit = async () => {
+			if (creating) return;
+			setCreating(true);
+			await onCreateHousehold(name);
+			setCreating(false);
+		};
+
+		return frame(
+			<>
+				<h1 class="font-disp text-2xl font-semibold mb-2" style={{ color: theme.textStrong }}>
+					Welcome to Larder Log
+				</h1>
+				<p class="text-sm mb-5" style={{ color: theme.textMuted }}>
+					Name your household to start tracking what&rsquo;s in the pantry and the freezer.
+					You&rsquo;ll get a starter set of locations, types, and stores to edit.
+				</p>
+
+				<label class="block text-left mb-4">
+					<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textMuted }}>
+						Household name
+					</span>
+					<input
+						value={name}
+						onInput={(e) => setName(e.currentTarget.value)}
+						onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit(); } }}
+						placeholder="My Pantry"
+						aria-label="Household name"
+						class="mt-1 w-full px-3 py-2 rounded border text-sm outline-none"
+						style={{ borderColor: theme.borderStrong, background: theme.surface, color: theme.text }}
+					/>
+				</label>
+
+				<button
+					onClick={() => void submit()}
+					disabled={creating || ! name.trim()}
+					class="w-full px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+					style={{ background: theme.primaryBg, color: theme.primaryText }}
+				>
+					{creating ? 'Setting up…' : 'Create household'}
+				</button>
+			</>
+		);
+	}
+
+	if (status.state === 'blocked') {
+		return frame(
+			<>
+				<p class="text-sm mb-4" style={{ color: theme.text }}>{status.message}</p>
+				<button onClick={onSignOut} class="text-xs underline" style={{ color: theme.textFaint }}>
+					Sign out
+				</button>
+			</>
+		);
+	}
+
+	// 'guest' — the gate in index.tsx normally catches this first.
+	return frame(
+		<p class="text-sm" style={{ color: theme.textMuted }}>Sign in to use Larder Log.</p>
 	);
 }

@@ -27,3 +27,6 @@
 /.spacefast-*
 .spacefast/.spacefast-*
 .spacefast/.space-link-*.tmp
+
+# Compiled output from `npm test`
+.test-out

@@ -16,5 +16,5 @@
 		"types": []
 	},
 	"include": ["client", "server", "shared"],
-	"exclude": ["node_modules", "dist", "src", ".ideas"]
+	"exclude": ["node_modules", ".test-out", ".ideas"]
 }

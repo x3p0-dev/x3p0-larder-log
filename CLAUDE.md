@@ -20,32 +20,47 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phase 1 is done. Phase 2 is next.** This is a real Spacefast Zero project:
-`sf.jsonc`, `theme.json`, a Preact + TypeScript client in `client/`, the domain
-types and pure helpers in `shared/`, and a capsule in `server/` that declares
-**no schema yet** (`capsule({ schema: {} })` compiles fine). Data still lives in
-`localStorage`, namespaced per signed-in identity — replacing that is Phase 2.
+**Phase 2 is done. Phase 3 is next.** A real Spacefast Zero project: `sf.jsonc`,
+`theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
+`shared/`, and a capsule in `server/` holding the full schema from
+`docs/data-model.md`, two live queries, and fifteen mutations.
+
+Data lives in the database. The **only** remaining `localStorage` call site is
+the per-device theme override, and that is correct there (D25) — a dark-mode
+choice on a phone should not follow you to a desktop.
+
+The React/Vite prototype in `src/` is **deleted**, along with `index.html`,
+`vite.config.js`, and the react/vite/tailwind dependencies. Zero compiles
+Tailwind itself. There is no `npm run prototype` any more.
 
 **It is live at <https://larderlog.view.fast/>** (space slug `larderlog`, team
-`justin-team-2`, published 2026-08-24). Gravatar sign-in, sign-out, and the gate
-were exercised end to end on that space, and `GET /api/status` returns `ok`, so
-the capsule's server half is genuinely deployed.
+`justin-team-2`) — but that is still the **Phase 1 build**. Phase 2 has never
+been published. Publishing it will run the first real migration.
 
-The React/Vite prototype in `src/` is still on disk and still runs
-(`npm run prototype`). It gets deleted in Phase 2, not before — don't remove it
-early, and don't edit it: `client/` is the live code.
+### Two auth bypasses, and they are not equally safe
 
-**Know this about the gate.** `sf dev` has no sign-in flow (`signInPath` and
-`signInUrl` are both null), so `auth.isGuest` never goes false locally. The gate
-in `client/index.tsx` therefore lets a guest through **on loopback hostnames
-only**, and shows a persistent orange "Dev guest · not signed in" badge while it
-does — see D14. The bypass is **confirmed inert in production**: the badge does
-not appear on the published space, and a signed-out visitor there gets the
-sign-in screen. Don't widen it to LAN addresses, and take it out if Spacefast
-ever ships a local sign-in stub.
+`sf dev` ships no sign-in flow (`signInPath` and `signInUrl` are both null), so
+`auth.isGuest` never goes false locally. Two separate holes exist because of it:
 
-Still true locally: sign-in cannot be exercised on `sf dev`. Anything touching
-auth has to be checked against the published space.
+1. **The client gate** (`client/index.tsx`) lets a guest through on loopback
+   hostnames only, with a persistent orange "Dev guest · not signed in" badge —
+   D14. **Confirmed inert in production**: the badge does not appear on the
+   published space and a signed-out visitor gets the sign-in screen.
+2. **The server** (`shared/identity.ts`) accepts the exact identity `sf dev`
+   issues — `guest:local` / `Local` / `guest` / not authenticated, all four
+   matched. That value comes from `zeroGuestAuth()` in the `spacefast` CLI, so
+   it should never appear on a hosted runtime. **This one has NOT been verified
+   against the published space.** Until it has, treat it as the weaker hole. If
+   a published space ever issued `guest:local`, every anonymous visitor would
+   share one household. Check it on the next publish.
+
+Don't widen either one, and take both out if Spacefast ships a local sign-in
+stub.
+
+**`sf dev` issues one fixed identity**, so a second local tab is the same user.
+That is enough to watch a mutation propagate; it is not enough to test two
+members of a household. Anything touching sign-in, invites, or roles has to be
+checked against the published space.
 
 See `docs/roadmap.md` for the phases.
 
@@ -127,9 +142,10 @@ update `docs/roadmap.md` and the status section here.
 - **The mockup is a design reference, not source.** `pantry-tracker-mockup.jsx`
   is a design artifact Justin edits and replaces wholesale. Diff it against the
   implementation rather than assuming it matches. It also contains at least one
-  known bug (a stale-closure duplicate guard, fixed in `client/lib/taxonomy.ts`
-  and in the soon-to-be-deleted `src/lib/taxonomy.js`, but not in the mockup),
-  so don't copy from it blindly.
+  known bug (a stale-closure duplicate guard), and it is **name-based
+  throughout** while the app now joins taxonomies by id — so it is a reference
+  for *layout and interaction*, never for data shape. Don't copy from it
+  blindly.
 
 ## Code conventions
 
@@ -153,7 +169,7 @@ update `docs/roadmap.md` and the status section here.
 npm install
 npm run dev          # the Zero app — `sf dev` on http://localhost:4173
 npm run typecheck    # tsc --noEmit over client/, server/, shared/
-npm run prototype    # the old React/Vite prototype on http://localhost:5173
+npm test             # unit tests over shared/ — compiles with tsc, runs on node
 ```
 
 `sf` is a pinned devDependency, **not** a global install — use the npm scripts
@@ -174,46 +190,49 @@ curl -X POST -H "authorization: Bearer $CAP" -H "origin: http://127.0.0.1:4173" 
 curl -b "spacefast_zero_dev_4173=$CAP" http://127.0.0.1:4173/zero.css
 ```
 
-For the prototype, `file://` will never work — `index.html` references raw JSX
-that Vite must transform. Use the dev server.
+`sf dev` state is in memory and resets on restart. Pass `--state-backend sqlite`
+to keep a database between runs.
 
 ## Verifying work
 
-There is no test runner configured. What works, cheapest first:
+Cheapest first:
 
-- **`npm run typecheck`** is the primary check. It covers `client/`, `server/`,
-  and `shared/` under `strict`, and it is the only thing that catches the
-  mistakes this codebase is prone to — string-encoded numbers used as numbers,
-  taxonomy names used where ids belong.
+- **`npm test`** — 81 assertions over `shared/`, compiled with the project's
+  `tsc` and run on plain Node. No runner, no dependencies. It covers the things
+  that are invisible when wrong: the D20 capability matrix, D18's
+  one-household rule, D22's last-owner guard, invite expiry boundaries, and the
+  dev-guest bypass in `shared/identity.ts`. **Add to it** when you touch any of
+  those — that file is the app's only authorization test.
+- **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
+  the fastest way to catch string-encoded numbers used as numbers.
+  **It will not catch a term id rendered where a name belongs** — both are
+  `string`. That bug shipped once already; see `docs/notes.md`.
 - **`sf dev`** compiles the capsule for real. A clean start plus `GET /` and
   `GET /api/status` proves the client and server entries both resolve.
-- **Curl the compiled assets** to confirm styling actually shipped. Because Zero
-  finds Tailwind classes by scanning source for static strings, "it typechecks"
-  says nothing about whether a class exists. Fetch `/zero.css` (see the
-  bootstrap dance above) and grep for the class. The file escapes **both
-  brackets and colons**: `max-h-[80vh]` appears as `max-h-\[80vh\]`, and
-  `md:grid-cols-[190px_1fr]` as `.md\:grid-cols-\[190px_1fr\]`. Grepping the
-  half-escaped form returns nothing and looks exactly like a missing class —
-  search for a distinctive substring (`190px`) when in doubt.
+- **Curl the compiled assets** to confirm styling shipped. Zero finds Tailwind
+  classes by scanning source for static strings, so "it typechecks" says nothing
+  about whether a class exists. Fetch `/zero.css` (see the bootstrap dance
+  above) and grep. The file escapes **both brackets and colons**: `max-h-[80vh]`
+  appears as `max-h-\[80vh\]` and `md:grid-cols-[190px_1fr]` as
+  `.md\:grid-cols-\[190px_1fr\]`. Grepping the half-escaped form returns
+  nothing and looks exactly like a missing class — search for a distinctive
+  substring (`190px`) when in doubt.
 - **Curl the published space** for anything auth-related; it needs no bootstrap
   token. `https://larderlog.view.fast/api/status` returning `ok` is the cheapest
-  proof that the server half of a publish actually landed.
-- **Plain Node unit tests** for pure logic. `shared/` has no dependencies at
-  all, so `shared/qty.ts` and `shared/status.ts` can be checked by compiling
-  them with `tsc` and running the output directly.
+  proof that a publish's server half landed.
 
-Do not claim something works because it compiled. Two hard limits:
+Do not claim something works because it compiled. Three hard limits:
 
-- **There is no browser in this environment**, so clicks, the
-  IntersectionObserver infinite scroll, drawer animation, and dark mode are
-  still unverified. Justin has to check those.
-- **There is no sign-in on `sf dev`.** D14's loopback bypass makes the app
-  reachable locally, but it sidesteps authentication rather than exercising it.
-  Auth was verified once, on the published space (2026-08-24) — so anything that
-  touches `useAuth()`, `signOut()`, or the gate has to be re-checked there, not
-  locally.
-
-Say both plainly rather than implying otherwise.
+- **There is no browser in this environment.** Justin has to click. Ask him.
+- **There is no sign-in on `sf dev`**, and it issues one fixed identity
+  (`guest:local`). So a second tab is the same user: enough to watch a mutation
+  propagate, not enough to test two members of a household. Anything touching
+  sign-in, invites, or roles goes to the published space.
+- **A failing query is invisible to the client.** Zero emits `query.result` only
+  — there is no error path — so a query that throws leaves `useQuery` on its
+  initial value forever, indistinguishable from loading. This is why queries
+  return a `QueryState` union instead of throwing. Never add a `throw` to a
+  query handler.
 
 ## Git
 
@@ -232,8 +251,8 @@ WordPress-era leftovers were cleared on 2026-08-24. What remains is deliberate:
   synced to the platform on publish; `.spacefast` holds the space claim key —
   neither exists yet, since nothing has been published). `.env.example` is
   deliberately un-ignored.
-  **Do not add `/public`, `/vendor`, or `/packages` back** — `public/` is Vite's
-  static-asset directory and must stay tracked.
+  (The old warning about not re-adding `/public` was a Vite concern; Vite is
+  gone and no `public/` directory exists. Nothing to preserve there now.)
 - **`.gitattributes`** keeps only line-ending normalization and binary
   denotes. The old `export-ignore` block was for building WordPress plugin ZIPs
   with `git archive` and had `docs/` and `CLAUDE.md` in it; the original is at
@@ -243,6 +262,7 @@ WordPress-era leftovers were cleared on 2026-08-24. What remains is deliberate:
 Still open:
 
 - Git history starts at `c6e8901` "Phase 0." — the Vite prototype plus all
-  project docs. Branch is `master`.
+  project docs. The prototype itself was deleted in Phase 2; it is still in
+  history if it is ever needed. Branch is `master`.
 - **`LICENSE.md` is GPL-3.0**, inherited from the WordPress plugin convention.
   Worth a deliberate choice for a hosted app rather than a default.

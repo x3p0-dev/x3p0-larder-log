@@ -2,18 +2,16 @@ import { ChipPicker } from './ChipPicker';
 import type { Theme } from '../lib/theme';
 import { STATUS_INK } from '../lib/theme';
 import type { ItemDraft, Term } from '../../shared/types';
-
-type CreateTerm = (name: string, color?: string, icon?: string) => void;
+import type { TaxonomyActions } from '../lib/actions';
+import { createTermFor } from '../lib/actions';
 
 type Props = {
 	value: ItemDraft;
 	onChange: (next: ItemDraft) => void;
-	categories: Term[];
+	locations: Term[];
 	types: Term[];
 	stores: Term[];
-	onCreateCategory: CreateTerm;
-	onCreateType: CreateTerm;
-	onCreateStore: CreateTerm;
+	taxonomy: TaxonomyActions;
 	error?: string;
 	dark: boolean;
 	theme: Theme;
@@ -25,16 +23,17 @@ type Props = {
  * the only things that actually differ between the two.
  */
 export function ItemFields({
-	value, onChange, categories, types, stores,
-	onCreateCategory, onCreateType, onCreateStore,
+	value, onChange, locations, types, stores, taxonomy,
 	error, dark, theme,
 }: Props) {
 	const inputStyle = { borderColor: theme.borderStrong, background: theme.surface, color: theme.text };
 	const labelStyle = { color: theme.textMuted };
 
 	const set = (patch: Partial<ItemDraft>) => onChange({ ...value, ...patch });
-	const toggleIn = (field: 'types' | 'stores') => (name: string) => set({
-		[field]: value[field].includes(name) ? value[field].filter((x) => x !== name) : [...value[field], name],
+
+	// Toggles a term id in one of the two multi-select fields.
+	const toggleIn = (field: 'typeIds' | 'storeIds') => (id: string) => set({
+		[field]: value[field].includes(id) ? value[field].filter((x) => x !== id) : [...value[field], id],
 	});
 
 	return (
@@ -60,25 +59,25 @@ export function ItemFields({
 			<label class="text-sm flex flex-col gap-1">
 				<span class="font-mono tracking-[0.02em] text-xs" style={labelStyle}>Location</span>
 				<ChipPicker
-					kind="location" entities={categories} selected={value.category} multi={false}
-					onSelect={(name) => set({ category: name || value.category })}
-					onCreate={onCreateCategory} theme={theme} dark={dark}
+					kind="location" entities={locations} selected={value.locationId} multi={false}
+					onSelect={(id) => set({ locationId: id || value.locationId })}
+					onCreate={createTermFor(taxonomy, 'location')} theme={theme} dark={dark}
 				/>
 			</label>
 
 			<label class="text-sm flex flex-col gap-1 sm:col-span-2">
 				<span class="font-mono tracking-[0.02em] text-xs" style={labelStyle}>Type</span>
 				<ChipPicker
-					kind="type" entities={types} selected={value.types} multi
-					onToggle={toggleIn('types')} onCreate={onCreateType} theme={theme} dark={dark}
+					kind="type" entities={types} selected={value.typeIds} multi
+					onToggle={toggleIn('typeIds')} onCreate={createTermFor(taxonomy, 'type')} theme={theme} dark={dark}
 				/>
 			</label>
 
 			<label class="text-sm flex flex-col gap-1 sm:col-span-2">
 				<span class="font-mono tracking-[0.02em] text-xs" style={labelStyle}>Store</span>
 				<ChipPicker
-					kind="store" entities={stores} selected={value.stores} multi
-					onToggle={toggleIn('stores')} onCreate={onCreateStore} theme={theme} dark={dark}
+					kind="store" entities={stores} selected={value.storeIds} multi
+					onToggle={toggleIn('storeIds')} onCreate={createTermFor(taxonomy, 'store')} theme={theme} dark={dark}
 				/>
 			</label>
 

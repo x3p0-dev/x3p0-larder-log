@@ -9,17 +9,21 @@ typed server capsule, database and Gravatar sign-in included.
 
 ## Status
 
-**Phase 1 — Zero scaffold and sign-in gate.** The app is a Preact + TypeScript
-client in `client/`, shared domain logic in `shared/`, and a server capsule in
-`server/` that declares no schema yet. Data still lives in localStorage,
-namespaced per signed-in identity; the real data layer is Phase 2.
+**Phase 2 — real data layer, done.** A Preact + TypeScript client in `client/`,
+pure domain logic in `shared/`, and a server capsule in `server/` holding the
+full schema, two live queries, and fifteen mutations. Data lives in the
+database; the only thing still in `localStorage` is the per-device theme
+override, which belongs there.
 
-Sign-in is built but **unverified** — `sf dev` has no local sign-in flow, so
-Gravatar sign-in has never actually been exercised. See the
+The React + Vite prototype has been deleted — it settled the interaction design
+and had no job left.
+
+Next is Phase 3: households, members, and invites. See the
 [roadmap](docs/roadmap.md).
 
-The React + Vite prototype in `src/` is still on disk and still runs. It settled
-the interaction design and gets deleted in Phase 2.
+**Two things stay unverified locally**, both because `sf dev` ships no sign-in
+flow: real Gravatar sign-in, and anything needing two different identities at
+once. Those have to be checked against the published space.
 
 ## Running
 
@@ -27,7 +31,7 @@ the interaction design and gets deleted in Phase 2.
 npm install
 npm run dev          # the Zero app — http://localhost:4173
 npm run typecheck    # tsc --noEmit over client/, server/, shared/
-npm run prototype    # the old prototype — http://localhost:5173
+npm test             # unit tests over shared/, no runner needed
 ```
 
 ## Documentation

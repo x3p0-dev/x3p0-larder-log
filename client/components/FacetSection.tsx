@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-preact';
 import { ChipPicker } from './ChipPicker';
 import type { IconComponent } from '../lib/icons';
 import type { Theme } from '../lib/theme';
+import { termNameFor } from '../lib/theme';
 import type { Term, TermKind } from '../../shared/types';
 
 type Props = {
@@ -11,15 +12,16 @@ type Props = {
 	kind: TermKind;
 	Icon: IconComponent;
 	entities: Term[];
+	/** A term **id**, or null for "no filter". */
 	active: string | null;
-	onSelect: (name: string | null) => void;
-	onCreate: (name: string, color?: string, icon?: string) => void;
+	onSelect: (id: string | null) => void;
+	onCreate: (name: string, color?: string, icon?: string) => Promise<string | null>;
 	theme: Theme;
 	dark: boolean;
 	defaultOpen?: boolean;
 	clearable?: boolean;
 	leadingAll?: { label: string; count: number; active: boolean; onClick: () => void };
-	countFor?: (name: string) => number;
+	countFor?: (id: string) => number;
 };
 
 /**
@@ -46,7 +48,12 @@ export function FacetSection({
 				<span class="flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest min-w-0" style={{ color: theme.textMuted }}>
 					<Icon size={12} class="shrink-0" />
 					<span class="truncate">{title}</span>
-					{active && <span class="font-mono normal-case shrink-0" style={{ color: theme.textFaint }}>· {active}</span>}
+					{/* `active` is a term id — always resolve it to a name before showing it. */}
+					{active && (
+						<span class="font-mono normal-case shrink-0" style={{ color: theme.textFaint }}>
+							· {termNameFor(active, entities)}
+						</span>
+					)}
 				</span>
 				<div class="flex items-center gap-2 shrink-0">
 					{clearable && active && (

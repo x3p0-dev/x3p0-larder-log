@@ -52,22 +52,50 @@ fixed the same day; the whole sequence is in
 [spacefast.md](../.claude/docs/spacefast.md) and
 [the bug report](../.claude/docs/spacefast-bug-2026-08-24.md).
 
-## Phase 2 — Real data layer
+## Phase 2 — Real data layer ✅
 
-- Declare the full schema from [data-model.md](data-model.md)
-- `requireHousehold()` helper; every handler resolves the household server-side
-- `pantry` and `household` queries; item and taxonomy mutations
-- Replace `usePersistentState` with `useQuery` / `useMutation`
-- Server-side validation and integer clamping for `qty` / `threshold` — reuse
-  `normalizeQty` from `shared/qty.ts` rather than writing the rule twice
-- **Convert taxonomy references from names to ids** — the largest single piece
-  of this phase; see [notes](notes.md#known-cost-carried-into-phase-2)
-- Retire the Vite app and its localStorage code
+- ✅ Full schema from [data-model.md](data-model.md), in `server/schema.ts`
+- ✅ `requireMembership()` / `requireCapability()` in `server/auth.ts` — every
+  handler resolves the household server-side and asserts a capability
+- ✅ `pantry` and `household` queries; item, taxonomy, invite, and membership
+  mutations, all declaring `invalidate()`
+- ✅ Server-side validation and clamping, reusing `shared/qty.ts` — plus
+  `shared/term.ts` (names, ink), `shared/icons.ts` (D23), `shared/invite.ts`
+  (codes, expiry), `shared/roles.ts` (D20 capabilities)
+- ✅ Platform spike: six unknowns answered, recorded in [notes](notes.md) and
+  `.claude/docs/spacefast.md`
+- ✅ `npm test` — 66 assertions over `shared/`, no runner needed
+- ✅ Replaced `usePersistentState` with `useQuery` / `useMutation` via
+  `client/hooks/usePantryData.ts` — the only remaining localStorage call site is
+  the per-device theme override, which is correct there (D25)
+- ✅ **Taxonomy references converted from names to ids throughout the client** —
+  filters, chips, item forms, item cards, the taxonomy manager, and the shopping
+  list all speak ids. A rename is now a single-row update
+- ✅ Queries return a discriminated `QueryState` rather than throwing, because
+  Zero never delivers a failed query to the client — see [notes](notes.md)
+- ✅ First-run seeding moved server-side into `createHousehold`; a household with
+  no locations cannot hold an item at all
+- ✅ Retired the Vite prototype: `src/`, `index.html`, `vite.config.js`, `dist/`,
+  the three `prototype*` scripts, and the `react` / `react-dom` /
+  `lucide-react` / `tailwindcss` / `vite` dependencies. Zero compiles Tailwind
+  itself, so nothing was left needing them
 
 **Done when:** two browsers signed in as the same identity see each other's
-edits live, and a reload loses nothing. The live space this needs now exists.
+edits live, and a reload loses nothing.
 
-**This is the risky milestone.** Schema mistakes get expensive after it, since
+**Verified in a browser 2026-08-24.** First-run household creation, adding
+items, the quantity steppers, creating terms from the `+` chip, renaming terms,
+and D16's refusal to delete a location holding items all work against the real
+capsule. Two things were found and fixed this way: `FacetSection` printed a raw
+term id as its active-filter label, and the server rejected the `sf dev` guest
+identity that D14's client-side bypass had just let through.
+
+**Still unverified, and it needs the published space:** anything touching real
+sign-in, and the two-browser live-query test. `sf dev` issues one fixed identity
+(`guest:local`), so a second local tab is the same user — enough to watch a
+mutation propagate, not enough to test two members of a household.
+
+**This was the risky milestone.** Schema mistakes get expensive from here, since
 destructive migrations need explicit flags.
 
 ## Phase 3 — Households, members, invites
@@ -129,7 +157,10 @@ Parked deliberately — see [non-goals](overview.md#non-goals) for the ones that
 are parked permanently.
 
 - Household switching UI (schema already supports it; only the UI is missing —
-  and queries can take arguments, so a household id can be a query parameter)
+  and queries can take arguments, so a household id can be a query parameter).
+  Households are already named and the name already has a home in the header
+  ([D3](decisions.md#d3-multi-household-schema-single-household-ui)), so the
+  switcher is a control, not a data change
 - Item photos via Zero storage
 - Multiple households per person
 - Roles beyond owner/editor/viewer — a contributor tier, per-location

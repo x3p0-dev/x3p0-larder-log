@@ -1,9 +1,10 @@
+import { useEffect, useState } from 'preact/hooks';
 import { X, ShoppingCart, LogOut } from 'lucide-preact';
 
 import { TaxonomyManager } from './TaxonomyManager';
 import type { Theme } from '../lib/theme';
 import { chipStyle, entityColorFor } from '../lib/theme';
-import type { TaxonomyActionSet } from '../lib/actions';
+import type { TaxonomyActions } from '../lib/actions';
 import type { Term, ThemeOverride } from '../../shared/types';
 
 const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
@@ -17,16 +18,18 @@ type Props = {
 	onClose: () => void;
 	themeOverride: ThemeOverride;
 	setThemeOverride: (value: ThemeOverride) => void;
+	householdName: string;
+	setHouseholdName: (value: string) => void;
 	defaultThreshold: string;
 	setDefaultThreshold: (value: string) => void;
-	categories: Term[];
+	locations: Term[];
 	types: Term[];
 	stores: Term[];
-	taxonomyActions: TaxonomyActionSet;
+	taxonomy: TaxonomyActions;
+	/** A store **id**, or null. */
 	shoppingStore: string | null;
-	setShoppingStore: (name: string | null) => void;
+	setShoppingStore: (id: string | null) => void;
 	onViewShoppingList: () => void;
-	onResetSampleData: () => void;
 	accountName: string;
 	accountEmail: string;
 	onSignOut: () => void;
@@ -37,14 +40,28 @@ type Props = {
 export function SettingsDrawer({
 	open, onClose,
 	themeOverride, setThemeOverride,
+	householdName, setHouseholdName,
 	defaultThreshold, setDefaultThreshold,
-	categories, types, stores, taxonomyActions,
+	locations, types, stores, taxonomy,
 	shoppingStore, setShoppingStore, onViewShoppingList,
-	onResetSampleData,
 	accountName, accountEmail, onSignOut,
 	dark, theme,
 }: Props) {
 	const inputStyle = { borderColor: theme.borderStrong, background: theme.surface, color: theme.text };
+
+	// Held locally so typing doesn't fire a mutation per keystroke; committed on
+	// blur or Enter. Re-syncs when the server value changes, which with live
+	// queries can happen because someone else renamed it.
+	const [nameDraft, setNameDraft] = useState(householdName);
+
+	useEffect(() => { setNameDraft(householdName); }, [householdName]);
+
+	function commitName() {
+		const trimmed = nameDraft.trim();
+
+		if (trimmed && trimmed !== householdName) setHouseholdName(trimmed);
+		else setNameDraft(householdName);
+	}
 
 	return (
 		<>
@@ -83,6 +100,22 @@ export function SettingsDrawer({
 					</div>
 
 					<div class="mb-6">
+						<p class="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: theme.textMuted }}>Household</p>
+						<input
+							value={nameDraft}
+							onInput={(e) => setNameDraft(e.currentTarget.value)}
+							onBlur={commitName}
+							onKeyDown={(e) => { if (e.key === 'Enter') { commitName(); e.currentTarget.blur(); } }}
+							aria-label="Household name"
+							class="w-full px-3 py-1.5 rounded border text-sm outline-none"
+							style={inputStyle}
+						/>
+						<p class="text-xs mt-1" style={{ color: theme.textFaint }}>
+							Only an owner can rename the household.
+						</p>
+					</div>
+
+					<div class="mb-6">
 						<p class="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: theme.textMuted }}>Appearance</p>
 						<div class="flex gap-1.5">
 							{THEME_OPTIONS.map((opt) => (
@@ -116,14 +149,14 @@ export function SettingsDrawer({
 						<p class="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: theme.textMuted }}>Shopping list</p>
 						<div class="flex flex-wrap gap-1.5 mb-2">
 							{stores.map((s) => {
-								const tc = entityColorFor(s.name, stores, dark);
+								const tc = entityColorFor(s.id, stores, dark);
 								return (
 									<button
-										key={s.name}
-										onClick={() => setShoppingStore(s.name)}
-										aria-pressed={shoppingStore === s.name}
+										key={s.id}
+										onClick={() => setShoppingStore(s.id)}
+										aria-pressed={shoppingStore === s.id}
 										class="px-2.5 py-1 rounded-full text-xs font-medium"
-										style={chipStyle(tc, shoppingStore === s.name, theme, 'ring')}
+										style={chipStyle(tc, shoppingStore === s.id, theme, 'ring')}
 									>
 										{s.name}
 									</button>
@@ -142,36 +175,36 @@ export function SettingsDrawer({
 
 					<div class="h-px my-5" style={{ background: theme.border }} />
 
+					{/*
+					  * The location sentence is D16: with no nullable fields there
+					  * is no "no location" for an item to fall back to, so the
+					  * delete is refused rather than silently orphaning rows.
+					  */}
 					<p class="text-xs mb-4" style={{ color: theme.textFaint }}>
-						Rename, recolor, or delete taxonomy terms. Deleting doesn&rsquo;t remove items &mdash; they&rsquo;ll just lose that tag.
+						Rename, recolor, or delete terms. Deleting a type or store just removes that
+						tag from your items. A location can only be deleted once nothing is stored there.
 					</p>
 
 					<div class="flex flex-col gap-6">
 						<TaxonomyManager
-							title="Locations" entities={categories} theme={theme}
-							onRename={taxonomyActions.renameCategory}
-							onDelete={taxonomyActions.deleteCategory}
-							onRecolor={taxonomyActions.recolorCategory}
+							title="Locations" entities={locations} theme={theme}
+							onRename={(id, name) => void taxonomy.update('location', id, { name })}
+							onDelete={(id) => void taxonomy.remove('location', id)}
+							onRecolor={(id, ink) => void taxonomy.update('location', id, { ink })}
 						/>
 						<TaxonomyManager
 							title="Stores" entities={stores} theme={theme}
-							onRename={taxonomyActions.renameStore}
-							onDelete={taxonomyActions.deleteStore}
-							onRecolor={taxonomyActions.recolorStore}
+							onRename={(id, name) => void taxonomy.update('store', id, { name })}
+							onDelete={(id) => void taxonomy.remove('store', id)}
+							onRecolor={(id, ink) => void taxonomy.update('store', id, { ink })}
 						/>
 						<TaxonomyManager
 							title="Types" entities={types} theme={theme}
-							onRename={taxonomyActions.renameType}
-							onDelete={taxonomyActions.deleteType}
-							onRecolor={taxonomyActions.recolorType}
+							onRename={(id, name) => void taxonomy.update('type', id, { name })}
+							onDelete={(id) => void taxonomy.remove('type', id)}
+							onRecolor={(id, ink) => void taxonomy.update('type', id, { ink })}
 						/>
 					</div>
-
-					<div class="h-px my-5" style={{ background: theme.border }} />
-
-					<button onClick={onResetSampleData} class="text-xs underline" style={{ color: theme.textFaint }}>
-						Reset to sample data
-					</button>
 				</div>
 			</div>
 		</>

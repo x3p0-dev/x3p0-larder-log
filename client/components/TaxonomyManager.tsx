@@ -7,10 +7,10 @@ import type { Term } from '../../shared/types';
 
 type RowProps = {
 	entity: Term;
-	onRename: (oldName: string, newName: string) => void;
-	onDelete: (name: string) => void;
+	onRename: (id: string, newName: string) => void;
+	onDelete: (id: string) => void;
 	colorOpen: string | null;
-	setColorOpen: (name: string | null) => void;
+	setColorOpen: (id: string | null) => void;
 	theme: Theme;
 };
 
@@ -22,14 +22,18 @@ function TaxonomyRow({ entity, onRename, onDelete, colorOpen, setColorOpen, them
 
 	function commit() {
 		const trimmed = draft.trim();
-		if (trimmed && trimmed !== entity.name) onRename(entity.name, trimmed);
+
+		// A rename is a single-row update now — the term's identity is its id,
+		// so nothing that references it has to change. Under the Phase 1
+		// name-joined model this rewrote every item that mentioned the term.
+		if (trimmed && trimmed !== entity.name) onRename(entity.id, trimmed);
 		else setDraft(entity.name);
 	}
 
 	return (
 		<div class="flex items-center gap-2 py-1">
 			<button
-				onClick={() => setColorOpen(colorOpen === entity.name ? null : entity.name)}
+				onClick={() => setColorOpen(colorOpen === entity.id ? null : entity.id)}
 				class="w-4 h-4 rounded-full shrink-0"
 				style={{ background: entity.ink }}
 				aria-label={`Change color for ${entity.name}`}
@@ -43,7 +47,7 @@ function TaxonomyRow({ entity, onRename, onDelete, colorOpen, setColorOpen, them
 				style={{ borderColor: theme.borderStrong, background: theme.surface, color: theme.text }}
 				aria-label={`Rename ${entity.name}`}
 			/>
-			<button onClick={() => onDelete(entity.name)} class="shrink-0" style={{ color: theme.dangerText }} aria-label={`Delete ${entity.name}`}>
+			<button onClick={() => onDelete(entity.id)} class="shrink-0" style={{ color: theme.dangerText }} aria-label={`Delete ${entity.name}`}>
 				<Trash2 size={14} />
 			</button>
 		</div>
@@ -53,9 +57,9 @@ function TaxonomyRow({ entity, onRename, onDelete, colorOpen, setColorOpen, them
 type Props = {
 	title: string;
 	entities: Term[];
-	onRename: (oldName: string, newName: string) => void;
-	onDelete: (name: string) => void;
-	onRecolor: (name: string, color: string) => void;
+	onRename: (id: string, newName: string) => void;
+	onDelete: (id: string) => void;
+	onRecolor: (id: string, color: string) => void;
 	theme: Theme;
 };
 
@@ -68,15 +72,15 @@ export function TaxonomyManager({ title, entities, onRename, onDelete, onRecolor
 			{entities.length === 0 && <p class="text-xs" style={{ color: theme.textFaint }}>None yet</p>}
 			<div class="flex flex-col">
 				{entities.map((e) => (
-					<div key={e.name}>
+					<div key={e.id}>
 						<TaxonomyRow
 							entity={e} onRename={onRename} onDelete={onDelete}
 							colorOpen={colorOpen} setColorOpen={setColorOpen} theme={theme}
 						/>
-						{colorOpen === e.name && (
+						{colorOpen === e.id && (
 							<ColorPicker
 								value={e.ink}
-								onChange={(hex) => { onRecolor(e.name, hex); setColorOpen(null); }}
+								onChange={(hex) => { onRecolor(e.id, hex); setColorOpen(null); }}
 								theme={theme}
 								class="flex flex-wrap gap-1.5 mb-2 ml-6"
 							/>
