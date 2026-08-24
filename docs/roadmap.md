@@ -72,10 +72,23 @@ destructive migrations need explicit flags.
 
 ## Phase 3 — Households, members, invites
 
-- `createInvite` / `revokeInvite` / `redeemInvite`
+- `createInvite` / `revokeInvite` / `redeemInvite` — each invite carries the
+  role it grants ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) and
+  expires after 14 days
+  ([D24](decisions.md#d24-invites-expire-after-14-days))
 - `/join/<code>` route
-- Member list in Settings
-- Real two-person test: both accounts editing the same household at once
+- Member list in Settings, with `changeRole` / `removeMember` / `leaveHousehold`
+- `shared/roles.ts` — the `can(role, capability)` matrix
+  ([D20](decisions.md#d20-three-roles-owner-editor-viewer)) — and a role check
+  in every mutation that writes
+- Last-owner and no-escalation guards
+  ([D22](decisions.md#d22-ownership-is-a-role-not-a-column))
+- Issue `owner` and `editor` invites only; `viewer` waits on Phase 4's
+  read-only UI. **Note the consequence:** editors may mint viewer invites and
+  nothing else ([D21](decisions.md#d21-invites-carry-the-role-they-grant)), so
+  until viewer goes live in Phase 4 the `invite:create` capability is dormant
+  for editors and invite creation is effectively owner-only. Build the
+  capability check properly anyway — it wakes up on its own when viewer ships
 
 **Done when:** Justin's wife signs in via an invite link and edits the same
 pantry.
@@ -89,6 +102,10 @@ Everything the prototype does that Phases 1–3 didn't carry over:
 - Undo on remove (needs a server-side soft delete or a client-held tombstone —
   the prototype's in-memory undo won't survive a live query refresh)
 - Cascade cleanup on taxonomy delete
+- **Read-only UI pass, which is what makes `viewer` usable** — steppers, inline
+  edit, the taxonomy manager, and every add/remove affordance need a disabled
+  state. The enforcement already shipped in Phase 3; this is the client half
+  ([D20](decisions.md#d20-three-roles-owner-editor-viewer))
 - Theme override persistence (per device, so localStorage is correct here)
 - Typography: Fraunces and IBM Plex Mono have **no way to load** — confirmed on
   the published space, where `zero.css` ships zero `@font-face` rules. Either
@@ -115,5 +132,7 @@ are parked permanently.
   and queries can take arguments, so a household id can be a query parameter)
 - Item photos via Zero storage
 - Multiple households per person
-- Roles beyond owner/member
+- Roles beyond owner/editor/viewer — a contributor tier, per-location
+  permissions ([D20](decisions.md#d20-three-roles-owner-editor-viewer) settled
+  the base set)
 - Barcode scanning

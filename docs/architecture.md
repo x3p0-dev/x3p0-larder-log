@@ -107,19 +107,68 @@ The rules, which every handler must follow without exception:
    confirm its `householdId` matches the caller's, then write.
 3. **Reject guests** in every handler that writes. Check `ctx.auth.isGuest`.
 
+4. **Never `.first()` a membership lookup.** One household per user is a rule
+   the handler enforces, not one the schema guarantees — so a multi-row result
+   is a bug, and picking a row silently lands the caller's edits in an arbitrary
+   household. See
+   [D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema).
+
 A single shared helper enforces this so it can't be forgotten per-handler:
 
 ```ts
 // Resolves the caller's household, or throws.
 async function requireHousehold(ctx) {
-  if (ctx.auth.isGuest) throw new Error("Sign in required");
-  const membership = await ctx.db.memberships
-    .withIndex("by_user", (r) => r.eq("userId", ctx.auth.userId))
-    .first();
-  if (!membership) throw new Error("No household");
-  return membership.householdId;
+  if (ctx.auth.isGuest) throw new Error('Sign in required');
+
+  const rows = await ctx.db.memberships
+    .withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+    .collect();
+
+  if (! rows.length) throw new Error('No household');
+
+  // Deliberately not `.first()`. The schema permits many memberships (D3) but
+  // the app supports one (D18); more than one means the switcher shipped
+  // without this check being revisited.
+  if (rows.length > 1) {
+    throw new Error('Multiple households; switcher not implemented');
+  }
+
+  return rows[0].householdId;
 }
 ```
+
+First run is a separate path, not a branch inside this helper: a signed-in
+identity with no membership gets a household and an owner membership created for
+it once, and every handler after that calls `requireHousehold()` and expects
+exactly one.
+
+### Roles
+
+Membership decides *reach*; `role` decides *permission*. A handler that writes
+checks both — `requireHousehold()` for the boundary, then a capability:
+
+```ts
+import { can } from '../shared/roles';
+
+const { householdId, role } = await requireMembership(ctx);
+
+if (! can(role, 'item:write')) throw new Error('Not allowed');
+```
+
+`can()` is a pure function over the matrix in
+[data-model.md](data-model.md#roles), living in `shared/roles.ts` so the server
+enforces and the client disables UI from the same table
+([D20](decisions.md#d20-three-roles-owner-editor-viewer)). Writing the rules
+inline per handler is how a three-role matrix across a dozen handlers drifts.
+
+Two invariants the helper can't express, which their own mutations must guard:
+
+- **Every household retains at least one owner.** The last owner cannot be
+  demoted or removed and cannot leave
+  ([D22](decisions.md#d22-ownership-is-a-role-not-a-column)).
+- **No invite grants a role above its creator's**, and demoting or removing a
+  member revokes the invites they created
+  ([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
 
 ## Platform constraints that shape the design
 
@@ -129,7 +178,7 @@ These are hard limits of the runtime, not preferences:
 |---|---|
 | Schema fields are only `string()`, `boolean()`, `id(table)` | **No number type.** `qty` and `threshold` are strings, parsed at the edges. See [D4](decisions.md#d4-numbers-are-strings). |
 | No array or JSON field type | Item→Type and Item→Store are **join tables**, not arrays. See [D5](decisions.md#d5-join-tables-for-many-to-many). |
-| No row-level security | Ownership checks are hand-written in every handler. |
+| No row-level security | Household **and role** checks are hand-written in every handler. See [D20](decisions.md#d20-three-roles-owner-editor-viewer). |
 | Destructive migrations need an explicit flag | Renaming or dropping a field is `sf db migrate --rename` / `--drop`. Additive changes apply on publish. Get the schema right early. |
 | Server bundle ≤ 768 KiB, client ≤ 8 MiB | Not a concern at this size, but rules out heavy dependencies. |
 | Storage: 5 MiB per object | Fine if we ever add item photos. |

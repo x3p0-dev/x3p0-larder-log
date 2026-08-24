@@ -32,39 +32,28 @@ gets answered.
   Affects all error handling, and it is the first thing Phase 2 will hit.
 - **Are there compound index ranges?** Docs only show `range.eq("field", value)`
   on a single field. If `.eq().eq()` chains work, some queries get cheaper.
+- **Is `Date` available inside a capsule handler?** Every `Date` call in the Zero
+  docs is client-side, and server code may import only `@spacefast/zero/server`
+  and its own files. [D24](decisions.md#d24-invites-expire-after-14-days)
+  computes invite expiry server-side and depends on this. If the server runtime
+  has no clock, that design has to change.
+- **What format are `createdAt` / `updatedAt`?** Undocumented. Zero's examples
+  only ever pass them to `new Date()` client-side, which parses non-ISO formats
+  in implementation-defined ways. D24 sidesteps this by writing its own ISO 8601
+  `expiresAt`, but anything else that compares or sorts by row timestamps needs
+  the answer first.
+- **Do live queries diff, or re-send the whole result set on every change?**
+  This is what decides whether
+  [D26](decisions.md#d26-pantry-stays-one-payload) holds: if `pantry` re-sends
+  everything, the hottest path in the app (`adjustQty`, a `+1`) re-transmits the
+  entire pantry. Cheapest thing to measure in the spike, and the most consequential.
 - **Migration granularity.** "Normal additive changes apply during `sf publish`"
   — is adding an index additive? Is widening a default?
 
 ## Product questions
 
-- **Deleting a location.** The prototype leaves items pointing at a deleted
-  location (they fall back to a hashed color and a box icon). Options: block the
-  delete while items reference it, reassign those items to another location, or
-  clear the field and render "no location". The Settings copy currently promises
-  "deleting doesn't remove items", which is true of all three.
-- **Undo after a live query.** The prototype's undo holds the removed item in
-  memory for 6 seconds. With server-backed live queries, a delete propagates
-  immediately to every tab. Do we need a soft-delete (`deletedAt` / `archived`
-  boolean) so undo is real, or is a client-held tombstone plus a re-insert good
-  enough? A re-insert changes the row `id`, which matters if anything ever
-  references items.
-- **Does the `pantry` query stay one payload?** Returning items + joins + all
-  three taxonomies in one live subscription is simple and fine for hundreds of
-  rows. At what point does it stop being fine, and do we care?
-- **Should invite codes expire?** They're bearer credentials. Revocable is
-  decided; time-limited is not.
-- **Can one person belong to multiple households?** The schema allows it —
-  `memberships` is a plain join. But `requireHousehold()` takes `.first()`,
-  which silently picks one. Either enforce one-household-per-user for now or
-  design the switcher sooner. (Now unblocked either way: queries *can* take
-  arguments, so a household id can be a query parameter rather than server-side
-  "active household" state.)
-- **Per-user vs per-household settings.** `defaultThreshold` is on the household
-  (shared). Theme override is per-device (localStorage). Is there anything that
-  should be per-user-but-synced? If so, we need a `preferences` table.
-- **Quantity granularity.** Everything is integer counts. "Half a bag of rice"
-  has no representation. Is that fine? (Probably — but it's the kind of thing
-  that gets discovered in week three of real use.)
+All settled as of 2026-08-24 — see [decisions.md](decisions.md), D16-D26.
+Nothing product-shaped is currently blocking Phase 2.
 
 ## Known cost carried into Phase 2
 

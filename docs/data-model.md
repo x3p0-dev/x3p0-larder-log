@@ -17,10 +17,15 @@ The container for everything. One household is one pantry.
 ```ts
 households: table({
   name: string(),
-  ownerId: string(),                      // ctx.auth.userId of the creator
+  createdBy: string(),                    // ctx.auth.userId of the creator
   defaultThreshold: string().default("1"), // numeric-as-string
-}).index("by_owner", ["ownerId"])
+})
 ```
+
+`createdBy` is **provenance only and never consulted for access**. Ownership
+lives entirely in `memberships.role`, and a household may have several owners
+([D22](decisions.md#d22-ownership-is-a-role-not-a-column)). The old `by_owner`
+index is gone with it — every authorization path goes through `memberships`.
 
 ### `memberships`
 
@@ -32,14 +37,18 @@ memberships: table({
   householdId: id("households"),
   userId: string(),                    // ctx.auth.userId
   displayName: string(),               // denormalized for the member list
-  role: string().default("member"),    // "owner" | "member"
+  role: string().default("viewer"),    // "owner" | "editor" | "viewer"
 })
   .index("by_user", ["userId"])
   .index("by_household", ["householdId"])
 ```
 
 `by_user` is the hot path: every request resolves the caller's household through
-it.
+it — and never with `.first()`
+([D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema)).
+
+`role` is the authorization level, defaulting to the least privileged value. See
+[Roles](#roles) below.
 
 ### `invites`
 
@@ -49,12 +58,32 @@ A join code. Someone signed in who opens `/join/<code>` gets a membership row.
 invites: table({
   householdId: id("households"),
   code: string(),                        // random, URL-safe, server-generated
+  role: string(),                        // the level this code grants
+  expiresAt: string(),                   // ISO 8601 UTC; "" means never
   createdBy: string(),
   revoked: boolean().default(false),
 })
   .index("by_code", ["code"])
   .index("by_household", ["householdId"])
+  .index("by_creator", ["createdBy"])
 ```
+
+`role` is fixed when the code is minted and must be **strictly below** the
+creator's own level — owners mint any level, editors mint `viewer` only, viewers
+mint nothing ([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
+`by_creator` exists so demoting or removing a member can revoke the invites they
+created — without it, an owner demoted to editor keeps minting editors through
+codes issued before the demotion.
+
+`expiresAt` is an ISO 8601 UTC timestamp written at mint time as now + 14 days
+([D24](decisions.md#d24-invites-expire-after-14-days)). ISO 8601 is chosen
+because it is the one date encoding that compares correctly as a plain string —
+the [D4](decisions.md#d4-numbers-are-strings) trap does not apply to it.
+Redemption checks `revoked` **and** expiry.
+
+Redemption **rejects a caller who already has a membership**, since
+[D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema)
+permits exactly one per user.
 
 ### `locations`, `types`, `stores`
 
@@ -63,19 +92,23 @@ separate tables because they attach to items differently (one location per item,
 many types and stores) and because merging them into one polymorphic table buys
 nothing here.
 
+`icon` holds a key from a closed, curated set — never an upload, and validated
+server-side against `shared/icons.ts`
+([D23](decisions.md#d23-icons-are-a-closed-set-and-the-keys-live-in-shared)).
+
 ```ts
 locations: table({
   householdId: id("households"),
   name: string(),
   ink: string(),                 // base hex; tints derive from it
-  icon: string(),                // key into LOCATION_ICONS
+  icon: string(),                // key from shared/icons.ts
 }).index("by_household", ["householdId"]),
 
 types: table({
   householdId: id("households"),
   name: string(),
   ink: string(),
-  icon: string(),                // key into TYPE_ICONS
+  icon: string(),                // key from shared/icons.ts
 }).index("by_household", ["householdId"]),
 
 stores: table({
@@ -157,10 +190,49 @@ Every non-membership table carries `householdId`. The rule is uniform:
 Enforced in handlers, never by the database. See
 [architecture](architecture.md#authorization).
 
+Membership grants *reach*; `role` grants *permission*. Both are checked: the
+household check decides whether the row is yours to touch at all, the role check
+decides what you may do to it.
+
+## Roles
+
+`memberships.role` is one of `"owner"`, `"editor"`, `"viewer"` and is the sole
+authority for ownership — `households.createdBy` is never consulted
+([D20](decisions.md#d20-three-roles-owner-editor-viewer),
+[D22](decisions.md#d22-ownership-is-a-role-not-a-column)).
+
+| Capability | owner | editor | viewer |
+|---|---|---|---|
+| `pantry:read` | ✓ | ✓ | ✓ |
+| `item:write` | ✓ | ✓ | — |
+| `taxonomy:write` | ✓ | ✓ | — |
+| `household:settings` | ✓ | — | — |
+| `invite:create` / `invite:revoke` | ✓ | ✓ ¹ | — |
+| `member:role` ² | ✓ | — | — |
+| `member:remove` | ✓ | — | — |
+| `household:delete` | ✓ | — | — |
+
+¹ An editor may mint **viewer invites only** — an invite grants a role strictly
+below its creator's ([D21](decisions.md#d21-invites-carry-the-role-they-grant)).
+
+² Promoting or demoting an existing member is owner-only. Combined with ¹, this
+means **the editor tier can only grow by owner action**: neither path to editor
+is available to an editor.
+
+The matrix is a pure `can(role, capability)` in **`shared/roles.ts`**, so the
+server enforces and the client disables UI from one table rather than two.
+
+**Invariant: every household retains at least one owner.** The last owner cannot
+be demoted, cannot demote themselves, and cannot leave; deleting the household is
+the only exit.
+
 ## Numbers as strings
 
 `qty` and `threshold` hold non-negative integers encoded as decimal strings
-("0", "6", "12"). Consequences to respect:
+("0", "6", "12") — "decimal" means base-10 text, not a fractional value.
+Fractional quantities are deliberately not representable
+([D19](decisions.md#d19-quantities-stay-whole-numbers)). Consequences to
+respect:
 
 - **Parse on read, serialize on write.** One pair of helpers, used everywhere:
   `toInt(value)` and `fromInt(n)`. Never `parseInt` inline.
@@ -181,15 +253,24 @@ dependents, in this order:
 | `item` | its `itemTypes`, `itemStores` rows | — |
 | `type` | its `itemTypes` rows | — |
 | `store` | its `itemStores` rows | — |
-| `location` | — | items keep a dangling `locationId`; see [open questions](notes.md) |
-| `household` | everything scoped to it | last, after all children |
+| `location` | — | **refused** if any item references it; see [D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it) |
+| `member` (demote or remove) | — | revoke the `invites` they created ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) |
+| `household` | everything scoped to it, `memberships` and `invites` included | last, after all children |
 
-The location case is deliberately unresolved — the prototype leaves items
-pointing at a deleted location, and we haven't decided whether that's right.
+The location case is not a cascade at all. Zero has no nullable fields, so an
+item cannot be left without a location; `deleteTerm` refuses to delete a
+location while any item points at it and reports the count instead
+([D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it)).
+
+Deleting an **item** is a hard delete — undo is a client-held tombstone that
+re-inserts, not a `deletedAt` flag, so no query filters on deletion state
+([D17](decisions.md#d17-undo-is-a-client-held-tombstone-not-a-soft-delete)).
+Undo therefore produces a new row `id`.
 
 ## Query surface (initial)
 
-Resolved server-side from `ctx.auth`; no household id crosses the wire.
+Resolved server-side from `ctx.auth`; no household id crosses the wire. Every
+mutation checks a capability from [Roles](#roles) before it writes.
 
 | Handler | Kind | Purpose |
 |---|---|---|
@@ -200,7 +281,11 @@ Resolved server-side from `ctx.auth`; no household id crosses the wire.
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path |
 | `removeItem` | mutation | Delete an item and its joins |
 | `createTerm` / `renameTerm` / `recolorTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind |
-| `createInvite` / `revokeInvite` / `redeemInvite` | mutation | Membership |
+| `updateHousehold` | mutation | Name and `defaultThreshold` — owner only |
+| `createInvite` / `revokeInvite` / `redeemInvite` | mutation | Membership; the invite carries its role |
+| `changeRole` | mutation | Promote or demote a member — owner only, last-owner guarded |
+| `removeMember` / `leaveHousehold` | mutation | Membership removal, last-owner guarded |
+| `deleteHousehold` | mutation | Owner only; cascades through every child table |
 
 `pantry` returning one denormalized payload keeps the client to a single live
 subscription. Whether that stays practical as the item count grows is an

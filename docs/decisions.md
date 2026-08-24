@@ -275,3 +275,386 @@ that should express this declaratively. See [notes](notes.md).
 - *Rely on the platform gate instead of the app's.* It authenticates against
   Spacefast accounts, not Gravatar identities, and it has no concept of a
   household.
+
+---
+
+## D16. Deleting a location is blocked while items reference it
+
+**Decided:** 2026-08-24
+
+Zero has no nullable or optional fields — every column holds a value, and the
+type vocabulary is `string()`, `boolean()`, `id(table)`. So "clear the location"
+is not a thing the schema can express without changing `locationId` to a plain
+`string()` and giving up the typed reference.
+
+`deleteTerm` therefore refuses to delete a location while any item points at it,
+and reports the count so the user knows what to move.
+
+**Why this one:** it costs nothing in the schema — no sentinel row to seed, no
+undeletable-row logic threaded through every taxonomy mutation, no migration. It
+is also the only option that can become either of the others later without
+touching stored data.
+
+**Consequence:** the Settings copy "deleting doesn't remove items" stays true,
+but it now needs a second sentence — deleting is refused rather than silent.
+
+**Rejected:**
+- *Reassign to a reserved "Unsorted" location.* Friendlier, and the likely
+  upgrade if blocking turns out to be annoying in real use. It needs a
+  guaranteed-present per-household row that seeding creates and no mutation can
+  delete — real work for a case that may never come up in a two-person pantry.
+- *Allow dangling references.* What the prototype does today: items keep a
+  `locationId` pointing at nothing and fall back to a hashed color and a box
+  icon. Requires `locationId: string()` rather than `id("locations")`, which
+  discards referential typing on the one relationship every item has.
+
+---
+
+## D17. Undo is a client-held tombstone, not a soft delete
+
+**Decided:** 2026-08-24
+
+`removeItem` really deletes. The client keeps the removed row and its join rows
+in memory for the length of the undo window, and undo re-runs `addItem` with the
+captured fields.
+
+**Why:** a `deletedAt` column would make every read in the app filter on it
+forever, and give cascade cleanup a second mode to get wrong — a permanent tax
+on every query to buy a six-second affordance.
+
+**Trade-off accepted:** undo produces a **new row id**, and with live queries
+another signed-in tab sees the item vanish and reappear. Both are fine here:
+nothing references items except the `itemTypes` / `itemStores` rows the undo
+recreates, and the flicker is visible only if two people are looking at the same
+list in the same six seconds.
+
+**Consequence:** undo does not survive a page reload, and it is not
+cross-device. If either becomes a real complaint, that is the signal to revisit.
+
+**Rejected:** *soft delete with `deletedAt`.* The right answer if we ever want a
+"recently deleted" view or cross-device recovery. Adding the column later is an
+additive migration, so this stays cheap to reverse.
+
+---
+
+## D18. One household per user, enforced in the handler — not in the schema
+
+**Decided:** 2026-08-24
+
+The schema stays exactly as [D3](#d3-multi-household-schema-single-household-ui)
+describes: `memberships` is a plain join, and nothing prevents a user from
+holding rows for several households. The *handler* is what draws the line.
+
+`requireHousehold()` reads the caller's memberships through `by_user` and:
+
+- **one row** → the household
+- **zero rows** → throw. First-run creation is a separate path, so the helper
+  stays resolve-or-throw rather than resolve-or-create.
+- **more than one** → throw. Not `.first()`.
+
+**Why throw rather than pick:** `.first()` on a multi-row result is a silent
+wrong answer — the user's edits land in whichever household the index happened
+to return, and nothing surfaces the problem. An explicit error is a bug report
+instead of quiet data corruption.
+
+**Why not support many now:** it means threading `householdId` through every
+handler as an argument and building a switcher in Phase 2, on the milestone the
+roadmap already calls the risky one. Queries can take arguments, so nothing
+about doing it later is harder than doing it now.
+
+**Reaching multi-household later** needs no destructive migration: delete the
+throw, add the parameter, build the switcher. That was the point of D3.
+
+---
+
+## D19. Quantities stay whole numbers
+
+**Decided:** 2026-08-24
+
+`qty` and `threshold` hold non-negative **integers** encoded as strings.
+`shared/qty.ts` enforces it — `toInt` rejects `"1.5"` along with `"-3"` and
+`"12abc"`, reading anything unparseable as `0`.
+
+("Decimal string" throughout these docs means base-10 text, not a fractional
+value. The encoding is decimal; the value is an integer.)
+
+**Why:** the whole UI is built on whole counts — a `+1` / `−1` stepper, a
+low-stock comparison, a shopping list. Fractions have no obvious behavior in any
+of them. What does `−1` do to `1.5`?
+
+**Why this is safe to defer:** the column is already a `string()`, so allowing
+decimals later changes `toInt` / `fromInt` / `isQty` and the stepper — **no
+migration, and every existing integer value stays valid**. The reverse would not
+be true, which is the argument for starting strict.
+
+**Revisit after** a month of real use. "Half a bag of rice" is exactly the kind
+of gap that shows up in week three, and it is cheap to close when it does.
+
+---
+
+## D20. Three roles: owner, editor, viewer
+
+**Decided:** 2026-08-24
+
+`memberships.role` holds one of `"owner"`, `"editor"`, `"viewer"`, defaulting to
+`"viewer"`. The value `"member"` from the original sketch is gone.
+
+**Names:** `viewer` rather than `reader` — "reader" implies text, and Drive,
+Docs, and Notion have already taught every user what a viewer is. `editor` is
+kept because it is exact.
+
+| Capability | owner | editor | viewer |
+|---|---|---|---|
+| `pantry:read` — items, taxonomies, shopping list, member list | ✓ | ✓ | ✓ |
+| `item:write` — add, edit, remove, adjust qty | ✓ | ✓ | — |
+| `taxonomy:write` — create, rename, recolor, delete terms | ✓ | ✓ | — |
+| `household:settings` — name, `defaultThreshold` | ✓ | — | — |
+| `invite:create` / `invite:revoke` | ✓ | ✓ ¹ | — |
+| `member:role` — change an **existing** member's role ² | ✓ | — | — |
+| `member:remove` | ✓ | — | — |
+| `household:delete` | ✓ | — | — |
+
+¹ An editor may mint **viewer invites only**
+([D21](#d21-invites-carry-the-role-they-grant)).
+² Only owners promote or demote — and only owners can produce an editor by any
+route, since [D21](#d21-invites-carry-the-role-they-grant) limits editors to
+minting viewer invites.
+Leaving voluntarily is available to everyone, subject to the last-owner rule in
+[D22](#d22-ownership-is-a-role-not-a-column).
+
+**The matrix lives in `shared/roles.ts` as a pure `can(role, capability)`.** Zero
+has no row-level security, so every one of these is a hand-written check; three
+roles across a dozen handlers is exactly the thing that drifts when the rules are
+written inline. `shared/` imports nothing, so the server enforces and the client
+disables UI from the same table — the same boundary
+[D10](#d10-typescript-for-the-port-with-the-domain-types-in-shared) draws.
+
+**The client half is a Phase 4 concern.** Phase 3 stores `role` and enforces
+every check server-side, but issues only `owner` and `editor` invites. Viewer is
+unusable until the read-only UI pass lands — steppers, inline edit, the taxonomy
+manager, and the add/remove affordances all need a disabled state, and that is
+more work than the schema. Shipping the enforcement first means no half-disabled
+screens and nothing to redo.
+
+**Deliberately not added:** a contributor tier (add items but not delete). It is
+a real distinction in a CMS and noise in a two-person pantry.
+
+---
+
+## D21. Invites carry the role they grant
+
+**Decided:** 2026-08-24
+
+`invites` gets a `role` field. An invite is a bearer credential for a specific
+level, so the level is fixed when the code is minted rather than guessed at
+redemption.
+
+**Who may mint what:** an invite may only grant a role **strictly below** its
+creator's.
+
+| Creator | May invite |
+|---|---|
+| owner | owner, editor, viewer |
+| editor | viewer |
+| viewer | nothing |
+
+Editors mint viewer invites and nothing else. **The editor tier can only grow by
+owner action** — there is no path by which an editor produces another editor.
+
+### Promotion and invitation are different paths
+
+These two statements are both true and only look contradictory:
+
+> Only owners can create new editors. Editors can invite new editors.
+
+**Both paths to the editor tier are owner-only**, which is what makes the
+guarantee absolute rather than conditional:
+
+| | Existing member | New person |
+|---|---|---|
+| **Mutation** | `changeRole` | `createInvite` + `redeemInvite` |
+| **Who may promote to editor** | owner only | owner only |
+| **What an editor may do** | nothing | invite a viewer |
+
+An editor cannot change the level of anyone already in the household — no
+promoting a viewer, no demoting a peer (`member:role`, reserved to owners by
+[D20](#d20-three-roles-owner-editor-viewer)) — and cannot mint a code that
+grants editor. There is no leave-and-rejoin gap either: a viewer who leaves and
+is re-invited by an editor comes back as a viewer, because a viewer invite is
+the only kind an editor can produce.
+
+**Cost accepted:** an owner is in the loop for every new editor. In a household
+where one or two people administer and everyone else is along for the ride,
+that is the point rather than a tax.
+
+**Two rules that close the obvious holes:**
+
+- **Demoting or removing a member revokes the invites they created.**
+  Validation happens at creation, not redemption, so revocation is the only
+  thing that enforces it afterward. The case that matters is an **owner demoted
+  to editor**: their outstanding editor- and owner-invites would otherwise keep
+  minting exactly the levels they just lost. `by_creator` exists for this.
+- **Redeeming while already in a household is rejected.**
+  [D18](#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema)
+  allows exactly one membership per user, so redemption must refuse rather than
+  create a second one. It also means a code can never change a current member's
+  role in either direction — no self-promotion, and no editor demoting a peer by
+  handing them a viewer invite. The error needs to say so plainly; this is the
+  most likely thing a real invite recipient hits.
+
+**Still open:** whether codes expire. See [notes](notes.md).
+
+---
+
+## D22. Ownership is a role, not a column
+
+**Decided:** 2026-08-24
+
+`memberships.role === "owner"` is the **sole** authority for ownership. A
+household may have any number of owners.
+
+`households.ownerId` is renamed **`createdBy`** and is never consulted for
+access — it records who set the household up and nothing more.
+
+**Why:** keeping `ownerId` authoritative alongside a `role` column creates two
+sources of truth that drift the first time someone is promoted — the same
+failure [D9](#d9-status-is-derived-never-stored) avoids for status. Renaming it
+makes the field's job unambiguous at every call site.
+
+**Why multiple owners:** with a single owner, losing that account leaves the
+household with no administrator and makes ownership transfer a special-case
+mutation. Two people who share a pantry should both be able to administer it.
+
+**The last-owner rule:** a household always retains at least one owner. The last
+owner cannot demote themselves, cannot be demoted, and cannot leave. Deleting
+the household is the exit. This is the standard way these systems strand people,
+and it is one guard in `member:role` and one in the leave path.
+
+**Cost:** `ownerId` → `createdBy` is a destructive rename (`sf db migrate
+--rename`) once anything is published. It is free today because the schema does
+not exist yet, which is the entire reason to settle it now.
+
+---
+
+## D23. Icons are a closed set, and the keys live in `shared/`
+
+**Decided:** 2026-08-24
+
+Taxonomy icons are never uploaded. `icon` stores a **key** into a curated list —
+today 10 location icons and 10 type icons in `client/lib/icons.ts`; stores have
+no icon and render as outlined chips.
+
+That much was already true. What changes is where the list lives:
+
+- **`shared/icons.ts`** holds the key arrays — plain strings, no imports.
+- **`client/lib/icons.ts`** keeps the key → `lucide-preact` component map.
+
+**Why the split:** Zero's server may import `@spacefast/zero/server` and its own
+files, nothing else, and `lucide-preact` is a client package regardless — so the
+server currently has no way to reject `icon: "not-a-real-icon"`. It would store
+the garbage and the client would render a fallback box forever. With the keys in
+`shared/`, `createTerm` and `recolorTerm` validate on write and the closed set
+becomes an enforced constraint instead of a convention.
+
+This is the boundary CLAUDE.md already describes for `client/lib/theme.ts`:
+status *derivation* is shared, status *colors* are not. Icon *keys* are shared,
+icon *components* are not.
+
+**Unrelated:** item photos via Zero storage, still parked in the roadmap's
+"Later, maybe". This decision is about taxonomy icons only.
+
+---
+
+## D24. Invites expire after 14 days
+
+**Decided:** 2026-08-24
+
+`invites` gets `expiresAt: string()` — an **ISO 8601 UTC timestamp**
+(`"2026-09-07T14:23:00.000Z"`), computed server-side at mint time as now + 14
+days. `redeemInvite` rejects a code whose `expiresAt` is in the past, alongside
+the existing `revoked` check.
+
+**Why an explicit field rather than `createdAt` + 14 days:** the policy becomes a
+constant applied at mint time instead of a schema fact applied retroactively.
+Changing 14 to 30 later affects new codes only; outstanding ones keep the expiry
+they were issued with, which is the behavior anyone would expect from a
+credential. It also leaves room for a per-invite override without a migration.
+
+**Why ISO 8601 UTC specifically:** it is the one date encoding that sorts and
+compares correctly as a plain string, since it is fixed-width and
+big-endian. Given [D4](#d4-numbers-are-strings) — where string ordering puts
+"10" before "2" and cost us a standing rule against sorting in the database —
+picking an encoding that survives lexicographic comparison is worth doing
+deliberately. Epoch milliseconds as a string would reintroduce exactly the D4
+problem.
+
+**Why not derive from `createdAt`:** its format is undocumented. Zero's own
+examples only ever pass it to `new Date()` client-side, and `new Date()` parses
+non-ISO formats in implementation-defined ways. An `expiresAt` we write
+ourselves has a format we control.
+
+**`""` means never.** Nothing mints such a code today, but reserving the empty
+string costs nothing and keeps the escape hatch from needing a migration.
+
+**Depends on an unconfirmed platform fact:** that `Date` is available inside a
+capsule handler. Every `Date` call in the Zero docs is client-side, and server
+code may import only `@spacefast/zero/server` and its own files. If the server
+runtime has no clock, expiry has to be computed client-side and validated
+against something else — a materially worse design. See [notes](notes.md); this
+belongs in the Phase 2 spike.
+
+---
+
+## D25. No `preferences` table
+
+**Decided:** 2026-08-24
+
+There is no per-user synced settings table. `defaultThreshold` is per-household
+and shared; the theme override is per-device and stays in `localStorage`, which
+is correct for it — a dark-mode choice on a phone should not follow you to a
+desktop.
+
+**Why:** nothing has been identified that needs to be per-user *and* synced.
+Adding a table later is an additive migration, so this is cheap to reverse; a
+speculative table that every handler has to consider is not.
+
+**Revisit when** a real preference shows up that fails both tests — shared is
+wrong, and per-device is also wrong.
+
+---
+
+## D26. `pantry` stays one payload
+
+**Decided:** 2026-08-24
+
+One live subscription returns items, their `itemTypes` / `itemStores` join rows,
+and all three taxonomies. The client keeps a single query rather than
+orchestrating five.
+
+**The size argument.** A household pantry is realistically 100–500 items, each
+with a handful of join rows, plus perhaps 30 taxonomy terms — call it 2,000 small
+rows, a few hundred KB at the very top end. That is unremarkable for a single
+subscription.
+
+**The real risk is not size, it's re-send.** If Zero pushes the whole result set
+on every change rather than a diff, then `adjustQty` — explicitly the hottest
+path in [the query surface](data-model.md#query-surface-initial) — re-transmits
+the entire pantry on every `+1`. **This is unconfirmed** and it is the thing that
+would actually decide the question, so it goes in the Phase 2 spike. Everything
+below assumes it turns out fine.
+
+**Why deferring is safe:** splitting a query is client-side refactoring. No
+schema change, no migration, no stored data affected. This is the rare decision
+that can be reversed at any point for the cost of writing it, which is exactly
+why it should not be pre-optimized now.
+
+**The tripwire.** Split when either is true:
+
+- a single `adjustQty` produces visible lag at real row counts, or
+- the payload crosses ~100 KB.
+
+**The seam to split on**, when it comes: taxonomies are small and change rarely;
+items are large and change constantly. Separating those two subscriptions takes
+the taxonomy re-send out of the hot path and is very likely sufficient on its
+own. Splitting items from their join rows is a distant second resort — it would
+push the join back into the client.
