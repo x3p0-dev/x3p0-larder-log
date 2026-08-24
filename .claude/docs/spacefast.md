@@ -438,6 +438,10 @@ public static files:
 - `CLAUDE.md`, `docs/*` — every internal design document
 - `src/`, `dist/`, `package-lock.json`, `tsconfig.json`, `vite.config.js`
 
+(An anonymous space is key-gated, per `setup.md`, so on that path these sit
+behind the space key rather than fully public — but on a claimed space, which is
+where any real project ends up, they are served to anyone.)
+
 The walker uses a fixed ignore list (`.git`, `node_modules`, `.ssh`, `.aws`,
 `.cache`, a few tool dirs) plus sensitive-filename patterns. Credentials are
 genuinely well covered — `.env*`, `*.pem`, `*.key`, `id_rsa*` are all pattern-
@@ -648,3 +652,184 @@ matters.
 For a platform whose anonymous flow is explicitly pitched at agents, this is the
 worst possible failure: the happy path is genuinely excellent, and the first
 unhappy step leaves an agent with no move that isn't "ask a human to log in".
+
+## 2026-08-24 — The actual cause: `version_finalize` fails, status never updates
+
+The finalize "hang" was never a hang. `sf api GET /v1/operations` — reachable
+only once we had an account — tells the truth:
+
+```
+failed  version_finalize  2026-08-24T16:57:17.898Z -> 2026-08-24T16:57:35.000Z
+   version ver_9910482e36f0456a92387c0ebd43b846
+   space   spc_7770744a870a43f5927213fa397c780e
+   ! InternalError: Runtime API request failed with 406.   (provider: runtime)
+```
+
+**The operation failed 17 seconds after it started.** Everything after that —
+the CLI's poll, our 15-minute watch, the dashboard — was observing a version
+whose finalize had already died.
+
+### 🐞 The bug: a failed operation never reconciles to the version
+
+Eight minutes after that failure, with the operation recorded as `failed`:
+
+```
+$ sf versions ls --space larderlog
+> v1 (deploying) status=finalizing …
+$ sf runtime status --space larderlog
+State: failed          <-- the space knows
+Live version: none
+Pending version: ver_9910482e36f0456a92387c0ebd43b846   <-- still pending
+```
+
+The space flips to `failed` but the version stays `finalizing` forever, and the
+pending pointer is never cleared. That single inconsistency causes every
+downstream symptom:
+
+- `sf publish` polls a status that will never change → the unsettled top-level
+  await, which we spent an hour chasing as if it were the bug.
+- `POST …/versions/{id}/finalize` → `409 version_not_ready`
+  *"Version … is finalizing and cannot be finalized."*
+- `sf versions rm` → `409 version_busy`
+  *"Wait for the version to finish finalizing before deleting it."*
+
+The version is simultaneously too busy to finalize and too busy to delete. The
+space is wedged with no CLI or API path out. We wedged two spaces this way
+before finding the operations endpoint.
+
+**What we'd suggest:** when `version_finalize` fails, mark the version failed and
+clear the pending pointer. Everything else here is downstream of that one
+missing write. Second: surface the operation's diagnostics in `sf publish`
+output — the CLI had a failed operation ID available and instead printed a
+spinner. Third: make `versions rm` always work on a version that isn't live.
+
+### 🐞 The 406 is deterministic and unrelated to our code
+
+We suspected our own empty schema (`capsule({ schema: {} })`, `migrations: []`,
+`mysql.migrateAtFinalize: true`) — a migrate step handed zero migrations is a
+plausible 406. So we published a probe capsule, identical except for one table:
+
+```ts
+schema: { probes: table({ note: string() }) }
+```
+
+Same failure, to the second:
+
+```
+failed  version_finalize  17:17:47.455Z -> 17:18:05.000Z   (probe, one table)
+failed  version_finalize  16:57:17.898Z -> 16:57:35.000Z   (empty schema)
+   ! InternalError: Runtime API request failed with 406.
+```
+
+Both ~17.5 seconds, which reads like a fixed timeout inside the runtime
+provisioning call rather than anything about the payload. Three spaces, two
+schemas, one anonymous and two owned — every Zero capsule publish today fails
+identically at finalize.
+
+**Net for 2026-08-24: Zero publishing is unavailable.** Nothing has been
+published, and the app has never served a request. `sf dev` compiles and serves
+the same capsule fine, so this is specific to the publish/provision path.
+
+For the record, since it is buried above: the failing request is a `406` from
+an internal service the diagnostics call `provider: runtime`, during
+`version_finalize`, on `spacefast/0.0.26`.
+
+### ✅ Resolved the same day — and the operation record was rewritten
+
+About 48 minutes after the finalize was recorded `failed`, the space went live
+on its own:
+
+```
+$ sf versions ls --space larderlog
+* v1 (live) status=ready …   updated: 2026-08-24T17:45:28.000Z
+
+$ sf runtime status --space larderlog
+State: active
+Live version: ver_9910482e36f0456a92387c0ebd43b846
+Pending version: none
+Capsule     larder-log
+Server      quickjs-rust
+```
+
+Same version id that had been stuck. And the operation now reads:
+
+```
+succeeded  version_finalize  2026-08-24T16:57:17.898Z -> 2026-08-24T16:57:35.000Z   []
+```
+
+Identical id and timestamps, but `failed` became `succeeded` and the
+`InternalError: Runtime API request failed with 406.` diagnostic is gone. The
+probe space `larderlogprobe` was deleted outright ("Space not found"), which is
+what our report asked for — so this looks like the Spacefast team intervening
+after Justin filed it, not a spontaneous retry.
+
+**What this changes about the bug report:** the 406 was real and reproducible at
+the time, and the version genuinely was unrecoverable through the CLI — that part
+stands. But "Zero publishing is unavailable" was too strong a conclusion: a
+finalize can apparently recover long after it is recorded as failed. The durable
+defect is the one we already led with — **version status and operation status
+don't track each other** — and this resolution makes it sharper in both
+directions: a failed operation left the version pinned at `finalizing`, and a
+later recovery rewrote history without any event a client could observe. There
+is no way to watch for either transition; we only found out by re-running
+`versions ls` an hour later.
+
+Worth adding to any follow-up: an operation whose terminal status can change
+from `failed` to `succeeded` after the fact is not a terminal status, and
+nothing in the CLI or API notifies on the change.
+
+## 2026-08-24 — Phase 1 closed: what publishing actually verified
+
+Once `larderlog` was live and made publicly viewable, the whole Phase 1 question
+answered itself in about five minutes.
+
+### 👍 The gate works exactly as designed, on the first try
+
+- Signed in → the pantry renders.
+- Signed out → the sign-in screen, "Sign in with Gravatar", "Sign-in required".
+- Sign out → back to the gate.
+- The D14 "Dev guest · not signed in" badge does **not** appear on a real
+  hostname, so the loopback bypass is confirmed inert in production.
+
+No code changed between `sf dev` and the published space. Whatever else went
+wrong today, the runtime honoured `useAuth()` / `signOut()` precisely as the
+types promised, and the client we wrote against a dev guest worked unmodified
+against a real Gravatar identity. That is the part worth saying out loud.
+
+`GET /api/status` returning `ok` is the cheapest possible proof that the server
+half of a capsule deployed — worth recommending in the docs as the one-line
+post-publish smoke test.
+
+### 😕 Spaces are private by default, and the app is the last to know
+
+A published Zero app answers `403 This space is private` to every visitor until
+someone changes it in the dashboard. For a sign-in-gated app that is a gate in
+front of a gate, and the outer one is invisible from the code: `sf.jsonc` has an
+`access` field, but `sf spaces get` reports `config: {}` after the dashboard
+toggle, so the two mechanisms don't obviously converge. Nothing in `sf publish`
+output mentions that the thing it just published cannot be opened.
+
+It also breaks the flow the platform is otherwise built for. Our Phase 3 invite
+link is useless if the recipient hits a platform 403 before reaching our join
+route — see [D15](../../docs/decisions.md#d15-the-space-is-public-the-apps-own-gate-is-the-boundary).
+
+**What we'd suggest:** say the space is private in the publish receipt, with the
+one command or click that changes it. Better still, let `sf.jsonc`'s `access`
+be the single source of truth and report it in `sf spaces get`.
+
+### 👎 Webfonts: confirmed impossible, not merely undocumented
+
+Settled on a real publish. The served `zero.css` contains **zero `@font-face`
+rules**; it defines `--font-disp`, `--font-sans`, and `--font-mono` from
+`theme.json` and never loads a face for any of them.
+`/__spacefast_generated/theme.css` 404s on the published space exactly as it
+does under `sf dev`.
+
+So `theme.json`'s `fontFamily` can *name* Fraunces, and nothing can ever fetch
+it. There is no `index.html` to add a `<link>` to, no CSS entry point, and
+`@plugin` / `@config` are rejected. An app on Zero gets system fonts, full stop.
+
+**What we'd suggest:** either honour `fontFace` in `theme.json` (the field name
+already implies it) or document plainly that webfonts are unsupported. Right now
+the config accepts a font family it cannot deliver, which reads as a bug in your
+own app until you go looking.

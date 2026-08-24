@@ -5,25 +5,27 @@ gets answered.
 
 ## Platform behavior we haven't confirmed
 
-- **How do we verify sign-in at all?** `sf dev` reports
-  `auth: { provider: "gravatar", signInPath: null, signInUrl: null }` — there is
-  no local sign-in flow, so `auth.isGuest` never goes false on the dev server.
-  Local development is unblocked by
-  [D14](decisions.md#d14-a-loopback-only-bypass-in-the-sign-in-gate)'s
-  loopback bypass, but that sidesteps authentication rather than exercising it.
-  **Nothing has confirmed that Gravatar sign-in works, that `signOut()` returns
-  to the gate, or that `useAuth()` reports a real identity the way the types
-  say.** All three need a `sf publish` to a real space, which is also what
-  Phase 1's "done when" requires. Worth doing before Phase 2 leans on
-  `ctx.auth.userId` for every household check.
-- **Can we ship a webfont at all?** `theme.json`'s `fontFace` is ignored — the
-  compile reads only `slug` and `fontFamily`. There is no `index.html` to add a
-  `<link>` to, no CSS entry point, and `@plugin` / `@config` are rejected.
-  `/__spacefast_generated/theme.css` — which `style.d.ts` describes as the
-  runtime's `theme.json`-derived stylesheet — 404s under `sf dev`. Unknown
-  whether it exists once published. Until then Fraunces and IBM Plex Mono fall
-  back to `ui-serif` / `ui-monospace` and the prototype's typographic identity
-  is lost.
+- **Does the space's public visibility survive a publish?** The space was made
+  publicly viewable from the Spacefast dashboard, but `sf spaces get` still
+  reports `config: {}` — so that setting lives outside the published config.
+  `sf.jsonc` has its own `access` field (`"access": "public"` is shorthand for
+  `{ "public": ["/**"] }`), which we have **not** set. Unknown whether the next
+  `sf publish` from a config without `access` reverts the space to private. If
+  it does, the app silently becomes unreachable for everyone but the owner —
+  which is exactly the failure Phase 3's invite flow cannot survive. **Check the
+  live URL from a signed-out browser after the next publish**, and if it broke,
+  declare `access` in `sf.jsonc` and treat the dashboard toggle as a fallback.
+- **Can we ship a webfont at all? No — confirmed on a published space.**
+  `theme.json`'s `fontFace` is ignored; the compile reads only `slug` and
+  `fontFamily`. There is no `index.html` to add a `<link>` to, no CSS entry
+  point, and `@plugin` / `@config` are rejected.
+  `/__spacefast_generated/theme.css` 404s on the published space just as it does
+  under `sf dev`, and the shipped `zero.css` contains **zero `@font-face`
+  rules** — it defines `--font-disp` / `--font-sans` / `--font-mono` as tokens
+  and nothing ever loads a face for them. So Fraunces and IBM Plex Mono fall
+  back to `ui-serif` / `ui-monospace`, and the prototype's typographic identity
+  is lost until Spacefast offers a font mechanism. This is the Phase 4
+  typography decision, and it now has an answer rather than an unknown.
 - **What does a handler throwing actually do to the client?** Our
   `requireHousehold()` helper will throw. Unclear how that surfaces in
   `useQuery` / `useMutation` — exception, rejected promise, silent empty result?

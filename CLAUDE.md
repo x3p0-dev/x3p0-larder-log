@@ -20,11 +20,16 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phase 1 — Zero scaffold and sign-in gate.** This is a real Spacefast Zero
-project now: `sf.jsonc`, `theme.json`, a Preact + TypeScript client in
-`client/`, the domain types and pure helpers in `shared/`, and a capsule in
-`server/` that declares **no schema yet** (`capsule({ schema: {} })` compiles
-fine). Data still lives in `localStorage`, namespaced per signed-in identity.
+**Phase 1 is done. Phase 2 is next.** This is a real Spacefast Zero project:
+`sf.jsonc`, `theme.json`, a Preact + TypeScript client in `client/`, the domain
+types and pure helpers in `shared/`, and a capsule in `server/` that declares
+**no schema yet** (`capsule({ schema: {} })` compiles fine). Data still lives in
+`localStorage`, namespaced per signed-in identity — replacing that is Phase 2.
+
+**It is live at <https://larderlog.view.fast/>** (space slug `larderlog`, team
+`justin-team-2`, published 2026-08-24). Gravatar sign-in, sign-out, and the gate
+were exercised end to end on that space, and `GET /api/status` returns `ok`, so
+the capsule's server half is genuinely deployed.
 
 The React/Vite prototype in `src/` is still on disk and still runs
 (`npm run prototype`). It gets deleted in Phase 2, not before — don't remove it
@@ -34,12 +39,13 @@ early, and don't edit it: `client/` is the live code.
 `signInUrl` are both null), so `auth.isGuest` never goes false locally. The gate
 in `client/index.tsx` therefore lets a guest through **on loopback hostnames
 only**, and shows a persistent orange "Dev guest · not signed in" badge while it
-does — see D14. A published space is served from a real hostname, so the bypass
-is inert there. Don't widen it to LAN addresses, and take it out if Spacefast
+does — see D14. The bypass is **confirmed inert in production**: the badge does
+not appear on the published space, and a signed-out visitor there gets the
+sign-in screen. Don't widen it to LAN addresses, and take it out if Spacefast
 ever ships a local sign-in stub.
 
-The consequence: **Gravatar sign-in has never actually been exercised.** Phase
-1's "done when" needs a `sf publish` to close.
+Still true locally: sign-in cannot be exercised on `sf dev`. Anything touching
+auth has to be checked against the published space.
 
 See `docs/roadmap.md` for the phases.
 
@@ -184,9 +190,14 @@ There is no test runner configured. What works, cheapest first:
 - **Curl the compiled assets** to confirm styling actually shipped. Because Zero
   finds Tailwind classes by scanning source for static strings, "it typechecks"
   says nothing about whether a class exists. Fetch `/zero.css` (see the
-  bootstrap dance above) and grep for the class. Note the file escapes brackets,
-  so `max-h-[80vh]` appears as `max-h-\[80vh\]` — use `grep -F` on the escaped
-  form or you will get a false negative.
+  bootstrap dance above) and grep for the class. The file escapes **both
+  brackets and colons**: `max-h-[80vh]` appears as `max-h-\[80vh\]`, and
+  `md:grid-cols-[190px_1fr]` as `.md\:grid-cols-\[190px_1fr\]`. Grepping the
+  half-escaped form returns nothing and looks exactly like a missing class —
+  search for a distinctive substring (`190px`) when in doubt.
+- **Curl the published space** for anything auth-related; it needs no bootstrap
+  token. `https://larderlog.view.fast/api/status` returning `ok` is the cheapest
+  proof that the server half of a publish actually landed.
 - **Plain Node unit tests** for pure logic. `shared/` has no dependencies at
   all, so `shared/qty.ts` and `shared/status.ts` can be checked by compiling
   them with `tsc` and running the output directly.
@@ -195,11 +206,12 @@ Do not claim something works because it compiled. Two hard limits:
 
 - **There is no browser in this environment**, so clicks, the
   IntersectionObserver infinite scroll, drawer animation, and dark mode are
-  unverified.
+  still unverified. Justin has to check those.
 - **There is no sign-in on `sf dev`.** D14's loopback bypass makes the app
   reachable locally, but it sidesteps authentication rather than exercising it.
-  Gravatar sign-in, `signOut()` returning to the gate, and a real `useAuth()`
-  identity are all still untested, and closing that needs a `sf publish`.
+  Auth was verified once, on the published space (2026-08-24) — so anything that
+  touches `useAuth()`, `signOut()`, or the gate has to be re-checked there, not
+  locally.
 
 Say both plainly rather than implying otherwise.
 

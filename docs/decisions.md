@@ -237,5 +237,41 @@ gate.
   test needs a live space. But it makes the day-to-day loop a publish, which is
   the wrong iteration speed for porting a UI.
 
+**Verified 2026-08-24.** On the published space the badge does not render and a
+signed-out visitor gets the sign-in screen, so the loopback condition is
+confirmed false in production rather than merely argued to be.
+
 **Revisit when:** Spacefast ships a local sign-in stub (`sf dev --sign-in-as`,
 or similar). At that point this bypass should come straight out.
+
+## D15. The space is public; the app's own gate is the boundary
+
+**Decided:** the Spacefast space serves to anyone, and every access decision is
+made inside the app.
+
+Spaces are private by default — an unauthenticated request gets Spacefast's own
+"This space is private" 403 before a single line of our code runs. That is the
+wrong boundary for this app. [D2](#d2-require-sign-in-no-guest-mode) already
+requires sign-in, and Phase 3's invite flow depends on a stranger being able to
+*reach* the sign-in screen in order to join a household. A platform-level gate
+in front of that makes the invite link unusable by the one person it is for.
+
+So the space is public and the gate in `client/index.tsx` does the work: a
+visitor who is not signed in sees the sign-in screen and nothing else, and no
+household data is reachable without an identity Zero vouches for.
+
+**What this does not weaken:** there is no row-level security in Zero, so every
+household boundary is a hand-written server-side check regardless. Making the
+space public changes who can see the *sign-in screen*, not who can read a row.
+
+**The loose end:** the setting was made from the dashboard, and `sf spaces get`
+reports `config: {}` — so it lives outside the published config, and it is
+unknown whether a later publish reverts it. `sf.jsonc` has an `access` field
+that should express this declaratively. See [notes](notes.md).
+
+**Rejected:**
+- *Keep it private and share a Link.* Fine for a solo demo, useless for an
+  invite: the recipient hits the platform 403 before our join route exists.
+- *Rely on the platform gate instead of the app's.* It authenticates against
+  Spacefast accounts, not Gravatar identities, and it has no concept of a
+  household.
