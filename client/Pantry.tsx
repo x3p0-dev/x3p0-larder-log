@@ -8,6 +8,7 @@ import type { SortKey } from './components/SortMenu';
 import { ItemFields } from './components/ItemFields';
 import { ItemCard } from './components/ItemCard';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { JoinBox } from './components/JoinBox';
 import { ShoppingListModal } from './components/ShoppingListModal';
 import { UndoToast } from './components/UndoToast';
 
@@ -16,10 +17,12 @@ import { usePersistentState } from './hooks/usePersistentState';
 import { usePantryData } from './hooks/usePantryData';
 
 import { getTheme, statusFor, termNameFor } from './lib/theme';
+import { clearPendingInvite, pendingInvite } from './lib/pendingInvite';
 import type { TaxonomyActions } from './lib/actions';
 
 import type { StatusKey } from '../shared/status';
 import type { Item, ItemDraft, ThemeOverride } from '../shared/types';
+import { DEFAULT_ROLE, can } from '../shared/roles';
 import { toInt } from '../shared/qty';
 
 const PAGE_SIZE = 20;
@@ -98,6 +101,30 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const [shoppingListOpen, setShoppingListOpen] = useState(false);
 	const [shoppingStore, setShoppingStore] = useState<string | null>(null);
 
+	/**
+	 * A code from an invite link, captured in the entry before sign-in.
+	 *
+	 * Held in state as well as the stash so redeeming it re-renders; the stash
+	 * is what survived the sign-in round trip, and this is what the screen reads.
+	 */
+	const [pendingCode, setPendingCode] = useState<string | null>(() => pendingInvite());
+
+	async function joinWithCode(code: string): Promise<boolean> {
+		const joined = await api.redeemInvite(code);
+
+		// Only a redemption that actually created the membership consumes the
+		// code. A refusal — expired, revoked, already in a household — leaves it
+		// in place so the message on screen still has something to refer to.
+		if (joined) dismissInvite();
+
+		return joined;
+	}
+
+	function dismissInvite() {
+		clearPendingInvite();
+		setPendingCode(null);
+	}
+
 	const ready = api.status.state === 'ready' ? api.status : null;
 	const pantry = ready?.pantry;
 	const household = ready?.household;
@@ -108,6 +135,23 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const stores = pantry?.stores ?? [];
 	const defaultThreshold = household?.household.defaultThreshold ?? '1';
 	const householdName = household?.household.name ?? '';
+	const members = household?.members ?? [];
+	const invites = household?.invites ?? [];
+	// The least privileged role until the query says otherwise, so a control is
+	// never enabled on the strength of data that hasn't arrived.
+	const myRole = household?.me.role ?? DEFAULT_ROLE;
+	const myMembershipId = household?.me.membershipId ?? '';
+
+	/**
+	 * D20's matrix, read once and threaded down as plain booleans.
+	 *
+	 * The components below take `canEdit` rather than a role, so no component
+	 * has to know what a role *is* — and the rule stays in `shared/roles.ts`,
+	 * where the server reads the same table. D30 covers what a `false` looks
+	 * like on screen: the affordance is absent, not disabled.
+	 */
+	const mayEditItems = can(myRole, 'item:write');
+	const mayEditTaxonomy = can(myRole, 'taxonomy:write');
 
 	const taxonomy: TaxonomyActions = useMemo(() => ({
 		create: api.createTerm,
@@ -257,6 +301,11 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	}
 
 	function openAddForm() {
+		// The button is absent for a viewer, so this is belt-and-braces — but it
+		// is the one entry point that opens a write form, and the server would
+		// only refuse at save time, after the typing.
+		if (! mayEditItems) return;
+
 		if (! showForm) {
 			setForm(emptyDraft());
 			setFormError('');
@@ -324,6 +373,11 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				dark={dark}
 				onCreateHousehold={api.createHousehold}
 				onSignOut={onSignOut}
+				error={api.error}
+				onDismissError={api.dismissError}
+				pendingCode={pendingCode}
+				onJoin={joinWithCode}
+				onDismissInvite={dismissInvite}
 			/>
 		);
 	}
@@ -350,6 +404,19 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						{householdName && (
 							<p class="font-mono tracking-[0.02em] text-xs mt-1 truncate" style={{ color: theme.textFaint }}>
 								{householdName}
+								{/*
+								  * Said once, here, rather than as a disabled control on
+								  * every card: a viewer's missing buttons need one
+								  * explanation, not forty (D30).
+								  */}
+								{! mayEditItems && (
+									<span
+										class="ml-2 px-1.5 py-0.5 rounded-full"
+										style={{ background: theme.neutralChipBg, color: theme.neutralChipText }}
+									>
+										View only
+									</span>
+								)}
 							</p>
 						)}
 					</div>
@@ -397,6 +464,29 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				</div>
 			)}
 
+			{/*
+			  * Someone followed an invite link while already belonging to a
+			  * household. D18 allows one membership, so `redeemInvite` would
+			  * refuse — say so here rather than letting them press a button that
+			  * cannot work.
+			  */}
+			{pendingCode && (
+				<div class="max-w-5xl mx-auto px-6">
+					<div
+						class="flex items-start justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
+						style={{ background: theme.surfaceAlt, color: theme.textMuted, border: `1px solid ${theme.border}` }}
+					>
+						<span>
+							You followed an invite link, but you&rsquo;re already in {householdName || 'a household'}.
+							Leave it first if you meant to join another.
+						</span>
+						<button onClick={dismissInvite} aria-label="Dismiss invite" class="shrink-0">
+							<X size={15} />
+						</button>
+					</div>
+				</div>
+			)}
+
 			<div class="max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-[190px_1fr] gap-6">
 				<Sidebar
 					items={items} locations={locations} types={types} stores={stores}
@@ -404,7 +494,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					activeType={activeType} setActiveType={setActiveType}
 					activeStore={activeStore} setActiveStore={setActiveStore}
 					locationCounts={locationCounts} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
-					taxonomy={taxonomy}
+					taxonomy={taxonomy} canCreateTerms={mayEditTaxonomy}
 					theme={theme} dark={dark}
 				/>
 
@@ -421,13 +511,15 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 								style={{ color: theme.text }}
 							/>
 						</div>
-						<button
-							onClick={openAddForm}
-							class="px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5"
-							style={{ background: theme.primaryBg, color: theme.primaryText }}
-						>
-							<Plus size={15} /> Add item
-						</button>
+						{mayEditItems && (
+							<button
+								onClick={openAddForm}
+								class="px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5"
+								style={{ background: theme.primaryBg, color: theme.primaryText }}
+							>
+								<Plus size={15} /> Add item
+							</button>
+						)}
 					</div>
 
 					{activeStore && (
@@ -445,12 +537,12 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						</div>
 					)}
 
-					{showForm && form && (
+					{mayEditItems && showForm && form && (
 						<div class="mb-5 p-4 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
 							<ItemFields
 								value={form} onChange={setForm} error={formError}
 								locations={locations} types={types} stores={stores}
-								taxonomy={taxonomy}
+								taxonomy={taxonomy} canCreateTerms={mayEditTaxonomy}
 								dark={dark} theme={theme}
 							/>
 							<div class="sm:col-span-2 flex gap-2 justify-end">
@@ -493,6 +585,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 								item={it} open={openId === it.id}
 								locations={locations} types={types} stores={stores}
 								dark={dark} theme={theme} taxonomy={taxonomy}
+								canEdit={mayEditItems} canCreateTerms={mayEditTaxonomy}
 								editForm={editingId === it.id ? editForm : null}
 								onEditFormChange={setEditForm}
 								onToggleOpen={() => toggleOpen(it.id)}
@@ -526,6 +619,13 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				shoppingStore={shoppingStore} setShoppingStore={setShoppingStore}
 				onViewShoppingList={() => { setShoppingListOpen(true); setSettingsOpen(false); }}
 				accountName={displayName} accountEmail={email} onSignOut={onSignOut}
+				members={members} invites={invites}
+				me={{ membershipId: myMembershipId, role: myRole }}
+				onCreateInvite={api.createInvite}
+				onRevokeInvite={api.revokeInvite}
+				onChangeRole={api.changeRole}
+				onRemoveMember={api.removeMember}
+				onLeaveHousehold={api.leaveHousehold}
 				dark={dark} theme={theme}
 			/>
 
@@ -553,11 +653,22 @@ function Gate({
 	dark,
 	onCreateHousehold,
 	onSignOut,
+	error,
+	onDismissError,
+	pendingCode,
+	onJoin,
+	onDismissInvite,
 }: {
 	status: ReturnType<typeof usePantryData>['status'];
 	dark: boolean;
 	onCreateHousehold: (name: string) => Promise<void>;
 	onSignOut: () => void;
+	/** A refused join or household creation. The app shell's banner isn't mounted here. */
+	error: string | null;
+	onDismissError: () => void;
+	pendingCode: string | null;
+	onJoin: (code: string) => Promise<boolean>;
+	onDismissInvite: () => void;
 }) {
 	const theme = getTheme(dark);
 
@@ -572,7 +683,25 @@ function Gate({
 			class="font-sans min-h-screen w-full flex items-center justify-center px-6"
 			style={{ background: theme.pageBg, color: theme.text, colorScheme: dark ? 'dark' : 'light' }}
 		>
-			<div class="max-w-sm w-full text-center">{children}</div>
+			<div class="max-w-sm w-full text-center">
+				{error && (
+					<div
+						role="alert"
+						class="flex items-start justify-between gap-3 px-3 py-2 rounded-md text-sm mb-4 text-left"
+						style={{
+							background: theme.surfaceAlt,
+							color: theme.dangerText,
+							border: `1px solid ${theme.dangerText}`,
+						}}
+					>
+						<span>{error}</span>
+						<button onClick={onDismissError} aria-label="Dismiss" class="shrink-0">
+							<X size={15} />
+						</button>
+					</div>
+				)}
+				{children}
+			</div>
 		</div>
 	);
 
@@ -594,6 +723,21 @@ function Gate({
 
 		return frame(
 			<>
+				{/*
+				  * An invited visitor is here to join something that already
+				  * exists, so the invite comes first and the first-run form
+				  * follows it. Without a code this renders as a single line of
+				  * link text below the form.
+				  */}
+				{pendingCode && (
+					<JoinBox
+						pendingCode={pendingCode}
+						onJoin={onJoin}
+						onDismiss={onDismissInvite}
+						theme={theme}
+					/>
+				)}
+
 				<h1 class="font-disp text-2xl font-semibold mb-2" style={{ color: theme.textStrong }}>
 					Welcome to Larder Log
 				</h1>
@@ -625,6 +769,15 @@ function Gate({
 				>
 					{creating ? 'Setting up…' : 'Create household'}
 				</button>
+
+				{! pendingCode && (
+					<JoinBox
+						pendingCode={null}
+						onJoin={onJoin}
+						onDismiss={onDismissInvite}
+						theme={theme}
+					/>
+				)}
 			</>
 		);
 	}

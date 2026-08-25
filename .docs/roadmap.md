@@ -115,55 +115,102 @@ The first sign-in is also what settles the last open auth question: whether a
 published space ever issues `guest:local`, which `shared/identity.ts` accepts.
 Sign in, then check `sf db dump --table memberships` and read the `userId`.
 
-**One thing the publish regressed:** the project's own documentation is now
-served publicly — `/CLAUDE.md`, `/docs/*.md`, `/tsconfig.json` and friends all
-return 200. Not secret, but not chosen either. See [notes](notes.md); it wants a
-decision before Phase 3 sends an invite link to anyone.
+**One thing the publish regressed, and Phase 3 fixed:** the project's own
+documentation was served publicly — `/CLAUDE.md`, `/docs/*.md` and friends all
+returned 200. `docs/` is now `.docs/` and `CLAUDE.md` is now
+`.claude/CLAUDE.md`, both behind the serving layer's 403 on dot-prefixed paths
+([D29](decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload)).
 
 **This was the risky milestone.** Schema mistakes get expensive from here, since
 destructive migrations need explicit flags.
 
 ## Phase 3 — Households, members, invites
 
-- `createInvite` / `revokeInvite` / `redeemInvite` — each invite carries the
-  role it grants ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) and
-  expires after 14 days
-  ([D24](decisions.md#d24-invites-expire-after-14-days))
-- `/join/<code>` route
-- Member list in Settings, with `changeRole` / `removeMember` / `leaveHousehold`
-- `shared/roles.ts` — the `can(role, capability)` matrix
-  ([D20](decisions.md#d20-three-roles-owner-editor-viewer)) — and a role check
-  in every mutation that writes
-- Last-owner and no-escalation guards
+**Built, not yet exercised by two people.** The server half shipped with Phase 2
+— all six handlers (`createInvite`, `revokeInvite`, `redeemInvite`,
+`changeRole`, `removeMember`, `leaveHousehold`), each resolving the household
+from `ctx.auth.userId` and asserting a capability. Phase 3 is the client half.
+
+- ✅ Invite links: `/?join=<code>` — captured in the client entry before
+  sign-in, stashed in `sessionStorage` so it survives the round trip, and
+  stripped from the address bar
+  ([D28](decisions.md#d28-an-invite-link-is-joincode-not-joincode)). **Not
+  `/join/<code>`**: the published space serves nothing at an unknown path, and
+  `sf publish --dry-run` says `SPA false`
+- ✅ A typed-code path beside the link, since an invite is as likely to be read
+  across a kitchen as clicked. `shared/joinLink.ts` builds, parses, strips, and
+  groups codes; 19 assertions cover it
+- ✅ Member list in Settings — roles as a segmented control, remove with a
+  one-step confirm, and leave-household. Owner-only controls are absent rather
+  than disabled for anyone who cannot use them
+- ✅ Invite panel — mint, copy link, revoke, and "expires in N days" from the
+  same `shared/invite.ts` the server enforces with
+- ✅ Last-owner and no-escalation guards visible in the UI before the click,
+  read from `wouldStrandHousehold()` and `can()` rather than re-implemented
   ([D22](decisions.md#d22-ownership-is-a-role-not-a-column))
-- Issue `owner` and `editor` invites only; `viewer` waits on Phase 4's
-  read-only UI. **Note the consequence:** editors may mint viewer invites and
+- ✅ Household name and default threshold now disabled for non-owners —
+  `updateHousehold` is gated on `household:settings`
+- ✅ Owner and editor invites only; `viewer` waits on Phase 4's read-only UI.
+  The consequence is live and correct: editors may mint viewer invites and
   nothing else ([D21](decisions.md#d21-invites-carry-the-role-they-grant)), so
-  until viewer goes live in Phase 4 the `invite:create` capability is dormant
-  for editors and invite creation is effectively owner-only. Build the
-  capability check properly anyway — it wakes up on its own when viewer ships
+  intersecting with what the UI offers leaves them none and invite creation is
+  effectively owner-only until viewer ships. The capability check is written
+  properly and wakes up on its own
+- ✅ The docs are out of the publish payload
+  ([D29](decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload))
+  — the thing that had to be decided before an invite link went to anyone
+- ✅ `npm test` — 100 assertions; `npm run typecheck` clean; the artifact still
+  reports nine tables, two queries, sixteen mutations, and **zero migrations**,
+  which is what a client-only phase should produce
+
+**Not verified, and it cannot be verified here.** Everything above compiles,
+bundles, and ships its CSS. The Settings panels, invite minting, and the
+read-only pass were checked in a browser against `sf dev` on 2026-08-25; what
+cannot be checked locally is a *second person*, because `sf dev` issues one
+fixed identity. That needs the published space.
+
+**And the publish is blocked** — three platform bugs plus a broken `finalize`
+stage, none of them ours. v2 is still live; v3 is recorded `failed`. See
+[notes](notes.md#blocked-we-cannot-publish-2026-08-25) before attempting one.
 
 **Done when:** Justin's wife signs in via an invite link and edits the same
 pantry.
 
 ## Phase 4 — Feature parity and polish
 
-Everything the prototype does that Phases 1–3 didn't carry over:
+Everything the prototype does that Phases 1–3 didn't carry over. **Audited
+2026-08-25 against the code, and most of this list was already true** — the
+Phase 2 port carried more across than this list assumed.
 
-- Shopping list per store
-- Sorting, search, infinite scroll at real row counts
-- Undo on remove (needs a server-side soft delete or a client-held tombstone —
-  the prototype's in-memory undo won't survive a live query refresh)
-- Cascade cleanup on taxonomy delete
-- **Read-only UI pass, which is what makes `viewer` usable** — steppers, inline
-  edit, the taxonomy manager, and every add/remove affordance need a disabled
-  state. The enforcement already shipped in Phase 3; this is the client half
-  ([D20](decisions.md#d20-three-roles-owner-editor-viewer))
-- Theme override persistence (per device, so localStorage is correct here)
+- ✅ Shopping list per store — `ShoppingListModal`, reachable from Settings and
+  from the store filter bar
+- ✅ Sorting, search, infinite scroll — `SortMenu`, the search field, and an
+  `IntersectionObserver` sentinel paging 20 at a time. **Untested at real row
+  counts**, which is the part of this line still outstanding
+- ✅ Undo on remove — D17's client-held tombstone, not a soft delete. Re-adds
+  through `addItem`, so the row comes back with a new id and does not survive a
+  reload. Both accepted at the time
+- ✅ Cascade cleanup on taxonomy delete — `deleteTerm` removes the `itemTypes` /
+  `itemStores` join rows for a type or store, and refuses a location that still
+  holds items (D16)
+- ✅ **Read-only UI pass, which is what makes `viewer` usable.** Steppers, Edit,
+  Remove, Add item, the "+" chip on every picker, and the taxonomy manager are
+  now gated on `can()`. They are **absent rather than disabled**, with a single
+  "View only" chip in the header explaining the absence
+  ([D30](decisions.md#d30-a-viewers-missing-controls-are-absent-not-disabled)
+  amends [D20](decisions.md#d20-three-roles-owner-editor-viewer) on that point).
+  Unverified in a browser: `sf dev` makes you an owner every time, so this needs
+  the published space and a second account
+- ✅ Theme override persistence — per device in localStorage, which is where it
+  belongs (D25)
 - Typography: Fraunces and IBM Plex Mono have **no way to load** — confirmed on
   the published space, where `zero.css` ships zero `@font-face` rules. Either
   accept the `ui-serif` / `ui-monospace` fallbacks as the app's real identity or
   wait for Spacefast to offer a font mechanism — see [notes](notes.md)
+
+**What is actually left:** the row-count test for sort/search/scroll, the
+typography decision, and a browser pass over the read-only UI — none of which
+can be finished without either real data or the published space.
 
 **Done when:** nothing from the prototype is missing.
 

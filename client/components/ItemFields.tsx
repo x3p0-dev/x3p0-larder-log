@@ -12,6 +12,8 @@ type Props = {
 	types: Term[];
 	stores: Term[];
 	taxonomy: TaxonomyActions;
+	/** `taxonomy:write`, for the "+" chip on each picker. */
+	canCreateTerms: boolean;
 	error?: string;
 	dark: boolean;
 	theme: Theme;
@@ -23,7 +25,7 @@ type Props = {
  * the only things that actually differ between the two.
  */
 export function ItemFields({
-	value, onChange, locations, types, stores, taxonomy,
+	value, onChange, locations, types, stores, taxonomy, canCreateTerms,
 	error, dark, theme,
 }: Props) {
 	const inputStyle = { borderColor: theme.borderStrong, background: theme.surface, color: theme.text };
@@ -61,7 +63,7 @@ export function ItemFields({
 				<ChipPicker
 					kind="location" entities={locations} selected={value.locationId} multi={false}
 					onSelect={(id) => set({ locationId: id || value.locationId })}
-					onCreate={createTermFor(taxonomy, 'location')} theme={theme} dark={dark}
+					onCreate={createTermFor(taxonomy, 'location')} canCreate={canCreateTerms} theme={theme} dark={dark}
 				/>
 			</label>
 
@@ -69,7 +71,7 @@ export function ItemFields({
 				<span class="font-mono tracking-[0.02em] text-xs" style={labelStyle}>Type</span>
 				<ChipPicker
 					kind="type" entities={types} selected={value.typeIds} multi
-					onToggle={toggleIn('typeIds')} onCreate={createTermFor(taxonomy, 'type')} theme={theme} dark={dark}
+					onToggle={toggleIn('typeIds')} onCreate={createTermFor(taxonomy, 'type')} canCreate={canCreateTerms} theme={theme} dark={dark}
 				/>
 			</label>
 
@@ -77,7 +79,7 @@ export function ItemFields({
 				<span class="font-mono tracking-[0.02em] text-xs" style={labelStyle}>Store</span>
 				<ChipPicker
 					kind="store" entities={stores} selected={value.storeIds} multi
-					onToggle={toggleIn('storeIds')} onCreate={createTermFor(taxonomy, 'store')} theme={theme} dark={dark}
+					onToggle={toggleIn('storeIds')} onCreate={createTermFor(taxonomy, 'store')} canCreate={canCreateTerms} theme={theme} dark={dark}
 				/>
 			</label>
 

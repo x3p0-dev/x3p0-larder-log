@@ -23,6 +23,7 @@ import {
 	isValidName, MAX_NAME,
 } from '../shared/term';
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
+import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 
 let fail = 0;
 let total = 0;
@@ -177,6 +178,54 @@ for (const [label, override] of [
 
 // A signed-in user with no id is not a user.
 check('no userId is refused', isSignedIn({ ...realUser, userId: '' }), false);
+
+// --- D28: invite links ride in a query parameter ---
+
+// A code the rest of the suite can reuse. Shaped, so `readJoinCode` accepts it.
+const LINK_CODE = codeFromBytes(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
+
+check('the code is shaped', isCodeShaped(LINK_CODE), true);
+check(
+	'link is the root path with a join parameter',
+	buildJoinUrl('https://larderlog.view.fast', LINK_CODE),
+	`https://larderlog.view.fast/?${JOIN_PARAM}=${LINK_CODE}`
+);
+check(
+	'a trailing slash on the origin does not double up',
+	buildJoinUrl('https://larderlog.view.fast/', LINK_CODE),
+	`https://larderlog.view.fast/?${JOIN_PARAM}=${LINK_CODE}`
+);
+check('the link round-trips', readJoinCode(`?${JOIN_PARAM}=${LINK_CODE}`), LINK_CODE);
+check('a leading ? is optional', readJoinCode(`${JOIN_PARAM}=${LINK_CODE}`), LINK_CODE);
+check('other parameters are ignored', readJoinCode(`?a=1&${JOIN_PARAM}=${LINK_CODE}&b=2`), LINK_CODE);
+check('no parameter is no code', readJoinCode('?a=1'), null);
+check('an empty query is no code', readJoinCode(''), null);
+
+// A mistyped or truncated code is treated as absent rather than handed to
+// `redeemInvite`, which would fail with a message about something nobody typed.
+check('a short code is refused', readJoinCode(`?${JOIN_PARAM}=ABC`), null);
+check('a code with excluded letters is refused', readJoinCode(`?${JOIN_PARAM}=OOOOOOOOOO`), null);
+check('an empty value is refused', readJoinCode(`?${JOIN_PARAM}=`), null);
+
+// People paste the spaced form out of a message, and mail clients lowercase
+// links. Both normalize back to the stored code.
+check(
+	'a spaced code is normalized',
+	readJoinCode(`?${JOIN_PARAM}=${encodeURIComponent(formatCode(LINK_CODE))}`),
+	LINK_CODE
+);
+check('a lowercased code is normalized', readJoinCode(`?${JOIN_PARAM}=${LINK_CODE.toLowerCase()}`), LINK_CODE);
+
+// The address bar is rewritten once the code is stashed, so a reload or a
+// screenshot doesn't carry a live credential.
+check('stripping leaves nothing behind', stripJoinParam(`?${JOIN_PARAM}=${LINK_CODE}`), '');
+check('stripping keeps other parameters', stripJoinParam(`?a=1&${JOIN_PARAM}=${LINK_CODE}`), '?a=1');
+check('stripping a clean query is a no-op', stripJoinParam('?a=1&b=2'), '?a=1&b=2');
+check('the stripped result has no code left', readJoinCode(stripJoinParam(`?${JOIN_PARAM}=${LINK_CODE}`)), null);
+
+// The grouped form is for reading aloud; it must survive the round trip back.
+check('codes group in fours', formatCode('ABCDEFGHJK'), 'ABCD EFGH JK');
+check('the grouped form normalizes back', normalizeCode(formatCode(LINK_CODE)), LINK_CODE);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

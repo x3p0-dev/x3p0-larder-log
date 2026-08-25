@@ -2,10 +2,14 @@ import { useEffect, useState } from 'preact/hooks';
 import { X, ShoppingCart, LogOut } from 'lucide-preact';
 
 import { TaxonomyManager } from './TaxonomyManager';
+import { MembersPanel } from './MembersPanel';
+import { InvitesPanel } from './InvitesPanel';
 import type { Theme } from '../lib/theme';
 import { chipStyle, entityColorFor } from '../lib/theme';
 import type { TaxonomyActions } from '../lib/actions';
-import type { Term, ThemeOverride } from '../../shared/types';
+import type { Invite, Member, Term, ThemeOverride } from '../../shared/types';
+import type { Role } from '../../shared/roles';
+import { can } from '../../shared/roles';
 
 const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
 	{ key: 'system', label: 'Auto' },
@@ -33,6 +37,17 @@ type Props = {
 	accountName: string;
 	accountEmail: string;
 	onSignOut: () => void;
+
+	members: Member[];
+	invites: Invite[];
+	/** The viewer's own membership, which decides what the panels below offer. */
+	me: { membershipId: string; role: Role };
+	onCreateInvite: (role: Role) => Promise<unknown>;
+	onRevokeInvite: (inviteId: string) => void;
+	onChangeRole: (membershipId: string, role: Role) => void;
+	onRemoveMember: (membershipId: string) => void;
+	onLeaveHousehold: () => void;
+
 	dark: boolean;
 	theme: Theme;
 };
@@ -45,6 +60,8 @@ export function SettingsDrawer({
 	locations, types, stores, taxonomy,
 	shoppingStore, setShoppingStore, onViewShoppingList,
 	accountName, accountEmail, onSignOut,
+	members, invites, me,
+	onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember, onLeaveHousehold,
 	dark, theme,
 }: Props) {
 	const inputStyle = { borderColor: theme.borderStrong, background: theme.surface, color: theme.text };
@@ -53,8 +70,25 @@ export function SettingsDrawer({
 	// blur or Enter. Re-syncs when the server value changes, which with live
 	// queries can happen because someone else renamed it.
 	const [nameDraft, setNameDraft] = useState(householdName);
+	const [creatingInvite, setCreatingInvite] = useState(false);
 
 	useEffect(() => { setNameDraft(householdName); }, [householdName]);
+
+	// The household name and the default threshold are both `updateHousehold`,
+	// which the server gates on `household:settings` — owner only. Disabled
+	// here so the sentence under the field is true before the click, not after
+	// an error banner. The broader read-only pass over the pantry itself is
+	// Phase 4 (D20).
+	const mayEditSettings = can(me.role, 'household:settings');
+	const mayEditTaxonomy = can(me.role, 'taxonomy:write');
+
+	async function createInvite(role: Role) {
+		if (creatingInvite) return;
+
+		setCreatingInvite(true);
+		await onCreateInvite(role);
+		setCreatingInvite(false);
+	}
 
 	function commitName() {
 		const trimmed = nameDraft.trim();
@@ -106,14 +140,35 @@ export function SettingsDrawer({
 							onInput={(e) => setNameDraft(e.currentTarget.value)}
 							onBlur={commitName}
 							onKeyDown={(e) => { if (e.key === 'Enter') { commitName(); e.currentTarget.blur(); } }}
+							disabled={! mayEditSettings}
 							aria-label="Household name"
-							class="w-full px-3 py-1.5 rounded border text-sm outline-none"
+							class="w-full px-3 py-1.5 rounded border text-sm outline-none disabled:opacity-60"
 							style={inputStyle}
 						/>
-						<p class="text-xs mt-1" style={{ color: theme.textFaint }}>
-							Only an owner can rename the household.
-						</p>
+						{! mayEditSettings && (
+							<p class="text-xs mt-1" style={{ color: theme.textFaint }}>
+								Only an owner can rename the household.
+							</p>
+						)}
 					</div>
+
+					<MembersPanel
+						members={members}
+						me={me}
+						onChangeRole={onChangeRole}
+						onRemoveMember={onRemoveMember}
+						onLeave={onLeaveHousehold}
+						theme={theme}
+					/>
+
+					<InvitesPanel
+						invites={invites}
+						myRole={me.role}
+						onCreate={(role) => void createInvite(role)}
+						onRevoke={onRevokeInvite}
+						creating={creatingInvite}
+						theme={theme}
+					/>
 
 					<div class="mb-6">
 						<p class="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: theme.textMuted }}>Appearance</p>
@@ -139,7 +194,8 @@ export function SettingsDrawer({
 						<input
 							type="number" min="0" value={defaultThreshold}
 							onInput={(e) => setDefaultThreshold(e.currentTarget.value)}
-							class="w-24 px-3 py-1.5 rounded border text-sm outline-none"
+							disabled={! mayEditSettings}
+							class="w-24 px-3 py-1.5 rounded border text-sm outline-none disabled:opacity-60"
 							style={inputStyle}
 						/>
 						<p class="text-xs mt-1" style={{ color: theme.textFaint }}>Applied to new items by default.</p>
@@ -181,25 +237,26 @@ export function SettingsDrawer({
 					  * delete is refused rather than silently orphaning rows.
 					  */}
 					<p class="text-xs mb-4" style={{ color: theme.textFaint }}>
-						Rename, recolor, or delete terms. Deleting a type or store just removes that
-						tag from your items. A location can only be deleted once nothing is stored there.
+						{mayEditTaxonomy
+							? 'Rename, recolor, or delete terms. Deleting a type or store just removes that tag from your items. A location can only be deleted once nothing is stored there.'
+							: 'The locations, types, and stores this household uses. You have view-only access, so they’re read-only here.'}
 					</p>
 
 					<div class="flex flex-col gap-6">
 						<TaxonomyManager
-							title="Locations" entities={locations} theme={theme}
+							title="Locations" entities={locations} canEdit={mayEditTaxonomy} theme={theme}
 							onRename={(id, name) => void taxonomy.update('location', id, { name })}
 							onDelete={(id) => void taxonomy.remove('location', id)}
 							onRecolor={(id, ink) => void taxonomy.update('location', id, { ink })}
 						/>
 						<TaxonomyManager
-							title="Stores" entities={stores} theme={theme}
+							title="Stores" entities={stores} canEdit={mayEditTaxonomy} theme={theme}
 							onRename={(id, name) => void taxonomy.update('store', id, { name })}
 							onDelete={(id) => void taxonomy.remove('store', id)}
 							onRecolor={(id, ink) => void taxonomy.update('store', id, { ink })}
 						/>
 						<TaxonomyManager
-							title="Types" entities={types} theme={theme}
+							title="Types" entities={types} canEdit={mayEditTaxonomy} theme={theme}
 							onRename={(id, name) => void taxonomy.update('type', id, { name })}
 							onDelete={(id) => void taxonomy.remove('type', id)}
 							onRecolor={(id, ink) => void taxonomy.update('type', id, { ink })}

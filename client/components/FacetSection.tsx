@@ -16,6 +16,8 @@ type Props = {
 	active: string | null;
 	onSelect: (id: string | null) => void;
 	onCreate: (name: string, color?: string, icon?: string) => Promise<string | null>;
+	/** `taxonomy:write`, forwarded to the picker's "+" chip. */
+	canCreate: boolean;
 	theme: Theme;
 	dark: boolean;
 	defaultOpen?: boolean;
@@ -30,7 +32,7 @@ type Props = {
  * Type/Store where the item fields themselves are multi-select.
  */
 export function FacetSection({
-	title, kind, Icon, entities, active, onSelect, onCreate,
+	title, kind, Icon, entities, active, onSelect, onCreate, canCreate,
 	theme, dark, defaultOpen = false, clearable = true, leadingAll, countFor,
 }: Props) {
 	const [open, setOpen] = useState(defaultOpen);
@@ -76,7 +78,7 @@ export function FacetSection({
 				<div class="mt-2">
 					<ChipPicker
 						kind={kind} entities={entities} selected={active} multi={false}
-						onSelect={onSelect} onCreate={onCreate} theme={theme} dark={dark}
+						onSelect={onSelect} onCreate={onCreate} canCreate={canCreate} theme={theme} dark={dark}
 						leadingAll={leadingAll} countFor={countFor}
 					/>
 				</div>

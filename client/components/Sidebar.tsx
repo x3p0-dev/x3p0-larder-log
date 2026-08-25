@@ -28,6 +28,8 @@ type Props = {
 	anyFilterActive: boolean;
 	onClearAll: () => void;
 	taxonomy: TaxonomyActions;
+	/** `taxonomy:write`. A viewer filters by terms but cannot mint them. */
+	canCreateTerms: boolean;
 	theme: Theme;
 	dark: boolean;
 };
@@ -35,7 +37,7 @@ type Props = {
 export function Sidebar({
 	items, locations, types, stores,
 	activeLocation, setActiveLocation, activeType, setActiveType, activeStore, setActiveStore,
-	locationCounts, anyFilterActive, onClearAll, taxonomy,
+	locationCounts, anyFilterActive, onClearAll, taxonomy, canCreateTerms,
 	theme, dark,
 }: Props) {
 	return (
@@ -44,7 +46,7 @@ export function Sidebar({
 				title="Location" kind="location" Icon={MapPin} entities={locations}
 				active={activeLocation}
 				onSelect={setActiveLocation}
-				onCreate={createTermFor(taxonomy, 'location')}
+				onCreate={createTermFor(taxonomy, 'location')} canCreate={canCreateTerms}
 				theme={theme} dark={dark} defaultOpen clearable={false}
 				leadingAll={{ label: 'All items', count: items.length, active: activeLocation === null, onClick: () => setActiveLocation(null) }}
 				countFor={(id) => locationCounts[id] || 0}
@@ -54,12 +56,12 @@ export function Sidebar({
 			<FacetSection
 				title="Store" kind="store" Icon={StoreIcon} entities={stores}
 				active={activeStore} onSelect={setActiveStore} onCreate={createTermFor(taxonomy, 'store')}
-				theme={theme} dark={dark}
+				canCreate={canCreateTerms} theme={theme} dark={dark}
 			/>
 			<FacetSection
 				title="Type" kind="type" Icon={UtensilsCrossed} entities={types}
 				active={activeType} onSelect={setActiveType} onCreate={createTermFor(taxonomy, 'type')}
-				theme={theme} dark={dark}
+				canCreate={canCreateTerms} theme={theme} dark={dark}
 			/>
 
 			{anyFilterActive && (

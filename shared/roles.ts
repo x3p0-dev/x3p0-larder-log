@@ -8,7 +8,7 @@
  * disables UI from it. `shared/` imports nothing, which is what lets both sides
  * read the same table instead of keeping two that agree by accident.
  *
- * See D20-D22 in `docs/decisions.md`.
+ * See D20-D22 in `.docs/decisions.md`.
  */
 
 export type Role = 'owner' | 'editor' | 'viewer';

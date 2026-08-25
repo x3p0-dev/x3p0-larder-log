@@ -3,6 +3,43 @@
 Things we haven't settled. Move each one to [decisions.md](decisions.md) when it
 gets answered.
 
+## Blocked: we cannot publish (2026-08-25)
+
+Three platform problems compose into a lockout. None of them is ours, and the
+code is ready.
+
+1. **The API requires an `x-spacefast-rationale` header** on publishes from
+   agent-attributed credentials. Undocumented — the word appears nowhere in
+   `zero.md`, `cli.md`, `publish.md`, or `llms.txt`. npm's `spacefast@0.0.26`
+   has no way to send it.
+2. **The CLI that can is 0.0.27, on the binary channel only.** npm still serves
+   0.0.26 (published 2026-08-22); 0.0.27 went to GitHub releases on 2026-08-25.
+   It adds `sf publish --rationale`, described as "the audit rationale required
+   by agent credentials".
+3. **The 0.0.27 standalone binary cannot compile a Zero capsule.** It resolves
+   esbuild's native helper and `@spacefast/zero/client` through
+   `createRequire(import.meta.url)`, where that URL is inside its own Bun
+   virtual filesystem (`/$bunfs/root/`). `ESBUILD_BINARY_PATH` clears the first;
+   nothing clears the second, because you cannot install a package "alongside" a
+   virtual filesystem.
+
+And behind all three, **finalize is broken anyway**. The one run that reached
+the platform — 0.0.26 with the header injected by a preload — created
+`ver_da36789d34044bbd9e95466c13235913`, uploaded 16 files, then failed with
+`runtime_api_not_found`. `failedStage: null`, `manifestHash: null`,
+`filesAddedCount: 0` with a non-empty `pendingUploads`: the manifest never
+reconciled. This is the same stage that broke on 2026-08-24 with a 406.
+
+**State right now:** space `Status: active`, **v2 still live and serving**, v3
+recorded `status=failed`. Nothing wedged, unlike yesterday.
+
+**The way out is one of:** npm ships 0.0.27, or Spacefast fixes finalize. Both
+are theirs. Full detail, with exact errors and suggestions, in
+[spacefast.md](../.claude/docs/spacefast.md).
+
+**Do not retry repeatedly.** Yesterday's wedge of three spaces came from
+hammering a broken finalize.
+
 ## Platform behavior we haven't confirmed
 
 **Spike run 2026-08-24** against `sf dev` (schema compiled, probes curled
@@ -121,29 +158,45 @@ summarized here.
   left it alone: `GET /` and `GET /api/status` both answer 200 unauthenticated
   after v2. Publishing does send a `config: {}` patch, but it merges rather than
   replaces. `access` stays unset, which is what Phase 3's invite flow needs.
-- **Publishing exposes the project's source files, and v2 made it real.**
-  `sf publish` mirrors the whole project root into the upload. Before v2 the
-  payload was small enough that it did not matter; now these all return **200**
-  on the live space to anyone:
+- **Publishing exposes the project's source files — settled, see
+  [D29](decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload).**
+  `sf publish` mirrors the whole project root into the upload, and after v2
+  `/CLAUDE.md` and every file under `/docs/` returned **200** to anyone.
 
-  `/CLAUDE.md`, `/docs/notes.md`, `/docs/decisions.md`, `/docs/architecture.md`,
-  `/docs/data-model.md`, `/docs/overview.md`, `/docs/roadmap.md`,
-  `/package-lock.json`, `/tsconfig.json`, `/tsconfig.test.json`, `/LICENSE.md`.
+  `publishPathIgnored()` denies only a fixed list (`.git`, `node_modules`,
+  `.env*`, key/cert patterns, `.DS_Store`, `.gitignore`), **does not honor
+  `.gitignore` itself**, and there is no exclude flag — `--source-include` does
+  the inverse. What there *is*, is the dot rule: dot-prefixed paths are uploaded
+  but refused by the serving layer with 403, verified on `.claude/`, `.idea/`,
+  and `.test-out/`. So `docs/` became `.docs/` and `CLAUDE.md` became
+  `.claude/CLAUDE.md`, which is one of Claude Code's two project-instruction
+  locations and therefore costs nothing. The payload under
+  `.spacefast/zero/public/` now carries neither.
 
-  Dot-prefixed paths are refused by the serving layer with 403, so `.claude/`
-  (including the Spacefast feedback log), `.idea/`, and `.test-out/` are
-  uploaded but not reachable. `/sf.jsonc` and `/theme.json` 404 — the runtime
-  appears to shadow those two names.
+  Still public, and deliberately: `/LICENSE.md`, `/package-lock.json`,
+  `/tsconfig.json`, `/tsconfig.test.json`, plus the app itself.
+  `/sf.jsonc` and `/theme.json` 404 — the runtime appears to shadow those two
+  names.
 
-  None of it is secret; it is design documentation, not credentials. But it is
-  internal planning on a public URL and nobody chose it. `publishPathIgnored()`
-  denies only a fixed list (`.git`, `node_modules`, `.env*`, key/cert patterns,
-  `.DS_Store`, `.gitignore`) and **does not honor `.gitignore` itself**, and
-  there is no exclude flag — `--source-include` does the inverse. Options, none
-  of them good: set `access` in `sf.jsonc` to an explicit allowlist of app paths
-  (risky, since a wrong list breaks the signed-out sign-in screen that Phase 3's
-  invite links depend on), or move the files out of the project root around each
-  publish. **Decide before Phase 3 ships an invite link to anyone.**
+- **There is no SPA fallback, and it is a publish flag rather than a
+  discovery.** Zero's client exports `Router`, `Routes`, `Route`, `Link`,
+  `useNavigate`, `useParams`, and `useLocation`, and the public docs show a
+  two-route app — but on the published space every unknown path answers with the
+  platform's 404 page, `/join/TEST` and `/anything-else` alike, so `client.js`
+  is never fetched and no route ever runs. The compiled artifact's `client`
+  section is `{ bundlePath, basePathAware }` and carries no route declarations;
+  the runtime cannot know what the client would have routed.
+
+  **`sf dev` does not reproduce this**: locally the shell is served at every
+  path, `/join/ABC23DEFGH` included, so a path route passes every local check
+  and 404s in production. Verified by curling both on 2026-08-25.
+
+  `sf publish --dry-run` prints the answer as one line of its plan: `SPA false`.
+  `sf publish` takes `--spa auto|true|false`, undocumented in the runtime
+  reference, which presumably turns the fallback on. Untested — Phase 3's invite
+  link rides in a query parameter instead
+  ([D28](decisions.md#d28-an-invite-link-is-joincode-not-joincode)), so nothing
+  needed it. Worth testing before anything in this app wants real routes.
 
 ### Unchanged from earlier
 

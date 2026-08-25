@@ -1,7 +1,7 @@
 /**
  * The domain vocabulary, shared by the client and the server capsule.
  *
- * These types track `docs/data-model.md`: quantities are strings (there is no
+ * These types track `.docs/data-model.md`: quantities are strings (there is no
  * numeric column), taxonomy references are **row ids** rather than names, and
  * accordion state is absent because it is UI, not data.
  *
@@ -68,7 +68,7 @@ export type ThemeOverride = 'system' | 'light' | 'dark';
  *
  * So every expected condition is a value, and a `throw` in a query is reserved
  * for genuine bugs. Confirmed against the client bundle 2026-08-24; see
- * `docs/notes.md`.
+ * `.docs/notes.md`.
  */
 export type QueryState<T> =
 	| ({ state: 'ready' } & T)

@@ -60,34 +60,57 @@ type Props = {
 	onRename: (id: string, newName: string) => void;
 	onDelete: (id: string) => void;
 	onRecolor: (id: string, color: string) => void;
+	/** `taxonomy:write`. False renders the list as plain text — see D30. */
+	canEdit: boolean;
 	theme: Theme;
 };
 
-export function TaxonomyManager({ title, entities, onRename, onDelete, onRecolor, theme }: Props) {
+export function TaxonomyManager({ title, entities, onRename, onDelete, onRecolor, canEdit, theme }: Props) {
 	const [colorOpen, setColorOpen] = useState<string | null>(null);
 
 	return (
 		<div>
 			<p class="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: theme.textMuted }}>{title}</p>
 			{entities.length === 0 && <p class="text-xs" style={{ color: theme.textFaint }}>None yet</p>}
-			<div class="flex flex-col">
-				{entities.map((e) => (
-					<div key={e.id}>
-						<TaxonomyRow
-							entity={e} onRename={onRename} onDelete={onDelete}
-							colorOpen={colorOpen} setColorOpen={setColorOpen} theme={theme}
-						/>
-						{colorOpen === e.id && (
-							<ColorPicker
-								value={e.ink}
-								onChange={(hex) => { onRecolor(e.id, hex); setColorOpen(null); }}
-								theme={theme}
-								class="flex flex-wrap gap-1.5 mb-2 ml-6"
+
+			{/*
+			  * A viewer gets the same list without the controls, rather than a
+			  * column of dead inputs. The color dot stays because it is what
+			  * ties a term here to its chips on the items (D30). Rendered as an
+			  * alternative rather than hidden with a class: a permission
+			  * boundary should not leave live inputs in the DOM.
+			  */}
+			{! canEdit && (
+				<div class="flex flex-col">
+					{entities.map((e) => (
+						<div key={e.id} class="flex items-center gap-2 py-1">
+							<span class="w-4 h-4 rounded-full shrink-0" style={{ background: e.ink }} />
+							<span class="text-sm" style={{ color: theme.text }}>{e.name}</span>
+						</div>
+					))}
+				</div>
+			)}
+
+			{canEdit && (
+				<div class="flex flex-col">
+					{entities.map((e) => (
+						<div key={e.id}>
+							<TaxonomyRow
+								entity={e} onRename={onRename} onDelete={onDelete}
+								colorOpen={colorOpen} setColorOpen={setColorOpen} theme={theme}
 							/>
-						)}
-					</div>
-				))}
-			</div>
+							{colorOpen === e.id && (
+								<ColorPicker
+									value={e.ink}
+									onChange={(hex) => { onRecolor(e.id, hex); setColorOpen(null); }}
+									theme={theme}
+									class="flex flex-wrap gap-1.5 mb-2 ml-6"
+								/>
+							)}
+						</div>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }

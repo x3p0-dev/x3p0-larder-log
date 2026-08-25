@@ -46,7 +46,7 @@ function termLabel(kind: TermKind): string {
 }
 
 /**
- * The database schema, as specified in `docs/data-model.md`.
+ * The database schema, as specified in `.docs/data-model.md`.
  *
  * **It has to be declared in this file, and it has to be a literal.** The
  * capsule compiler does not execute the capsule to learn its schema — it runs a

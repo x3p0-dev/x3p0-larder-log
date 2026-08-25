@@ -24,6 +24,7 @@ larder-log/
       usePersistentState.ts  # theme override only — everything else is server
       useSystemTheme.ts
     lib/               # theme derivation, icon components, taxonomy action shape
+                       #   pendingInvite.ts holds an invite code across sign-in (D28)
   server/
     index.ts           # capsule(): the schema, 2 queries, 16 mutations
     schema.ts          # ReadDb / WriteDb only — the tables CANNOT live here (D27)
@@ -34,13 +35,16 @@ larder-log/
     identity.ts        # who counts as signed in (the dev-guest bypass)
     membership.ts      # D18's one-household rule; D22's last-owner guard
     invite.ts          # code generation, 14-day expiry (D24)
+    joinLink.ts        # ?join=<code> links: build, parse, strip, group (D28)
     term.ts            # name/ink validation
     icons.ts           # icon KEYS (the components live in client/lib) (D23)
     seed.ts            # starter taxonomies for a new household
     qty.ts             # the string <-> integer boundary (D4)
     status.ts          # out / low / ok derivation (D9)
-  tests/shared.test.ts # 81 assertions; `npm test`, no runner
-  docs/                # these documents
+  tests/shared.test.ts # 100 assertions; `npm test`, no runner
+  .docs/               # these documents — dot-prefixed to stay out of the
+                       #   publish payload's web root (D29)
+  .claude/CLAUDE.md    # project instructions, dot-prefixed for the same reason
   .claude/docs/        # mockup, platform feedback log, Zero's own AGENTS.md
   sf.jsonc             # runtime config
   theme.json           # WordPress theme.json v3 — see Styling
@@ -175,9 +179,18 @@ if (! can(role, 'item:write')) throw new Error('Not allowed');
 
 `can()` is a pure function over the matrix in
 [data-model.md](data-model.md#roles), living in `shared/roles.ts` so the server
-enforces and the client disables UI from the same table
+enforces and the client renders from the same table
 ([D20](decisions.md#d20-three-roles-owner-editor-viewer)). Writing the rules
 inline per handler is how a three-role matrix across a dozen handlers drifts.
+
+**On the client, the matrix is read once.** `Pantry.tsx` computes
+`mayEditItems` / `mayEditTaxonomy` from `can()` and passes plain booleans down;
+no component knows what a role *is*, so none can invent a rule of its own. A
+`false` means the control is **not rendered** — absent, not disabled — with one
+"View only" chip carrying the explanation
+([D30](decisions.md#d30-a-viewers-missing-controls-are-absent-not-disabled)).
+The server check is the enforcement; the client's job is to be honest about
+what it will accept.
 
 Two invariants the helper can't express, which their own mutations must guard:
 

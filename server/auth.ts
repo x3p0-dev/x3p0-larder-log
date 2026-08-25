@@ -6,7 +6,7 @@
  * household inserts without complaint. So there is no backstop anywhere beneath
  * this file: if a check is missing here, nothing else catches it.
  *
- * Two rules every handler follows, from `docs/architecture.md`:
+ * Two rules every handler follows, from `.docs/architecture.md`:
  *
  * 1. Never accept a `householdId` from the client as authority. Resolve it from
  *    `ctx.auth.userId`.
@@ -40,7 +40,7 @@ type AnyCtx = { auth: AuthContext; db: ReadDb | WriteDb };
  *
  * **Not yet confirmed inert in production.** D14's client-side bypass was
  * verified against the published space; this server-side one has not been. See
- * `docs/notes.md`.
+ * `.docs/notes.md`.
  */
 export { isSignedIn };
 

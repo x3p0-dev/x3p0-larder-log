@@ -16,6 +16,19 @@ export type MembershipLike = {
 	role: string;
 };
 
+/**
+ * The narrower shape the last-owner rule needs — no household id, no user id.
+ *
+ * Kept separate so the *client* can ask the same question of the member list
+ * the `household` query hands it, which carries no `householdId` per row (it is
+ * one household by construction). A rule the client re-implements to grey out a
+ * button is a rule that drifts from the one the server enforces.
+ */
+export type RoleBearing = {
+	id: string;
+	role: string;
+};
+
 export type Membership = {
 	id: string;
 	householdId: string;
@@ -64,7 +77,7 @@ export function resolveMembership(rows: readonly MembershipLike[]): MembershipRe
  * `members` is the household's full membership list.
  */
 export function wouldStrandHousehold(
-	members: readonly MembershipLike[],
+	members: readonly RoleBearing[],
 	targetId: string
 ): boolean {
 	const target = members.find((m) => m.id === targetId);

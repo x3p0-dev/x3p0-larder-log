@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'preact/hooks';
 import { useMutation, useQuery } from '@spacefast/zero/client';
 
+import type { Role } from '../../shared/roles';
 import type {
 	HouseholdData,
 	HouseholdResult,
@@ -56,6 +57,16 @@ export type PantryApi = {
 	createTerm: (kind: TermKind, draft: { name: string; ink: string; icon?: string }) => Promise<string | null>;
 	updateTerm: (kind: TermKind, id: string, patch: { name?: string; ink?: string; icon?: string }) => Promise<void>;
 	deleteTerm: (kind: TermKind, id: string) => Promise<void>;
+
+	/** Resolves to the new code, or null when the server refused. */
+	createInvite: (role: Role) => Promise<{ code: string; expiresAt: string } | null>;
+	revokeInvite: (inviteId: string) => Promise<void>;
+	/** Resolves true only when the membership was actually created. */
+	redeemInvite: (code: string) => Promise<boolean>;
+
+	changeRole: (membershipId: string, role: Role) => Promise<void>;
+	removeMember: (membershipId: string) => Promise<void>;
+	leaveHousehold: () => Promise<void>;
 };
 
 export function usePantryData(): PantryApi {
@@ -73,6 +84,12 @@ export function usePantryData(): PantryApi {
 	const rawCreateTerm = useMutation<[TermKind, { name: string; ink: string; icon?: string }], { id: string }>('createTerm');
 	const rawUpdateTerm = useMutation<[TermKind, string, { name?: string; ink?: string; icon?: string }], void>('updateTerm');
 	const rawDeleteTerm = useMutation<[TermKind, string], void>('deleteTerm');
+	const rawCreateInvite = useMutation<[string], { code: string; expiresAt: string }>('createInvite');
+	const rawRevokeInvite = useMutation<[string], void>('revokeInvite');
+	const rawRedeemInvite = useMutation<[string], { householdId: string }>('redeemInvite');
+	const rawChangeRole = useMutation<[string, string], void>('changeRole');
+	const rawRemoveMember = useMutation<[string], void>('removeMember');
+	const rawLeaveHousehold = useMutation<[], void>('leaveHousehold');
 
 	/**
 	 * Runs a mutation and surfaces its failure.
@@ -156,5 +173,32 @@ export function usePantryData(): PantryApi {
 		deleteTerm: useCallback(async (kind, id) => {
 			await run(() => rawDeleteTerm(kind, id));
 		}, [run, rawDeleteTerm]),
+
+		createInvite: useCallback(async (role) => (
+			run(() => rawCreateInvite(role))
+		), [run, rawCreateInvite]),
+
+		revokeInvite: useCallback(async (inviteId) => {
+			await run(() => rawRevokeInvite(inviteId));
+		}, [run, rawRevokeInvite]),
+
+		// The boolean matters: the caller clears the stashed code on success and
+		// keeps it on failure, so an expired-code message stays on screen with
+		// the code still in the box.
+		redeemInvite: useCallback(async (code) => (
+			(await run(() => rawRedeemInvite(code))) !== null
+		), [run, rawRedeemInvite]),
+
+		changeRole: useCallback(async (membershipId, role) => {
+			await run(() => rawChangeRole(membershipId, role));
+		}, [run, rawChangeRole]),
+
+		removeMember: useCallback(async (membershipId) => {
+			await run(() => rawRemoveMember(membershipId));
+		}, [run, rawRemoveMember]),
+
+		leaveHousehold: useCallback(async () => {
+			await run(() => rawLeaveHousehold());
+		}, [run, rawLeaveHousehold]),
 	};
 }

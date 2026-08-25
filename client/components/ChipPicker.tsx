@@ -22,6 +22,8 @@ type CommonProps = {
 	entities: Term[];
 	/** Creates a term and resolves to its new id, or null if the server refused. */
 	onCreate: (name: string, color?: string, icon?: string) => Promise<string | null>;
+	/** `taxonomy:write`. False hides the "+" chip entirely — see D30. */
+	canCreate: boolean;
 	theme: Theme;
 	dark: boolean;
 	leadingAll?: LeadingAll;
@@ -41,7 +43,7 @@ type Props =
  * interaction everywhere, rather than a separate always-open text field.
  */
 export function ChipPicker(props: Props) {
-	const { kind, entities, onCreate, theme, dark, leadingAll, countFor } = props;
+	const { kind, entities, onCreate, canCreate, theme, dark, leadingAll, countFor } = props;
 
 	const iconSet = iconSetFor(kind);
 	const label = KIND_LABEL[kind];
@@ -132,22 +134,24 @@ export function ChipPicker(props: Props) {
 					);
 				})}
 
-				<button
-					type="button"
-					onClick={() => (adding ? resetDraft() : setAdding(true))}
-					aria-expanded={adding}
-					class={`px-2.5 py-1 ${shapeClass} text-xs font-medium flex items-center gap-1 border border-dashed`}
-					style={{
-						borderColor: adding ? theme.inkBg : theme.borderStrong,
-						color: adding ? theme.text : theme.textMuted,
-						background: 'transparent',
-					}}
-				>
-					<Plus size={11} /> {label}
-				</button>
+				{canCreate && (
+					<button
+						type="button"
+						onClick={() => (adding ? resetDraft() : setAdding(true))}
+						aria-expanded={adding}
+						class={`px-2.5 py-1 ${shapeClass} text-xs font-medium flex items-center gap-1 border border-dashed`}
+						style={{
+							borderColor: adding ? theme.inkBg : theme.borderStrong,
+							color: adding ? theme.text : theme.textMuted,
+							background: 'transparent',
+						}}
+					>
+						<Plus size={11} /> {label}
+					</button>
+				)}
 			</div>
 
-			{adding && (
+			{canCreate && adding && (
 				<div class="mt-2 p-2.5 rounded-md" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
 					<ColorPicker value={color} onChange={setColor} theme={theme} />
 

@@ -793,3 +793,156 @@ at build time and costs nothing.
 Reported to Spacefast with a suggested fix — fail the build when a capsule
 declares mutations against zero tables. See
 [spacefast.md](../.claude/docs/spacefast.md).
+
+---
+
+## D28. An invite link is `/?join=<code>`, not `/join/<code>`
+
+**Decision.** The link an owner shares is
+`https://larderlog.view.fast/?join=ABC23DEFGH`. The client entry reads the code
+out of `location.search` before anything renders, stashes it in
+`sessionStorage`, and strips it from the address bar. A typed-code box is always
+available beside it.
+
+**Why.** A path route does not survive first contact with the platform. Zero
+exports `Router`, `Routes`, `Route`, and `useParams`, but the published space
+serves nothing at an unknown path: `/join/TEST` and `/anything-else` both return
+the platform's own 404 page, so `client.js` is never fetched and the router
+never runs. `sf publish --dry-run` says why in one line — `SPA false` — and the
+compiled artifact's `client` section carries only `bundlePath` and
+`basePathAware`, no route declarations. The root path is the app's entire
+surface.
+
+**And `sf dev` does not reproduce it.** Locally, `/join/ABC23DEFGH` returns the
+client shell byte-for-byte identical to `/`; the dev server behaves as though
+`--spa true`. A path route would therefore have worked on every local check and
+404'd for the first person who clicked the link — the same failure shape as
+[D27](#d27-the-schema-has-to-be-a-literal-in-the-server-entry): local success,
+silent production breakage. Verified by curling both.
+
+`sessionStorage` rather than a URL that survives sign-in, because sign-in
+navigates away and back and nothing promises the query string comes back with
+it. The code is a bearer credential with a job that ends at redemption, so it
+should not outlive the tab either — and stripping it from the URL keeps it out
+of the history entry and out of any screenshot taken afterwards.
+
+**The typed path is not a fallback, it is the other half.** An invite is as
+likely to be read across a kitchen as clicked. The code alphabet in
+`shared/invite.ts` already excludes `0`/`O` and `1`/`l`/`I` for exactly that
+case, and `formatCode` groups it in fours for reading aloud; `normalizeCode`
+takes the spaces back out, so the dictated form pastes straight back in.
+
+**Rejected: `sf publish --spa true`.** The flag exists and would probably make
+deep links work, but it changes how the whole space answers every unknown path,
+for one link that a query parameter already carries. Three things make it the
+wrong trade today:
+
+- **It buys nothing the query parameter doesn't.** The paste box still has to
+  exist for a dictated code, and the `sessionStorage` stash still has to exist
+  to survive sign-in. The only gain is a tidier URL.
+- **Soft 404s.** With the fallback on, every unmatched path answers 200 with the
+  app's HTML — including a mistyped asset or endpoint path. A missing script
+  then fails as `Unexpected token '<'` instead of a clean 404, and `/api/typo`
+  looks like the app rather than a mistake.
+- **It lives in the publish invocation, not the repo.** `sf.jsonc` has no field
+  for it, so the setting rides on whoever types the command. Forget the flag on
+  a later publish and every live invite link breaks, with nothing in version
+  control to catch it. A query parameter is in the source.
+
+Revisit when the app actually wants more than one page — a household switcher,
+or the shopping list as its own view. That is one deliberate change with a
+browser test behind it, and `--spa auto` (which may detect the `Router`) is
+probably what to try first.
+
+**Rejected: a hash fragment (`/#join=…`).** A fragment is never sent to the
+server, so it would work — but whether it survives the hosted sign-in redirect
+is unknown and untestable without a browser, and it buys nothing over a query
+parameter that already works.
+
+---
+
+## D29. The project's own documentation is kept out of the publish payload
+
+**Decision.** `docs/` moved to `.docs/`, and `CLAUDE.md` moved to
+`.claude/CLAUDE.md`. Both are still tracked in git and still read normally —
+`.claude/CLAUDE.md` is one of Claude Code's two project-instruction locations.
+
+**Why.** `sf publish` mirrors the whole project root into the upload, and the v2
+publish made that real: `/CLAUDE.md` and every file under `/docs/` returned 200
+to anyone on the public space. None of it is secret, but it is internal planning
+— including a frank description of the app's two authentication bypasses — and
+nobody chose to publish it. Phase 3 sends invite links to people, which is the
+wrong moment to be handing out the design notes.
+
+The serving layer refuses dot-prefixed paths with 403 while `publishPathIgnored()`
+still uploads them, which is what makes the rename sufficient: `.claude/` was
+already unreachable on the live space, verified before and after v2. Confirmed
+in the payload — `.spacefast/zero/public/` no longer contains `docs/` or
+`CLAUDE.md` at all.
+
+What stays public is what should be: `index.html`, `client.js`, `zero.css`,
+`LICENSE.md`, `package-lock.json`, and the two `tsconfig` files.
+
+**Rejected: an `access` allowlist in `sf.jsonc`.** The cleanest in principle and
+the riskiest in practice — a wrong list breaks the signed-out sign-in screen,
+which is precisely the surface an invite link depends on, and it could only be
+proven by publishing and clicking.
+
+**Rejected: moving the files out of the root around each publish.** Fails open.
+Forget the ritual once and the docs are public again, with nothing to notice it.
+
+**Rejected: accepting it.** Defensible — it is documentation, not credentials —
+but a rename cost one commit and closed it.
+
+---
+
+## D30. A viewer's missing controls are absent, not disabled
+
+**Decision.** Where a role cannot write, the control is not rendered. The
+quantity, the notes, the terms, and the shopping list all stay — a viewer sees
+the same pantry, minus the affordances. One "View only" chip beside the
+household name in the header explains all of it at once.
+
+This **amends [D20](#d20-three-roles-owner-editor-viewer)**, which said the
+steppers, inline edit, taxonomy manager, and add/remove affordances "all need a
+disabled state".
+
+**Why the change.** A disabled control is a promise that it might become
+enabled. That is true of a button waiting on a form, and false of a stepper a
+viewer will never be able to press — their role is a property of the account,
+not of the moment. Rendering it disabled puts two dead buttons on every card in
+a pantry that is meant to hold hundreds, and answers "why can't I?" nowhere.
+
+So the rule is: **remove the control, explain the absence once.** The chip in
+the header is that one explanation, and Settings says it again where the
+taxonomy list would otherwise look mysteriously uneditable.
+
+**What is gated, and by what:**
+
+| Surface | Capability |
+|---|---|
+| Quantity steppers, Edit, Remove, Add item, the add form | `item:write` |
+| The "+" chip on every picker; rename / recolor / delete in Settings | `taxonomy:write` |
+| Household name, default threshold | `household:settings` |
+| Role controls, remove member, invite creation | `member:role`, `member:remove`, `invite:create` |
+
+**Rendered as an alternative, never hidden with a class.** `TaxonomyManager`
+draws a plain list for a viewer rather than the editable rows behind
+`display: none`. A permission boundary that leaves live inputs in the DOM is
+not a boundary — and the server check is what actually enforces this, so the
+client's job is to be honest rather than clever.
+
+**The components never see a role.** `Pantry` reads `can()` once and passes
+`canEdit` / `canCreateTerms` booleans down. No component knows what a role is,
+the matrix stays in `shared/roles.ts` where the server reads the same table,
+and a component cannot invent a rule of its own.
+
+**Rejected: a read-only *mode* toggle.** Tempting for testing — a switch that
+previews the viewer UI — but it would be a second source of truth for the same
+question, and the one thing worse than an untested read-only pass is one that
+tests a different code path than the real thing.
+
+**Still unverifiable locally.** `sf dev` issues one identity and
+`createHousehold` makes it an owner, so nothing here can be exercised without a
+published space and a second account. The gating is driven entirely by `can()`,
+which `npm test` covers directly; what remains unproven is the rendering.

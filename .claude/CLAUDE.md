@@ -20,12 +20,13 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phase 2 is done. Phase 3 is next.** A real Spacefast Zero project: `sf.jsonc`,
+**Phase 3 is built. Phase 4 is largely built too. Neither can be published
+right now — see the blocker below.** A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`docs/data-model.md`, two live queries, and sixteen mutations. The schema is
+`.docs/data-model.md`, two live queries, and sixteen mutations. The schema is
 declared inline in `server/index.ts` and **has to be** — see
-[D27](docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
+[D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
 
 Data lives in the database. The **only** remaining `localStorage` call site is
@@ -35,6 +36,47 @@ choice on a phone should not follow you to a desktop.
 The React/Vite prototype in `src/` is **deleted**, along with `index.html`,
 `vite.config.js`, and the react/vite/tailwind dependencies. Zero compiles
 Tailwind itself. There is no `npm run prototype` any more.
+
+Phase 3 added the client half of households, members, and invites — the six
+server handlers had shipped with Phase 2. Invite links are `/?join=<code>`
+rather than `/join/<code>`, because the published space serves nothing at an
+unknown path and `sf publish --dry-run` prints `SPA false`
+([D28](../.docs/decisions.md#d28-an-invite-link-is-joincode-not-joincode)).
+The project's own docs are no longer in the publish payload: `docs/` is `.docs/`
+and this file is `.claude/CLAUDE.md`, both behind the serving layer's 403 on
+dot-prefixed paths
+([D29](../.docs/decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload)).
+**None of Phase 3 has been exercised by a second person** — that needs the
+published space.
+
+Phase 4's read-only pass landed on 2026-08-25: every write affordance is gated
+on `can()` and is **absent rather than disabled**, with one "View only" chip
+explaining it ([D30](../.docs/decisions.md#d30-a-viewers-missing-controls-are-absent-not-disabled),
+which amends D20). Verified locally against the real code path — `sf dev` makes
+you an owner, so a throwaway endpoint rewrote the caller's own role, and it has
+been removed. The rest of Phase 4 was already built and the roadmap now says so.
+
+### Publishing is blocked, and it is not our bug
+
+**Do not attempt a publish before re-reading this.** As of 2026-08-25:
+
+1. The API now rejects publishes from agent-attributed credentials unless they
+   carry an `x-spacefast-rationale` header. **npm's `spacefast@0.0.26` cannot
+   send it** — no flag, no env var.
+2. The CLI that can is **0.0.27, released to the binary channel only**
+   (`install.sh` / GitHub releases). npm is still on 0.0.26.
+3. That standalone 0.0.27 binary **cannot compile a Zero capsule**: it resolves
+   esbuild's native helper and `@spacefast/zero/client` relative to its own Bun
+   virtual filesystem. `ESBUILD_BINARY_PATH` gets past the first, nothing gets
+   past the second.
+4. The one run that reached the platform (0.0.26 with the header injected)
+   created a version, uploaded, then **failed at `finalize` with
+   `runtime_api_not_found`** — the same stage that broke on 2026-08-24.
+
+Net: **v2 is still live**, v3 is recorded `status=failed`, and the space is
+healthy (`Status: active`). The way out is npm shipping 0.0.27, or Spacefast
+fixing finalize. The full write-up, with exact errors and version ids, is in
+[`.claude/docs/spacefast.md`](docs/spacefast.md) — Justin intends to send it.
 
 **Phase 2 is live at <https://larderlog.view.fast/>** as v2 (space slug
 `larderlog`, team `justin-team-2`), published 2026-08-24. The first real
@@ -71,7 +113,7 @@ That is enough to watch a mutation propagate; it is not enough to test two
 members of a household. Anything touching sign-in, invites, or roles has to be
 checked against the published space.
 
-See `docs/roadmap.md` for the phases.
+See `.docs/roadmap.md` for the phases.
 
 ## Target platform: Spacefast Zero
 
@@ -103,14 +145,16 @@ The whole runtime reference is one file: `https://spacefast.com/docs/zero.md`
 (~19 KB of plain Markdown — schema API, auth, storage, styling, limits, and a
 complete example app).
 
-**The site returns HTTP 403 to a plain programmatic fetch, `WebFetch` included.**
-Send a desktop browser User-Agent:
+A plain `curl` works — **the 403 to programmatic fetches was fixed on
+2026-08-25**, so the browser User-Agent this file used to insist on is no longer
+needed:
 
 ```bash
-curl -sL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36" https://spacefast.com/docs/zero.md
+curl -sL https://spacefast.com/docs/zero.md
 ```
 
-Every docs page has a `.md` twin at the same path. Prefer it over the HTML.
+Every docs page has a `.md` twin at the same path. Prefer it over the HTML. If a
+page ever 403s again, a desktop browser User-Agent was the old workaround.
 
 **But read `.claude/docs/zero-agent-rules.md` first.** It is the `AGENTS.md`
 that `sf init --runtime zero` scaffolds, and it is denser and more accurate than
@@ -120,24 +164,24 @@ fact that platform modules don't count against the client bundle budget.
 
 ## Documentation map
 
-Depth lives in `docs/`. Read the relevant one before proposing architecture —
+Depth lives in `.docs/`. Read the relevant one before proposing architecture —
 most of it is already decided.
 
 | File | What's in it |
 |---|---|
-| `docs/overview.md` | What the app is, concept vocabulary, goals, **non-goals** |
-| `docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
-| `docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
-| `docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `docs/decisions.md` | D1–D27, with reasoning and rejected alternatives. **D27 governs every schema edit** |
-| `docs/notes.md` | Open platform questions, what the v2 publish answered, and the source-exposure decision Phase 3 needs |
+| `.docs/overview.md` | What the app is, concept vocabulary, goals, **non-goals** |
+| `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
+| `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
+| `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
+| `.docs/decisions.md` | D1–D30, with reasoning and rejected alternatives. **D27 governs every schema edit** |
+| `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |
 | `.claude/docs/zero-agent-rules.md` | Zero's own `AGENTS.md`, verbatim — the best runtime reference |
 
-**Keep these current.** When a decision gets made, add it to `docs/decisions.md`
-and remove the corresponding entry from `docs/notes.md`. When a phase completes,
-update `docs/roadmap.md` and the status section here.
+**Keep these current.** When a decision gets made, add it to `.docs/decisions.md`
+and remove the corresponding entry from `.docs/notes.md`. When a phase completes,
+update `.docs/roadmap.md` and the status section here.
 
 ## Standing instructions
 
@@ -206,22 +250,23 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 81 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 100 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
-  one-household rule, D22's last-owner guard, invite expiry boundaries, and the
-  dev-guest bypass in `shared/identity.ts`. **Add to it** when you touch any of
-  those — that file is the app's only authorization test.
+  one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
+  invite-link parsing, and the dev-guest bypass in `shared/identity.ts`. **Add
+  to it** when you touch any of those — that file is the app's only
+  authorization test.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
   the fastest way to catch string-encoded numbers used as numbers.
   **It will not catch a term id rendered where a name belongs** — both are
-  `string`. That bug shipped once already; see `docs/notes.md`.
+  `string`. That bug shipped once already; see `.docs/notes.md`.
 - **`npx sf publish --dry-run`, then read `.spacefast/zero/artifact.json`** —
   the only way to see what a publish would actually install: the schema,
   queries, mutations, endpoints, and migrations. **Mandatory after any schema
   edit.** The capsule compiler finds tables by regex over `server/index.ts`
   alone, so a table can vanish from the artifact while typechecking perfectly
-  ([D27](docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)).
+  ([D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)).
   Note that `--dry-run` is not read-only: it rewrites the build under
   `.spacefast/zero/`.
 - **`sf dev`** compiles the capsule for real. A clean start plus `GET /` and
@@ -262,6 +307,14 @@ This overrides any default instruction to append co-authorship trailers.
 
 WordPress-era leftovers were cleared on 2026-08-24. What remains is deliberate:
 
+- **The project's documentation is dot-prefixed on purpose.** `sf publish`
+  mirrors the project root into the upload and does not honor `.gitignore`, but
+  the serving layer refuses dot-prefixed paths with 403. That is why the docs
+  live in `.docs/` and these instructions live in `.claude/CLAUDE.md` — one of
+  Claude Code's two project-instruction locations, so nothing is lost. **Do not
+  move either back to the root**; see
+  [D29](../.docs/decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload).
+  Markdown links in this file are relative to `.claude/`, hence the `../.docs/`.
 - **`.gitignore`** is written for this project, not the old plugin. It ignores
   `node_modules`, `dist`, editor dirs, and `.ideas` — plus, pre-emptively,
   `.env*` and `/.spacefast`, both of which hold credentials (`.env.server` is
@@ -273,7 +326,7 @@ WordPress-era leftovers were cleared on 2026-08-24. What remains is deliberate:
   gone and no `public/` directory exists. Nothing to preserve there now.)
 - **`.gitattributes`** keeps only line-ending normalization and binary
   denotes. The old `export-ignore` block was for building WordPress plugin ZIPs
-  with `git archive` and had `docs/` and `CLAUDE.md` in it; the original is at
+  with `git archive` and had `.docs/` and `CLAUDE.md` in it; the original is at
   `.ideas/plugin-code/.gitattributes.wp-original`.
 - **`.phpstorm.meta.php`** moved to `.ideas/plugin-code/`.
 

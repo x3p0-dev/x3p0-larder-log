@@ -1312,3 +1312,376 @@ warning inside a spinner rather than in the final summary, and the final summary
 then reports `Files 53` when 35 were uploaded. If a rejected file had been part
 of the app, this is the notice that would have to catch it, and it is easy to
 scroll past.
+
+---
+
+## 2026-08-25 — Client routing exists, but nothing serves a deep path
+
+Context: Phase 3 needed an invite link. The plan was `/join/<code>`, a client
+route, because the runtime reference advertises one.
+
+### 👎 `Router` is documented; the fallback that makes it usable is not
+
+`https://spacefast.com/docs/zero.md` says the client exports `Router`, `Routes`,
+`Route`, `Link`, `useNavigate()`, `useParams()`, and `useLocation()`, and the
+complete-app example ships a two-route guestbook with a `<Link to="/stats">`.
+Nothing on that page mentions that those routes are only reachable if the
+visitor is already inside the app.
+
+On our published space, every unknown path returns the platform's own 404 page:
+
+```
+/              200  text/html  3030
+/join/TEST     404  text/html  8496
+/nonexistent   404  text/html  8503
+/api/status    200  text/plain
+```
+
+So `client.js` is never fetched and the router never runs. A link mailed to
+someone — the entire reason an app has a `/join/:code` route — cannot work. The
+example app hides this, because `/stats` is only ever reached by clicking a
+`<Link>` from `/`, where the bundle is already loaded. Deep-link it and it 404s.
+
+The compiled artifact explains why the runtime can't do better on its own: the
+`client` section is `{ "bundlePath": "client.js", "basePathAware": true }` and
+carries no route declarations. The server has no way to know which paths the
+client would have handled.
+
+**Where the answer actually is:** `sf publish --dry-run` prints it as one line
+of the plan —
+
+```
+Mode            website
+SPA             false
+```
+
+— and `sf publish --help` lists `--spa auto|true|false`. Neither `SPA` nor
+`--spa` appears in `zero.md`, and `sf.jsonc`'s documented surface doesn't
+mention it either. A capsule app with a client router is presumably always meant
+to be `--spa true`; if so, `auto` should detect a `<Router>` in the client entry
+and say so, and the runtime reference's routing paragraph should say which
+setting makes those routes reachable.
+
+### 🐛 `sf dev` serves deep paths; the published space does not
+
+The worst part of the above, found while verifying the fix. Against a freshly
+started `sf dev`, the client shell is served at **any** path:
+
+```
+/                   200  1829
+/?join=ABC23DEFGH   200  1829
+/join/ABC23DEFGH    200  1829   <- the same shell, byte for byte
+/api/status         200  ok
+```
+
+Against the published space, the same three paths are 200 / 200 / **404**.
+
+So `sf dev` behaves as `--spa true` while a default publish is `--spa false`.
+A `/join/:code` route written against the dev server works perfectly, passes
+every local check, and 404s for the first person who clicks the link — the same
+shape of failure as the D27 schema-extraction bug: local success, silent
+production breakage, and nothing in between that catches it. Whatever the
+default ends up being, dev and production should agree on it.
+
+We shipped around it — the invite code rides in `?join=` on the root path, which
+works under either setting and survives sign-in in `sessionStorage`. But the
+detour cost a probe and a read of the artifact to be sure, and the shape of the
+feature changed because of a flag we found by accident.
+
+### 👍 The dot-path rule is a usable exclude, once you know it
+
+Following up on the 2026-08-24 source-exposure entry: `publishPathIgnored()`
+still uploads everything `.gitignore` lists, but the serving layer refuses
+dot-prefixed paths with 403. That turned out to be the practical fix. Renaming
+`docs/` to `.docs/` and moving `CLAUDE.md` to `.claude/CLAUDE.md` removed both
+from the payload root entirely — confirmed in `.spacefast/zero/public/`, which
+now contains neither.
+
+It works, and it needed no flags. But it is an accident of the serving layer
+rather than a feature, and it means "keep this out of the web root" is spelled
+"rename your directories." The suggestion from the previous entry stands:
+honor `.gitignore`, or give `sf.jsonc` an `ignore` array.
+
+---
+
+## 2026-08-25 — `sf publish` is blocked by a header the CLI cannot send
+
+Context: publishing Phase 3 (client-only; no schema change). Dry run clean —
+nine tables, two queries, sixteen mutations, zero migrations.
+
+### 🐛 Publishing fails on an undocumented `x-spacefast-rationale` requirement
+
+```
+✓ Updating space  larderlog (spc_7770744a870a43f5927213fa397c780e)
+⠋ Creating version
+Agent mutations require a rationale of 1 to 1024 characters in the
+x-spacefast-rationale request header.
+Learn more: https://spacefast.com/docs/errors/validation_error
+```
+
+Deterministic — identical on two attempts, several minutes apart. The command
+was `sf publish -y --wait -m "Phase 3: households, members, and invites"`, so a
+changelog message *was* supplied; whatever `-m` maps to, it is not this header.
+
+**The CLI has no way to satisfy this.** Pinned at `spacefast@0.0.26`, which is
+also the latest on npm:
+
+- `sf publish --help` lists no `--rationale`.
+- No `SPACEFAST_*RATIONALE*` environment variable exists anywhere in
+  `node_modules/spacefast/dist/`.
+- The only `extraHeaders` merge in the bundle is in the MCP client, not the
+  publish path. There is no generic header-injection lever.
+
+**And it is undocumented.** `rationale` does not appear in
+`https://spacefast.com/docs/zero.md`, `/docs/agents.md`,
+`/docs/agents/publishing.md`, or the bundled offline docs — `sf docs rationale
+--all` answers "No reference docs match rationale." The error's `Learn more`
+link goes to the generic `validation_error` page, which explains the RFC 9457
+envelope and says nothing about this header, what an "agent mutation" is, or how
+to supply a rationale.
+
+**We are not authenticated as an agent.** `sf whoami` reports
+`Justin Tadlock (justintadlock@gmail.com)`, a human account with a device
+login, and the CLI sends `x-spacefast-client: spacefast-cli/0.0.26`. So the
+"agent mutation" classification is being made somewhere on the platform side,
+for a plain human CLI publish, and the CLI it is classifying cannot answer it.
+Net effect: **the space cannot be published to at all.**
+
+### 👍 The failure is clean this time
+
+Worth saying, because the 2026-08-24 publish bug was not. The space came out
+healthy:
+
+```
+Space: Larder Log   Status: active   Live URL: https://larderlog.view.fast/
+* v2 (live) status=ready source=git@91b1999
+  v1          status=ready source=git@216003f
+```
+
+No orphan v3, no unreconciled operation, no wedge. `/`, `/api/status`, and
+`/client.js` all still answer 200 from v2. Failing *before* creating a version
+is the right place to fail.
+
+**One wrinkle:** the `Updating space` step succeeds before the version step
+refuses, so a publish that cannot possibly complete still patches the space
+config. A precondition this absolute should be checked first, before anything is
+written.
+
+**Suggestions.**
+
+1. Give the CLI a `--rationale` flag and a `SPACEFAST_RATIONALE` env var — or,
+   simpler, send the `-m` changelog message as the rationale, since it is
+   already a human-written explanation of the publish.
+2. Point the error at a page that documents the header, what counts as an
+   "agent mutation", and which principals it applies to. `validation_error` is
+   the right *code* and the wrong *destination*.
+3. Don't let a released CLI be locked out by a policy it predates. If agent
+   attribution is now required, the CLI that agents are told to use needs to
+   ship the field in the same release.
+
+### 🐛 …because the npm channel is a release behind the binary channel
+
+Follow-up, same day. The fix exists; it is just not where the project gets its
+CLI from.
+
+| Channel | Latest | Published |
+|---|---|---|
+| npm `spacefast` | **0.0.26** | 2026-08-22 |
+| `github.com/spacefast/cli` releases (what `install.sh` uses) | **0.0.27** | 2026-08-25 01:24Z |
+
+Our publish attempts were a few hours after 0.0.27 shipped. Verified by
+downloading the release artifact and checking it against the manifest —
+`spacefast-darwin-arm64.gz` matched both the packed and unpacked sha256 in
+`latest.json` — then reading its strings:
+
+```
+sf publish --target preview --rationale "Share the reviewed preview" --json
+  "Publish a preview with the audit rationale required by agent credentials."
+
+rationale: string().trim().min(1).max(1024)
+  .describe("State in your own words why this execution is necessary.
+             Spacefast stores this text in the audit record.")
+```
+
+So 0.0.27 adds the `--rationale` flag that satisfies the policy, and the phrase
+"required by **agent credentials**" says the requirement is keyed to the
+credential rather than the environment — consistent with what we saw, where the
+publish failed identically inside and outside an agent shell.
+
+**The real bug is the channel split.** A server-side policy landed that rejects
+every publish from 0.0.26, and the CLI release that answers it went to the
+binary channel only. Anyone pinned to the npm package — which is how a
+JavaScript project naturally installs a JavaScript tool, and what `sf init`
+leaves you with — is locked out of publishing with no upgrade path on that
+channel and no error message that names the version.
+
+**Suggestions.**
+
+1. Publish both channels in the same release. If npm is a supported way to get
+   the CLI, a policy that requires a newer CLI cannot ship before npm has it.
+2. Name the fix in the error: "this account requires `--rationale`, added in
+   CLI 0.0.27; you are running 0.0.26" turns a dead end into a one-line fix.
+   The CLI already sends `x-spacefast-client: spacefast-cli/0.0.26`, so the API
+   knows the version it is refusing.
+3. Document `--rationale` and what an "agent mutation" is. It appears in the
+   0.0.27 binary's own help and nowhere on the docs site.
+
+### 🐛 The 0.0.27 standalone binary cannot compile a Zero capsule
+
+Having installed 0.0.27 to get `--rationale`, the publish fails earlier than
+before:
+
+```
+Error: ResolveMessage: Cannot find package 'esbuild' from
+'/$bunfs/root/spacefast-darwin-arm64'
+Code: unexpected_error
+```
+
+The standalone CLI is a Bun single-file executable. esbuild's **JavaScript** is
+bundled into it — the binary's strings still carry
+`// ../../node_modules/.pnpm/esbuild@0.27.7/node_modules/esbuild/lib/main.js` —
+but esbuild resolves its own package directory at runtime to locate its
+**native** helper binary, and that resolution fails inside Bun's virtual
+filesystem (`/$bunfs/root/`). Bundling esbuild this way cannot work; the native
+half has to exist on disk.
+
+This lands on Zero projects specifically, since the capsule compile is what
+needs esbuild. The same binary presumably publishes a static site fine, which is
+how it passed whatever testing it had.
+
+**The two bugs compose into a lockout.** A server policy rejects publishes from
+0.0.26. The CLI that answers it, 0.0.27, is on the binary channel only. And the
+binary channel's build cannot compile the runtime the policy is blocking. A Zero
+project installed from npm — the way `sf init` leaves you — has no working
+publish path at all today.
+
+**Workaround.** esbuild honors `ESBUILD_BINARY_PATH`, and the binary's bundled
+copy still reads it (`ESBUILD_BINARY_PATH = process.env.ESBUILD_BINARY_PATH || …`).
+Pointing it at the native esbuild that the npm CLI already installed —
+`node_modules/spacefast/node_modules/@esbuild/darwin-arm64/bin/esbuild`,
+version 0.27.7, matching the version compiled into 0.0.27 exactly — should let
+the standalone binary compile. Which means the fix depends on having the npm
+package installed alongside the standalone binary that replaced it.
+
+**Suggestion.** Ship the native esbuild beside the standalone binary and set
+`ESBUILD_BINARY_PATH` at startup, or drop the standalone build's claim to
+support Zero until it can compile one.
+
+### 😕 0.0.27 also changed credential storage, and the migration prompts
+
+First run of 0.0.27 stopped at a bare `password data for new item:` prompt —
+macOS `security` asking for a value on stdin. The binary shells out to
+`security add-generic-password … -U -w` and feeds the token in; from an
+interactive terminal it hung there instead, with no explanation of what was
+being asked for or why. It reads exactly like the tool asking for your Mac
+login password, which is the one thing you must not type into it.
+
+`SPACEFAST_CREDENTIAL_STORE=plaintext` restores the 0.0.26 file-based store and
+skips it — discovered in the binary's own error text, documented nowhere.
+Moving credentials into the OS keyring is a good change; doing it silently
+during an unrelated publish, on a release that a server policy has just made
+mandatory, is a lot of new failure surface at once.
+
+### 🐛 …and finalize fails again, at the same stage as yesterday
+
+With the header attached, the publish gets all the way through and then dies at
+the last step:
+
+```
+✓ Updating space   larderlog (spc_7770744a870a43f5927213fa397c780e)
+✓ Creating version ver_da36789d34044bbd9e95466c13235913
+✓ Uploading files  16 files
+⠋ Finalizing version
+Not found.
+Learn more: https://spacefast.com/docs/errors/runtime_api_not_found
+```
+
+The version record:
+
+```json
+{ "ref": "v3", "status": "failed",
+  "failureCode": "runtime_api_not_found", "failureMessage": "Not found.",
+  "failedStage": null, "manifestHash": null,
+  "fileCount": 16, "filesAddedCount": 0, "filesChangedCount": 0,
+  "pendingUploads": [ "__spacefast/zero/deploy.json", ".claude/CLAUDE.md", … ] }
+```
+
+`POST /v1/spaces/{id}/versions/{id}/finalize` is the call. The documented
+resolution for `runtime_api_not_found` — *"Send the request with the management
+hostname as the Host header. Spacefast does not serve management routes on
+public hostnames."* — is advice for a caller hitting the runtime management API
+directly, which is not what the CLI is doing here; it is posting to
+`api.spacefast.com` exactly as it did for the successful v2. So this reads as
+the platform failing to reach its own runtime management endpoint while
+installing the capsule.
+
+**This is the same stage that broke on 2026-08-24**, when every publish failed
+at `version_finalize` with an internal 406 and the failed operations never
+reconciled, wedging three spaces. Today it is a 404 with a different code. The
+finalize stage has now been the failure point on two of the three days this
+project has existed.
+
+**Better than yesterday:** the space did not wedge. `Status: active`, v2 is
+still live and serving, and the failed v3 is recorded as `status=failed` rather
+than left dangling. Whatever reconciliation was added since yesterday is
+working. `filesAddedCount: 0` with a non-empty `pendingUploads` does suggest the
+version's manifest never reconciled, but it is marked failed rather than
+pretending otherwise.
+
+Not retried, deliberately — yesterday's wedge came from repeated attempts
+through a broken finalize.
+
+## 2026-08-25 — Docs review: one fix, and the gap the day's bugs sit in
+
+Checked the docs against what this log recorded on 2026-08-24.
+
+### 👍 The programmatic-fetch 403 is fixed
+
+Yesterday's first entry: `https://spacefast.com/docs/zero.md` and `/setup.md`
+returned **403** to a plain `curl`, so the page an agent is explicitly told to
+fetch was the one page it could not read, and every fetch here needed a spoofed
+desktop User-Agent.
+
+Both now return **200** with no User-Agent games, and the content is
+byte-identical to what the spoofed fetch returns. That was the single biggest
+day-one friction and it is gone. Thank you.
+
+*(Project note: the browser-UA workaround in `CLAUDE.md` can be simplified when
+someone next touches it. Left in place for now — a plain `curl` works, so the
+instruction is merely redundant rather than wrong.)*
+
+### 😕 Nothing about today's blockers has reached the docs
+
+Searched `zero.md`, `cli.md`, `publish.md`, `agents/publishing.md`, and
+`llms.txt`:
+
+| Term | zero.md | cli.md | publish.md | llms.txt |
+|---|---|---|---|---|
+| `rationale` | 0 | 0 | 0 | 0 |
+| "agent mutation" | 0 | 0 | 0 | 0 |
+| `SPACEFAST_CREDENTIAL_STORE` / keyring | 0 | 0 | 0 | 0 |
+| `--spa` / "SPA fallback" | **0** | yes | yes | yes |
+
+So the requirement that blocked every publish today is documented nowhere, and
+neither is the credential-store change that stopped the CLI at a bare
+`password data for new item:` prompt.
+
+The 0.0.27 binary also references an error page that does not exist:
+`errors/invalid_elevation_request` returns **404** on the docs site, as do
+`elevation_required` and `rationale_required`. The CLI ships pointing at
+documentation for a system the site has not published.
+
+**The `--spa` row is its own small lesson.** The flag *is* documented — in
+`cli.md` and `publish.md`. It is `zero.md`, the one file a Zero developer is
+told is "the whole runtime reference", that advertises `Router`, `Routes`,
+`Route`, and `useParams` and never mentions that unmatched paths 404 unless SPA
+fallback is on. The fact was published; it just wasn't where the person who
+needs it is reading.
+
+### Dating any of this is not possible from outside
+
+No `Last-Modified` header on any docs page — only content-hash ETags — and
+`sitemap.xml` carries no `<lastmod>`. So "what changed since yesterday" can only
+be answered by diffing against copies you kept. A `lastmod` in the sitemap, or a
+visible "updated" date on each page, would make the docs auditable for anyone
+tracking a moving platform.

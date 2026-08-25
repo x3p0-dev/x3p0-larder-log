@@ -18,6 +18,10 @@ type Props = {
 	editForm: ItemDraft | null;
 	onEditFormChange: (next: ItemDraft) => void;
 	taxonomy: TaxonomyActions;
+	/** `item:write`. False strips the steppers, edit, and remove — see D30. */
+	canEdit: boolean;
+	/** `taxonomy:write`, for the "+" chip inside the edit form. */
+	canCreateTerms: boolean;
 	onToggleOpen: () => void;
 	onAdjustQty: (delta: number) => void;
 	onRemove: () => void;
@@ -28,7 +32,7 @@ type Props = {
 
 export function ItemCard({
 	item, open, locations, types, stores, dark, theme,
-	editForm, onEditFormChange, taxonomy,
+	editForm, onEditFormChange, taxonomy, canEdit, canCreateTerms,
 	onToggleOpen, onAdjustQty, onRemove, onStartEdit, onSaveEdit, onCancelEdit,
 }: Props) {
 	const c = entityColorFor(item.locationId, locations, dark);
@@ -36,7 +40,7 @@ export function ItemCard({
 	const location = locations.find((l) => l.id === item.locationId);
 	const locationName = termNameFor(item.locationId, locations);
 	const LocationIcon = locationIconFor(location?.icon);
-	const isEditing = Boolean(editForm);
+	const isEditing = canEdit && Boolean(editForm);
 
 	return (
 		<div
@@ -94,24 +98,33 @@ export function ItemCard({
 				</div>
 			</button>
 
+			{/*
+			  * The quantity is information, so it stays for everyone; only the
+			  * two controls go. A viewer sees "4 · low at 2" rather than a pair
+			  * of dead buttons on every card in the pantry (D30).
+			  */}
 			<div class="flex items-center gap-2 px-4 pb-3.5">
-				<button
-					onClick={() => onAdjustQty(-1)}
-					class="w-8 h-8 rounded-md flex items-center justify-center"
-					style={{ background: theme.neutralChipBg, color: theme.text }}
-					aria-label={`Decrease ${item.name}`}
-				>
-					<Minus size={14} />
-				</button>
+				{canEdit && (
+					<button
+						onClick={() => onAdjustQty(-1)}
+						class="w-8 h-8 rounded-md flex items-center justify-center"
+						style={{ background: theme.neutralChipBg, color: theme.text }}
+						aria-label={`Decrease ${item.name}`}
+					>
+						<Minus size={14} />
+					</button>
+				)}
 				<span class="font-mono tracking-[0.02em] text-base w-7 text-center font-semibold">{item.qty}</span>
-				<button
-					onClick={() => onAdjustQty(1)}
-					class="w-8 h-8 rounded-md flex items-center justify-center"
-					style={{ background: theme.neutralChipBg, color: theme.text }}
-					aria-label={`Increase ${item.name}`}
-				>
-					<Plus size={14} />
-				</button>
+				{canEdit && (
+					<button
+						onClick={() => onAdjustQty(1)}
+						class="w-8 h-8 rounded-md flex items-center justify-center"
+						style={{ background: theme.neutralChipBg, color: theme.text }}
+						aria-label={`Increase ${item.name}`}
+					>
+						<Plus size={14} />
+					</button>
+				)}
 				<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>low at {item.threshold}</span>
 			</div>
 
@@ -120,18 +133,20 @@ export function ItemCard({
 					<p class="font-mono text-xs uppercase tracking-widest mb-1" style={{ color: theme.textFaint }}>Notes</p>
 					<div class="flex items-start justify-between gap-3">
 						<p class="flex-1 min-w-0">{item.notes || <span style={{ color: theme.textFaint }}>No notes yet.</span>}</p>
-						<div class="flex flex-col items-end gap-2.5 shrink-0">
-							<button onClick={onStartEdit} class="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ color: c.ink, background: c.bg }}>
-								<Pencil size={12} /> Edit
-							</button>
-							<button
-								onClick={onRemove}
-								class="text-xs px-0.5"
-								style={{ color: theme.dangerText, textDecoration: 'underline', textDecorationThickness: '2px', textUnderlineOffset: '3px' }}
-							>
-								Remove
-							</button>
-						</div>
+						{canEdit && (
+							<div class="flex flex-col items-end gap-2.5 shrink-0">
+								<button onClick={onStartEdit} class="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ color: c.ink, background: c.bg }}>
+									<Pencil size={12} /> Edit
+								</button>
+								<button
+									onClick={onRemove}
+									class="text-xs px-0.5"
+									style={{ color: theme.dangerText, textDecoration: 'underline', textDecorationThickness: '2px', textUnderlineOffset: '3px' }}
+								>
+									Remove
+								</button>
+							</div>
+						)}
 					</div>
 				</div>
 			)}
@@ -141,7 +156,7 @@ export function ItemCard({
 					<ItemFields
 						value={editForm} onChange={onEditFormChange}
 						locations={locations} types={types} stores={stores}
-						taxonomy={taxonomy}
+						taxonomy={taxonomy} canCreateTerms={canCreateTerms}
 						dark={dark} theme={theme}
 					/>
 					<div class="sm:col-span-2 flex gap-2 justify-end">
