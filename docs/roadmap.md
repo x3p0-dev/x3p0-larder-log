@@ -49,12 +49,13 @@ see [notes](notes.md).
 `version_finalize` with an internal 406, and the failed operation never
 reconciled to the version, which wedged three spaces. Reported to Spacefast and
 fixed the same day; the whole sequence is in
-[spacefast.md](../.claude/docs/spacefast.md) and
-[the bug report](../.claude/docs/spacefast-bug-2026-08-24.md).
+[spacefast.md](../.claude/docs/spacefast.md), under the 2026-08-24 entries.
 
 ## Phase 2 — Real data layer ✅
 
-- ✅ Full schema from [data-model.md](data-model.md), in `server/schema.ts`
+- ✅ Full schema from [data-model.md](data-model.md), declared inline in
+  `server/index.ts` — it cannot live in its own module
+  ([D27](decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry))
 - ✅ `requireMembership()` / `requireCapability()` in `server/auth.ts` — every
   handler resolves the household server-side and asserts a capability
 - ✅ `pantry` and `household` queries; item, taxonomy, invite, and membership
@@ -64,7 +65,7 @@ fixed the same day; the whole sequence is in
   (codes, expiry), `shared/roles.ts` (D20 capabilities)
 - ✅ Platform spike: six unknowns answered, recorded in [notes](notes.md) and
   `.claude/docs/spacefast.md`
-- ✅ `npm test` — 66 assertions over `shared/`, no runner needed
+- ✅ `npm test` — 81 assertions over `shared/`, no runner needed
 - ✅ Replaced `usePersistentState` with `useQuery` / `useMutation` via
   `client/hooks/usePantryData.ts` — the only remaining localStorage call site is
   the per-device theme override, which is correct there (D25)
@@ -90,10 +91,34 @@ capsule. Two things were found and fixed this way: `FacetSection` printed a raw
 term id as its active-filter label, and the server rejected the `sf dev` guest
 identity that D14's client-side bypass had just let through.
 
-**Still unverified, and it needs the published space:** anything touching real
-sign-in, and the two-browser live-query test. `sf dev` issues one fixed identity
-(`guest:local`), so a second local tab is the same user — enough to watch a
-mutation propagate, not enough to test two members of a household.
+**Published as v2 on 2026-08-24**, and the schema is live. The publish applied
+all 60 migration operations — 9 `create_table`, 36 `add_column`, 15 `add_index`
+— with no flags and no prompt, and every table answers `sf db dump` on the live
+space with `No rows`. `GET /api/status` returns `ok`; `/`, `/client.js`, and
+`/zero.css` all serve. The space stayed publicly viewable through the publish.
+
+**It nearly shipped broken.** The capsule compiler finds tables by regex over
+the server *entry* and never follows an import, so the schema in
+`server/schema.ts` compiled to an artifact with **zero tables and zero
+migrations** while still reporting all 16 mutations — typechecking clean,
+dry-running clean, and working perfectly under `sf dev`. Caught by reading
+`.spacefast/zero/artifact.json` before publishing. The schema now lives inline
+in `server/index.ts`; see
+[D27](decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry) for
+the rules that constraint imposes, and read it before touching the schema.
+
+**Still unverified, and it needs a browser on the published space:** anything
+touching real sign-in, and the two-browser live-query test. `sf dev` issues one
+fixed identity (`guest:local`), so a second local tab is the same user — enough
+to watch a mutation propagate, not enough to test two members of a household.
+The first sign-in is also what settles the last open auth question: whether a
+published space ever issues `guest:local`, which `shared/identity.ts` accepts.
+Sign in, then check `sf db dump --table memberships` and read the `userId`.
+
+**One thing the publish regressed:** the project's own documentation is now
+served publicly — `/CLAUDE.md`, `/docs/*.md`, `/tsconfig.json` and friends all
+return 200. Not secret, but not chosen either. See [notes](notes.md); it wants a
+decision before Phase 3 sends an invite link to anyone.
 
 **This was the risky milestone.** Schema mistakes get expensive from here, since
 destructive migrations need explicit flags.

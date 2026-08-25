@@ -90,29 +90,63 @@ summarized here.
   `ctx.env` is empty under `sf dev` and the CLI has no env-injection flag, so a
   cleaner environment-keyed switch was not available.
 
-- **Migration granularity.** "Normal additive changes apply during `sf publish`"
-  — is adding an index additive? Is widening a default? Not answerable on
-  `sf dev`, whose state is in-memory and resets; it needs a deliberate publish
-  against the live space, which would replace the working Phase 1 app.
+- **Migration granularity — the create-from-nothing case is answered; the
+  change cases are not.** The v2 publish applied all 60 operations of the
+  Phase 2 schema (9 `create_table`, 36 `add_column`, 15 `add_index`) with no
+  flags and no prompt, so **creating tables, columns, and indexes is additive**
+  and lands during `sf publish` exactly as documented. All nine tables answer
+  `sf db dump` on the live space.
+
+  Still unknown, because nothing has been *changed* yet: is adding an index to
+  an existing table additive? Is widening or altering a `.default()`? Those need
+  a second publish that modifies the schema rather than introducing it.
+
+  **Watch out for `sf db`'s "Pending operations" line.** After the successful v2
+  publish it still reads `Pending operations: 60` — the full create-from-empty
+  plan — even though every one of those operations had already been applied and
+  the tables are queryable. It appears to be the artifact's plan rather than a
+  diff against live state, so do not read it as work outstanding. `sf db dump`
+  against a real table (vs. a made-up one, which errors with
+  `zero_db_table_not_found`) is the honest check.
 - **Does a *query* throw surface like an endpoint throw?** The 500 +
   problem+json result above is the endpoint path. How it reaches `useQuery` /
   `useMutation` — thrown, rejected promise, empty result — still needs a
   browser.
-- **Does the space's public visibility survive a publish?** Unchanged from
-  before; see below.
+
+### Answered by the v2 publish (2026-08-24)
+
+- **Does the space's public visibility survive a publish? Yes — confirmed on the
+  v2 publish (2026-08-24).** The dashboard's public toggle lives outside the
+  published config, and a `sf publish` from an `sf.jsonc` with no `access` field
+  left it alone: `GET /` and `GET /api/status` both answer 200 unauthenticated
+  after v2. Publishing does send a `config: {}` patch, but it merges rather than
+  replaces. `access` stays unset, which is what Phase 3's invite flow needs.
+- **Publishing exposes the project's source files, and v2 made it real.**
+  `sf publish` mirrors the whole project root into the upload. Before v2 the
+  payload was small enough that it did not matter; now these all return **200**
+  on the live space to anyone:
+
+  `/CLAUDE.md`, `/docs/notes.md`, `/docs/decisions.md`, `/docs/architecture.md`,
+  `/docs/data-model.md`, `/docs/overview.md`, `/docs/roadmap.md`,
+  `/package-lock.json`, `/tsconfig.json`, `/tsconfig.test.json`, `/LICENSE.md`.
+
+  Dot-prefixed paths are refused by the serving layer with 403, so `.claude/`
+  (including the Spacefast feedback log), `.idea/`, and `.test-out/` are
+  uploaded but not reachable. `/sf.jsonc` and `/theme.json` 404 — the runtime
+  appears to shadow those two names.
+
+  None of it is secret; it is design documentation, not credentials. But it is
+  internal planning on a public URL and nobody chose it. `publishPathIgnored()`
+  denies only a fixed list (`.git`, `node_modules`, `.env*`, key/cert patterns,
+  `.DS_Store`, `.gitignore`) and **does not honor `.gitignore` itself**, and
+  there is no exclude flag — `--source-include` does the inverse. Options, none
+  of them good: set `access` in `sf.jsonc` to an explicit allowlist of app paths
+  (risky, since a wrong list breaks the signed-out sign-in screen that Phase 3's
+  invite links depend on), or move the files out of the project root around each
+  publish. **Decide before Phase 3 ships an invite link to anyone.**
 
 ### Unchanged from earlier
 
-- **Does the space's public visibility survive a publish?** The space was made
-  publicly viewable from the Spacefast dashboard, but `sf spaces get` still
-  reports `config: {}` — so that setting lives outside the published config.
-  `sf.jsonc` has its own `access` field (`"access": "public"` is shorthand for
-  `{ "public": ["/**"] }`), which we have **not** set. Unknown whether the next
-  `sf publish` from a config without `access` reverts the space to private. If
-  it does, the app silently becomes unreachable for everyone but the owner —
-  which is exactly the failure Phase 3's invite flow cannot survive. **Check the
-  live URL from a signed-out browser after the next publish**, and if it broke,
-  declare `access` in `sf.jsonc` and treat the dashboard toggle as a fallback.
 - **Can we ship a webfont at all? No — confirmed on a published space.**
   `theme.json`'s `fontFace` is ignored; the compile reads only `slug` and
   `fontFamily`. There is no `index.html` to add a `<link>` to, no CSS entry
@@ -126,7 +160,8 @@ summarized here.
 ## Product questions
 
 All settled as of 2026-08-24 — see [decisions.md](decisions.md), D16-D26.
-Nothing product-shaped is currently blocking Phase 2.
+Nothing product-shaped is blocking Phase 3; what remains open above is platform
+behavior and the source-exposure decision.
 
 ## Paid off in Phase 2
 

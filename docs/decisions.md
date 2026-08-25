@@ -736,3 +736,60 @@ client-side (debounce or coalesce the mutation), **not** a different query shape
 
 **Why this remains cheap to revisit:** splitting a query is client-side
 refactoring. No schema change, no migration, no stored data affected.
+
+## D27. The schema has to be a literal in the server entry
+
+**Decision.** `schema` is declared as an object literal in `server/index.ts`.
+`server/schema.ts` keeps only the derived `ReadDb` / `WriteDb` types, which it
+gets back through a type-only `import type { schema } from './index'`.
+
+**Why.** Not a preference — a platform constraint we hit head-on. The capsule
+compiler does not execute the capsule to learn its schema. It runs a regex over
+the source of the server *entry file only* and never follows an import. A schema
+defined in `server/schema.ts` and imported into `capsule({ schema })` produces an
+artifact with **zero tables and zero migrations**, while still reporting all
+sixteen mutations and both queries.
+
+Nothing catches it. `tsc --noEmit` passes — the types are real and correct.
+`sf publish --dry-run` reports a successful plan. `sf dev` works normally,
+which is why all of Phase 2's browser verification passed against a schema the
+publish path could not see. The failure would first have appeared as every write
+failing on the live space, after a publish the version history recorded as
+clean.
+
+Found by reading `.spacefast/zero/artifact.json` after a dry run, before the
+first Phase 2 publish. Confirmed by experiment: a throwaway `probeTable`
+declared inline in the entry appeared in the artifact while the nine real tables
+stayed missing.
+
+**Rules this imposes on editing the schema.** All of them are invisible to the
+typechecker:
+
+- Every table must be a plain `table({ ... })` literal in `server/index.ts`. A
+  helper that returns a table, a spread, or a computed key compiles to nothing.
+- No nested braces inside a `table({ ... })` body — the extractor's match is
+  non-greedy and stops at the first `}`.
+- **No comment anywhere between a table's closing `})` and the end of its
+  `.index()` chain.** The chain is matched as `(\s*\.index(…))*`, so a comment
+  truncates it at that point and every index after it is silently dropped. This
+  really happened to `invites.by_creator`; a comment one line higher dropped all
+  three of that table's indexes.
+- Comments are *not* stripped before matching, so a comment containing something
+  shaped like a table entry mints a phantom empty table. This also really
+  happened, to a doc comment written while fixing the first problem.
+- After any schema edit, run `npx sf publish --dry-run` and read the tables back
+  out of `.spacefast/zero/artifact.json`. That is the only verification that
+  exists.
+
+**Rejected: keeping the schema in `server/schema.ts` and duplicating it.** Two
+copies of a schema that must agree, with no check that they do, is worse than
+the constraint.
+
+**Rejected: folding `ReadDb` / `WriteDb` into `server/index.ts` and deleting
+`server/schema.ts`.** It would work, but `server/auth.ts` imports those types
+and there is no reason to point it at the entry. The type-only cycle is erased
+at build time and costs nothing.
+
+Reported to Spacefast with a suggested fix — fail the build when a capsule
+declares mutations against zero tables. See
+[spacefast.md](../.claude/docs/spacefast.md).

@@ -25,8 +25,8 @@ larder-log/
       useSystemTheme.ts
     lib/               # theme derivation, icon components, taxonomy action shape
   server/
-    index.ts           # capsule(): 2 queries, 16 mutations
-    schema.ts          # the tables, plus ReadDb / WriteDb derived from them
+    index.ts           # capsule(): the schema, 2 queries, 16 mutations
+    schema.ts          # ReadDb / WriteDb only — the tables CANNOT live here (D27)
     auth.ts            # membershipState / requireMembership / requireCapability
   shared/              # imports NOTHING — see below
     types.ts           # Item, Term, QueryState — the domain vocabulary
@@ -197,7 +197,8 @@ These are hard limits of the runtime, not preferences:
 | Schema fields are only `string()`, `boolean()`, `id(table)` | **No number type.** `qty` and `threshold` are strings, parsed at the edges. See [D4](decisions.md#d4-numbers-are-strings). |
 | No array or JSON field type | Item→Type and Item→Store are **join tables**, not arrays. See [D5](decisions.md#d5-join-tables-for-many-to-many). |
 | No row-level security | Household **and role** checks are hand-written in every handler. See [D20](decisions.md#d20-three-roles-owner-editor-viewer). |
-| Destructive migrations need an explicit flag | Renaming or dropping a field is `sf db migrate --rename` / `--drop`. Additive changes apply on publish. Get the schema right early. |
+| The schema is found by **regex over the server entry** | Tables must be literals in `server/index.ts`. An imported schema compiles to **zero tables**, silently. See [D27](decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry). |
+| Destructive migrations need an explicit flag | Renaming or dropping a field is `sf db migrate --rename` / `--drop`. Additive changes apply on publish — confirmed by v2, which created 9 tables, 36 columns and 15 indexes with no flags. Get the schema right early. |
 | Server bundle ≤ 768 KiB, client ≤ 8 MiB | Not a concern at this size, but rules out heavy dependencies. |
 | Storage: 5 MiB per object | Fine if we ever add item photos. |
 | Rollback moves code, not data | A rollback across a migration can leave code and schema mismatched. |

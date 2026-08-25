@@ -1,6 +1,6 @@
-import { capsule, query, mutation, endpoint, text } from '@spacefast/zero/server';
+import { capsule, query, mutation, endpoint, text, table, string, boolean, id } from '@spacefast/zero/server';
 
-import { schema, type WriteDb } from './schema';
+import type { WriteDb } from './schema';
 import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCapability, requireMembership } from './auth';
 
 import { toRole, canInviteRole } from '../shared/roles';
@@ -44,6 +44,118 @@ function termTable(kind: TermKind): 'locations' | 'types' | 'stores' {
 function termLabel(kind: TermKind): string {
 	return kind === 'location' ? 'That location' : kind === 'type' ? 'That type' : 'That store';
 }
+
+/**
+ * The database schema, as specified in `docs/data-model.md`.
+ *
+ * **It has to be declared in this file, and it has to be a literal.** The
+ * capsule compiler does not execute the capsule to learn its schema — it runs a
+ * regex over the source of the server *entry* only, and never follows an
+ * import. A schema defined in `server/schema.ts` and imported here typechecks,
+ * compiles, and publishes an artifact with **zero tables and zero migrations**,
+ * with no warning anywhere. It cost us a blocked Phase 2 publish; see
+ * `.claude/docs/spacefast.md`.
+ *
+ * Consequences for editing it:
+ *
+ * - Keep every table a plain literal entry. A helper that returns a table, a
+ *   spread, or a computed key is invisible to the compiler.
+ * - No nested braces inside a `table({ ... })` body — the extractor's match is
+ *   non-greedy and stops at the first `}`.
+ * - After any change here, run `npx sf publish --dry-run` and confirm the table
+ *   shows up in `.spacefast/zero/artifact.json`. Typecheck cannot see this.
+ *
+ * Two platform facts confirmed against `sf dev` on 2026-08-24 that this schema
+ * leans on:
+ *
+ * - `id("table")` is a **type hint, not a foreign key**. A row whose `id()`
+ *   field points at nothing inserts happily. Every referential rule in this app
+ *   is enforced in a handler or not at all.
+ * - The built-in `createdAt` / `updatedAt` are ISO 8601 UTC strings and so
+ *   compare correctly as plain strings. `invites.expiresAt` uses the same
+ *   encoding on purpose (D24).
+ */
+export const schema = {
+
+	households: table({
+		name: string(),
+		// Provenance only. Ownership is memberships.role — see D22.
+		createdBy: string(),
+		defaultThreshold: string().default('1'),
+	}),
+
+	memberships: table({
+		householdId: id('households'),
+		userId: string(),
+		displayName: string(),
+		role: string().default('viewer'),
+	})
+		.index('by_user', ['userId'])
+		.index('by_household', ['householdId']),
+
+	// by_creator exists because demoting a member has to revoke the invites
+	// they created (D21).
+	invites: table({
+		householdId: id('households'),
+		code: string(),
+		role: string(),
+		// ISO 8601 UTC, written at mint time as now + 14 days. "" means never.
+		expiresAt: string(),
+		createdBy: string(),
+		revoked: boolean().default(false),
+	})
+		.index('by_code', ['code'])
+		.index('by_household', ['householdId'])
+		.index('by_creator', ['createdBy']),
+
+	locations: table({
+		householdId: id('households'),
+		name: string(),
+		ink: string(),
+		icon: string(),
+	}).index('by_household', ['householdId']),
+
+	types: table({
+		householdId: id('households'),
+		name: string(),
+		ink: string(),
+		icon: string(),
+	}).index('by_household', ['householdId']),
+
+	// Stores render as outlined chips, so they carry no icon.
+	stores: table({
+		householdId: id('households'),
+		name: string(),
+		ink: string(),
+	}).index('by_household', ['householdId']),
+
+	items: table({
+		householdId: id('households'),
+		name: string(),
+		locationId: id('locations'),
+		qty: string(),
+		threshold: string(),
+		notes: string().default(''),
+	}).index('by_household', ['householdId']),
+
+	itemTypes: table({
+		itemId: id('items'),
+		typeId: id('types'),
+		householdId: id('households'),
+	})
+		.index('by_item', ['itemId'])
+		.index('by_type', ['typeId'])
+		.index('by_household', ['householdId']),
+
+	itemStores: table({
+		itemId: id('items'),
+		storeId: id('stores'),
+		householdId: id('households'),
+	})
+		.index('by_item', ['itemId'])
+		.index('by_store', ['storeId'])
+		.index('by_household', ['householdId']),
+};
 
 export default capsule({
 	name: 'Larder Log',

@@ -23,7 +23,10 @@ WordPress, say so rather than building it.
 **Phase 2 is done. Phase 3 is next.** A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`docs/data-model.md`, two live queries, and sixteen mutations.
+`docs/data-model.md`, two live queries, and sixteen mutations. The schema is
+declared inline in `server/index.ts` and **has to be** — see
+[D27](docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
+before editing it.
 
 Data lives in the database. The **only** remaining `localStorage` call site is
 the per-device theme override, and that is correct there (D25) — a dark-mode
@@ -33,9 +36,12 @@ The React/Vite prototype in `src/` is **deleted**, along with `index.html`,
 `vite.config.js`, and the react/vite/tailwind dependencies. Zero compiles
 Tailwind itself. There is no `npm run prototype` any more.
 
-**It is live at <https://larderlog.view.fast/>** (space slug `larderlog`, team
-`justin-team-2`) — but that is still the **Phase 1 build**. Phase 2 has never
-been published. Publishing it will run the first real migration.
+**Phase 2 is live at <https://larderlog.view.fast/>** as v2 (space slug
+`larderlog`, team `justin-team-2`), published 2026-08-24. The first real
+migration ran with it: all nine tables exist and are empty. Verify a publish
+with `GET /api/status` and `sf db dump --table <name>`; ignore `sf db`'s
+"Pending operations" count, which shows the artifact's full plan rather than a
+diff against live state.
 
 ### Two auth bypasses, and they are not equally safe
 
@@ -49,10 +55,13 @@ been published. Publishing it will run the first real migration.
 2. **The server** (`shared/identity.ts`) accepts the exact identity `sf dev`
    issues — `guest:local` / `Local` / `guest` / not authenticated, all four
    matched. That value comes from `zeroGuestAuth()` in the `spacefast` CLI, so
-   it should never appear on a hosted runtime. **This one has NOT been verified
-   against the published space.** Until it has, treat it as the weaker hole. If
-   a published space ever issued `guest:local`, every anonymous visitor would
-   share one household. Check it on the next publish.
+   it should never appear on a hosted runtime. **This one is still NOT
+   verified** — v2 shipped on 2026-08-24 and the check needs a real sign-in,
+   which nobody has done yet. Until then, treat it as the weaker hole. If a
+   published space ever issued `guest:local`, every anonymous visitor would
+   share one household. **How to close it:** sign in on the published space,
+   create the household, then `npx sf db dump --table memberships` and read the
+   `userId`. A Gravatar identity clears it; `guest:local` is an emergency.
 
 Don't widen either one, and take both out if Spacefast ships a local sign-in
 stub.
@@ -120,8 +129,8 @@ most of it is already decided.
 | `docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `docs/decisions.md` | D1–D14, with reasoning and rejected alternatives |
-| `docs/notes.md` | Open questions, plus the known cost carried into Phase 2 |
+| `docs/decisions.md` | D1–D27, with reasoning and rejected alternatives. **D27 governs every schema edit** |
+| `docs/notes.md` | Open platform questions, what the v2 publish answered, and the source-exposure decision Phase 3 needs |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |
 | `.claude/docs/zero-agent-rules.md` | Zero's own `AGENTS.md`, verbatim — the best runtime reference |
@@ -207,6 +216,14 @@ Cheapest first:
   the fastest way to catch string-encoded numbers used as numbers.
   **It will not catch a term id rendered where a name belongs** — both are
   `string`. That bug shipped once already; see `docs/notes.md`.
+- **`npx sf publish --dry-run`, then read `.spacefast/zero/artifact.json`** —
+  the only way to see what a publish would actually install: the schema,
+  queries, mutations, endpoints, and migrations. **Mandatory after any schema
+  edit.** The capsule compiler finds tables by regex over `server/index.ts`
+  alone, so a table can vanish from the artifact while typechecking perfectly
+  ([D27](docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)).
+  Note that `--dry-run` is not read-only: it rewrites the build under
+  `.spacefast/zero/`.
 - **`sf dev`** compiles the capsule for real. A clean start plus `GET /` and
   `GET /api/status` proves the client and server entries both resolve.
 - **Curl the compiled assets** to confirm styling shipped. Zero finds Tailwind
@@ -248,8 +265,9 @@ WordPress-era leftovers were cleared on 2026-08-24. What remains is deliberate:
 - **`.gitignore`** is written for this project, not the old plugin. It ignores
   `node_modules`, `dist`, editor dirs, and `.ideas` — plus, pre-emptively,
   `.env*` and `/.spacefast`, both of which hold credentials (`.env.server` is
-  synced to the platform on publish; `.spacefast` holds the space claim key —
-  neither exists yet, since nothing has been published). `.env.example` is
+  synced to the platform on publish and still does not exist; `.spacefast` holds
+  the space id and claim key and **does** exist now — publishing created it, and
+  it also carries the build output the publish uploads). `.env.example` is
   deliberately un-ignored.
   (The old warning about not re-adding `/public` was a Vite concern; Vite is
   gone and no `public/` directory exists. Nothing to preserve there now.)

@@ -1073,3 +1073,242 @@ Retiring the Vite prototype left `package.json` at three runtime dependencies
 compiles the CSS itself from classes it scans out of source. For an app with a
 real database, live queries, auth, and a full component tree, that is a genuinely
 small surface, and it is the clearest thing the platform does well.
+
+## 2026-08-24 — pre-publish check on Phase 2: the capsule shipped an empty schema
+
+Caught by running `sf publish --dry-run` before the first Phase 2 publish and
+reading `.spacefast/zero/artifact.json` rather than trusting the exit code.
+Nothing else in the toolchain says a word about any of this.
+
+### 🐞 The schema compiler reads only the server entry, and never follows an import
+
+Our schema lived in `server/schema.ts` and was imported into `server/index.ts`:
+
+```ts
+import { schema } from './schema';
+export default capsule({ name: 'Larder Log', schema, queries: {…}, mutations: {…} });
+```
+
+`tsc --noEmit` passes. `sf publish --dry-run` reports a successful plan. The
+compiled artifact:
+
+```json
+{ "server": { "schema": {}, "queries": ["household", "pantry"], "mutations": [ …16… ] },
+  "db": { "backend": "mysql", "migrations": [] } }
+```
+
+**Sixteen mutations and two live queries, against zero tables and zero
+migrations.** Publishing that would have deployed a working-looking app whose
+every write fails at runtime, and the version history would show it as a clean
+publish.
+
+The cause is in `zero-publish.js`. `analyzeZeroSource()` reads the single entry
+file and calls `extractCapsuleSurface(serverSource)`, which finds tables with a
+regex:
+
+```js
+var TABLE_PATTERN = /([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*table\s*\(\s*\{([\s\S]*?)\}\s*\)((?:\s*\.index\s*\(\s*["'][A-Za-z_$][A-Za-z0-9_$]*["']\s*,\s*\[[^\]]*\]\s*\))*)/g;
+```
+
+There is no module resolution anywhere in that path. Queries and mutations were
+found because they are written inline in the entry; the tables were not because
+they were one `import` away.
+
+Confirmed by experiment, not by reading: adding a throwaway
+`const __probe = { probeTable: table({ hello: string() }) }` to `server/index.ts`
+made `probeTable` appear in the artifact, while the nine real tables stayed
+missing. Removing it and moving the real schema literal into the entry produced
+all nine, with columns, defaults, and indexes intact.
+
+**Why this is the worst failure mode we have hit.** Every other sharp edge in
+this log announces itself — a 406, a 403, a scanner error, a blank screen.
+This one is silent at every stage: it typechecks, it compiles, it dry-runs
+clean, it publishes, and the damage only appears when a user tries to save
+something. And the fix is invisible from the outside: splitting a schema into
+its own module is such ordinary TypeScript that nothing suggests it is the
+problem.
+
+**Suggestions, cheapest first:**
+
+1. **Fail the build when `capsule()` declares a schema the extractor could not
+   resolve to at least one table.** A capsule with mutations and no tables is
+   never intentional. One error message would have saved the whole
+   investigation.
+2. Warn when the entry's `schema` value is an identifier rather than an object
+   literal — that is the exact shape that silently produces `{}`.
+3. Document the constraint. The docs say "Declare the schema in the capsule" and
+   every example is inline, but nothing states that inline is *required*. Read
+   as prose, "in the capsule" reasonably describes a schema imported into it.
+4. Longer term: resolve the entry's imports, or execute the capsule module the
+   way `sf dev` evidently does, instead of pattern-matching source text.
+
+### 🐞 A comment inside a table's `.index()` chain silently drops indexes
+
+Same regex, second bug. The index chain is captured as
+`((?:\s*\.index\(…\))*)` — whitespace only, no comments. So this:
+
+```ts
+invites: table({ … })
+    .index('by_code', ['code'])
+    .index('by_household', ['householdId'])
+    // Demoting a member has to revoke the invites they created (D21).
+    .index('by_creator', ['createdBy']),
+```
+
+compiles to a table with **`by_code` and `by_household` only**. `by_creator` is
+gone. Moving the comment up one line, to between `})` and the first `.index()`,
+drops **all three**.
+
+A dropped index is not a build error and not a type error. It is a query that
+still returns correct results and quietly stops using an index — or, if the
+platform validates `withIndex()` names at runtime, a handler that fails only on
+the code path that uses it. Ours would have been D21's invite revocation, which
+does not run until Phase 3.
+
+This one also bit us in the opposite direction: a doc comment we wrote
+containing the example text `` `name: table({ ... })` `` minted a **phantom
+empty table called `name`** in the artifact, because the extractor scans raw
+source and does not strip comments. So comments can both delete real tables'
+indexes and invent tables that do not exist.
+
+**Suggestion:** strip comments before matching, at minimum. Better, parse the
+entry rather than regex it — every problem in this entry is downstream of
+pattern-matching TypeScript with a regular expression.
+
+### 😕 `--dry-run` is not read-only
+
+`sf publish --dry-run` rebuilds the capsule and prunes/rewrites
+`.spacefast/zero/public/`, `artifact.json`, `finalize.json`, and
+`server.qjs.mjs`. That turned out to be useful — it is the only way we found to
+inspect a compiled artifact without publishing — but "dry run" implies no side
+effects, and it silently rewrote build state on disk. Worth either documenting
+or renaming.
+
+### 😕 The publish payload mirrors the whole project directory
+
+`sf publish` for a Zero runtime copies the project root into
+`.spacefast/zero/public/` and uploads it. The Phase 2 plan is 53 files, of which
+about 17 are the app (`client.js`, `zero.css`, `index.html`, `_spacefast/…`).
+The other 36 are source and local editor state: `CLAUDE.md`, all of `docs/`,
+`.claude/docs/` (including this file), `.idea/` including `workspace.xml`,
+`.test-out/`, `tsconfig.json`, `package-lock.json`.
+
+`publishPathIgnored()` in `publish-policy.js` denies a fixed list — `.git`,
+`node_modules`, `.env*`, key and cert patterns, `.DS_Store`, `.gitignore` — and
+nothing else. **`.gitignore` itself is excluded from the upload but not honored
+as a rule**, so `.idea/` and `.test-out/`, both gitignored and untracked here,
+are staged for upload anyway.
+
+The serving layer does appear to refuse dot-prefixed paths (`/.claude/docs/…`
+returns 403 on the live space, while a missing non-dot path returns 404), and
+the docs state "Spacefast does not expose the source as static files." So this
+may be inert in practice. But the files are still uploaded and stored in the
+version artifact, and non-dot paths like `docs/notes.md` have no dot-rule
+protecting them.
+
+**Suggestion:** honor `.gitignore` by default, or support a `.spacefastignore`,
+or add an `ignore` array to `sf.jsonc`. `--source-include` exists for the
+inverse case (pulling ignored files *into* a remote build) but there is no way
+to exclude.
+
+### 👍 The dry-run artifact is the best verification surface the platform has
+
+Credit where it is due: `.spacefast/zero/artifact.json` is exactly the right
+artifact to expose — a complete, readable manifest of the schema, queries,
+mutations, endpoints, and migrations that a publish would install. Every bug in
+this entry was found by reading it. It deserves to be a first-class command
+(`sf inspect` / `sf artifact`) rather than a file you have to know is there
+after a dry run rewrites it.
+
+## 2026-08-24 — the v2 publish itself: what worked and what to watch
+
+The fixes from the previous entry went out as v2. Recording the publish
+behavior separately, because most of it was good.
+
+### 👍 The migration applied exactly as documented, with no ceremony
+
+60 operations — 9 `create_table`, 36 `add_column`, 15 `add_index` — applied
+during `sf publish` with no flags, no prompt, and no separate `sf db migrate`
+step. Total publish time 133s. Afterwards every table answers `sf db dump` with
+`No rows`, and a made-up table name errors with `zero_db_table_not_found`, so
+the distinction between "exists and empty" and "does not exist" is legible from
+the CLI. That is the whole promise of "migrations on publish" and it was kept.
+
+Also worth noting after the Phase 1 ordeal: **no 406.** `version_finalize`
+succeeded on the first attempt. The fix held.
+
+### 👍 Publishing did not touch the space's public visibility
+
+An open question since Phase 1, now closed. The dashboard's public toggle lives
+outside the published config, and `sf publish` from an `sf.jsonc` with no
+`access` field left it alone — `GET /` and `GET /api/status` both answer 200
+unauthenticated after v2. The `config: {}` patch a publish sends merges rather
+than replaces.
+
+### 😕 `sf db` reports "Pending operations: 60" for a migration it already ran
+
+Immediately after the successful publish, and with all nine tables live and
+queryable:
+
+```
+Backend: mysql
+Migration mode: safe
+Pending operations: 60
+```
+
+Those 60 are the same create-from-empty operations the publish just applied. The
+JSON output makes the cause visible — `sf db --json` returns `tables` (the
+artifact's declared schema) and `migrations` (the artifact's plan), and has no
+field for the *live* schema at all. So the count is "operations in this
+artifact's plan", not "operations outstanding".
+
+Read literally it says the database is unmigrated, which is alarming and wrong,
+and there is no obvious way to tell the difference without falling back to
+`sf db dump` on a table you expect to exist.
+
+**Suggestion:** diff the plan against live state, and say `Pending operations: 0`
+when there is nothing to do. If the live schema is genuinely not queryable from
+the control plane, label the line `Planned operations` instead.
+
+### 👎 The publish exposed the project's documentation on a public URL
+
+Following on from the payload note in the previous entry — this is no longer
+hypothetical. After v2, all of these return **200** to any anonymous visitor:
+
+```
+/CLAUDE.md  /LICENSE.md  /package-lock.json  /tsconfig.json  /tsconfig.test.json
+/docs/notes.md  /docs/decisions.md  /docs/architecture.md
+/docs/data-model.md  /docs/overview.md  /docs/roadmap.md
+```
+
+Dot-prefixed paths are refused with 403, so `.claude/` (this file included),
+`.idea/`, and `.test-out/` were uploaded but are not reachable. `/sf.jsonc` and
+`/theme.json` return 404 — the runtime appears to shadow those two names
+specifically.
+
+Nothing here is a credential, and the docs do say "Spacefast does not expose the
+source as static files" — which is true of `server/index.ts` and `client/`, but
+plainly not true of everything else in the directory. A `.md` file in `docs/` is
+not source, so nothing excludes it, and it gets served as a static asset.
+
+The publish output also says `Ignored 0` while uploading files that `.gitignore`
+lists, which reads as a promise the tool is not making.
+
+**Suggestion:** honor `.gitignore` by default. Failing that, a
+`.spacefastignore` or an `ignore` array in `sf.jsonc`. Right now the only
+levers are `access` — whose allowlist, if wrong, breaks the signed-out sign-in
+page — or physically moving files out of the project root before each publish.
+
+### 😕 Two files were rejected by plan limits, silently mid-publish
+
+```
+Warning: ignored 2 unsupported file(s) on this plan:
+  .claude/docs/pantry-tracker-mockup.jsx, .idea/x3p0-larder-log.iml
+```
+
+Harmless here — both are files we never wanted uploaded. But "unsupported on
+this plan" does not say *why* (extension? size? count?), it appeared as a
+warning inside a spinner rather than in the final summary, and the final summary
+then reports `Files 53` when 35 were uploaded. If a rejected file had been part
+of the app, this is the notice that would have to catch it, and it is easy to
+scroll past.
