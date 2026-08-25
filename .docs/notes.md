@@ -200,15 +200,22 @@ summarized here.
 
 ### Unchanged from earlier
 
-- **Can we ship a webfont at all? No — confirmed on a published space.**
-  `theme.json`'s `fontFace` is ignored; the compile reads only `slug` and
-  `fontFamily`. There is no `index.html` to add a `<link>` to, no CSS entry
-  point, and `@plugin` / `@config` are rejected.
-  `/__spacefast_generated/theme.css` 404s on the published space just as it does
-  under `sf dev`, and the shipped `zero.css` contains **zero `@font-face`
-  rules**. Fraunces and IBM Plex Mono fall back to `ui-serif` / `ui-monospace`.
-  This is the Phase 4 typography decision, and it has an answer rather than an
-  unknown.
+- **Can we ship a webfont? Yes — settled in
+  [D31](decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google).**
+  Every route this section used to list is still closed: `theme.json`'s
+  `fontFace` is discarded by `zero-compile`'s `presetRecord()`, there is no
+  authored `index.html` (the shell is a fixed template in `compile.js`), no CSS
+  entry point, `@plugin` / `@config` are rejected, and `zero.css` ships zero
+  `@font-face` rules. The conclusion drawn from that was wrong. What Zero is
+  missing is the `@font-face` *rule*, and a rule is a DOM node — so the client
+  appends a Google Fonts `<link>` at boot.
+
+  **Self-hosting was built first and rejected**, because `sf dev` does not
+  serve project static files at all — it answers every unrecognized path with
+  the SPA shell, so a self-hosted face is invisible locally and appears only
+  after a publish. `sf dev --help` has no static-directory flag. A remote URL
+  behaves the same in both environments; D31 records the self-hosted recipe in
+  full if that ever changes.
 
 ## Product questions
 

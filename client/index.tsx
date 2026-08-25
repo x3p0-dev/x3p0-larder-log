@@ -3,6 +3,7 @@ import { SignInWithGoogle, signOut, useAuth } from '@spacefast/zero/client';
 import { Pantry } from './Pantry';
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { getTheme } from './lib/theme';
+import { installFonts } from './lib/fonts';
 import { capturePendingInvite, pendingInvite } from './lib/pendingInvite';
 
 /*
@@ -14,6 +15,12 @@ import { capturePendingInvite, pendingInvite } from './lib/pendingInvite';
  * round trip. See D28 for why the code rides in `?join=` rather than a path.
  */
 capturePendingInvite();
+
+/*
+ * Zero ships no webfont mechanism, so the app installs its own `@font-face`
+ * rules before anything paints. See client/lib/fonts.ts.
+ */
+installFonts();
 
 /**
  * Hostnames the browser can only be talking to a local `sf dev` on. A LAN

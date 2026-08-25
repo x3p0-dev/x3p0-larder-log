@@ -243,8 +243,12 @@ property with the literal as a fallback:
 --font-disp: var(--wp--preset--font-family--disp, Fraunces, ui-serif, Georgia, serif);
 ```
 
-Its `fontFace` block is **ignored**, so there is currently no way to ship a
-webfont — see [notes](notes.md). Note also that Zero's semantic palette uses
+Its `fontFace` block is **ignored** — `presetRecord()` reads `slug` and
+`fontFamily` and nothing else — so the tokens above are a complete stack
+pointing at a family the browser cannot find. `client/lib/fonts.ts` appends a
+Google Fonts `<link>` at boot to supply what is missing, which is why
+`font-disp` / `font-sans` / `font-mono` resolve at all
+([D31](decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google)). Note also that Zero's semantic palette uses
 `ink` for body text, which collides with this app's older use of "ink" to mean a
 term's base hex. Ours are inline styles, so nothing actually conflicts.
 

@@ -946,3 +946,87 @@ tests a different code path than the real thing.
 `createHousehold` makes it an owner, so nothing here can be exercised without a
 published space and a second account. The gating is driven entirely by `can()`,
 which `npm test` covers directly; what remains unproven is the rendering.
+
+## D31. Webfonts are declared by the client at boot, and served by Google
+
+Zero has no webfont mechanism, so the app supplies one: `client/lib/fonts.ts`
+appends a Google Fonts `<link>` to `document.head` before the first render.
+Fraunces, Inter, and IBM Plex Mono, weight axes included.
+
+**Why any of this is necessary.** Declaring a webfont is normally one line of
+HTML or one line of CSS. Zero provides neither file. `theme.json`'s `fontFace`
+block is discarded by `zero-compile`'s `presetRecord()` without a warning, the
+`index.html` is generated from a fixed template in `compile.js` with no head
+hook, and there is no CSS entry point — `@plugin` and `@config` are rejected.
+
+What the compiler *does* emit is a complete stack per family:
+
+```
+--font-disp: var(--wp--preset--font-family--disp, Fraunces, ui-serif, Georgia, serif);
+```
+
+So `font-disp`, `font-sans`, and `font-mono` are real utilities that already
+resolve; the browser simply has nowhere to find "Fraunces". A stylesheet link
+is a DOM node, and nothing in the compile pipeline touches those. Hence a ~40
+line module, **no change to `theme.json`, and no change to any component**. The
+family names in `fonts.ts` must keep matching the `theme.json` literals exactly
+— that is the entire contract between the two files.
+
+**Why Google rather than self-hosting.** Self-hosting works in production —
+`sf publish` mirrors the project root and serves what it finds, confirmed
+against live v2 where `/LICENSE.md`, `/package-lock.json`, and `/tsconfig.json`
+all return 200 with correct content types. It does **not** work in development.
+`sf dev` does not serve project static files at all: it answers every
+unrecognized path with the SPA shell, so `/fonts/inter.woff2` comes back as
+1829 bytes of `text/html` — as does `/LICENSE.md`, which demonstrably serves in
+production. `sf dev --help` offers no static-directory flag.
+
+That would have made the app's own typography invisible in the only environment
+we can iterate in, and visible only after a publish — during a UI redesign, on
+a project where **publishing is currently blocked**. A remote URL behaves
+identically in both environments. That is the whole argument, and for a
+two-person household app it outweighs the costs below.
+
+**What it costs:**
+
+- A third-party dependency on `fonts.googleapis.com` and `fonts.gstatic.com`.
+  If either is unreachable the app falls back to `ui-serif` / `ui-monospace` —
+  degraded, not broken.
+- Visitor IPs reach Google. Negligible for this app's audience; it would not be
+  for a public one.
+- Two extra hosts to connect to. Mitigated with a `preconnect` to
+  `fonts.gstatic.com`, which is where every `src` in the stylesheet points.
+
+**Confirmed rendering on 2026-08-25**, in a browser under `sf dev`, with
+Fraunces painting the headers rather than the fallback stack. That check is the
+entire justification for this decision — it was impossible with self-hosted
+files.
+
+**Rejected: base64 `data:` URIs inlined in the bundle.** The one approach that
+works everywhere with no network dependency at all. It adds ~155 KB to a 122 KB
+`client.js`, parsed on every load, with no separate cache entry and no
+revalidation. Too much weight for the problem.
+
+**Self-hosting stays a documented fallback.** If Spacefast ever serves static
+assets from `sf dev`, or if the Google dependency becomes unwanted, the swap is
+small: drop Latin-subset `.woff2` files in `fonts/` at the project root and
+point `@font-face` rules at `/fonts/…` instead of appending a link. The files
+were built and verified once, from Fontsource — 116 KB total, all OFL-1.1:
+
+```
+@fontsource-variable/fraunces@5.3.0  files/fraunces-latin-wght-normal.woff2
+@fontsource-variable/inter@5.3.0     files/inter-latin-wght-normal.woff2
+@fontsource/ibm-plex-mono@5.3.0      files/ibm-plex-mono-latin-{400,600}-normal.woff2
+```
+
+They land in the publish payload correctly and the CLI's uploader tags a `wOF2`
+file as `font/woff2` by magic-byte sniff with no configuration. Only two
+serving exclusions exist and `fonts/` trips neither: dot-prefixed paths 403
+([D29](#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload)),
+and `sf.jsonc` / `theme.json` are shadowed by name.
+
+**The local/production asymmetry is the inverse of [D28](#d28-an-invite-link-is-joincode-not-joincode).**
+There, `sf dev` served deep paths the published space 404s. Here, `sf dev`
+shells files the published space serves. Same root cause — a dev server whose
+routing is unrelated to production's — pointing opposite ways on consecutive
+features, and both times the local result is the misleading one.

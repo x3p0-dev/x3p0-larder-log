@@ -203,10 +203,13 @@ Phase 2 port carried more across than this list assumed.
   the published space and a second account
 - ✅ Theme override persistence — per device in localStorage, which is where it
   belongs (D25)
-- Typography: Fraunces and IBM Plex Mono have **no way to load** — confirmed on
-  the published space, where `zero.css` ships zero `@font-face` rules. Either
-  accept the `ui-serif` / `ui-monospace` fallbacks as the app's real identity or
-  wait for Spacefast to offer a font mechanism — see [notes](notes.md)
+- ✅ Typography — Fraunces, Inter, and IBM Plex Mono load from Google Fonts via
+  a `<link>` that `client/lib/fonts.ts` appends at boot, because Zero has no way
+  to declare a webfont and `sf dev` cannot serve a self-hosted one
+  ([D31](decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google)).
+  **Verified rendering in a browser on 2026-08-25** under `sf dev` — Fraunces
+  paints the headers, not the `ui-serif` fallback. Unverified only on the
+  published space, which runs the same remote URL
 
 **What is actually left:** the row-count test for sort/search/scroll, the
 typography decision, and a browser pass over the read-only UI — none of which

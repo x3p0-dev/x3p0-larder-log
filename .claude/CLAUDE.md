@@ -56,6 +56,20 @@ which amends D20). Verified locally against the real code path — `sf dev` make
 you an owner, so a throwaway endpoint rewrote the caller's own role, and it has
 been removed. The rest of Phase 4 was already built and the roadmap now says so.
 
+Phase 4's typography question is also closed, in the opposite direction from
+the one the notes predicted. Zero has no webfont mechanism — `theme.json`'s
+`fontFace` is discarded silently — but the `--font-disp` / `--font-sans` /
+`--font-mono` tokens it emits are already complete stacks, so the only missing
+piece is a stylesheet. `client/lib/fonts.ts` appends a Google Fonts `<link>`
+for Fraunces, Inter, and IBM Plex Mono at boot
+([D31](../.docs/decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google)).
+The family names there must keep matching the `theme.json` literals exactly —
+that is the entire contract between the two files. Self-hosting was built first
+and rejected: `sf dev` serves no project static files, so a self-hosted face is
+invisible locally and appears only after a publish. **Confirmed rendering under
+`sf dev` on 2026-08-25** — the whole reason for choosing a remote URL was that
+this check is possible at all.
+
 ### Publishing is blocked, and it is not our bug
 
 **Do not attempt a publish before re-reading this.** As of 2026-08-25:
@@ -282,6 +296,14 @@ Cheapest first:
 - **Curl the published space** for anything auth-related; it needs no bootstrap
   token. `https://larderlog.view.fast/api/status` returning `ok` is the cheapest
   proof that a publish's server half landed.
+- **`sf dev` does not serve the publish payload**, so it cannot verify a static
+  asset. It returns the SPA shell — `200 text/html`, 1829 bytes — for every
+  unrecognized path, including `/fonts/*.woff2` and `/LICENSE.md`, the latter
+  of which demonstrably *does* serve in production. Only `/`, `/zero.css`, and
+  `/client.js` are real locally. This is the exact inverse of D28's routing
+  asymmetry, and both times the local answer is the misleading one. To check
+  what would actually ship, read `.spacefast/zero/public/` after a dry run
+  rather than curling `sf dev`.
 
 Do not claim something works because it compiled. Three hard limits:
 

@@ -1685,3 +1685,159 @@ No `Last-Modified` header on any docs page — only content-hash ETags — and
 be answered by diffing against copies you kept. A `lastmod` in the sitemap, or a
 visible "updated" date on each page, would make the docs auditable for anyone
 tracking a moving platform.
+
+## 2026-08-25 — Shipping a webfont: possible, but every signpost says otherwise
+
+Zero has no webfont mechanism. Working around that took four dead ends and one
+piece of luck, and three of the four dead ends are silent.
+
+### 🐛 `theme.json`'s `fontFace` is discarded without a warning
+
+`theme.json` is WordPress theme.json v3, and in WordPress a `fontFamilies`
+entry carries a `fontFace` array that self-hosts the files:
+
+```json
+{
+  "fontFamily": "Fraunces, ui-serif, Georgia, serif",
+  "slug": "disp",
+  "fontFace": [
+    { "fontFamily": "Fraunces", "fontWeight": "100 900",
+      "src": ["file:./fonts/fraunces.woff2"] }
+  ]
+}
+```
+
+`zero-compile` reads `slug` and `fontFamily` and drops everything else on the
+floor — `tailwind-core.js`, `presetRecord(typography, "fontFamilies",
+"fontFamily")`. No warning at compile, none in `sf publish --dry-run`, nothing
+in `artifact.json`. The block simply evaporates.
+
+This is the worst shape a limitation can take: the format is borrowed from a
+system where the key means something, and the key is accepted and ignored. A
+developer who writes it has no way to learn it did nothing except by loading the
+page and squinting at the letterforms.
+
+**Suggestion:** either honor `fontFace`, or warn on an ignored key. The compiler
+already validates — `isSafePresetValue()` drops values containing `;{}`, also
+silently. One `console.warn` per dropped key would have saved the whole
+investigation.
+
+### 😕 Three more routes closed, which is what made the limit look absolute
+
+For completeness, because each was checked before the workaround was found:
+
+| Route | Result |
+|---|---|
+| `theme.json` → `fontFace` | ignored, silently |
+| A `<link>` in `index.html` | no authored shell; `compile.js` generates it from a fixed template |
+| A CSS entry point / `@import` | none exists; `@plugin` and `@config` are rejected |
+| `/__spacefast_generated/theme.css` | 404 on both `sf dev` and the published space |
+
+The docs' own summary — "a `theme.json` at the project root adjusts the palette
+and typography the utilities compile against" — reads as though typography is
+fully covered. Four of the five things a developer would try are closed and none
+of them says so.
+
+### 👍 The tokens the compiler *does* emit are exactly right
+
+The one piece of luck, and it is genuinely good design. Each family becomes:
+
+```css
+--font-disp: var(--wp--preset--font-family--disp, Fraunces, ui-serif, Georgia, serif);
+```
+
+That is a complete `font-family` stack. `font-disp` is a working utility
+already; the only missing link is a rule telling the browser where "Fraunces"
+lives. And an `@font-face` rule is a DOM node, which nothing in the compile
+pipeline can take away. So a ~40-line client module that appends a `<style>`
+to `document.head` at boot closes the gap, with **no change to `theme.json` and
+no change to any component**.
+
+The workaround is small because the token design is good. Worth saying, since
+the rest of this entry is complaints.
+
+### 🐛 `sf dev` does not serve the publish payload — the inverse of the SPA bug
+
+The font files ship as static assets in `fonts/` at the project root. That works
+on a published space: confirmed against live v2, where `/LICENSE.md`,
+`/package-lock.json`, and `/tsconfig.json` all return 200 with correct content
+types. (`/sf.jsonc` and `/theme.json` 404 — shadowed by name — and dot-paths
+403, both already logged.) The uploader even sniffs magic bytes and tags a
+`wOF2` file as `font/woff2` with no configuration.
+
+Under `sf dev`, none of it serves. Every unrecognized path returns the SPA
+shell:
+
+```
+$ curl -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' \
+    http://127.0.0.1:4174/fonts/inter-latin-wght.woff2
+200 text/html; charset=utf-8 1829
+
+$ # …and a path that does not exist at all:
+$ curl … http://127.0.0.1:4174/fonts/nope.woff2
+200 text/html; charset=utf-8 1829
+
+$ # …and a file that demonstrably serves in production:
+$ curl … http://127.0.0.1:4174/LICENSE.md
+200 text/html; charset=utf-8 1829
+```
+
+Only the generated assets are real locally: `/zero.css` (40715b, `text/css`)
+and `/client.js` (124702b, `application/javascript`).
+
+**This is precisely the inverse of the deep-path bug logged on 2026-08-25
+above.** There, `sf dev` served paths the published space 404s. Here, `sf dev`
+404s — well, shells — files the published space serves. Same root cause, a dev
+server whose routing is unrelated to production's, pointing opposite ways on
+consecutive features. Both times the local result is the *misleading* one, and
+both times the only way to find out is to publish.
+
+**Suggestion:** serve the publish payload from `sf dev`, or at minimum make the
+shell fallback conditional on `--spa` so an unmatched path 404s locally exactly
+as it will in production. A `200 text/html` for a `.woff2` request is a
+uniquely unhelpful answer: the browser rejects it as a font, and the network tab
+shows a success.
+
+### 😕 Net cost
+
+Roughly an hour, almost all of it spent establishing that four documented-looking
+routes do nothing. The actual fix is 40 lines and four files. A single line in
+`zero.md` — "Zero does not load webfonts; `fontFace` is ignored; ship files as
+static assets and declare `@font-face` yourself" — would have made it fifteen
+minutes.
+
+### Coda: we went with Google Fonts, and the reason is the dev server
+
+Every finding above stands — the silent `fontFace` discard, the closed routes,
+the payload asymmetry. But the self-hosted approach they add up to was **built,
+verified, and then abandoned**, because of the one thing that matters most in
+practice: it does not work in local development.
+
+Fonts are one of the easiest things on the web. One `<link>`, or one
+`@font-face`. Zero removes both files, which is defensible on its own — the
+tokens it emits in exchange are well designed. What is not defensible is that
+the workaround still doesn't work locally, because `sf dev` serves no project
+static file at all and has no flag to make it. `sf dev --help` lists
+`--state-backend`, `--watch-interval`, and `--allow-network`; nothing for static
+assets.
+
+So a developer restyling their app cannot see their own typography until they
+publish. On this project that is worse than it sounds, since publishing has been
+blocked for two days by the `x-spacefast-rationale` issue logged above. The only
+way to see a self-hosted font was to fix an unrelated platform bug first.
+
+Pointing at `fonts.googleapis.com` sidesteps all of it in one line — a remote
+URL is a remote URL in both environments. That is a fine outcome for this app
+and a poor advertisement for the platform: the escape hatch that works is the
+one that sends your users to a third party, and the one that keeps them on your
+own origin is the one you cannot test.
+
+**Two changes would close this, in order of value:**
+
+1. **Serve the publish payload from `sf dev`.** Whatever `sf publish
+   --dry-run` would upload should be reachable locally at the same path. This
+   is the fix; everything else is mitigation.
+2. **Say so in `zero.md`.** One line — "Zero does not load webfonts;
+   `theme.json`'s `fontFace` is ignored; declare `@font-face` yourself and
+   serve the files from a URL" — turns an hour into fifteen minutes. Ideally
+   with the caveat that a self-hosted path won't resolve under `sf dev`.
