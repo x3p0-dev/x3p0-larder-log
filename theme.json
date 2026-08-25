@@ -3,17 +3,40 @@
 	"version": 3,
 	"settings": {
 		"color": {
+			"comment": "Every value is light-dark(light, dark) so one slug serves both themes, the way Zero's own platform tokens do. Resolution follows the `color-scheme` the app sets on its root element.",
 			"palette": [
-				{ "slug": "canvas", "name": "Page", "color": "#F5F2EA" },
-				{ "slug": "surface", "name": "Surface", "color": "#FFFFFF" },
-				{ "slug": "surface-alt", "name": "Surface alt", "color": "#FAF8F2" },
-				{ "slug": "line", "name": "Border", "color": "#DED6C3" },
-				{ "slug": "ink", "name": "Text", "color": "#20241E" },
-				{ "slug": "ink-muted", "name": "Muted text", "color": "#8A8265" },
-				{ "slug": "accent", "name": "Accent", "color": "#3C4A32" },
-				{ "slug": "success", "name": "In stock", "color": "#3C6B3C" },
-				{ "slug": "warning", "name": "Low", "color": "#96631A" },
-				{ "slug": "danger", "name": "Out", "color": "#8C2F2F" }
+				{ "slug": "canvas", "name": "Page", "color": "light-dark(#F3EADC, #1F1912)" },
+				{ "slug": "surface", "name": "Surface", "color": "light-dark(#FDFAF4, #2C251B)" },
+				{ "slug": "surface-alt", "name": "Sunk", "color": "light-dark(#F2EADC, #221C14)" },
+				{ "slug": "line", "name": "Border", "color": "light-dark(#E2D5C0, #3E3527)" },
+				{ "slug": "line-strong", "name": "Border strong", "color": "light-dark(#CFBEA3, #544737)" },
+
+				{ "slug": "ink", "name": "Text", "color": "light-dark(#241E17, #F2E9DA)" },
+				{ "slug": "ink-body", "name": "Body text", "color": "light-dark(#4C4237, #DCD0BA)" },
+				{ "slug": "ink-muted", "name": "Muted text", "color": "light-dark(#6F6049, #A5937A)" },
+				{ "slug": "ink-faint", "name": "Faint text", "color": "light-dark(#9B8B75, #7E6E58)" },
+
+				{ "slug": "accent", "name": "Crimson", "color": "light-dark(#BE3346, #D4636B)" },
+				{ "slug": "success", "name": "In stock", "color": "light-dark(#5F7546, #8FAE6D)" },
+				{ "slug": "warning", "name": "Low", "color": "light-dark(#C4901F, #D8A63F)" },
+				{ "slug": "danger", "name": "Out", "color": "light-dark(#BE3346, #D4636B)" },
+
+				{ "slug": "drawer", "name": "Drawer", "color": "light-dark(#2B2419, #15110B)" },
+				{ "slug": "drawer-raised", "name": "Drawer raised", "color": "light-dark(#332B22, #231D15)" },
+				{ "slug": "drawer-well", "name": "Drawer well", "color": "light-dark(#191510, #0A0805)" },
+				{ "slug": "drawer-line", "name": "Drawer hairline", "color": "light-dark(#3B3126, #2C2419)" },
+				{ "slug": "drawer-dashed", "name": "Drawer dashed", "color": "light-dark(#4A4031, #3A3025)" },
+
+				{ "slug": "on-dark", "name": "On dark", "color": "#F2E9DA" },
+				{ "slug": "on-dark-muted", "name": "On dark muted", "color": "#D8CBB6" },
+				{ "slug": "on-dark-faint", "name": "On dark faint", "color": "#9E8C74" },
+				{ "slug": "on-dark-label", "name": "On dark label", "color": "#8A7860" },
+
+				{ "slug": "drawer-card", "name": "Drawer card", "color": "light-dark(#262019, #1C1710)" },
+				{ "slug": "drawer-card-hover", "name": "Drawer card hover", "color": "light-dark(#332B22, #241E16)" },
+
+				{ "slug": "drawer-press", "name": "Drawer pressed", "color": "#F2E9DA" },
+				{ "slug": "drawer-press-ink", "name": "Drawer pressed text", "color": "#241E17" }
 			]
 		},
 		"typography": {
@@ -21,18 +44,28 @@
 				{
 					"slug": "disp",
 					"name": "Display",
-					"fontFamily": "Fraunces, ui-serif, Georgia, serif"
+					"fontFamily": "'Playfair Display', Georgia, serif"
 				},
 				{
 					"slug": "sans",
 					"name": "Body",
-					"fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif"
+					"fontFamily": "Karla, 'Helvetica Neue', Arial, sans-serif"
 				},
 				{
 					"slug": "mono",
 					"name": "Mono",
-					"fontFamily": "\"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, monospace"
+					"fontFamily": "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
 				}
+			],
+			"fontSizes": [
+				{ "slug": "label", "name": "Section label", "size": "10.5px" },
+				{ "slug": "meta", "name": "Meta", "size": "13px" },
+				{ "slug": "body", "name": "Body", "size": "15px" },
+				{ "slug": "item-sm", "name": "Item name (mobile)", "size": "18.5px" },
+				{ "slug": "item", "name": "Item name", "size": "21px" },
+				{ "slug": "wordmark", "name": "Wordmark", "size": "27px" },
+				{ "slug": "qty-sm", "name": "Quantity (mobile)", "size": "28px" },
+				{ "slug": "qty", "name": "Quantity", "size": "42px" }
 			]
 		}
 	}

@@ -1,15 +1,26 @@
-import { ArrowUpDown } from 'lucide-preact';
+import { useEffect, useRef } from 'preact/hooks';
+import { ArrowUpDown, Check, ChevronDown } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
+import { PAGE_FOCUS } from '../lib/controlStyles';
 
-export type SortKey = 'default' | 'name-asc' | 'name-desc' | 'qty-asc' | 'qty-desc';
+export type SortKey = 'default' | 'restock' | 'name-asc' | 'name-desc' | 'qty-asc' | 'qty-desc';
 
-export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-	{ key: 'default', label: 'Newest first' },
-	{ key: 'name-asc', label: 'Name (A–Z)' },
-	{ key: 'name-desc', label: 'Name (Z–A)' },
-	{ key: 'qty-asc', label: 'Quantity (low–high)' },
-	{ key: 'qty-desc', label: 'Quantity (high–low)' },
+/**
+ * Six options in three groups, split by hairlines rather than headings — at six
+ * rows a group label costs more than it explains.
+ *
+ * `group` is the break *before* this row. "Recently added" is the default and
+ * "Needs restocking" sits directly under it: that pair is the priority group,
+ * and everything below is a plain ordering.
+ */
+export const SORT_OPTIONS: { key: SortKey; label: string; short: string; group?: boolean }[] = [
+	{ key: 'default', label: 'Recently added', short: 'Recent' },
+	{ key: 'restock', label: 'Needs restocking', short: 'Restock' },
+	{ key: 'name-asc', label: 'Name · A to Z', short: 'A–Z', group: true },
+	{ key: 'name-desc', label: 'Name · Z to A', short: 'Z–A' },
+	{ key: 'qty-asc', label: 'Quantity · fewest first', short: 'Fewest', group: true },
+	{ key: 'qty-desc', label: 'Quantity · most first', short: 'Most' },
 ];
 
 type Props = {
@@ -20,44 +31,89 @@ type Props = {
 	theme: Theme;
 };
 
+/**
+ * The sort control.
+ *
+ * The trigger **names the current choice**, so the menu only ever gets opened
+ * to change it — the old icon-only button meant the only way to find out how
+ * the list was ordered was to open the thing that changes it.
+ *
+ * It stays a popover at every size rather than becoming a sheet on mobile; six
+ * rows do not earn one. They just grow to 44px.
+ */
 export function SortMenu({ open, setOpen, sortBy, setSortBy, theme }: Props) {
-	const highlighted = open || sortBy !== 'default';
+	const ref = useRef<HTMLDivElement>(null);
+	const current = SORT_OPTIONS.find((o) => o.key === sortBy) ?? SORT_OPTIONS[0];
+
+	useEffect(() => {
+		if (! open) return;
+
+		function onKey(e: KeyboardEvent) {
+			if (e.key === 'Escape') { setOpen(false); ref.current?.querySelector('button')?.focus(); }
+		}
+		function onDown(e: PointerEvent) {
+			if (! ref.current?.contains(e.target as Node)) setOpen(false);
+		}
+
+		document.addEventListener('keydown', onKey);
+		document.addEventListener('pointerdown', onDown);
+		return () => {
+			document.removeEventListener('keydown', onKey);
+			document.removeEventListener('pointerdown', onDown);
+		};
+	}, [open, setOpen]);
 
 	return (
-		<div class="relative">
+		<div class="relative" ref={ref}>
 			<button
 				onClick={() => setOpen(! open)}
-				class="w-7 h-7 rounded-md flex items-center justify-center"
-				style={{
-					background: highlighted ? theme.inkBg : theme.neutralChipBg,
-					color: highlighted ? theme.inkText : theme.neutralChipText,
-				}}
-				aria-label="Sort items"
+				class={`inline-flex items-center gap-2 h-10 px-3 rounded-[11px] text-[13.5px] border transition-colors ${PAGE_FOCUS}`}
+				style={
+					open
+						? { background: theme.surfaceAlt, borderColor: theme.borderStrong, color: theme.textStrong }
+						: { background: 'transparent', borderColor: 'transparent', color: theme.text }
+				}
+				aria-haspopup="menu"
 				aria-expanded={open}
+				aria-label={`Sort: ${current.label}`}
 			>
-				<ArrowUpDown size={13} />
+				<ArrowUpDown size={15} class="hidden md:block" style={{ color: theme.textFaint }} />
+				{/* The label alone carries it on mobile; "Sort" is the widest word here. */}
+				<span class="hidden md:inline" style={{ color: theme.textFaint }}>Sort</span>
+				<span class="font-semibold">
+					<span class="md:hidden">{current.short}</span>
+					<span class="hidden md:inline">{current.label}</span>
+				</span>
+				<ChevronDown size={15} style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
 			</button>
 
 			{open && (
-				<>
-					{/* Click-away backdrop. */}
-					<div class="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-					<div
-						class="absolute right-0 mt-1 w-44 rounded-md overflow-hidden z-20"
-						style={{ background: theme.surface, border: `1px solid ${theme.border}`, boxShadow: '0 4px 16px -4px rgba(0,0,0,0.2)' }}
-					>
-						{SORT_OPTIONS.map((opt) => (
-							<button
-								key={opt.key}
-								onClick={() => { setSortBy(opt.key); setOpen(false); }}
-								class="w-full text-left px-3 py-2 text-xs"
-								style={{ background: sortBy === opt.key ? theme.neutralChipBg : 'transparent', color: theme.text }}
-							>
-								{opt.label}
-							</button>
-						))}
-					</div>
-				</>
+				<div
+					role="menu"
+					class="absolute right-0 top-full mt-1.5 z-30 w-[248px] p-1.5 rounded-[14px]"
+					style={{ background: theme.surface, border: `1px solid ${theme.border}`, boxShadow: '0 14px 30px rgba(36, 30, 23, 0.20)' }}
+				>
+					{SORT_OPTIONS.map((opt) => {
+						const on = sortBy === opt.key;
+
+						return (
+							<div key={opt.key}>
+								{opt.group && <span class="block h-px mx-2.5 my-[5px]" style={{ background: theme.border }} />}
+								<button
+									role="menuitemradio"
+									aria-checked={on}
+									onClick={() => { setSortBy(opt.key); setOpen(false); }}
+									class={`flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt ${PAGE_FOCUS}`}
+									style={{ color: on ? theme.textStrong : theme.text, fontWeight: on ? 600 : 400 }}
+								>
+									<span class="flex-1 min-w-0 truncate">{opt.label}</span>
+									{/* A check, not a fill — so hover still reads on the chosen row. */}
+									{on && <Check size={15} strokeWidth={2.4} style={{ color: '#BE3346' }} />}
+								</button>
+							</div>
+						);
+					})}
+				</div>
 			)}
 		</div>
 	);

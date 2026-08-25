@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Plus, Search, Menu, ShoppingCart, X } from 'lucide-preact';
 
-import { Sidebar } from './components/Sidebar';
+import { CollapsedRail } from './components/CollapsedRail';
+import { Drawer } from './components/Drawer';
+import type { DrawerTab } from './components/Drawer';
 import { StatusChip } from './components/StatusChip';
 import { SortMenu } from './components/SortMenu';
 import type { SortKey } from './components/SortMenu';
-import { ItemFields } from './components/ItemFields';
+import { ItemSheet } from './components/ItemSheet';
+import { PAGE_BUTTON, PAGE_BUTTON_PRIMARY, PAGE_CHIP_ADD, PAGE_INPUT } from './lib/controlStyles';
 import { ItemCard } from './components/ItemCard';
-import { SettingsDrawer } from './components/SettingsDrawer';
 import { JoinBox } from './components/JoinBox';
 import { ShoppingListModal } from './components/ShoppingListModal';
 import { UndoToast } from './components/UndoToast';
@@ -16,11 +18,12 @@ import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
 import { usePantryData } from './hooks/usePantryData';
 
-import { getTheme, statusFor, termNameFor } from './lib/theme';
+import { entityColorFor, getTheme, statusFor, termNameFor } from './lib/theme';
 import { clearPendingInvite, pendingInvite } from './lib/pendingInvite';
 import type { TaxonomyActions } from './lib/actions';
 
 import type { StatusKey } from '../shared/status';
+import { statusKeyFor } from '../shared/status';
 import type { Item, ItemDraft, ThemeOverride } from '../shared/types';
 import { DEFAULT_ROLE, can } from '../shared/roles';
 import { toInt } from '../shared/qty';
@@ -28,10 +31,13 @@ import { toInt } from '../shared/qty';
 const PAGE_SIZE = 20;
 const UNDO_MS = 6000;
 
-const STATUS_CHIPS: { key: StatusKey; label: string }[] = [
-	{ key: 'ok', label: 'In stock' },
-	{ key: 'low', label: 'Low' },
-	{ key: 'out', label: 'Out' },
+/** What "needs restocking" means as an ordering. */
+const RESTOCK_RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
+
+const STATUS_CHIPS: { key: StatusKey; label: string; short: string }[] = [
+	{ key: 'ok', label: 'in stock', short: 'stocked' },
+	{ key: 'low', label: 'running low', short: 'low' },
+	{ key: 'out', label: 'out', short: 'out' },
 ];
 
 /**
@@ -69,7 +75,11 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const [activeStatus, setActiveStatus] = useState<StatusKey | null>(null);
 	const [search, setSearch] = useState('');
 
-	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [drawerTab, setDrawerTab] = useState<DrawerTab>('filter');
+	/* Mobile only — the drawer is docked and always present from `md` up. */
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	/* Desktop only — folded away, with the header's menu button to bring it back. */
+	const [drawerCollapsed, setDrawerCollapsed] = useState(false);
 	const [sortMenuOpen, setSortMenuOpen] = useState(false);
 	const [sortBy, setSortBy] = useState<SortKey>('default');
 
@@ -99,7 +109,6 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
 	const [shoppingListOpen, setShoppingListOpen] = useState(false);
-	const [shoppingStore, setShoppingStore] = useState<string | null>(null);
 
 	/**
 	 * A code from an invite link, captured in the entry before sign-in.
@@ -187,7 +196,13 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		const arr = [...filtered];
 		// Quantity sorts parse first: these are strings, and "10" sorts before
 		// "2". The database can't sort them either, for the same reason (D4).
-		if (sortBy === 'name-asc') arr.sort((a, b) => a.name.localeCompare(b.name));
+		if (sortBy === 'restock') {
+			// Out first, then low, then stocked — the order you would walk the
+			// kitchen in. `sort` is stable, so within a status the list keeps
+			// whatever order it already had.
+			arr.sort((a, b) => RESTOCK_RANK[statusKeyFor(a.qty, a.threshold)] - RESTOCK_RANK[statusKeyFor(b.qty, b.threshold)]);
+		}
+		else if (sortBy === 'name-asc') arr.sort((a, b) => a.name.localeCompare(b.name));
 		else if (sortBy === 'name-desc') arr.sort((a, b) => b.name.localeCompare(a.name));
 		else if (sortBy === 'qty-asc') arr.sort((a, b) => toInt(a.qty) - toInt(b.qty));
 		else if (sortBy === 'qty-desc') arr.sort((a, b) => toInt(b.qty) - toInt(a.qty));
@@ -231,15 +246,21 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		if (activeLocation && ! locations.some((l) => l.id === activeLocation)) setActiveLocation(null);
 		if (activeType && ! types.some((t) => t.id === activeType)) setActiveType(null);
 		if (activeStore && ! stores.some((s) => s.id === activeStore)) setActiveStore(null);
-		if (shoppingStore && ! stores.some((s) => s.id === shoppingStore)) setShoppingStore(null);
-	}, [locations, types, stores, activeLocation, activeType, activeStore, shoppingStore]);
+	}, [locations, types, stores, activeLocation, activeType, activeStore]);
+
+	/*
+	 * The shopping list is contextual: it is whatever the store you are
+	 * filtering by is short of. There is no second store selector any more —
+	 * one store, chosen once, in the filter pane.
+	 */
+	const storeColor = entityColorFor(activeStore ?? '', stores, dark);
 
 	const shoppingItems = useMemo(() => {
-		if (! shoppingStore) return [];
+		if (! activeStore) return [];
 		return items
-			.filter((it) => it.storeIds.includes(shoppingStore) && statusFor(it.qty, it.threshold, dark).key !== 'ok')
+			.filter((it) => it.storeIds.includes(activeStore) && statusFor(it.qty, it.threshold, dark).key !== 'ok')
 			.sort((a, b) => (toInt(a.qty) <= 0 ? -1 : 1) - (toInt(b.qty) <= 0 ? -1 : 1));
-	}, [items, shoppingStore, dark]);
+	}, [items, activeStore, dark]);
 
 	// --- Item actions ------------------------------------------------------
 
@@ -382,60 +403,105 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		);
 	}
 
+	/*
+	 * No `overflow-x-hidden` on the root: setting one overflow axis makes the
+	 * other compute to `auto`, which turns that element into the scroll
+	 * container and leaves the drawer's `position: sticky` with nothing to
+	 * stick to — it then only covers its own flow height instead of the
+	 * viewport's. The content column clips instead.
+	 */
 	return (
 		<div
-			class="font-sans min-h-screen w-full transition-colors duration-200 overflow-x-hidden"
+			class="font-sans min-h-screen w-full flex transition-colors duration-200"
 			style={{
 				background: theme.pageBg,
 				color: theme.text,
 				colorScheme: dark ? 'dark' : 'light',
 			}}
 		>
-			<header class="transition-colors duration-200">
-				<div class="max-w-5xl mx-auto px-6 pt-5 pb-3 flex items-center justify-between flex-wrap gap-3">
-					{/*
-					  * The household name sits under the app name rather than
-					  * replacing it. The schema has always been multi-household
-					  * (D3), so once a switcher exists this line is what tells
-					  * two of them apart — it needs a home before then.
-					  */}
-					<div class="min-w-0">
-						<h1 class="font-disp text-lg sm:text-xl font-semibold leading-none" style={{ color: theme.textStrong }}>Larder Log</h1>
-						{householdName && (
-							<p class="font-mono tracking-[0.02em] text-xs mt-1 truncate" style={{ color: theme.textFaint }}>
-								{householdName}
-								{/*
-								  * Said once, here, rather than as a disabled control on
-								  * every card: a viewer's missing buttons need one
-								  * explanation, not forty (D30).
-								  */}
-								{! mayEditItems && (
-									<span
-										class="ml-2 px-1.5 py-0.5 rounded-full"
-										style={{ background: theme.neutralChipBg, color: theme.neutralChipText }}
-									>
-										View only
-									</span>
-								)}
-							</p>
-						)}
-					</div>
-					<div class="flex items-center gap-2 flex-wrap">
-						{STATUS_CHIPS.map(({ key, label }) => (
-							<StatusChip
-								key={key} statusKey={key} label={label} count={statusCounts[key]}
-								active={activeStatus === key} dark={dark} theme={theme}
-								onClick={() => setActiveStatus((prev) => prev === key ? null : key)}
-							/>
-						))}
-						<button
-							onClick={() => setSettingsOpen(true)}
-							class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-							style={{ background: theme.neutralChipBg, color: theme.textFaint }}
-							aria-label="Settings"
+			{/*
+			  * Collapsed is a rail, not an absence — it reflows the content column
+			  * rather than covering it, so nothing overlaps the grid.
+			  */}
+			{drawerCollapsed && (
+				<CollapsedRail
+					locations={locations} stores={stores} types={types}
+					activeLocation={activeLocation} setActiveLocation={setActiveLocation}
+					activeStore={activeStore} setActiveStore={setActiveStore}
+					activeType={activeType} setActiveType={setActiveType}
+					itemCount={items.length} locationCounts={locationCounts}
+					householdName={householdName} accountName={displayName}
+					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
+					dark={dark}
+					onExpand={(tab) => { setDrawerTab(tab); setDrawerCollapsed(false); }}
+					onSignOut={onSignOut}
+					theme={theme}
+				/>
+			)}
+
+			<Drawer
+				items={items} locations={locations} types={types} stores={stores}
+				activeLocation={activeLocation} setActiveLocation={setActiveLocation}
+				activeType={activeType} setActiveType={setActiveType}
+				activeStore={activeStore} setActiveStore={setActiveStore}
+				locationCounts={locationCounts} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
+				tab={drawerTab} setTab={setDrawerTab}
+				open={drawerOpen} onClose={() => setDrawerOpen(false)}
+				collapsed={drawerCollapsed}
+				onDismiss={() => { setDrawerOpen(false); setDrawerCollapsed(true); }}
+				householdName={householdName} accountName={displayName}
+				settings={{
+					themeOverride, setThemeOverride,
+					householdName,
+					setHouseholdName: (v) => void api.updateHousehold({ name: v }),
+					defaultThreshold,
+					setDefaultThreshold: (v) => void api.updateHousehold({ defaultThreshold: v }),
+					accountName: displayName, accountEmail: email, onSignOut,
+					members, invites,
+					me: { membershipId: myMembershipId, role: myRole },
+					onCreateInvite: api.createInvite,
+					onRevokeInvite: api.revokeInvite,
+					onChangeRole: api.changeRole,
+					onRemoveMember: api.removeMember,
+					onLeaveHousehold: api.leaveHousehold,
+				}}
+				onCreateTerm={(kind, name, ink) => taxonomy.create(kind, { name, ink })}
+				onRenameTerm={(kind, id, name) => { void taxonomy.update(kind, id, { name }); }}
+				onRecolorTerm={(kind, id, ink) => { void taxonomy.update(kind, id, { ink }); }}
+				onDeleteTerm={(kind, id) => { void taxonomy.remove(kind, id); }}
+				canEditTaxonomy={mayEditTaxonomy}
+				theme={theme}
+			/>
+
+			<div class="flex-1 min-w-0 overflow-x-hidden">
+			{/* Mobile only: above `md` the drawer carries the wordmark and the menu. */}
+			<header class="md:hidden">
+				<div class="flex items-center gap-[13px] px-5 pt-4 pb-3">
+					{/* Left, the same side the drawer comes from. */}
+					<button
+						onClick={() => { setDrawerOpen(true); setDrawerCollapsed(false); }}
+						class={`shrink-0 flex items-center justify-center w-11 h-11 rounded-[13px] ${PAGE_BUTTON}`}
+						style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
+						aria-label="Open menu"
+					>
+						<Menu size={19} />
+					</button>
+
+					<div class="min-w-0 flex flex-col">
+						<h1
+							class="font-disp text-wordmark font-bold leading-[1.06] tracking-[-0.015em]"
+							style={{ color: theme.textStrong }}
 						>
-							<Menu size={17} />
-						</button>
+							Larder <span class="italic font-semibold" style={{ color: '#BE3346' }}>Log</span>
+						</h1>
+						{householdName && (
+							<span
+								class="text-[10px] font-semibold uppercase tracking-[0.16em] truncate"
+								style={{ color: theme.textMuted }}
+							>
+								{householdName}
+							</span>
+						)}
 					</div>
 				</div>
 			</header>
@@ -487,94 +553,118 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				</div>
 			)}
 
-			<div class="max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-[190px_1fr] gap-6">
-				<Sidebar
-					items={items} locations={locations} types={types} stores={stores}
-					activeLocation={activeLocation} setActiveLocation={setActiveLocation}
-					activeType={activeType} setActiveType={setActiveType}
-					activeStore={activeStore} setActiveStore={setActiveStore}
-					locationCounts={locationCounts} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
-					taxonomy={taxonomy} canCreateTerms={mayEditTaxonomy}
-					theme={theme} dark={dark}
-				/>
-
+			<div class="max-w-[1160px] px-[18px] md:px-[34px] py-6 md:py-[30px] pb-28 md:pb-[30px]">
 				<main>
-					<div class="flex items-center gap-3 mb-4 flex-wrap">
-						<div class="flex items-center gap-2 px-3 py-2 rounded-md flex-1 min-w-[180px]" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
-							<Search size={15} style={{ color: theme.textMuted }} />
+					<div class="flex items-center gap-3.5">
+						<label class={`flex-1 min-w-0 flex items-center gap-[11px] h-[50px] px-[18px] rounded-[15px] focus-within:border-ink-muted ${PAGE_INPUT}`}>
+							<Search size={18} style={{ color: theme.textFaint }} />
 							<input
 								value={search}
 								onInput={(e) => setSearch(e.currentTarget.value)}
-								placeholder="Search items…"
+								placeholder="What are you looking for?"
 								aria-label="Search items"
-								class="text-sm outline-none flex-1 bg-transparent"
+								class="text-[15px] outline-none flex-1 min-w-0 bg-transparent"
 								style={{ color: theme.text }}
 							/>
-						</div>
+						</label>
 						{mayEditItems && (
 							<button
 								onClick={openAddForm}
-								class="px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5"
-								style={{ background: theme.primaryBg, color: theme.primaryText }}
+								class={`shrink-0 hidden md:flex items-center gap-2.5 h-[50px] px-[22px] rounded-[15px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY}`}
+								style={{ background: theme.inkBg, color: theme.inkText }}
 							>
-								<Plus size={15} /> Add item
+								<Plus size={17} strokeWidth={2.4} /> Add item
 							</button>
 						)}
 					</div>
 
+					{/*
+					  * The shopping list is reached from here and nowhere else: it is
+					  * whatever the store you are filtering by is short of. The count
+					  * is the point — a store with nothing low does not need a list,
+					  * and the badge says so before you open it.
+					  */}
 					{activeStore && (
-						<div class="mb-4 flex items-center justify-between gap-2 px-3 py-2 rounded-md" style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}>
-							<span class="text-xs" style={{ color: theme.textMuted }}>
-								Filtering by <strong style={{ color: theme.text }}>{termNameFor(activeStore, stores)}</strong>
+						<div
+							class="flex items-center justify-between gap-4 mt-4 pl-[18px] pr-3 py-[11px] rounded-[15px]"
+							style={{ background: theme.surface, border: `1px solid ${storeColor.ring}` }}
+						>
+							<span class="flex items-center gap-2.5 text-[14.5px] min-w-0" style={{ color: theme.text }}>
+								<span class="w-2 h-2 rounded-full shrink-0" style={{ background: storeColor.dot }} />
+								<span class="truncate">
+									Filtering by <strong class="font-semibold" style={{ color: theme.textStrong }}>{termNameFor(activeStore, stores)}</strong>
+								</span>
+								<button
+									onClick={() => setActiveStore(null)}
+									class="pl-1 text-[13.5px] shrink-0"
+									style={{ color: theme.textMuted, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+								>
+									Clear
+								</button>
 							</span>
 							<button
-								onClick={() => { setShoppingStore(activeStore); setShoppingListOpen(true); }}
-								class="text-xs px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1.5 shrink-0"
-								style={{ background: theme.primaryBg, color: theme.primaryText }}
+								onClick={() => setShoppingListOpen(true)}
+								class="flex items-center gap-2.5 h-10 px-4 rounded-xl text-sm font-semibold shrink-0"
+								style={{ background: theme.inkBg, color: theme.inkText }}
 							>
-								<ShoppingCart size={12} /> Shopping list
+								<ShoppingCart size={16} />
+								Shopping list
+								<span
+									class="flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold"
+									style={{ background: '#BE3346', color: '#F2E9DA' }}
+								>
+									{shoppingItems.length}
+								</span>
 							</button>
 						</div>
 					)}
 
-					{mayEditItems && showForm && form && (
-						<div class="mb-5 p-4 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
-							<ItemFields
-								value={form} onChange={setForm} error={formError}
-								locations={locations} types={types} stores={stores}
-								taxonomy={taxonomy} canCreateTerms={mayEditTaxonomy}
-								dark={dark} theme={theme}
-							/>
-							<div class="sm:col-span-2 flex gap-2 justify-end">
-								<button
-									type="button"
-									onClick={() => { setShowForm(false); setFormError(''); }}
-									class="px-3 py-2 rounded text-sm"
-									style={{ color: theme.textMuted }}
+
+					<div class="flex items-center justify-between gap-4 flex-wrap pt-6 pb-4 px-0.5">
+						<div class="flex items-center gap-2.5 flex-wrap">
+							{STATUS_CHIPS.map(({ key, label, short }) => (
+								<StatusChip
+									key={key} statusKey={key} label={label} short={short} count={statusCounts[key]}
+									active={activeStatus === key} dark={dark} theme={theme}
+									onClick={() => setActiveStatus((prev) => prev === key ? null : key)}
+								/>
+							))}
+							{/*
+							  * On desktop the wordmark line is hidden, so this is where a
+							  * viewer learns why their controls are missing — once, rather
+							  * than as a disabled button on every card (D30).
+							  */}
+							{! mayEditItems && (
+								<span
+									class="inline-flex items-center px-3 py-[7px] rounded-full text-[13.5px]"
+									style={{ background: theme.neutralChipBg, color: theme.textMuted, border: `1px solid ${theme.border}` }}
 								>
-									Cancel
-								</button>
-								<button
-									type="button"
-									onClick={addItem}
-									disabled={saving}
-									class="px-4 py-2 rounded text-sm font-medium disabled:opacity-50"
-									style={{ background: theme.inkBg, color: theme.inkText }}
-								>
-									{saving ? 'Saving…' : 'Save item'}
-								</button>
+									View only
+								</span>
+							)}
+						</div>
+						{/*
+						  * Its own full-width row on mobile, so the count stays left and
+						  * the sort stays right rather than both wrapping to the left.
+						  * Inline at the end of the row from `md` up.
+						  */}
+						<div class="w-full md:w-auto flex items-center justify-between md:justify-end gap-[18px]">
+							<span class="text-[13px]" style={{ color: theme.textMuted }}>
+								Showing {Math.min(visibleCount, sorted.length)} of {sorted.length}
+							</span>
+							{/* Pulled to the edge so the trigger's padding does not read as a gap. */}
+							<div class="-mr-2.5 md:mr-0">
+								<SortMenu open={sortMenuOpen} setOpen={setSortMenuOpen} sortBy={sortBy} setSortBy={setSortBy} theme={theme} />
 							</div>
 						</div>
-					)}
-
-					<div class="flex items-center justify-between mb-2">
-						<p class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>
-							Showing {Math.min(visibleCount, sorted.length)} of {sorted.length}
-						</p>
-						<SortMenu open={sortMenuOpen} setOpen={setSortMenuOpen} sortBy={sortBy} setSortBy={setSortBy} theme={theme} />
 					</div>
 
-					<div class="flex flex-col gap-3">
+					{/*
+					  * A grid rather than a stack, per the spec: cards are dense
+					  * enough that eight scan in one pass on a desktop. `items-start`
+					  * keeps an expanded card from stretching its whole row.
+					  */}
+					<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
 						{sorted.length === 0 && (
 							<p class="text-sm py-8 text-center" style={{ color: theme.textMuted }}>Nothing here yet.</p>
 						)}
@@ -584,18 +674,29 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 								key={it.id}
 								item={it} open={openId === it.id}
 								locations={locations} types={types} stores={stores}
-								dark={dark} theme={theme} taxonomy={taxonomy}
-								canEdit={mayEditItems} canCreateTerms={mayEditTaxonomy}
-								editForm={editingId === it.id ? editForm : null}
-								onEditFormChange={setEditForm}
+								dark={dark} theme={theme} canEdit={mayEditItems}
 								onToggleOpen={() => toggleOpen(it.id)}
 								onAdjustQty={(delta) => void api.adjustQty(it.id, delta)}
 								onRemove={() => void removeItem(it.id)}
 								onStartEdit={() => startEdit(it)}
-								onSaveEdit={() => void saveEdit(it.id)}
-								onCancelEdit={cancelEdit}
 							/>
 						))}
+
+						{/*
+						  * The tile sits in the grid rather than above it, so adding
+						  * something is where the shelf ends — the same gesture as
+						  * reaching past the last jar. Desktop only: on mobile the
+						  * bottom bar already carries it.
+						  */}
+						{mayEditItems && sorted.length > 0 && visibleCount >= sorted.length && (
+							<button
+								onClick={openAddForm}
+								class={`hidden md:flex flex-col items-center justify-center gap-2.5 min-h-[152px] p-5 rounded-[20px] font-disp italic text-base ${PAGE_CHIP_ADD}`}
+							>
+								<Plus size={20} strokeWidth={2.2} />
+								Something new on the shelf
+							</button>
+						)}
 
 						{visibleCount < sorted.length && (
 							<div ref={sentinelRef} class="py-4 text-center">
@@ -605,33 +706,52 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					</div>
 				</main>
 			</div>
+			</div>
 
-			<UndoToast item={pendingRemoval} onUndo={() => void undoRemove()} theme={theme} />
+			{/*
+			  * Mobile's primary action, pinned rather than scrolled past. The grid
+			  * carries matching bottom padding so the last card clears it.
+			  */}
+			{mayEditItems && (
+				<div
+					class="md:hidden fixed inset-x-0 bottom-0 z-30 px-5 pt-3.5 pb-5"
+					style={{ background: theme.ground, borderTop: `1px solid ${theme.border}` }}
+				>
+					<button
+						onClick={openAddForm}
+						class={`flex items-center justify-center gap-2.5 w-full h-[54px] rounded-2xl text-base font-semibold ${PAGE_BUTTON_PRIMARY}`}
+						style={{ background: theme.inkBg, color: theme.inkText }}
+					>
+						<Plus size={18} strokeWidth={2.4} /> Add item
+					</button>
+				</div>
+			)}
 
-			<SettingsDrawer
-				open={settingsOpen} onClose={() => setSettingsOpen(false)}
-				themeOverride={themeOverride} setThemeOverride={setThemeOverride}
-				householdName={householdName}
-				setHouseholdName={(v) => void api.updateHousehold({ name: v })}
-				defaultThreshold={defaultThreshold}
-				setDefaultThreshold={(v) => void api.updateHousehold({ defaultThreshold: v })}
-				locations={locations} types={types} stores={stores} taxonomy={taxonomy}
-				shoppingStore={shoppingStore} setShoppingStore={setShoppingStore}
-				onViewShoppingList={() => { setShoppingListOpen(true); setSettingsOpen(false); }}
-				accountName={displayName} accountEmail={email} onSignOut={onSignOut}
-				members={members} invites={invites}
-				me={{ membershipId: myMembershipId, role: myRole }}
-				onCreateInvite={api.createInvite}
-				onRevokeInvite={api.revokeInvite}
-				onChangeRole={api.changeRole}
-				onRemoveMember={api.removeMember}
-				onLeaveHousehold={api.leaveHousehold}
+			{/*
+			  * One sheet for both flows. Editing wins if somehow both are set,
+			  * because it is the one tied to a specific row.
+			  */}
+			<ItemSheet
+				open={mayEditItems && (Boolean(editingId && editForm) || (showForm && Boolean(form)))}
+				mode={editingId ? 'edit' : 'add'}
+				title={items.find((i) => i.id === editingId)?.name}
+				value={(editingId ? editForm : form) ?? emptyDraft()}
+				onChange={editingId ? setEditForm : setForm}
+				error={editingId ? '' : formError}
+				locations={locations} types={types} stores={stores}
+				taxonomy={taxonomy} canCreateTerms={mayEditTaxonomy}
+				defaultThreshold={defaultThreshold} saving={saving}
+				onSave={() => void (editingId ? saveEdit(editingId) : addItem())}
+				onRemove={editingId ? () => { const id = editingId; cancelEdit(); void removeItem(id); } : undefined}
+				onClose={() => { if (editingId) cancelEdit(); else { setShowForm(false); setFormError(''); } }}
 				dark={dark} theme={theme}
 			/>
 
+			<UndoToast item={pendingRemoval} onUndo={() => void undoRemove()} theme={theme} />
+
 			<ShoppingListModal
 				open={shoppingListOpen}
-				store={shoppingStore ? termNameFor(shoppingStore, stores) : null}
+				store={activeStore ? termNameFor(activeStore, stores) : null}
 				items={shoppingItems}
 				onClose={() => setShoppingListOpen(false)} dark={dark} theme={theme}
 			/>

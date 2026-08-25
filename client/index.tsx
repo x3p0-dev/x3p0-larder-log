@@ -3,6 +3,7 @@ import { SignInWithGoogle, signOut, useAuth } from '@spacefast/zero/client';
 import { Pantry } from './Pantry';
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { getTheme } from './lib/theme';
+import { installAppIcon } from './lib/appIcon';
 import { installFonts } from './lib/fonts';
 import { capturePendingInvite, pendingInvite } from './lib/pendingInvite';
 
@@ -21,6 +22,7 @@ capturePendingInvite();
  * rules before anything paints. See client/lib/fonts.ts.
  */
 installFonts();
+installAppIcon();
 
 /**
  * Hostnames the browser can only be talking to a local `sf dev` on. A LAN
@@ -96,22 +98,6 @@ function AuthLoading({ dark }: { dark: boolean }) {
 	);
 }
 
-/**
- * Deliberately hard to miss. The bypass below is a hole in the app's only auth
- * boundary, and the one failure mode that matters is someone believing a local
- * session is a real one — so the app says so on screen the whole time.
- */
-function DevIdentityBadge() {
-	return (
-		<div
-			role="status"
-			class="fixed bottom-3 left-3 z-50 font-mono text-xs uppercase tracking-widest px-2.5 py-1 rounded-full pointer-events-none"
-			style={{ background: '#96631A', color: '#FFFFFF' }}
-		>
-			Dev guest &middot; not signed in
-		</div>
-	);
-}
 
 export function App() {
 	const auth = useAuth();
@@ -137,14 +123,11 @@ export function App() {
 	if (! auth.userId || (auth.isGuest && ! devGuest)) return <SignInGate dark={dark} />;
 
 	return (
-		<>
-			<Pantry
-				userId={auth.userId}
-				displayName={devGuest ? 'Local dev guest' : (auth.displayName || 'Signed in')}
-				email={devGuest ? '' : (auth.email ?? '')}
-				onSignOut={() => signOut()}
-			/>
-			{devGuest && <DevIdentityBadge />}
-		</>
+		<Pantry
+			userId={auth.userId}
+			displayName={devGuest ? 'Local dev guest' : (auth.displayName || 'Signed in')}
+			email={devGuest ? '' : (auth.email ?? '')}
+			onSignOut={() => signOut()}
+		/>
 	);
 }

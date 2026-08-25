@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — sort menu</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Karla:wght@400;500;600;700&display=swap">
+<style>
+
+    body { margin: 0; font-family: 'Karla', 'Helvetica Neue', Arial, sans-serif; }
+    a { color: #BE3346; } a:hover { color: #9A2836; }
+  
+  body { margin: 0; background: #E7DAC5; display: flex; justify-content: center; padding: 26px; }
+  .frame { border: 1px solid #CFBEA3; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 40px rgba(36,30,23,0.16); width: max-content; transform: scale(var(--s, 1)); transform-origin: top center; }
+  @media (max-width: 1260px) { .frame { --s: 0.85; } }
+  @media (max-width: 1060px) { .frame { --s: 0.7; } }
+  @media (max-width: 880px)  { .frame { --s: 0.5; } }
+</style>
+</head>
+<body>
+<div class="frame"><div style="width: 1180px; height: 900px; padding: 36px; background: radial-gradient(120% 85% at 8% -8%, #F9F3E9 0%, #F3EADC 46%, #EADFCD 100%); color: #241E17; font-family: 'Karla', 'Helvetica Neue', Arial, sans-serif; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 20px; border-bottom: 1px solid #CFBEA3;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em;">Sort menu</div>
+    <div style="font-size: 13.5px; color: #6F6049;">The current choice is named on the trigger, so the menu is only ever opened to change it</div>
+  </div>
+
+  <!-- trigger states -->
+  <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 22px;">
+    <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Trigger</div>
+    <div style="display: flex; align-items: center; gap: 26px; flex-wrap: wrap;">
+      <span style="display: inline-flex; flex-direction: column; align-items: flex-start; gap: 7px;"><span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 11px; background: none; border: 1px solid transparent; color: #4C4237; font-size: 13.5px;"><span style="color: #9B8B75;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg></span><span style="color: #9B8B75;">Sort</span><span style="font-weight: 600;">Recently added</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span><span style="font-size: 11.5px; color: #9B8B75;">Rest</span></span>
+      <span style="display: inline-flex; flex-direction: column; align-items: flex-start; gap: 7px;"><span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 11px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px;"><span style="color: #9B8B75;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg></span><span style="color: #9B8B75;">Sort</span><span style="font-weight: 600;">Recently added</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span><span style="font-size: 11.5px; color: #9B8B75;">Hover</span></span>
+      <span style="display: inline-flex; flex-direction: column; align-items: flex-start; gap: 7px;"><span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 11px; background: none; border: 1px solid transparent; color: #4C4237; font-size: 13.5px; box-shadow: 0 0 0 2px #F3EADC, 0 0 0 3.5px #BE3346;"><span style="color: #9B8B75;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg></span><span style="color: #9B8B75;">Sort</span><span style="font-weight: 600;">Recently added</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span><span style="font-size: 11.5px; color: #9B8B75;">Focus-visible</span></span>
+      <span style="display: inline-flex; flex-direction: column; align-items: flex-start; gap: 7px;"><span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 11px; background: #F2EADC; border: 1px solid #CFBEA3; color: #241E17; font-size: 13.5px;"><span style="color: #9B8B75;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg></span><span style="color: #9B8B75;">Sort</span><span style="font-weight: 600;">Recently added</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span><span style="font-size: 11.5px; color: #9B8B75;">Open</span></span>
+    </div>
+  </div>
+
+  <!-- in context + states -->
+  <div style="display: flex; gap: 26px; align-items: flex-start; padding-top: 26px;">
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Desktop · anchored to the trigger</div>
+      <div style="position: relative; padding: 18px; border-radius: 16px; background: #F6EEE0; border: 1px solid #E2D5C0; min-height: 400px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 2px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <span style="display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: #EDEFE1; border: 1px solid #DCE0CB; font-size: 13.5px; color: #47592F;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7546;"></span>5 in stock</span>
+          <span style="display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; font-size: 13.5px; color: #855A0F;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></span>2 low</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span style="font-size: 13px; color: #7A6A57;">Showing 8 of 8</span>
+          <span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 11px; background: #F2EADC; border: 1px solid #CFBEA3; color: #241E17; font-size: 13.5px;"><span style="color: #9B8B75;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg></span><span style="color: #9B8B75;">Sort</span><span style="font-weight: 600;">Recently added</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+        </div>
+      </div>
+        <div style="position: absolute; top: 66px; right: 18px;"><div style="width: 248px; padding: 6px; border-radius: 14px; background: #FDFAF4; border: 1px solid #E2D5C0; box-shadow: 0 14px 30px rgba(36,30,23,0.20);"><div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #241E17;">Recently added</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#BE3346" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></div><div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Needs restocking</span></div><div style="height: 1px; margin: 5px 10px; background: #EEE4D2;"></div><div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Name · A to Z</span></div><div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px; background: #F2EADC;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Name · Z to A</span></div><div style="height: 1px; margin: 5px 10px; background: #EEE4D2;"></div><div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Quantity · fewest first</span></div><div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Quantity · most first</span></div></div></div>
+        <div style="position: absolute; left: 18px; top: 78px; right: 296px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="height: 74px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0;"></div>
+          <div style="height: 74px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0;"></div>
+          <div style="height: 74px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 268px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Row states</div>
+      <div style="padding: 6px; border-radius: 14px; background: #FDFAF4; border: 1px solid #E2D5C0; box-shadow: 0 14px 30px rgba(36,30,23,0.20);">
+        <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #241E17;">Recently added</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#BE3346" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Needs restocking</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px; background: #F2EADC;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Name · A to Z</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 9px; box-shadow: 0 0 0 2px #FDFAF4, 0 0 0 3.5px #BE3346;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Name · Z to A</span></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; line-height: 1.5; color: #6F6049;">
+        <span><strong style="font-weight: 600; color: #4C4237;">Selected</strong> — 600 weight, ink, crimson check. No fill, so hover still reads on it.</span>
+        <span><strong style="font-weight: 600; color: #4C4237;">Hover</strong> — <code style="font-size: 11.5px;">#F2EADC</code>, radius 9.</span>
+        <span><strong style="font-weight: 600; color: #4C4237;">Focus</strong> — 2px crimson ring, 2px offset in the surface.</span>
+      </div>
+    </div>
+
+    <div style="width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Mobile</div>
+      <div style="width: 234px; padding: 14px 14px 16px 14px; border-radius: 16px; background: #F6EEE0; border: 1px solid #E2D5C0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px;">
+          <span style="font-size: 12.5px; color: #6F6049;">Showing 8 of 8</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 10px; border-radius: 11px; background: #F2EADC; border: 1px solid #CFBEA3; font-size: 13px; color: #241E17;"><span style="color: #9B8B75;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg></span><span style="font-weight: 600;">Recent</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+        </div>
+        <div style="width: 206px; padding: 6px; border-radius: 14px; background: #FDFAF4; border: 1px solid #E2D5C0; box-shadow: 0 14px 30px rgba(36,30,23,0.20);"><div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #241E17;">Recently added</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#BE3346" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></div><div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Needs restocking</span></div><div style="height: 1px; margin: 5px 10px; background: #EEE4D2;"></div><div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Name · A to Z</span></div><div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Name · Z to A</span></div><div style="height: 1px; margin: 5px 10px; background: #EEE4D2;"></div><div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Quantity · fewest first</span></div><div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; border-radius: 9px;"><span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; color: #4C4237;">Quantity · most first</span></div></div>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #6F6049;">Same popover, rows at 44px and the trigger label shortened. It stays anchored rather than becoming a sheet — six rows do not earn one.</p>
+    </div>
+  </div>
+
+  <!-- notes -->
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-top: 24px; margin-top: 20px; border-top: 1px solid #E2D5C0;">
+    <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">Six options, three groups.</strong> Priority, then name, then quantity, split by hairlines rather than group headings — at six rows the labels cost more than they explain.</p>
+    <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">“Recently added” is the default</strong>, with <em>Needs restocking</em> — out, then low, then stocked — directly beneath it. That pair is the priority group; everything below is a plain ordering.</p>
+    <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">Changes from the current markup:</strong> 248px not 176px, rows 14px not 12px, radius 14 not 6, a crimson check instead of a fill to mark the choice, and the trigger names the active sort so you can read it without opening.</p>
+  </div>
+
+</div></div>
+</body>
+</html>

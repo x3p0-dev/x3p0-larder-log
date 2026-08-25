@@ -1,6 +1,11 @@
 {
 	"$schema": "https://spacefast.com/schemas/sf.json",
 	"name": "Larder Log",
+	// The generated index.html takes its <title> from here, falling back to the
+	// app name slug. Without it the browser tab reads "larder-log".
+	"meta": {
+		"title": "Larder Log"
+	},
 	"runtime": {
 		"kind": "zero",
 		"server": "server/index.ts",

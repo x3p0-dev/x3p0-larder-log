@@ -264,6 +264,16 @@ confirmed false in production rather than merely argued to be.
 **Revisit when:** Spacefast ships a local sign-in stub (`sf dev --sign-in-as`,
 or similar). At that point this bypass should come straight out.
 
+**The orange badge is gone (2026-08-25).** This decision originally carried a
+persistent "Dev guest · not signed in" chip pinned bottom-left. The Cellar
+drawer's Account section now shows the same two facts — the identity reads
+*Local dev guest* and the email line reads *Not signed in* — in the place a
+person looks to find out who they are signed in as. A fixed chip sitting over
+the interface to repeat that was covering real UI.
+
+The signal is what mattered, not the chip. If the Account section ever stops
+naming the dev guest, put something back.
+
 ## D15. The space is public; the app's own gate is the boundary
 
 **Decided:** the Spacefast space serves to anyone, and every access decision is
@@ -951,7 +961,13 @@ which `npm test` covers directly; what remains unproven is the rendering.
 
 Zero has no webfont mechanism, so the app supplies one: `client/lib/fonts.ts`
 appends a Google Fonts `<link>` to `document.head` before the first render.
-Fraunces, Inter, and IBM Plex Mono, weight axes included.
+Playfair Display and Karla, full weight axes and italics — the design uses
+Playfair italic for the wordmark's second half and for empty-state prose, so the
+italic face is load bearing rather than a synthesised slant.
+
+IBM Plex Mono rides along **temporarily**. The Cellar spec has no monospace at
+all; its role (uppercase section labels, 10.5px / 0.15em) is Karla's now. It
+comes out when the 35 remaining `font-mono` sites are converted.
 
 **Why any of this is necessary.** Declaring a webfont is normally one line of
 HTML or one line of CSS. Zero provides neither file. `theme.json`'s `fontFace`
@@ -1030,3 +1046,60 @@ There, `sf dev` served deep paths the published space 404s. Here, `sf dev`
 shells files the published space serves. Same root cause — a dev server whose
 routing is unrelated to production's — pointing opposite ways on consecutive
 features, and both times the local result is the misleading one.
+
+## D32. A term stores a color token, not a color
+
+`terms.ink` holds `color-7`. What `color-7` looks like is decided by the active
+theme in `client/lib/palette.ts`, so a future theme restyles every location,
+type, and store in every household by shipping sixteen new values — without
+touching a single row.
+
+Storing the hex, which is what the app did through Phase 4, pins the palette
+into the data. Re-theming would mean rewriting every term in every household,
+and any row missed would keep the old look forever with nothing to indicate
+why.
+
+**The split follows the existing one.** `shared/palette.ts` declares *which*
+tokens exist (`color-1` … `color-16`) and validates them; it has no colors in
+it. `client/lib/palette.ts` holds what they look like. Same rule as status:
+the derivation is shared, the colors are not — the server has no business
+knowing what a color looks like, and `shared/` is compiled into the capsule.
+
+**The values are a table, not a formula.** Each token carries five hand-tuned
+values — base, tint bg, tint border, tint text, on dark — because each pair was
+checked to clear 4.6:1. Deriving them loses the corrections: `color-7`'s tint
+text is deliberately darker than its base, and `color-8`'s darker still. The
+old `lighten()` derivation survives only as the legacy path below.
+
+**Legacy hex still renders, and that is not defensive.** Every row written
+before this decision holds a raw `#rrggbb`. `normalizeInk()` accepts both,
+`themed()` falls back to deriving a tint for anything it cannot resolve, and
+`isInk()` still passes hex. Nothing new writes one.
+
+**Timing made this cheap, and it will not stay cheap.** The production database
+is empty — all nine tables exist with no rows — so there is no migration to
+run and no data to convert. The same change after a household has a year of
+terms in it would need a backfill and a rollback plan.
+
+**Rejected: naming the tokens after their colors** (`slate`, `terracotta`).
+Reads better in source, and it is exactly wrong: a theme that makes `terracotta`
+blue leaves every call site lying. The spec's own names are kept as a trailing
+comment on each row so the table can be diffed against the design doc, and
+nothing reads them.
+
+**Rejected: CSS custom properties for term colors.** The obvious move, and it
+does not work here — Zero compiles utility classes by scanning source for
+static strings, so a computed `bg-${token}` emits no CSS at all
+([D7](#d7-keep-the-prototypes-theme-system-dont-adopt-the-kit-wholesale)).
+Term colors have always been inline styles on this platform and still are;
+the token indirection happens in TypeScript, not in CSS.
+
+**What still stores a hex:** `theme.json`'s palette, and the status colors in
+`theme.ts`. Neither is user data — they are the theme itself.
+
+**Each token carries eight values, not five.** The dark spec (2026-08-25) added
+a full second quad — dark dot, tint, border, text — rather than a lightened
+first one, so nothing about a term's dark appearance is derived either. That
+also forced `ThemedColor` to grow a `dot` alongside `ink`: the solid fill and
+the text had been close enough to share one value in light, and in dark they
+are not.

@@ -1,24 +1,40 @@
 /**
  * Color + theme helpers.
  *
- * Every location, type, store, and status is described by a single base "ink"
- * hex. The helpers below derive a matching background tint and ring from that
- * one value so a new color only ever has to be picked once.
+ * A location, type, or store stores a color *token* (`color-7`); this module
+ * turns it into the ink, tint, and ring it renders as, by way of the active
+ * theme in `./palette`. Status is not a term and does not use the tokens — it
+ * has three fixed roles the design names outright.
  *
  * These are all *inline style* values, not Tailwind classes, and that is load
  * bearing on this platform: Zero compiles utility classes by scanning source
  * for static strings, so a computed `bg-${hex}` would emit no CSS at all. A
- * user-picked hex can never be a class name here.
+ * term's color can never be a class name here.
  */
 
 import type { StatusKey } from '../../shared/status';
 import { STATUS_LABEL, statusKeyFor } from '../../shared/status';
 import type { Term } from '../../shared/types';
+import { TERM_COLORS, termColorFor } from './palette';
+
+export { DEFAULT_PALETTE, TERM_COLORS, termColorFor, drawerDot, proposeColor } from './palette';
+export type { TermColor } from './palette';
 
 export type ThemedColor = {
+	/** Text on `bg`. */
 	ink: string;
+	/** The tint a chip or badge sits on. */
 	bg: string;
+	/** The tint's border. */
 	ring: string;
+	/**
+	 * The solid fill — an active chip, a swatch, a status dot.
+	 *
+	 * Separate from `ink` because the two diverge: a fill has to read against
+	 * the page, and the text has to read against `bg`. In the light theme they
+	 * were close enough to share one value; in dark they are not.
+	 */
+	dot: string;
 };
 
 export type Status = ThemedColor & {
@@ -28,16 +44,35 @@ export type Status = ThemedColor & {
 
 export type ChipVariant = 'fill' | 'ring';
 
-export const DEFAULT_PALETTE = [
-	'#8C4A2F', '#3C6B3C', '#96631A', '#2C5A6E', '#6B5B7A',
-	'#7A5230', '#8C2F6B', '#2F6B8C', '#5B6B3F', '#8C2F2F',
-];
-
-export const STATUS_INK: Record<StatusKey, string> = {
-	out: '#8C2F2F',
-	low: '#96631A',
-	ok: '#3C6B3C',
+/*
+ * Status is not a term, so it does not go through the color tokens — these are
+ * fixed roles the design names directly. Each carries its own tint and text
+ * rather than deriving them, for the same contrast reason as the term table.
+ */
+const STATUS_COLOR: Record<StatusKey, { light: ThemedColor; dark: ThemedColor }> = {
+	out: {
+		light: { ink: '#9A2E3B', bg: '#F6E2DD', ring: '#EBCFC5', dot: '#BE3346' },
+		dark: { ink: '#E5878D', bg: '#31201E', ring: '#4E2E2C', dot: '#D4636B' },
+	},
+	low: {
+		light: { ink: '#855A0F', bg: '#F7EEDA', ring: '#E9DAB9', dot: '#C4901F' },
+		dark: { ink: '#E2B85E', bg: '#2E2614', ring: '#4B3E1E', dot: '#D8A63F' },
+	},
+	ok: {
+		light: { ink: '#47592F', bg: '#EDEFE1', ring: '#DCE0CB', dot: '#5F7546' },
+		dark: { ink: '#A9C486', bg: '#232A1B', ring: '#39482C', dot: '#8FAE6D' },
+	},
 };
+
+/** A status's colors, without needing a quantity to derive the status from. */
+export function statusColor(key: StatusKey, dark: boolean): ThemedColor {
+	return STATUS_COLOR[key][dark ? 'dark' : 'light'];
+}
+
+/** The solid dot beside a status, brighter than its text. Theme-aware. */
+export function statusInk(key: StatusKey, dark: boolean): string {
+	return STATUS_COLOR[key][dark ? 'dark' : 'light'].dot;
+}
 
 function hexToRgb(hex: string): [number, number, number] {
 	const n = parseInt(hex.replace('#', ''), 16);
@@ -55,10 +90,30 @@ function withAlpha(hex: string, a: number): string {
 	return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-export function themed(inkHex: string, dark: boolean): ThemedColor {
+/**
+ * Resolves a stored `terms.ink` to the colors it renders as.
+ *
+ * The token path is a lookup, because the theme's tints are hand-corrected for
+ * contrast and deriving them would lose that. The derivation below is the
+ * legacy path only: rows written before the tokens existed hold a raw hex, and
+ * they still have to render. Nothing new writes one.
+ *
+ * Dark still derives the tint and ring. The theme specifies an `onDark` ink for
+ * every token — that part is real — but no dark tint pairs, so those stay
+ * generated until the dark palette is designed.
+ */
+export function themed(ink: string, dark: boolean): ThemedColor {
+	const c = termColorFor(ink);
+
+	if (c) {
+		return dark
+			? { ink: c.darkTintText, bg: c.darkTintBg, ring: c.darkTintBorder, dot: c.darkDot }
+			: { ink: c.tintText, bg: c.tintBg, ring: c.tintBorder, dot: c.base };
+	}
+
 	return dark
-		? { ink: lighten(inkHex, 0.55), bg: withAlpha(inkHex, 0.22), ring: withAlpha(inkHex, 0.45) }
-		: { ink: inkHex, bg: lighten(inkHex, 0.88), ring: lighten(inkHex, 0.72) };
+		? { ink: lighten(ink, 0.55), bg: withAlpha(ink, 0.22), ring: withAlpha(ink, 0.45), dot: lighten(ink, 0.55) }
+		: { ink, bg: lighten(ink, 0.88), ring: lighten(ink, 0.72), dot: ink };
 }
 
 export function hashStr(s: string): number {
@@ -67,8 +122,9 @@ export function hashStr(s: string): number {
 	return h;
 }
 
+/** The token an unresolvable term falls back to. Deterministic, so it is stable. */
 export function fallbackInk(name: string): string {
-	return DEFAULT_PALETTE[hashStr(name) % DEFAULT_PALETTE.length];
+	return TERM_COLORS[hashStr(name) % TERM_COLORS.length].id;
 }
 
 /**
@@ -95,7 +151,8 @@ export function termNameFor(id: string, list: Term[]): string {
 /** Derives the status *and* its colors. The derivation itself lives in shared/. */
 export function statusFor(qty: unknown, threshold: unknown, dark: boolean): Status {
 	const key = statusKeyFor(qty, threshold);
-	return { key, label: STATUS_LABEL[key], ...themed(STATUS_INK[key], dark) };
+
+	return { key, label: STATUS_LABEL[key], ...STATUS_COLOR[key][dark ? 'dark' : 'light'] };
 }
 
 /**
@@ -112,7 +169,7 @@ export function chipStyle(tc: ThemedColor, active: boolean, theme: Theme, varian
 		};
 	}
 	return {
-		background: active ? tc.ink : tc.bg,
+		background: active ? tc.dot : tc.bg,
 		color: active ? theme.onInk : tc.ink,
 		border: '1px solid transparent',
 	};
@@ -127,28 +184,127 @@ export type Theme = {
 	inkBg: string; inkText: string;
 	dangerText: string;
 	onInk: string;
+	/** The card lift. Barely visible in light and needs real alpha in dark. */
+	cardShadow: string;
+	/**
+	 * The ground as a flat color.
+	 *
+	 * `pageBg` is a gradient, which a ring offset or a border cannot use. This
+	 * is the same ground reduced to one value for those callers.
+	 */
+	ground: string;
+	/**
+	 * The drawer is the darkest surface in *both* themes — in dark it drops
+	 * below the content ground rather than inverting — so it carries its own
+	 * ramp rather than reusing the page's. The four ink values are
+	 * theme-independent for the same reason: the surface under them barely
+	 * moves.
+	 */
+	drawer: {
+		bg: string;
+		raised: string;
+		well: string;
+		line: string;
+		dashed: string;
+		ink: string;
+		inkMuted: string;
+		inkFaint: string;
+		label: string;
+	};
+};
+
+const DRAWER_INK = {
+	ink: '#F2E9DA',
+	inkMuted: '#D8CBB6',
+	inkFaint: '#9E8C74',
+	label: '#8A7860',
 };
 
 export function getTheme(dark: boolean): Theme {
+	/*
+	 * Three rules hold across both themes, from the spec:
+	 *
+	 * 1. The drawer is the darkest surface. In dark it drops *below* the
+	 *    content ground rather than inverting.
+	 * 2. Cards sit one step above the ground.
+	 * 3. Near-black ink is the only thing you press — and in dark that flips to
+	 *    cream with ink text, still the single lightest control on screen.
+	 *    Crimson is brand-and-out, never a button.
+	 *
+	 * Type, spacing, radii and layout are identical in both. Only these change,
+	 * which is why the dark artboards were generated from the light ones by a
+	 * hex-for-hex map: any visual difference is a token difference.
+	 */
 	return dark
 		? {
-			pageBg: '#1B1D16', surface: '#242620', surfaceAlt: '#1F211B',
-			border: '#33352A', borderStrong: '#454736',
-			text: '#EDE9DB', textStrong: '#F5F2E8', textMuted: '#9C9680', textFaint: '#726C5A',
-			neutralChipBg: '#2F3126', neutralChipText: '#C9C3AE',
-			primaryBg: '#5C7A4A', primaryText: '#F5F2E8',
-			inkBg: '#EDE9DB', inkText: '#1B1D16',
-			dangerText: '#D69999',
-			onInk: '#1B1D16',
+			pageBg: 'radial-gradient(135% 105% at 10% -12%, #241E16 0%, #1F1912 45%, #191410 100%)',
+			surface: '#2C251B', surfaceAlt: '#221C14',
+			border: '#3E3527', borderStrong: '#544737',
+			text: '#DCD0BA', textStrong: '#F2E9DA', textMuted: '#A5937A', textFaint: '#7E6E58',
+			neutralChipBg: '#221C14', neutralChipText: '#DCD0BA',
+			primaryBg: '#EFE3CE', primaryText: '#241E17',
+			inkBg: '#EFE3CE', inkText: '#241E17',
+			dangerText: '#E5878D',
+			onInk: '#241E17',
+			cardShadow: '0 2px 3px rgba(0, 0, 0, 0.28)',
+			ground: '#1F1912',
+			drawer: {
+				bg: 'linear-gradient(180deg, #15110B 0%, #0F0C07 100%)',
+				raised: '#231D15', well: '#0A0805', line: '#2C2419', dashed: '#3A3025',
+				...DRAWER_INK,
+			},
 		}
 		: {
-			pageBg: '#F5F2EA', surface: '#FFFFFF', surfaceAlt: '#FAF8F2',
-			border: '#DED6C3', borderStrong: '#CFC6AC',
-			text: '#20241E', textStrong: '#1E2A1E', textMuted: '#8A8265', textFaint: '#A9A38A',
-			neutralChipBg: '#F5F2EA', neutralChipText: '#20241E',
-			primaryBg: '#3C4A32', primaryText: '#F5F2EA',
-			inkBg: '#20241E', inkText: '#F5F2EA',
-			dangerText: '#B08787',
-			onInk: '#FFFFFF',
+			pageBg: 'radial-gradient(135% 105% at 10% -12%, #F9F3E9 0%, #F3EADC 45%, #EADFCD 100%)',
+			surface: '#FDFAF4', surfaceAlt: '#F2EADC',
+			border: '#E2D5C0', borderStrong: '#CFBEA3',
+			text: '#4C4237', textStrong: '#241E17', textMuted: '#6F6049', textFaint: '#9B8B75',
+			neutralChipBg: '#F2EADC', neutralChipText: '#4C4237',
+			primaryBg: '#241E17', primaryText: '#F2E9DA',
+			inkBg: '#241E17', inkText: '#F2E9DA',
+			dangerText: '#9A2E3B',
+			onInk: '#FDFAF4',
+			cardShadow: '0 2px 3px rgba(36, 30, 23, 0.03)',
+			ground: '#EADFCD',
+			drawer: {
+				bg: 'linear-gradient(180deg, #2B2419 0%, #1F1A13 100%)',
+				raised: '#332B22', well: '#191510', line: '#3B3126', dashed: '#4A4031',
+				...DRAWER_INK,
+			},
 		};
+}
+
+/**
+ * The page theme remapped onto the drawer's ramp.
+ *
+ * The drawer is dark in both themes, so anything rendered inside it needs a
+ * different set of surfaces than the page — but every panel already takes a
+ * `Theme` and paints from its fields. Handing them this instead of a second
+ * set of props keeps `MembersPanel` and `InvitesPanel` unaware that they are on
+ * a dark slab at all.
+ */
+export function drawerTheme(theme: Theme): Theme {
+	const d = theme.drawer;
+
+	return {
+		...theme,
+		pageBg: d.bg,
+		surface: d.raised,
+		surfaceAlt: d.well,
+		border: d.line,
+		borderStrong: '#4A3E2E',
+		text: d.inkMuted,
+		textStrong: d.ink,
+		textMuted: d.inkFaint,
+		textFaint: d.label,
+		neutralChipBg: d.raised,
+		neutralChipText: d.inkMuted,
+		primaryBg: d.ink,
+		primaryText: '#241E17',
+		inkBg: d.ink,
+		inkText: '#241E17',
+		dangerText: '#D4636B',
+		onInk: '#241E17',
+		cardShadow: 'none',
+	};
 }

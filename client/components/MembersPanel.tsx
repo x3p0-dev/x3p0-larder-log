@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { LogOut, UserMinus } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
+import { DRAWER_BUTTON, DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON_DANGER } from '../lib/controlStyles';
 import type { Member } from '../../shared/types';
 import type { Role } from '../../shared/roles';
 import { can } from '../../shared/roles';
@@ -19,18 +20,16 @@ import { wouldStrandHousehold } from '../../shared/membership';
 /**
  * Roles this UI will assign.
  *
- * `viewer` is deliberately absent: the enforcement shipped in Phase 3 but the
- * read-only client — disabled steppers, no add button, no taxonomy editing —
- * is Phase 4 work, so a viewer today would get a pantry full of controls that
- * fail on use. A member who is already a viewer still renders as one; see
- * `roleOptions` below.
+ * `viewer` used to be absent because the read-only client did not exist yet —
+ * assigning it would have handed someone a pantry full of controls that fail on
+ * use. Phase 4 shipped that pass (D30), so all three are offerable now.
  */
-const ASSIGNABLE: readonly Role[] = ['owner', 'editor'];
+const ASSIGNABLE: readonly Role[] = ['owner', 'editor', 'viewer'];
 
 const ROLE_LABELS: Record<Role, string> = {
 	owner: 'Owner',
 	editor: 'Editor',
-	viewer: 'View only',
+	viewer: 'Viewer',
 };
 
 /** What the role control offers for one member: the assignable set, plus their own role if it is outside it. */
@@ -62,112 +61,106 @@ export function MembersPanel({ members, me, onChangeRole, onRemoveMember, onLeav
 	const leaveWouldStrand = wouldStrandHousehold(members, me.membershipId);
 
 	return (
-		<div class="mb-6">
-			<p class="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: theme.textMuted }}>
-				Members
-			</p>
+		<div class="flex flex-col gap-2.5">
+			{members.map((member) => {
+				const isMe = member.id === me.membershipId;
+				const strands = wouldStrandHousehold(members, member.id);
+				const editable = mayManageRoles && ! isMe;
 
-			<div class="flex flex-col gap-3">
-				{members.map((member) => {
-					const isMe = member.id === me.membershipId;
-					const strands = wouldStrandHousehold(members, member.id);
+				return (
+					<div key={member.id} class="flex flex-col gap-2">
+						<div class="flex items-center gap-[11px] px-3 py-[9px] rounded-xl" style={{ background: theme.surface }}>
+							<span
+								class="flex items-center justify-center w-8 h-8 rounded-full shrink-0 font-disp text-sm font-bold"
+								style={{ background: '#4A3E2E', boxShadow: 'inset 0 0 0 1px #63533E', color: '#E8DCC6' }}
+							>
+								{(member.displayName || '?').charAt(0).toUpperCase()}
+							</span>
 
-					return (
-						<div key={member.id}>
-							<div class="flex items-baseline justify-between gap-2">
-								<p class="text-sm truncate" style={{ color: theme.text }}>
+							<span class="flex-1 min-w-0 flex items-baseline gap-[7px]">
+								<span class="text-[14.5px] truncate" style={{ color: theme.textStrong }}>
 									{member.displayName || 'Someone'}
-									{isMe && (
-										<span class="font-mono text-xs ml-1.5" style={{ color: theme.textFaint }}>you</span>
-									)}
-								</p>
+								</span>
+								{isMe && <span class="text-xs shrink-0" style={{ color: theme.textMuted }}>you</span>}
+							</span>
 
-								{mayRemove && ! isMe && (
-									<button
-										onClick={() => setConfirmRemove(confirmRemove === member.id ? null : member.id)}
-										disabled={strands}
-										class="shrink-0 disabled:opacity-40"
-										style={{ color: theme.dangerText }}
-										aria-label={`Remove ${member.displayName}`}
-									>
-										<UserMinus size={14} />
-									</button>
-								)}
-							</div>
+							{/* The pill states the role; changing it is the row below. */}
+							<span
+								class="px-2.5 py-[3px] rounded-full text-[11px] font-semibold tracking-[0.04em] shrink-0"
+								style={{ background: '#4A3E2E', color: theme.text }}
+							>
+								{ROLE_LABELS[member.role]}
+							</span>
 
-							{mayManageRoles && ! isMe ? (
-								<div class="flex gap-1.5 mt-1.5">
-									{roleOptions(member.role).map((role) => {
-										const active = member.role === role;
-
-										return (
-											<button
-												key={role}
-												onClick={() => { if (! active) onChangeRole(member.id, role); }}
-												// Demoting the household's only owner is refused server-side.
-												// Nobody but that owner can be in this state, and they can
-												// only leave it by promoting someone else first.
-												disabled={role !== 'owner' && strands}
-												aria-pressed={active}
-												class="px-2.5 py-1 rounded-full text-xs font-medium disabled:opacity-40"
-												style={{
-													background: active ? theme.inkBg : theme.neutralChipBg,
-													color: active ? theme.inkText : theme.neutralChipText,
-												}}
-											>
-												{ROLE_LABELS[role]}
-											</button>
-										);
-									})}
-								</div>
-							) : (
-								<p class="font-mono text-xs mt-0.5" style={{ color: theme.textFaint }}>
-									{ROLE_LABELS[member.role]}
-								</p>
-							)}
-
-							{confirmRemove === member.id && (
-								<div class="flex items-center gap-2 mt-2">
-									<span class="text-xs" style={{ color: theme.textMuted }}>
-										Remove {member.displayName || 'this member'}?
-									</span>
-									<button
-										onClick={() => { onRemoveMember(member.id); setConfirmRemove(null); }}
-										class="text-xs px-2 py-1 rounded-md font-medium"
-										style={{ background: theme.dangerText, color: theme.surface }}
-									>
-										Remove
-									</button>
-									<button
-										onClick={() => setConfirmRemove(null)}
-										class="text-xs px-2 py-1 rounded-md"
-										style={{ color: theme.textFaint }}
-									>
-										Cancel
-									</button>
-								</div>
+							{mayRemove && ! isMe && (
+								<button
+									onClick={() => setConfirmRemove(confirmRemove === member.id ? null : member.id)}
+									disabled={strands}
+									class={`shrink-0 flex items-center justify-center w-7 h-7 ${DRAWER_ICON_DANGER}`}
+									style={{ color: theme.dangerText }}
+									aria-label={`Remove ${member.displayName}`}
+								>
+									<UserMinus size={14} />
+								</button>
 							)}
 						</div>
-					);
-				})}
-			</div>
 
-			<div class="mt-4">
+						{editable && (
+							<div class="flex gap-1.5 pl-1">
+								{roleOptions(member.role).map((role) => {
+									const active = member.role === role;
+
+									return (
+										<button
+											key={role}
+											onClick={() => { if (! active) onChangeRole(member.id, role); }}
+											// Demoting the household's only owner is refused server-side.
+											// Nobody but that owner can be in this state, and they can
+											// only leave it by promoting someone else first.
+											disabled={role !== 'owner' && strands}
+											aria-pressed={active}
+											class={`px-2.5 py-1 rounded-full text-xs disabled:opacity-40 disabled:pointer-events-none ${active ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
+										>
+											{ROLE_LABELS[role]}
+										</button>
+									);
+								})}
+							</div>
+						)}
+
+						{confirmRemove === member.id && (
+							<div class="flex items-center gap-2 pl-1">
+								<span class="text-xs" style={{ color: theme.textMuted }}>
+									Remove {member.displayName || 'this member'}?
+								</span>
+								<button
+									onClick={() => { onRemoveMember(member.id); setConfirmRemove(null); }}
+									class="text-xs px-2 py-1 rounded-md font-medium"
+									style={{ background: theme.dangerText, color: '#241E17' }}
+								>
+									Remove
+								</button>
+								<button onClick={() => setConfirmRemove(null)} class="text-xs px-2 py-1" style={{ color: theme.textMuted }}>
+									Cancel
+								</button>
+							</div>
+						)}
+					</div>
+				);
+			})}
+
+			<div class="mt-1">
 				{confirmLeave ? (
 					<div class="flex items-center gap-2">
 						<span class="text-xs" style={{ color: theme.textMuted }}>Leave this household?</span>
 						<button
 							onClick={() => { onLeave(); setConfirmLeave(false); }}
 							class="text-xs px-2 py-1 rounded-md font-medium"
-							style={{ background: theme.dangerText, color: theme.surface }}
+							style={{ background: theme.dangerText, color: '#241E17' }}
 						>
 							Leave
 						</button>
-						<button
-							onClick={() => setConfirmLeave(false)}
-							class="text-xs px-2 py-1 rounded-md"
-							style={{ color: theme.textFaint }}
-						>
+						<button onClick={() => setConfirmLeave(false)} class="text-xs px-2 py-1" style={{ color: theme.textMuted }}>
 							Cancel
 						</button>
 					</div>
@@ -175,15 +168,14 @@ export function MembersPanel({ members, me, onChangeRole, onRemoveMember, onLeav
 					<button
 						onClick={() => setConfirmLeave(true)}
 						disabled={leaveWouldStrand}
-						class="text-xs px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 disabled:opacity-40"
-						style={{ background: theme.neutralChipBg, color: theme.neutralChipText }}
+						class={`self-start flex items-center gap-2 h-[38px] px-[15px] rounded-[11px] text-[13.5px] font-medium disabled:cursor-not-allowed ${DRAWER_BUTTON}`}
 					>
-						<LogOut size={12} /> Leave household
+						<LogOut size={15} /> Leave household
 					</button>
 				)}
 
 				{leaveWouldStrand && (
-					<p class="text-xs mt-1.5" style={{ color: theme.textFaint }}>
+					<p class="text-[12.5px] leading-[1.45] mt-2" style={{ color: theme.textMuted }}>
 						You&rsquo;re the only owner. Make someone else an owner first.
 					</p>
 				)}

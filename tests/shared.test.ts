@@ -19,10 +19,11 @@ import {
 	normalizeCode, NEVER_EXPIRES, CODE_BYTES,
 } from '../shared/invite';
 import {
-	normalizeName, normalizeNotes, termKey, normalizeInk, DEFAULT_INK,
+	normalizeName, normalizeNotes, termKey, normalizeInk, DEFAULT_INK, isInk,
 	isValidName, MAX_NAME,
 } from '../shared/term';
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
+import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 
 let fail = 0;
@@ -139,9 +140,29 @@ check('truncates', normalizeName('x'.repeat(200)).length, MAX_NAME);
 check('non-string is empty', normalizeName(null), '');
 check('empty name invalid', isValidName('   '), false);
 check('dupe key is case-insensitive', termKey('Deep  FREEZER'), termKey('deep freezer'));
-check('ink normalizes to lowercase', normalizeInk('#AABBCC'), '#aabbcc');
+
+// --- color tokens ---
+//
+// A term stores `color-7`, never a hex, so re-theming does not mean rewriting
+// every row. Two things have to hold: a token survives storage unchanged, and
+// the legacy hexes written before the tokens existed still round-trip, because
+// those rows still have to render.
+check('a token survives normalization', normalizeInk('color-7'), 'color-7');
+check('the first token is valid', normalizeInk('color-1'), 'color-1');
+check('the last token is valid', normalizeInk(`color-${COLOR_SLOT_COUNT}`), `color-${COLOR_SLOT_COUNT}`);
+check('one past the last is not', normalizeInk(`color-${COLOR_SLOT_COUNT + 1}`), DEFAULT_INK);
+check('color-0 is not a token', normalizeInk('color-0'), DEFAULT_INK);
+check('a bare number is not a token', normalizeInk('7'), DEFAULT_INK);
+check('no zero padding', normalizeInk('color-07'), DEFAULT_INK);
+check('the default is itself a token', isColorSlot(DEFAULT_INK), true);
+check('every declared slot validates', COLOR_SLOTS.every(isColorSlot), true);
+check('slot count matches the list', COLOR_SLOTS.length, COLOR_SLOT_COUNT);
+
+// Legacy: rows predating the tokens hold a raw hex and must keep working.
+check('legacy hex normalizes to lowercase', normalizeInk('#AABBCC'), '#aabbcc');
 check('bad ink falls back', normalizeInk('red'), DEFAULT_INK);
 check('shorthand hex rejected', normalizeInk('#abc'), DEFAULT_INK);
+check('legacy hex is still accepted', isInk('#8c2f2f'), true);
 check('notes keep newlines', normalizeNotes('a\nb'), 'a\nb');
 
 // --- the dev-guest bypass (D14's server half) ---

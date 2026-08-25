@@ -1,11 +1,8 @@
-import { Plus, Minus, ChevronDown, Pencil, Check, Store as StoreIcon } from 'lucide-preact';
+import { Plus, Minus, ChevronDown, Pencil, Trash2 } from 'lucide-preact';
 
-import { ItemFields } from './ItemFields';
-import type { Theme } from '../lib/theme';
+import type { Theme, ThemedColor } from '../lib/theme';
 import { entityColorFor, statusFor, termNameFor } from '../lib/theme';
-import { locationIconFor, typeIconFor } from '../lib/icons';
-import type { Item, ItemDraft, Term } from '../../shared/types';
-import type { TaxonomyActions } from '../lib/actions';
+import type { Item, Term } from '../../shared/types';
 
 type Props = {
 	item: Item;
@@ -15,162 +12,160 @@ type Props = {
 	stores: Term[];
 	dark: boolean;
 	theme: Theme;
-	editForm: ItemDraft | null;
-	onEditFormChange: (next: ItemDraft) => void;
-	taxonomy: TaxonomyActions;
 	/** `item:write`. False strips the steppers, edit, and remove — see D30. */
 	canEdit: boolean;
-	/** `taxonomy:write`, for the "+" chip inside the edit form. */
-	canCreateTerms: boolean;
 	onToggleOpen: () => void;
 	onAdjustQty: (delta: number) => void;
 	onRemove: () => void;
 	onStartEdit: () => void;
-	onSaveEdit: () => void;
-	onCancelEdit: () => void;
 };
 
+/**
+ * One taxonomy chip: a dot in the term's own color, then its name.
+ *
+ * The design dropped the icon-circles the card used to carry — a location and
+ * a type were two glyphs you had to hover to identify. A named chip says what
+ * it is, and the dot is what carries the color.
+ */
+function TermChip({ name, color }: { name: string; color: ThemedColor }) {
+	return (
+		<span
+			class="flex items-center gap-1.5 px-2.5 py-[3px] rounded-full text-xs"
+			style={{ background: color.bg, border: `1px solid ${color.ring}`, color: color.ink }}
+		>
+			<span class="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color.dot }} />
+			{name}
+		</span>
+	);
+}
+
 export function ItemCard({
-	item, open, locations, types, stores, dark, theme,
-	editForm, onEditFormChange, taxonomy, canEdit, canCreateTerms,
-	onToggleOpen, onAdjustQty, onRemove, onStartEdit, onSaveEdit, onCancelEdit,
+	item, open, locations, types, stores, dark, theme, canEdit,
+	onToggleOpen, onAdjustQty, onRemove, onStartEdit,
 }: Props) {
-	const c = entityColorFor(item.locationId, locations, dark);
 	const s = statusFor(item.qty, item.threshold, dark);
-	const location = locations.find((l) => l.id === item.locationId);
-	const locationName = termNameFor(item.locationId, locations);
-	const LocationIcon = locationIconFor(location?.icon);
-	const isEditing = canEdit && Boolean(editForm);
+	const atZero = Number(item.qty) <= 0;
+
+	/*
+	 * The card's edge carries the status, so a shelf of cards reads as a
+	 * distribution before you read a single name. "In stock" is the neutral
+	 * line rather than a green one — only a problem is worth an outline.
+	 */
+	const edge = s.key === 'ok' ? theme.border : s.ring;
+
+	/*
+	 * The numeral takes the status text, except when out, where it takes the
+	 * dot — crimson. Low's dot is too pale to read at 42px on cream; out's is
+	 * the brand color and is meant to shout.
+	 */
+	const qtyColor = s.key === 'ok' ? theme.textStrong : s.key === 'out' ? s.dot : s.ink;
 
 	return (
 		<div
-			class="rounded-xl overflow-hidden transition-shadow"
-			style={{
-				background: theme.surface,
-				border: `1px solid ${open ? c.ink : c.ring}`,
-				boxShadow: open ? `0 2px 10px -4px ${c.ring}` : 'none',
-			}}
+			class="flex flex-col p-5 rounded-[20px]"
+			style={{ background: theme.surface, border: `1px solid ${edge}`, boxShadow: theme.cardShadow }}
 		>
-			<button onClick={onToggleOpen} class="w-full text-left px-4 pt-3.5 pb-3 flex items-start gap-3" aria-expanded={open}>
-				<div class="min-w-0 flex-1">
-					<div class="flex items-center gap-2">
-						<p class="font-disp text-base sm:text-lg font-semibold leading-snug break-words flex-1 min-w-0" style={{ color: theme.textStrong }}>
-							{item.name}
-						</p>
-						<span class="font-mono tracking-[0.02em] text-xs px-1.5 py-0.5 rounded-full shrink-0" style={{ background: s.bg, color: s.ink }}>
+			<button onClick={onToggleOpen} class="w-full text-left flex items-start justify-between gap-3" aria-expanded={open}>
+				<span class="font-disp text-item-sm sm:text-item font-semibold leading-[1.15] break-words min-w-0" style={{ color: theme.textStrong }}>
+					{item.name}
+				</span>
+
+				<span class="flex items-center gap-2 shrink-0">
+					{/*
+					  * In stock is a dot; low and out get the word. A badge on every
+					  * card would make the healthy majority as loud as the problems.
+					  */}
+					{s.key === 'ok' ? (
+						<span class="w-2 h-2 rounded-full" style={{ background: s.dot }} aria-label={s.label} />
+					) : (
+						<span
+							class="px-[11px] py-1 rounded-full text-[11.5px] font-bold uppercase tracking-[0.04em]"
+							style={{ background: s.bg, color: s.ink }}
+						>
 							{s.label}
 						</span>
-						<ChevronDown
-							size={16}
-							class="shrink-0 transition-transform"
-							style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none' }}
-						/>
-					</div>
-
-					<div class="flex items-center gap-1.5 flex-wrap mt-1.5">
-						<span title={locationName} class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: c.bg, color: c.ink }}>
-							<LocationIcon size={13} />
-						</span>
-
-						{item.typeIds.map((id) => {
-							const tc = entityColorFor(id, types, dark);
-							const TypeIcon = typeIconFor(types.find((t) => t.id === id)?.icon);
-							return (
-								<span key={id} title={termNameFor(id, types)} class="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: tc.bg, color: tc.ink }}>
-									<TypeIcon size={13} />
-								</span>
-							);
-						})}
-
-						{item.storeIds.map((id) => {
-							const sc = entityColorFor(id, stores, dark);
-							return (
-								<span
-									key={id}
-									class="text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1 border"
-									style={{ borderColor: sc.ring, color: sc.ink, background: 'transparent' }}
-								>
-									<StoreIcon size={9} />{termNameFor(id, stores)}
-								</span>
-							);
-						})}
-					</div>
-				</div>
+					)}
+					<ChevronDown
+						size={17}
+						class="shrink-0 transition-transform"
+						style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none' }}
+					/>
+				</span>
 			</button>
 
-			{/*
-			  * The quantity is information, so it stays for everyone; only the
-			  * two controls go. A viewer sees "4 · low at 2" rather than a pair
-			  * of dead buttons on every card in the pantry (D30).
-			  */}
-			<div class="flex items-center gap-2 px-4 pb-3.5">
-				{canEdit && (
-					<button
-						onClick={() => onAdjustQty(-1)}
-						class="w-8 h-8 rounded-md flex items-center justify-center"
-						style={{ background: theme.neutralChipBg, color: theme.text }}
-						aria-label={`Decrease ${item.name}`}
-					>
-						<Minus size={14} />
-					</button>
-				)}
-				<span class="font-mono tracking-[0.02em] text-base w-7 text-center font-semibold">{item.qty}</span>
-				{canEdit && (
-					<button
-						onClick={() => onAdjustQty(1)}
-						class="w-8 h-8 rounded-md flex items-center justify-center"
-						style={{ background: theme.neutralChipBg, color: theme.text }}
-						aria-label={`Increase ${item.name}`}
-					>
-						<Plus size={14} />
-					</button>
-				)}
-				<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>low at {item.threshold}</span>
+			<div class="flex flex-wrap gap-1.5 pt-2.5">
+				<TermChip name={termNameFor(item.locationId, locations)} color={entityColorFor(item.locationId, locations, dark)} />
+				{item.storeIds.map((id) => (
+					<TermChip key={id} name={termNameFor(id, stores)} color={entityColorFor(id, stores, dark)} />
+				))}
+				{item.typeIds.map((id) => (
+					<TermChip key={id} name={termNameFor(id, types)} color={entityColorFor(id, types, dark)} />
+				))}
 			</div>
 
-			{open && ! isEditing && (
-				<div class="px-4 py-3 text-sm" style={{ background: theme.surfaceAlt, borderTop: `1px solid ${c.ring}`, color: theme.text }}>
-					<p class="font-mono text-xs uppercase tracking-widest mb-1" style={{ color: theme.textFaint }}>Notes</p>
-					<div class="flex items-start justify-between gap-3">
-						<p class="flex-1 min-w-0">{item.notes || <span style={{ color: theme.textFaint }}>No notes yet.</span>}</p>
-						{canEdit && (
-							<div class="flex flex-col items-end gap-2.5 shrink-0">
-								<button onClick={onStartEdit} class="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ color: c.ink, background: c.bg }}>
-									<Pencil size={12} /> Edit
-								</button>
-								<button
-									onClick={onRemove}
-									class="text-xs px-0.5"
-									style={{ color: theme.dangerText, textDecoration: 'underline', textDecorationThickness: '2px', textUnderlineOffset: '3px' }}
-								>
-									Remove
-								</button>
-							</div>
-						)}
+			{/*
+			  * The quantity is information, so it stays for everyone; only the two
+			  * controls go. A viewer sees "4 · low at 2" rather than a pair of dead
+			  * buttons on every card in the pantry (D30).
+			  */}
+			<div class="flex items-center justify-between gap-3.5 pt-3.5">
+				<div class="flex items-baseline gap-2.5 min-w-0">
+					<span class="font-disp text-qty-sm sm:text-qty font-bold leading-[0.9]" style={{ color: qtyColor }}>
+						{item.qty}
+					</span>
+					<span class="text-[12.5px] truncate" style={{ color: theme.textFaint }}>low at {item.threshold}</span>
+				</div>
+
+				{canEdit && (
+					<div class="flex gap-2 shrink-0">
+						<button
+							onClick={() => onAdjustQty(-1)}
+							class="w-[46px] h-[46px] rounded-[14px] flex items-center justify-center"
+							style={{ background: theme.surfaceAlt, color: atZero ? theme.textFaint : theme.text }}
+							aria-label={`Decrease ${item.name}`}
+						>
+							<Minus size={17} strokeWidth={2.4} />
+						</button>
+						<button
+							onClick={() => onAdjustQty(1)}
+							class="w-[46px] h-[46px] rounded-[14px] flex items-center justify-center"
+							style={{ background: theme.inkBg, color: theme.inkText }}
+							aria-label={`Increase ${item.name}`}
+						>
+							<Plus size={17} strokeWidth={2.4} />
+						</button>
 					</div>
+				)}
+			</div>
+
+			{open && (
+				<div class="mt-4 pt-[15px]" style={{ borderTop: `1px solid ${theme.border}` }}>
+					<p class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: theme.textFaint }}>Notes</p>
+					<p class="pt-[5px] text-sm" style={{ color: theme.text }}>
+						{item.notes || <span style={{ color: theme.textFaint }}>No notes yet.</span>}
+					</p>
+
+					{canEdit && (
+						<div class="flex items-center gap-2 pt-3.5">
+							<button
+								onClick={onStartEdit}
+								class="flex items-center gap-[7px] h-9 px-3.5 rounded-[11px] text-[13.5px] font-medium"
+								style={{ background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text }}
+							>
+								<Pencil size={14} /> Edit
+							</button>
+							<button
+								onClick={onRemove}
+								class="flex items-center gap-[7px] h-9 px-3.5 text-[13.5px]"
+								style={{ color: theme.dangerText }}
+							>
+								<Trash2 size={14} /> Remove
+							</button>
+						</div>
+					)}
 				</div>
 			)}
 
-			{open && isEditing && editForm && (
-				<div class="px-4 py-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ background: theme.surfaceAlt, borderTop: `1px solid ${c.ink}` }}>
-					<ItemFields
-						value={editForm} onChange={onEditFormChange}
-						locations={locations} types={types} stores={stores}
-						taxonomy={taxonomy} canCreateTerms={canCreateTerms}
-						dark={dark} theme={theme}
-					/>
-					<div class="sm:col-span-2 flex gap-2 justify-end">
-						<button onClick={onCancelEdit} class="px-3 py-2 rounded text-sm" style={{ color: theme.textMuted }}>Cancel</button>
-						<button
-							onClick={onSaveEdit}
-							class="px-4 py-2 rounded text-sm font-medium flex items-center gap-1.5"
-							style={{ background: theme.inkBg, color: theme.inkText }}
-						>
-							<Check size={14} /> Save changes
-						</button>
-					</div>
-				</div>
-			)}
 		</div>
 	);
 }

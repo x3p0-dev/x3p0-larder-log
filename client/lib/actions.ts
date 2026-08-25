@@ -16,11 +16,3 @@ export type TaxonomyActions = {
 	remove: (kind: TermKind, id: string) => Promise<void>;
 };
 
-/**
- * Adapts `TaxonomyActions.create` to the `(name, color, icon)` shape
- * `ChipPicker` passes, for one kind.
- */
-export function createTermFor(actions: TaxonomyActions, kind: TermKind) {
-	return (name: string, color?: string, icon?: string) =>
-		actions.create(kind, { name, ink: color ?? '', icon });
-}

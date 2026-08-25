@@ -11,6 +11,7 @@
  * inventory that someone has to delete a row at a time.
  */
 
+/** `ink` is a color token from `shared/palette.ts`, not a hex. */
 export type SeedTerm = {
 	name: string;
 	ink: string;
@@ -18,25 +19,25 @@ export type SeedTerm = {
 };
 
 export const SEED_LOCATIONS: SeedTerm[] = [
-	{ name: 'Upright Freezer', icon: 'snowflake', ink: '#2c5a6e' },
-	{ name: 'Chest Freezer', icon: 'snowflake', ink: '#2c5a6e' },
-	{ name: 'Pantry', icon: 'package', ink: '#5b6b3f' },
+	{ name: 'Upright Freezer', icon: 'snowflake', ink: 'color-1' },
+	{ name: 'Chest Freezer', icon: 'snowflake', ink: 'color-12' },
+	{ name: 'Pantry', icon: 'package', ink: 'color-10' },
 ];
 
 export const SEED_TYPES: SeedTerm[] = [
-	{ name: 'Protein', icon: 'beef', ink: '#8c4a2f' },
-	{ name: 'Produce', icon: 'carrot', ink: '#3c6b3c' },
-	{ name: 'Grain', icon: 'wheat', ink: '#96631a' },
-	{ name: 'Dairy', icon: 'milk', ink: '#2c5a6e' },
-	{ name: 'Condiment', icon: 'droplet', ink: '#6b5b7a' },
-	{ name: 'Baking', icon: 'cookie', ink: '#7a5230' },
-	{ name: 'Snack', icon: 'popcorn', ink: '#8c2f6b' },
-	{ name: 'Beverage', icon: 'coffee', ink: '#2f6b8c' },
-	{ name: 'Spice', icon: 'flame', ink: '#8c2f2f' },
+	{ name: 'Protein', icon: 'beef', ink: 'color-6' },
+	{ name: 'Produce', icon: 'carrot', ink: 'color-10' },
+	{ name: 'Grain', icon: 'wheat', ink: 'color-8' },
+	{ name: 'Dairy', icon: 'milk', ink: 'color-1' },
+	{ name: 'Condiment', icon: 'droplet', ink: 'color-4' },
+	{ name: 'Baking', icon: 'cookie', ink: 'color-7' },
+	{ name: 'Snack', icon: 'popcorn', ink: 'color-14' },
+	{ name: 'Beverage', icon: 'coffee', ink: 'color-12' },
+	{ name: 'Spice', icon: 'flame', ink: 'color-5' },
 ];
 
 export const SEED_STORES: SeedTerm[] = [
-	{ name: 'Costco', ink: '#5b6b3f' },
-	{ name: 'Publix', ink: '#2f6b8c' },
-	{ name: 'Calfee Cattle', ink: '#8c2f2f' },
+	{ name: 'Costco', ink: 'color-10' },
+	{ name: 'Publix', ink: 'color-1' },
+	{ name: 'Calfee Cattle', ink: 'color-6' },
 ];

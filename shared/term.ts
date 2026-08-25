@@ -6,6 +6,10 @@
  * to duplicate, and the two drift the first time either is edited.
  */
 
+import { DEFAULT_INK, isColorSlot } from './palette';
+
+export { DEFAULT_INK };
+
 /** Longest a term or item name may be. Long enough for "Chunky peanut butter". */
 export const MAX_NAME = 60;
 
@@ -48,20 +52,30 @@ export function termKey(name: string): string {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
-/** The fallback ink for a term whose color is missing or malformed. */
-export const DEFAULT_INK = '#6b7280';
-
-/** True when `value` is a `#rrggbb` hex color. */
+/**
+ * A term's color is stored as a token (`color-7`), never as a hex — see
+ * `shared/palette.ts` for why.
+ *
+ * Raw hex is still *accepted*, because rows written before the tokens existed
+ * hold one. Those keep rendering through the legacy path in `themed()`; nothing
+ * new should ever produce one.
+ */
 export function isInk(value: unknown): value is string {
-	return typeof value === 'string' && HEX.test(value.trim());
+	return isColorSlot(value) || (typeof value === 'string' && HEX.test(value.trim()));
 }
 
 /**
- * Normalizes a color for storage: lowercase `#rrggbb`, or the default.
+ * Normalizes a color for storage: a color token, a legacy lowercase
+ * `#rrggbb`, or the default token.
  *
  * Shorthand (`#abc`) is deliberately not expanded — the pickers only ever emit
- * full hex, so accepting shorthand would widen the stored format for no caller.
+ * full tokens, so accepting shorthand would widen the stored format for no
+ * caller.
  */
 export function normalizeInk(value: unknown): string {
-	return isInk(value) ? value.trim().toLowerCase() : DEFAULT_INK;
+	if (isColorSlot(value)) return value.trim();
+
+	return typeof value === 'string' && HEX.test(value.trim())
+		? value.trim().toLowerCase()
+		: DEFAULT_INK;
 }

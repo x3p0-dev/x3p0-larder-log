@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — edit item</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Karla:wght@400;500;600;700&display=swap">
+<style>
+
+    body { margin: 0; font-family: 'Karla', 'Helvetica Neue', Arial, sans-serif; }
+    a { color: #BE3346; } a:hover { color: #9A2836; }
+  
+  body { margin: 0; background: #E7DAC5; display: flex; justify-content: center; padding: 26px; }
+  .frame { border: 1px solid #CFBEA3; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 40px rgba(36,30,23,0.16); width: max-content; transform: scale(var(--s, 1)); transform-origin: top center; }
+  @media (max-width: 1420px) { .frame { --s: 0.85; } }
+  @media (max-width: 1200px) { .frame { --s: 0.7; } }
+  @media (max-width: 980px) { .frame { --s: 0.5; } }
+</style>
+</head>
+<body>
+<div class="frame"><div style="width: 1340px; height: 1230px; padding: 36px; background: radial-gradient(120% 85% at 8% -8%, #F9F3E9 0%, #F3EADC 46%, #EADFCD 100%); color: #241E17; font-family: 'Karla', 'Helvetica Neue', Arial, sans-serif; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 20px; border-bottom: 1px solid #CFBEA3;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em;">Edit item</div>
+    <div style="font-size: 13.5px; color: #6F6049;">The add sheet, prefilled — plus the inline composer that creates a location, store or type without leaving it</div>
+  </div>
+
+  <div style="display: flex; gap: 34px; align-items: flex-start; padding-top: 22px;">
+
+    <div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Desktop · 480px from the right</div>
+      <aside style="width: 480px; height: 900px; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; background: radial-gradient(120% 60% at 100% 0%, #FBF6EC 0%, #F5EDDF 100%); border: 1px solid #CFBEA3; box-shadow: 0 18px 44px rgba(36,30,23,0.20);">
+
+  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 24px 0 24px;">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+      <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Edit</span>
+      <span style="font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 27px; line-height: 1.1; color: #241E17;">Ground Beef</span>
+    </div>
+    <button style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin: -2px -4px 0 0; background: none; border: none; border-radius: 12px; color: #7A6A57; cursor: pointer;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 17px; padding: 20px 24px 22px 24px;">
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Item</div>
+        <div style="display: flex; align-items: center; height: 52px; padding: 0 16px; background: #FDFAF4; border: 1px solid #CFBEA3; border-radius: 14px; font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 19px; color: #241E17;">Ground Beef</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">On hand</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display: flex; align-items: center; justify-content: center; width: 42px; height: 46px; border-radius: 13px; background: #F2EADC; color: #4C4237;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></span>
+            <span style="flex: 1; display: flex; align-items: center; justify-content: center; height: 46px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 13px; font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 21px;">75</span>
+            <span style="display: flex; align-items: center; justify-content: center; width: 42px; height: 46px; border-radius: 13px; background: #241E17; color: #F2E9DA;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 9px;">
+          <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Low at</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 16px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 13px;">
+            <span style="font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 21px;">15</span>
+            <span style="font-size: 12px; color: #9B8B75;">default 2</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Location</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px;"><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span>Pantry</span><span style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #241E17; color: #F2E9DA; font-size: 13.5px; font-weight: 600;">Meat Freezer</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span>Upright Freezer</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span>Chest Freezer</span><span style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: none; border: 1px dashed #CFBEA3; font-size: 13.5px; color: #7A6A57;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Location</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Type</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px;"><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span>Produce</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span>Dairy</span><span style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #241E17; color: #F2E9DA; font-size: 13.5px; font-weight: 600;">Protein</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A5791D;"></span>Grain</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A85E33;"></span>Baking</span><span style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: none; border: 1px dashed #CFBEA3; font-size: 13.5px; color: #7A6A57;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Type</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Store</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px;"><span style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #241E17; color: #F2E9DA; font-size: 13.5px; font-weight: 600;">Calfee Cattle</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span>Costco</span><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span>Publix</span><span style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: none; border: 1px dashed #CFBEA3; font-size: 13.5px; color: #7A6A57;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Store</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Notes <span style="font-weight: 400; letter-spacing: 0; text-transform: none; color: #B0A088;">optional</span></div>
+        <div style="height: 70px; padding: 12px 16px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 14px; font-size: 14.5px; color: #4C4237;">1 lb. packages, vacuum sealed.</div>
+      </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 14px 16px; border-top: 1px solid #E2D5C0; background: #F7F0E4;">
+    <button style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; background: none; border: none; border-radius: 12px; font-family: inherit; font-size: 14px; color: #9A2E3B; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+      Remove item
+    </button>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button style="height: 46px; padding: 0 18px; background: none; border: none; font-family: inherit; font-size: 15px; color: #6F6049; cursor: pointer;">Cancel</button>
+      <button style="display: flex; align-items: center; gap: 9px; height: 46px; padding: 0 20px; background: #241E17; color: #F2E9DA; border: none; border-radius: 14px; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>
+        Save changes
+      </button>
+    </div>
+  </div>
+</aside>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Adding a term without leaving the sheet</div>
+      <div style="display: flex; gap: 14px;">
+        <span style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 2px; border-radius: 999px; background: #241E17; font-size: 12px; font-weight: 700; color: #F2E9DA;">1</span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 13.5px; font-weight: 600; color: #241E17;">The dashed chip sits at the end of its group</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px;"><div style="display: flex; flex-wrap: wrap; gap: 7px;"><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span>Chest Freezer</span><span style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: none; border: 1px dashed #CFBEA3; font-size: 13.5px; color: #7A6A57;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Location</span></div></div>
+          <span style="font-size: 12px; line-height: 1.5; color: #6F6049;">Same chip in the add sheet, the edit sheet and the filter pane. Only editors and owners see it.</span>
+        </div>
+      </div>      <div style="display: flex; gap: 14px;">
+        <span style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 2px; border-radius: 999px; background: #241E17; font-size: 12px; font-weight: 700; color: #F2E9DA;">2</span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 13.5px; font-weight: 600; color: #241E17;">Pressing it opens the same panel the Filter tab uses</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px;"><div style="display: flex; flex-direction: column; align-items: flex-start; gap: 9px;"><div style="display: flex; flex-wrap: wrap; gap: 7px;"><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span>Chest Freezer</span><span style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: none; border: 1px dashed #CFBEA3; font-size: 13.5px; color: #7A6A57;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Location</span></div><div style="width: 400px; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px 12px; border-radius: 14px; background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #8C7B62;">location &middot; new</span>
+          <button style="display: flex; align-items: center; height: 28px; padding: 0 12px; background: #EBE1D0; border: none; border-radius: 999px; font-family: inherit; font-size: 12.5px; font-weight: 600; color: #B0A088; cursor: pointer;">Add</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <button style="flex-shrink: 0; width: 26px; height: 26px; border-radius: 999px; background: #2F6E7C; border: none; box-shadow: inset 0 0 0 1.5px #F3EBDD, 0 0 0 1.5px #2F6E7C; cursor: pointer;"></button>
+          <span style="flex: 1; min-width: 0; display: flex; align-items: center; height: 40px; padding: 0 12px; background: #FDFAF4; border: 1px solid #9B8B75; border-radius: 11px; box-shadow: 0 0 0 3px rgba(190,51,70,0.14);"><span style="font-size: 14px; color: #B0A088;">Name it…</span></span>
+          <button style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: none; border: none; border-radius: 9px; color: #9B8B75; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        
+      </div></div></div>
+          <span style="font-size: 12px; line-height: 1.5; color: #6F6049;">It drops in below the group rather than replacing the chip — a recessed panel on a hairline, a 26px swatch, a 40px field and a dismiss, laid out exactly like a row in the Filter tab’s editing panel. The swatch arrives pre-filled with the next unused colour, so naming it and pressing Enter is the whole job.</span>
+        </div>
+      </div>      <div style="display: flex; gap: 14px;">
+        <span style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 2px; border-radius: 999px; background: #241E17; font-size: 12px; font-weight: 700; color: #F2E9DA;">3</span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 13.5px; font-weight: 600; color: #241E17;">The swatch opens the sixteen inline</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px;"><div style="width: 400px; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px 12px; border-radius: 14px; background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #8C7B62;">location &middot; new</span>
+          <button style="display: flex; align-items: center; height: 28px; padding: 0 12px; background: #241E17; border: none; border-radius: 999px; font-family: inherit; font-size: 12.5px; font-weight: 600; color: #F2E9DA; cursor: pointer;">Add</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <button style="flex-shrink: 0; width: 26px; height: 26px; border-radius: 999px; background: #2F6E7C; border: none; box-shadow: inset 0 0 0 1.5px #F3EBDD, 0 0 0 2.5px #241E17; cursor: pointer;"></button>
+          <span style="flex: 1; min-width: 0; display: flex; align-items: center; height: 40px; padding: 0 12px; background: #FDFAF4; border: 1px solid #9B8B75; border-radius: 11px; box-shadow: 0 0 0 3px rgba(190,51,70,0.14);"><span style="font-size: 14px; color: #241E17;">Deep Pantry</span><span style="width: 1.5px; height: 18px; margin-left: 1px; background: #BE3346;"></span></span>
+          <button style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: none; border: none; border-radius: 9px; color: #9B8B75; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; padding: 11px 12px; border-radius: 12px; background: #EBE1D0; border: 1px solid #DFD2BC;"><span title="Slate" style="aspect-ratio: 1; border-radius: 999px; background: #456B80;"></span><span title="Denim" style="aspect-ratio: 1; border-radius: 999px; background: #42618F;"></span><span title="Indigo" style="aspect-ratio: 1; border-radius: 999px; background: #5A548C;"></span><span title="Plum" style="aspect-ratio: 1; border-radius: 999px; background: #6D4A69;"></span><span title="Mulberry" style="aspect-ratio: 1; border-radius: 999px; background: #8E4468;"></span><span title="Brick" style="aspect-ratio: 1; border-radius: 999px; background: #A03B36;"></span><span title="Terracotta" style="aspect-ratio: 1; border-radius: 999px; background: #A85E33;"></span><span title="Ochre" style="aspect-ratio: 1; border-radius: 999px; background: #A5791D;"></span><span title="Mustard" style="aspect-ratio: 1; border-radius: 999px; background: #8C7C22;"></span><span title="Olive" style="aspect-ratio: 1; border-radius: 999px; background: #5F7542;"></span><span title="Fern" style="aspect-ratio: 1; border-radius: 999px; background: #3F7A4C;"></span><span title="Teal" style="aspect-ratio: 1; border-radius: 999px; background: #3E6D68;"></span><span title="Aqua" style="aspect-ratio: 1; border-radius: 999px; background: #2F6E7C; box-shadow: 0 0 0 2px #EBE1D0, 0 0 0 3.5px #241E17;"></span><span title="Clay" style="aspect-ratio: 1; border-radius: 999px; background: #87694C;"></span><span title="Cocoa" style="aspect-ratio: 1; border-radius: 999px; background: #5E4A3C;"></span><span title="Stone" style="aspect-ratio: 1; border-radius: 999px; background: #6E6A5F;"></span></div>
+      </div></div>
+          <span style="font-size: 12px; line-height: 1.5; color: #6F6049;">The panel grows; nothing floats over the sheet. Same 8 × 2 grid, same ring on the current colour as the Filter tab. Optional — Enter commits without ever opening it, Escape closes the panel.</span>
+        </div>
+      </div>      <div style="display: flex; gap: 14px;">
+        <span style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 2px; border-radius: 999px; background: #241E17; font-size: 12px; font-weight: 700; color: #F2E9DA;">4</span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 13.5px; font-weight: 600; color: #241E17;">It lands created and already selected</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px;"><div style="display: flex; flex-wrap: wrap; gap: 7px;"><span style="display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; font-size: 13.5px; color: #4C4237;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span>Chest Freezer</span><span style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #241E17; color: #F2E9DA; font-size: 13.5px; font-weight: 600;">Deep Pantry</span><span style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: none; border: 1px dashed #CFBEA3; font-size: 13.5px; color: #7A6A57;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Location</span></div></div>
+          <span style="font-size: 12px; line-height: 1.5; color: #6F6049;">Created from a sheet it is selected on the spot — that is why you made it. Created from the filter pane it is left unselected, since filtering by a brand-new empty term would blank the list.</span>
+        </div>
+      </div>
+
+      <p style="margin: 0 0 0 38px; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">Same panel, less of it.</strong> The sheet's copy only creates — one row, an <em>Add</em> pill where the Filter tab has <em>Done</em>. Renaming, recolouring and deleting a term stay in the Filter tab, which is the one place terms are managed.</p>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 6px; margin-top: 4px; border-top: 1px solid #E2D5C0;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">What differs from the add sheet</div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px;">
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">The item names itself.</strong> The header carries the item rather than “Add an item” — the only place its name is set in Playfair at that size, so there is never a doubt about which row you opened.</p>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">Remove lives in the footer, far left.</strong> Always reachable without scrolling, and the width of the footer away from Save. Crimson text, never a crimson fill.</p>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">Removal is undoable, not confirmed.</strong> The sheet closes, the item goes, and a toast holds it for a few seconds. A modal asking “are you sure” on every edit is the worse trade in a shared list.</p>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #4C4237;"><strong style="font-weight: 600;">A selected chip inverts, it does not take the term's colour.</strong> Same signal as the filter pane and the quick-filter flyouts; the colour identifies the term, inversion says it is on.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div></div>
+</body>
+</html>

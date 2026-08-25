@@ -1841,3 +1841,137 @@ own origin is the one you cannot test.
    `theme.json`'s `fontFace` is ignored; declare `@font-face` yourself and
    serve the files from a URL" — turns an hour into fifteen minutes. Ideally
    with the caveat that a self-hosted path won't resolve under `sf dev`.
+
+## 2026-08-25 — Checked for movement: none on our blocker, but a rebrand is in preview
+
+Re-checked everything this project depends on. Nothing that blocks us has moved.
+
+### The docs have not changed
+
+`https://spacefast.com/docs/zero.md` is **byte-identical** (19126 bytes) to the
+copy fetched at 11:37 today. Since the site still exposes no `Last-Modified`
+and no sitemap `lastmod`, diffing a kept copy remains the only way to answer
+"did this change" — the point made at the end of the docs-review entry above.
+
+### The publish blocker is unchanged
+
+- **npm is still on `0.0.26`.** Published versions end `0.0.23, 0.0.24, 0.0.26`.
+  `0.0.27` — the only CLI that can send `x-spacefast-rationale` — remains
+  binary-channel only. Publishing is still blocked for exactly the reason
+  logged yesterday.
+- **`rationale` still appears in no documentation.** Zero hits across `/ai`,
+  `/docs/cli.md`, `/docs/publish.md`, and `/docs/errors.md`. A requirement that
+  hard-fails every agent-attributed publish is now two days old and documented
+  nowhere.
+
+### A rebrand is in preview: "Stattic"
+
+Found at `https://space-xzbpj0kbj.view.fast/` — a Spacefast-hosted space
+carrying a proposed replacement marketing site. Canonical `https://stattic.net/`,
+which currently 301s to `https://spacefast.com/?ref=stattic.net`. Branded "By
+Automattic", and it carries an internal notice: *"Automatticians: Stattic is
+experimental… do not promise availability or move customer workloads here
+without talking to the Stattic team."*
+
+Recording it because the positioning is a straight repositioning to static
+publishing — "The publishing layer for AI-made stuff", permanent URLs,
+immutable versions, claim — and **the Zero runtime does not appear in it at
+all**. The site's full route table has `/docs`, `/docs/errors`, and
+`/docs/platform-api`; there is no `/docs/zero`. Searching the compiled bundle
+finds no `capsule`, no `sf publish`, no `sf dev`, no `view.fast` — the only
+"Zero" hit is the marketing phrase "Zero tools".
+
+**This is not evidence that Zero is going away**, and it should not be read as
+such. The live `/ai` document still states plainly: *"Spaces serve static files;
+app code runs only through a declared Zero or Functions runtime."* Zero remains
+a declared, supported runtime. A marketing site omitting a developer runtime is
+a marketing decision.
+
+Two smaller notes:
+
+- **"Functions" is a runtime we have never seen mentioned** — it appears in
+  `/ai` and nowhere in this project's notes or in `zero.md`. Unknown whether it
+  is shipped, planned, or the successor to something.
+- If the rebrand lands, the hostnames change: `stattic.net`,
+  `api.stattic.net`, and `*.stattic.site` replace `spacefast.com` and
+  `*.view.fast`. `larderlog.view.fast` is a published, claimed URL whose entire
+  pitch is that it never moves.
+
+### Speculation, flagged as such
+
+Our publish has failed twice at `finalize` with **`runtime_api_not_found`** —
+the stage that activates a *runtime* version. That error, unresolved across two
+days, alongside a rebrand whose story is static-only, is at least worth holding
+as a hypothesis: the runtime API may be mid-migration rather than briefly
+broken. No evidence either way, and the docs assert Zero is supported. But it
+would explain a two-day failure better than a transient fault, and it is a
+question worth asking the team directly rather than waiting out.
+
+### 😕 `sf dev` hardcodes the page title and ignores `sf.jsonc#meta.title`
+
+Small, but it is the tab you look at all day. The **built** shell honours the
+config — `.spacefast/zero/public/index.html` carries `<title>Larder Log</title>`
+after adding `meta.title` to `sf.jsonc`. The shell `sf dev` serves does not:
+
+```
+$ grep -o '<title>[^<]*</title>' .spacefast/zero/public/index.html
+<title>Larder Log</title>
+
+$ curl -s -b "spacefast_zero_dev_4173=$CAP" http://127.0.0.1:4173/ | grep -o '<title>[^<]*</title>'
+<title>Spacefast Zero dev</title>
+```
+
+The two shells differ in more than the title — 1829 bytes served against 1889
+built — so `sf dev` is generating its own rather than serving the compiled one.
+That is defensible for a dev harness, but it means the one identity setting the
+platform *does* expose is invisible in development and only correct after a
+publish. Same shape as the static-asset gap logged above: local and production
+disagree, and local is the misleading one.
+
+**Suggestion:** read `meta.title` in the dev shell too. It is one string, and it
+is the difference between a tab that says what you are building and one that
+says what tool you are building it with.
+
+### 😕 …and there is still no way to declare an icon
+
+`zeroHostedAppShell()` takes a title and nothing else. No favicon, no
+`apple-touch-icon`, no `theme-color`, no manifest link — and no head hook to add
+them. Declaring an app icon is table stakes for something whose pitch is
+"publish a page and keep it", and it is the second thing after webfonts (D31)
+that has to be injected into `document.head` from client code to exist at all.
+
+**Suggestion:** let `sf.jsonc#meta` carry `icon`, `themeColor`, and `manifest`,
+and emit the corresponding tags. The config block already exists; it just stops
+at `title`.
+
+## 2026-08-25 (evening) — Re-checked the publish blockers: nothing has moved
+
+All four checks from this morning, run again at the end of the day.
+
+| Check | This morning | Now |
+|---|---|---|
+| npm `spacefast` latest | 0.0.26 | **0.0.26** |
+| `rationale` in the docs | 0 hits | **0 hits** (`/ai`, `cli.md`, `publish.md`, `errors.md`, `zero.md`) |
+| `docs/zero.md` | 19126 bytes | **19126, byte-identical** |
+| `larderlog.view.fast` | live, v2 | **live, v2** — `/api/status` returns `ok` |
+
+The published bundle still carries the pre-Cellar palette (7 hits for the old
+hexes), which is the cleanest confirmation that nothing has shipped since
+2026-08-24.
+
+`sf publish --help` still exposes no rationale flag and no environment variable
+that could carry one — the full env surface is `SPACEFAST_{API_URL,
+CLAIM_TOKEN, GIT_*, PROFILE, PUBLISH_MESSAGE, SOURCE_TYPE, SPACE, TEAM, TOKEN,
+YES}`. `PUBLISH_MESSAGE` is the closest thing by name and is not the same
+header.
+
+**So the position is unchanged:** the only ways out remain npm shipping 0.0.27,
+or the platform dropping the `x-spacefast-rationale` requirement, or fixing
+`finalize`'s `runtime_api_not_found`. Two days now, and none of it is written
+down anywhere a developer would look.
+
+Worth noting what has accumulated behind this: the entire Cellar reskin — new
+palette, dark mode, typography, drawer, collapsed rail, item sheet, sort menu,
+icons — is built and unpublishable. The gap between what runs locally and what
+is live grows every day the blocker stands, and none of it can be verified by a
+second person until a publish succeeds.

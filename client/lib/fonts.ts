@@ -22,20 +22,27 @@
  */
 
 /*
- * Weight axes, not just the defaults: Fraunces and Inter are variable, so one
- * request covers `font-semibold` too. IBM Plex Mono has no variable build, so
- * 400 and 600 are named explicitly — the two weights the mono utilities pair
- * with. `display=swap` because the fallbacks are a generic serif and a generic
- * monospace; a first visit that quietly kept them would not look like this app.
+ * Full weight axes, and italics for both: the design uses Playfair italic for
+ * the wordmark's second half and for empty-state prose, so the italic face is
+ * load bearing rather than a browser-synthesised slant.
+ *
+ * IBM Plex Mono is **interim**. The Cellar spec has no monospace at all — its
+ * role (uppercase section labels, 10.5px / 0.15em) belongs to Karla now — but
+ * 35 `font-mono` sites still reference it. It comes out with the component
+ * pass; loading it until then keeps those legible instead of dropping them to
+ * whatever `ui-monospace` resolves to.
+ *
+ * `display=swap` because the fallbacks are a generic serif and a generic sans;
+ * a first visit that quietly kept them would not look like this app.
  *
  * The family names must keep matching the `theme.json` literals exactly. That
  * is the entire contract between these two files.
  */
 const HREF =
 	'https://fonts.googleapis.com/css2' +
-	'?family=Fraunces:opsz,wght@9..144,100..900' +
-	'&family=IBM+Plex+Mono:wght@400;600' +
-	'&family=Inter:opsz,wght@14..32,100..900' +
+	'?family=IBM+Plex+Mono:wght@400;600' +
+	'&family=Karla:ital,wght@0,200..800;1,200..800' +
+	'&family=Playfair+Display:ital,wght@0,400..900;1,400..900' +
 	'&display=swap';
 
 /*

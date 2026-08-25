@@ -203,16 +203,16 @@ Phase 2 port carried more across than this list assumed.
   the published space and a second account
 - ✅ Theme override persistence — per device in localStorage, which is where it
   belongs (D25)
-- ✅ Typography — Fraunces, Inter, and IBM Plex Mono load from Google Fonts via
-  a `<link>` that `client/lib/fonts.ts` appends at boot, because Zero has no way
+- ✅ Typography — Playfair Display and Karla load from Google Fonts via a
+  `<link>` that `client/lib/fonts.ts` appends at boot, because Zero has no way
   to declare a webfont and `sf dev` cannot serve a self-hosted one
   ([D31](decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google)).
   **Verified rendering in a browser on 2026-08-25** under `sf dev` — Fraunces
   paints the headers, not the `ui-serif` fallback. Unverified only on the
   published space, which runs the same remote URL
 
-**What is actually left:** the row-count test for sort/search/scroll, the
-typography decision, and a browser pass over the read-only UI — none of which
+**What is actually left:** the row-count test for sort/search/scroll, and a
+browser pass over the read-only UI — none of which
 can be finished without either real data or the published space.
 
 **Done when:** nothing from the prototype is missing.
@@ -242,3 +242,124 @@ are parked permanently.
   permissions ([D20](decisions.md#d20-three-roles-owner-editor-viewer) settled
   the base set)
 - Barcode scanning
+
+## Phase 4.5 — The Cellar reskin
+
+The interface spec at `.claude/docs/design/ui-directions.md` (Aug 2026),
+rendered in `larderlogdesigns-4.html`. Chosen from three explorations; the other
+two are not to be built.
+
+- ✅ **Token layer** — `theme.json` carries the warm-brown palette (21 slugs),
+  the Playfair/Karla families, and an 8-step type scale. Term colors became
+  tokens rather than hexes
+  ([D32](decisions.md#d32-a-term-stores-a-color-token-not-a-color)), with the
+  sixteen theme values in `client/lib/palette.ts` and the token names in
+  `shared/palette.ts`. Seed data, the picker (now 8 x 2), and `getTheme`'s light
+  half all moved over. 111 assertions pass
+- ✅ **Dark mode** — spec landed 2026-08-25 and is implemented. Both themes now
+  come from the same table: ground gradients, surfaces, ink ramp, status trios,
+  and a full dark quad for all sixteen term colors. `theme.json` carries
+  `light-dark(light, dark)` pairs so one slug serves both, the way Zero's own
+  platform tokens do. The primary button flips to cream on ink in dark — the
+  single lightest control, since crimson never carries a button
+- **Item card + list** — the densest surface, and the first real proof the
+  tokens work
+- **`font-mono` retirement** — 35 sites still use a monospace the spec dropped.
+  Their role is Karla uppercase labels now. IBM Plex Mono keeps loading until
+  they are converted
+- ✅ **Item card + list** — 20px radius, status on the edge, 42px Playfair
+  numerals, named term chips with a color dot, 46px steppers; the list is a
+  3-column grid
+- ✅ **Drawer** — one dark drawer on the left, docked from `md` and a 328px
+  slide-over with a scrim below it, same component at both sizes. Wordmark,
+  household row, Filter/Settings switch, scrolling filter body, account row.
+  **Term management moved into the Filter pane**: the pencil flips one section
+  into editing (swatch, rename, delete, add) and Done flips it back.
+  `Sidebar.tsx` and `FacetSection.tsx` were replaced and deleted; `Drawer.tsx`
+  and `DrawerFilters.tsx` are their successors
+- ✅ **Collapsed rail** — 68px, eight controls in three groups, dividers after
+  2 and 5. Settings and Expand open a pane; household, appearance, account and
+  the three filter groups are flyouts, so the rail stays put and the button
+  that opened one takes the lit treatment. Badges count that group's active
+  filter, crimson, ringed in the rail colour — the one place crimson touches
+  the rail. Tooltips at 400ms; Escape and outside-click close a flyout
+- **Household switcher — DEFERRED, see below**
+- ✅ **Settings pane** — the six sections now live *inside* the drawer, in the
+  spec's order: Account, Household, Members, Appearance, Default threshold,
+  **Invites last**. No terms block (they moved to the Filter pane) and no
+  shopping list (it is contextual). `MembersPanel` and `InvitesPanel` render
+  unchanged on the dark slab by way of `drawerTheme()`, which remaps a `Theme`
+  onto the drawer ramp — cheaper than a second set of props and it keeps those
+  panels unaware of where they are
+- ✅ **Contextual shopping list** — reached only from the store-filter banner
+  above the list, with a live count on the button. The separate `shoppingStore`
+  state is gone: the list is whatever the store you are *filtering by* is short
+  of. `SettingsDrawer.tsx` and `TaxonomyManager.tsx` were replaced and deleted
+- ✅ **Main column header** — 50px search and Add item, then a counts row:
+  status chips in their own tints with a crimson ring for the active one,
+  opposite "Showing n of n" and the sort control
+- ✅ **Item sheet (add *and* edit)** — 480px in from the right on desktop, a
+  near-full-height bottom sheet with a grabber below `md`, one component for
+  both flows: only the header, the save label and the presence of Remove
+  differ. Editing used to expand inside the card and reflow the grid around it.
+  Remove sits far left in the footer — ghost with crimson text, never a crimson
+  fill — and removal stays undoable via the toast rather than confirmed.
+  `ItemFields`, `ChipPicker` and `IconPicker` were replaced and deleted. Sticky
+  footer, Escape to close, chips that fill with their own term colour when
+  selected. Replaces the inline form, which pushed the whole pantry down the
+  page every time you reached for it
+- **Contextual shopping list** — reached from a store filter, not from Settings
+
+**Open, from the spec's own list:** the collapsed desktop rail (undrawn, and it owns the reopen control); invite
+links cramped at 340px; whether the shopping list earns a modal when the sample
+data gives each store one row. Empty states are not designed.
+
+**Not in the spec but now in the data:** the sample dataset names a "Meat
+Freezer" location and an "Aldi" store that `shared/seed.ts` does not seed.
+
+### Two things the rail spec leaves ambiguous
+
+**Do filter groups fly out or expand?** The prose says *"Filter groups and
+Settings need width, so they animate the rail 68px → 340px"*, but the control
+table says "Flyout — quick filter" for all three, and the *Quick filter ≠ the
+full set* paragraph describes flyout contents ending in *Open full filters* —
+which only makes sense if it is a flyout. `CollapsedStates` draws it as a
+flyout. Built as a flyout; the prose sentence appears to be stale.
+
+**The household tile has no colour to take.** The spec says "the household's
+initial on its term colour", but a household is not a term and carries no
+`ink`. The tile currently borrows the first location's colour and falls back to
+terracotta. It wants either a real `households.ink` column — a schema change,
+so D27 governs — or a rule for deriving one.
+
+### The household switcher contradicts D18 — deferred, not dropped
+
+The spec draws a full-width button opening a popover of **every** household you
+belong to — name, role, item count, a check on the current one — plus *New
+household* and *Join with a link*.
+
+[D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema)
+gives each user exactly one. `requireHousehold()` reads memberships through
+`by_user` and throws on anything but a single row, and the client has one
+`household` query rather than a list. The schema has always allowed many
+(D3) — the handler is what refuses.
+
+So this is not UI work. Building it means a query returning every membership, a
+notion of "current household" the server can trust, and relaxing
+`requireHousehold()` — which is the one function every household boundary in the
+app is enforced through. **That is a decision to take deliberately, not a
+component to draw.** The drawer currently shows the household name without a
+switcher, and says so in a comment.
+
+**Decided 2026-08-25:** left out for now, and **revisited once the design work
+lands**. The schema was built multi-household from the start (D3) precisely so
+this stays possible; D18 is a handler rule, not a data limitation, which is why
+this is a deferral rather than a redesign.
+
+### Eight of sixteen on-drawer dots are unspecified
+
+The drawer is the darkest surface in both themes, so a term's dot there is
+brighter than the `Dark dot` column — confirmed by the mockup, where the same
+value appears in the light and dark artboards alike. The eight colors the
+sample data uses are pinned down; the other eight fall back to `Dark dot` and
+read slightly dim. `client/lib/palette.ts` marks which.

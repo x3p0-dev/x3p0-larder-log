@@ -61,8 +61,13 @@ the one the notes predicted. Zero has no webfont mechanism — `theme.json`'s
 `fontFace` is discarded silently — but the `--font-disp` / `--font-sans` /
 `--font-mono` tokens it emits are already complete stacks, so the only missing
 piece is a stylesheet. `client/lib/fonts.ts` appends a Google Fonts `<link>`
-for Fraunces, Inter, and IBM Plex Mono at boot
+for Playfair Display and Karla at boot (plus IBM Plex Mono, interim — the
+Cellar spec has no monospace, but 35 `font-mono` sites still reference one)
 ([D31](../.docs/decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google)).
+The Cellar reskin's token layer is in for **both** themes — see Phase 4.5 in
+the roadmap. Layout is untouched: the drawer, item card, and add-item sheet are
+still the pre-Cellar components, so the app currently reads as the same
+interface in a new palette.
 The family names there must keep matching the `theme.json` literals exactly —
 that is the entire contract between the two files. Self-hosting was built first
 and rejected: `sf dev` serves no project static files, so a self-hosted face is
@@ -105,9 +110,12 @@ diff against live state.
 `auth.isGuest` never goes false locally. Two separate holes exist because of it:
 
 1. **The client gate** (`client/index.tsx`) lets a guest through on loopback
-   hostnames only, with a persistent orange "Dev guest · not signed in" badge —
-   D14. **Confirmed inert in production**: the badge does not appear on the
-   published space and a signed-out visitor gets the sign-in screen.
+   hostnames only — D14. **Confirmed inert in production**: a signed-out
+   visitor on the published space gets the sign-in screen. The orange
+   "Dev guest · not signed in" chip that used to mark this was removed on
+   2026-08-25; the drawer's Account section names the dev guest instead, which
+   is where someone looks to find out who they are. If that ever stops being
+   true, put a marker back.
 2. **The server** (`shared/identity.ts`) accepts the exact identity `sf dev`
    issues — `guest:local` / `Local` / `guest` / not authenticated, all four
    matched. That value comes from `zeroGuestAuth()` in the `spacefast` CLI, so
@@ -187,9 +195,11 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D30, with reasoning and rejected alternatives. **D27 governs every schema edit** |
+| `.docs/decisions.md` | D1–D32, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
-| `.claude/docs/pantry-tracker-mockup.jsx` | The design reference (see below) |
+| `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
+| `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
+| `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |
 | `.claude/docs/zero-agent-rules.md` | Zero's own `AGENTS.md`, verbatim — the best runtime reference |
 
@@ -206,7 +216,13 @@ update `.docs/roadmap.md` and the status section here.
   good / friction / unclear / bug. Justin intends to send this feedback to the
   Spacefast team, so record concrete detail: exact errors, HTTP codes, what was
   tried. Do this as you go, not at the end.
-- **The mockup is a design reference, not source.** `pantry-tracker-mockup.jsx`
+- **The design spec is `.claude/docs/design/ui-directions.md`.** It supersedes
+  `pantry-tracker-mockup.jsx`, which describes the pre-Cellar interface and is
+  now history. `larderlogdesigns-4.html` is the rendered final design; page 2 of
+  the linked canvas holds three rejected explorations — **ignore those**. Where
+  the spec and the HTML disagree, the HTML wins; they were checked against each
+  other and currently agree.
+- **The old mockup is a design reference, not source.** `pantry-tracker-mockup.jsx`
   is a design artifact Justin edits and replaces wholesale. Diff it against the
   implementation rather than assuming it matches. It also contains at least one
   known bug (a stale-closure duplicate guard), and it is **name-based
@@ -285,6 +301,19 @@ Cheapest first:
   `.spacefast/zero/`.
 - **`sf dev`** compiles the capsule for real. A clean start plus `GET /` and
   `GET /api/status` proves the client and server entries both resolve.
+- **An unused `theme.json` token is pruned from `zero.css`, and that looks
+  exactly like a rejected one.** The compiler reads every palette and
+  `fontSizes` entry, but Tailwind emits a `--color-*` / `--text-*` var only
+  once a class actually uses it — so `bg-drawer` compiles to nothing until
+  something references it, and grepping for the var proves nothing either way.
+  To check a token was *read*, run the compiler's own reader instead:
+
+  ```bash
+  node --input-type=module -e "
+  import { zeroThemeSettingsFromThemeJson } from './node_modules/@spacefast/zero-compile/dist/tailwind-core.js';
+  import { readFileSync } from 'fs';
+  console.log(zeroThemeSettingsFromThemeJson(JSON.parse(readFileSync('theme.json','utf8'))));"
+  ```
 - **Curl the compiled assets** to confirm styling shipped. Zero finds Tailwind
   classes by scanning source for static strings, so "it typechecks" says nothing
   about whether a class exists. Fetch `/zero.css` (see the bootstrap dance

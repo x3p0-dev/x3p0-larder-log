@@ -1,0 +1,240 @@
+import { useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
+import { ChevronUp, LogOut, Pencil } from 'lucide-preact';
+
+import { MembersPanel } from './MembersPanel';
+import { InvitesPanel } from './InvitesPanel';
+import type { Theme } from '../lib/theme';
+import { drawerTheme } from '../lib/theme';
+import { DRAWER_BUTTON, DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_INPUT } from '../lib/controlStyles';
+import type { Invite, Member, ThemeOverride } from '../../shared/types';
+import type { Role } from '../../shared/roles';
+import { can } from '../../shared/roles';
+
+const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
+	{ key: 'system', label: 'Auto' },
+	{ key: 'light', label: 'Light' },
+	{ key: 'dark', label: 'Dark' },
+];
+
+type Props = {
+	themeOverride: ThemeOverride;
+	setThemeOverride: (value: ThemeOverride) => void;
+	householdName: string;
+	setHouseholdName: (value: string) => void;
+	defaultThreshold: string;
+	setDefaultThreshold: (value: string) => void;
+	accountName: string;
+	accountEmail: string;
+	onSignOut: () => void;
+	members: Member[];
+	invites: Invite[];
+	me: { membershipId: string; role: Role };
+	onCreateInvite: (role: Role) => void;
+	onRevokeInvite: (inviteId: string) => void;
+	onChangeRole: (membershipId: string, role: Role) => void;
+	onRemoveMember: (membershipId: string) => void;
+	onLeaveHousehold: () => void;
+	theme: Theme;
+};
+
+/**
+ * A settings section: the label treatment the filter pane uses, and the same
+ * chevron.
+ *
+ * `collapsible` is opt-in. Account and Household are two lines each and folding
+ * them would hide less than the control to unfold them; Members and Invites can
+ * both run long, so those fold.
+ */
+function Section({
+	title, theme, collapsible = false, defaultOpen = true, children,
+}: {
+	title: string;
+	theme: Theme;
+	collapsible?: boolean;
+	defaultOpen?: boolean;
+	children: ComponentChildren;
+}) {
+	const [open, setOpen] = useState(defaultOpen);
+	const d = theme.drawer;
+	const shown = ! collapsible || open;
+
+	return (
+		<section class="flex flex-col gap-2.5">
+			<div class="flex items-center justify-between">
+				<p class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: d.label }}>{title}</p>
+				{collapsible && (
+					<button
+						onClick={() => setOpen((v) => ! v)}
+						class={`flex items-center justify-center w-7 h-7 ${DRAWER_ICON}`}
+						aria-expanded={open}
+						aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
+					>
+						<ChevronUp
+							size={14}
+							style={{ color: '#6E5F4B', transform: open ? 'none' : 'rotate(180deg)', transition: 'transform .15s' }}
+						/>
+					</button>
+				)}
+			</div>
+			{shown && children}
+		</section>
+	);
+}
+
+/**
+ * The Settings pane, inside the drawer.
+ *
+ * Order is fixed by the spec — Account, Household, Members, Appearance, Default
+ * threshold, **Invites last** — because inviting someone is the one action here
+ * that reaches another person, and it should not sit above the things you
+ * change every week.
+ *
+ * There is deliberately no terms block (they live in the Filter pane now) and
+ * no shopping list (it is contextual to a store filter).
+ */
+export function DrawerSettings({
+	themeOverride, setThemeOverride, householdName, setHouseholdName,
+	defaultThreshold, setDefaultThreshold,
+	accountName, accountEmail, onSignOut,
+	members, invites, me, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember,
+	onLeaveHousehold, theme,
+}: Props) {
+	const d = theme.drawer;
+	/* Panels paint from a Theme; hand them one whose surfaces are the drawer's. */
+	const inner = drawerTheme(theme);
+	const [renaming, setRenaming] = useState(false);
+	const [nameDraft, setNameDraft] = useState(householdName);
+	const [creatingInvite, setCreatingInvite] = useState(false);
+
+	/*
+	 * The household name and the default threshold are both `updateHousehold`,
+	 * which the server gates on `household:settings` — owner only. Their
+	 * controls are absent rather than disabled for everyone else (D30); the
+	 * values themselves still show, because they are information.
+	 */
+	const mayEditSettings = can(me.role, 'household:settings');
+
+	/* One in flight at a time, so a double tap cannot mint two codes. */
+	async function createInvite(role: Role) {
+		if (creatingInvite) return;
+
+		setCreatingInvite(true);
+		await onCreateInvite(role);
+		setCreatingInvite(false);
+	}
+
+	function commitName() {
+		const next = nameDraft.trim();
+		if (next && next !== householdName) setHouseholdName(next);
+		setRenaming(false);
+	}
+
+	return (
+		<div class="flex flex-col gap-[26px] px-5 pt-6 pb-6">
+			<Section title="Account" theme={theme}>
+				<div class="flex items-center gap-3">
+					<span
+						class="flex items-center justify-center w-[46px] h-[46px] rounded-full font-disp text-[19px] font-bold shrink-0"
+						style={{ background: '#4A3E2E', boxShadow: 'inset 0 0 0 1px #63533E', color: '#E8DCC6' }}
+					>
+						{(accountName || '?').charAt(0).toUpperCase()}
+					</span>
+					<span class="flex-1 min-w-0 flex flex-col gap-px">
+						<span class="font-disp text-[18px] font-semibold truncate" style={{ color: d.ink }}>{accountName || 'Account'}</span>
+						<span class="text-xs truncate" style={{ color: d.inkFaint }}>{accountEmail || 'Not signed in'}</span>
+					</span>
+				</div>
+				<button
+					onClick={onSignOut}
+					class={`self-start flex items-center gap-2 h-[38px] px-[15px] rounded-[11px] text-[13.5px] font-medium ${DRAWER_BUTTON}`}
+				>
+					<LogOut size={15} /> Sign out
+				</button>
+			</Section>
+
+			<Section title="Household" theme={theme}>
+				{/*
+				  * Read state with a pencil, not a live field. A text input that is
+				  * always armed invites an accidental rename of the one name every
+				  * member sees.
+				  */}
+				{renaming && mayEditSettings ? (
+					<input
+						value={nameDraft}
+						onInput={(e) => setNameDraft(e.currentTarget.value)}
+						onBlur={commitName}
+						onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+						class={`h-10 px-3 rounded-[10px] text-[15px] ${DRAWER_INPUT}`}
+						aria-label="Household name"
+						// eslint-disable-next-line
+						ref={(el) => el?.focus()}
+					/>
+				) : (
+					<div class="flex items-center gap-2 pl-0.5 pr-1">
+						<span class="flex-1 min-w-0 font-disp text-[19px] font-semibold truncate" style={{ color: d.ink }}>
+							{householdName || 'Your household'}
+						</span>
+						{mayEditSettings && (
+							<button
+								onClick={() => { setNameDraft(householdName); setRenaming(true); }}
+								class={`shrink-0 flex items-center justify-center w-[34px] h-[34px] rounded-[10px] ${DRAWER_CHIP}`}
+								title="Rename household"
+							>
+								<Pencil size={15} />
+							</button>
+						)}
+					</div>
+				)}
+			</Section>
+
+			<Section title="Members" theme={theme} collapsible>
+				<MembersPanel
+					members={members} me={me}
+					onChangeRole={onChangeRole} onRemoveMember={onRemoveMember} onLeave={onLeaveHousehold}
+					theme={inner}
+				/>
+			</Section>
+
+			<Section title="Appearance" theme={theme}>
+				<div class="grid grid-cols-3 gap-1 p-1 rounded-xl" style={{ background: d.well }}>
+					{THEME_OPTIONS.map((opt) => (
+						<button
+							key={opt.key}
+							onClick={() => setThemeOverride(opt.key)}
+							class={`h-[34px] rounded-[9px] text-[13.5px] ${themeOverride === opt.key ? DRAWER_CHIP_ON : 'transition-colors text-on-dark-faint font-medium hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
+						>
+							{opt.label}
+						</button>
+					))}
+				</div>
+			</Section>
+
+			<Section title="Default low-stock threshold" theme={theme}>
+				{mayEditSettings ? (
+					<input
+						value={defaultThreshold}
+						onInput={(e) => setDefaultThreshold(e.currentTarget.value)}
+						inputMode="decimal"
+						class={`h-10 px-3 rounded-[10px] text-[15px] w-24 ${DRAWER_INPUT}`}
+						aria-label="Default low-stock threshold"
+					/>
+				) : (
+					<span class="font-disp text-[19px] font-semibold" style={{ color: d.ink }}>{defaultThreshold}</span>
+				)}
+				<p class="text-[12.5px] leading-[1.45]" style={{ color: d.label }}>
+					What a new item starts at, until you change it on the item itself.
+				</p>
+			</Section>
+
+			{/* Invites last: the only thing here that reaches another person. */}
+			<Section title="Invites" theme={theme} collapsible>
+				<InvitesPanel
+					invites={invites} myRole={me.role}
+					onCreate={createInvite} onRevoke={onRevokeInvite} creating={creatingInvite}
+					theme={inner}
+				/>
+			</Section>
+		</div>
+	);
+}
