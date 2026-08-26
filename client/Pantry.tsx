@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Archive, Link2Off, LogOut, Menu, Plus, Search, ShoppingCart, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
+import { Archive, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
 import type { LucideIcon } from 'lucide-preact';
 
 import { CollapsedRail } from './components/CollapsedRail';
@@ -11,10 +11,12 @@ import type { SortKey } from './components/SortMenu';
 import { ItemSheet } from './components/ItemSheet';
 import { PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_CHIP_ADD, PAGE_INPUT } from './lib/controlStyles';
 import { ItemCard } from './components/ItemCard';
+import { EmptyState } from './components/EmptyState';
 import { FirstRun } from './components/FirstRun';
 import { InviteLanding } from './components/InviteLanding';
 import { OutsideShell } from './components/OutsideShell';
-import { ShoppingListModal } from './components/ShoppingListModal';
+import { ShoppingList } from './components/ShoppingList';
+import { ShoppingListTrigger } from './components/ShoppingListTrigger';
 import { ToastStack } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import type { ConfirmTone } from './components/ConfirmDialog';
@@ -23,8 +25,9 @@ import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
 import { usePantryData, useInvitePreview } from './hooks/usePantryData';
 import { useToasts } from './hooks/useToasts';
+import { useTripChecks } from './hooks/useTripChecks';
 
-import { entityColorFor, getTheme, statusFor, termNameFor } from './lib/theme';
+import { getTheme, statusFor, termNameFor } from './lib/theme';
 import { clearInviteAccepted, clearPendingInvite, inviteAccepted, pendingInvite } from './lib/pendingInvite';
 import type { TaxonomyActions } from './lib/actions';
 
@@ -36,6 +39,7 @@ import type { Item, ItemDraft, Term, TermKind, ThemeOverride } from '../shared/t
 import { DEFAULT_ROLE, can } from '../shared/roles';
 import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
+import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
 import type { TermBlock } from '../shared/term';
 import { termBlock, termUsageCount } from '../shared/term';
 
@@ -52,6 +56,21 @@ const PAGE_SIZE = 20;
  */
 const DOCK_PX = 1120;
 
+/**
+ * The content width row 2 needs before its controls can wear their full labels.
+ *
+ * Measured from the parts, not chosen: the three status pills at full padding
+ * are 368, *Shopping list* with its count pill is 165, `Showing 20 of 20` is
+ * ~112, and the sort trigger naming *Recently added* is ~207. With the row's
+ * own gaps that is ~904, so 910 is the first width at which nothing is cramped.
+ *
+ * **It is compared against the content column, not the viewport**, and that is
+ * the whole point: a docked drawer costs 340px, so a 1280 screen leaves 872 and
+ * is every bit as cramped as a phone. Sizing off `md:` got this wrong in both
+ * directions.
+ */
+const ROW2_FULL_PX = 910;
+
 /** What "needs restocking" means as an ordering. */
 const RESTOCK_RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
 
@@ -62,13 +81,15 @@ const STATUS_CHIPS: { key: StatusKey; label: string; short: string }[] = [
 ];
 
 /**
- * The two things still in localStorage, and both for the same reason: they are
- * properties of *this device*, not of the account (D25, D33).
+ * The three things still in localStorage, and all for the same reason: they are
+ * properties of *this device*, not of the account (D25, D33, D41).
  *
  * A dark-mode choice made on a phone should not follow you to a desktop, and
  * neither should which household you were last looking at — the phone in the
- * kitchen is pointed at the kitchen. Everything that is actually data lives in
- * the database.
+ * kitchen is pointed at the kitchen. Nor should what is in your cart: two people
+ * at two different stores would collide on the same rows, and a tick that means
+ * "in *my* cart" cannot be read by someone else without saying whose.
+ * Everything that is actually data lives in the database.
  *
  * Namespaced per identity so signing in as someone else picks up their choice.
  */
@@ -78,6 +99,10 @@ function themeKeyFor(userId: string) {
 
 function householdKeyFor(userId: string) {
 	return `larder.v4.${userId}.household`;
+}
+
+function tripKeyFor(userId: string) {
+	return `larder.v4.${userId}.trip`;
 }
 
 /**
@@ -190,6 +215,94 @@ function dialogCopy(pending: Pending, facts: DialogFacts): DialogCopy {
 	}
 }
 
+/**
+ * What an empty result says, and it depends entirely on what emptied it.
+ *
+ * Three families, and they behave differently on purpose:
+ *
+ * 1. **A status chip on its own** is the good-news case — nothing is out,
+ *    nothing is low. It gets **no action**, because the chip you pressed is
+ *    still on screen and now reads `0`; a button would be a second control for
+ *    a job the first one is still doing.
+ * 2. **One term or one search** names the thing you picked, and offers to
+ *    unpick exactly that.
+ * 3. **Anything else** — several filters at once — cannot name a single cause
+ *    without guessing which one is to blame, so it says so and clears the lot.
+ */
+type EmptyFilters = {
+	search: string;
+	locationName: string | null;
+	typeName: string | null;
+	storeName: string | null;
+	status: StatusKey | null;
+};
+
+const STATUS_EMPTY: Record<StatusKey, { title: string; body: string }> = {
+	ok: {
+		title: 'Nothing’s fully stocked.',
+		body: 'Everything in the larder is low or out. The shopping list has it grouped by the shop you buy it at.',
+	},
+	low: {
+		title: 'Nothing’s running low.',
+		body: 'Everything in the larder is either stocked up or already out — nothing is on its way down.',
+	},
+	out: {
+		title: 'Nothing’s out.',
+		body: 'You’ve got at least some of everything you’re tracking.',
+	},
+};
+
+function emptyCopy(f: EmptyFilters): { title: string; body: string; clear: 'none' | 'one' | 'all'; label?: string } {
+	const named = [f.locationName, f.typeName, f.storeName].filter(Boolean).length;
+	const searching = Boolean(f.search.trim());
+	const only = named + (searching ? 1 : 0) + (f.status ? 1 : 0) === 1;
+
+	if (f.status && only) return { ...STATUS_EMPTY[f.status], clear: 'none' };
+
+	if (only && f.locationName) {
+		return {
+			title: `Nothing in ${f.locationName}.`,
+			body: 'This location is empty right now — nothing you’re tracking lives here.',
+			clear: 'one',
+			label: 'Clear the location filter',
+		};
+	}
+
+	if (only && f.storeName) {
+		return {
+			title: `Nothing from ${f.storeName}.`,
+			body: 'No item names this store yet. Open any item and add it to its Store list.',
+			clear: 'one',
+			label: 'Clear the store filter',
+		};
+	}
+
+	if (only && f.typeName) {
+		return {
+			title: `Nothing tagged ${f.typeName}.`,
+			body: 'No item carries this type yet. Open any item and add it to its Type list.',
+			clear: 'one',
+			label: 'Clear the type filter',
+		};
+	}
+
+	if (only && searching) {
+		return {
+			title: `Nothing matches “${f.search.trim()}”.`,
+			body: 'Search reads item names only, so a shorter word usually finds more.',
+			clear: 'one',
+			label: 'Clear the search',
+		};
+	}
+
+	return {
+		title: 'Nothing matches these filters.',
+		body: 'Together they rule out everything in the larder. Loosen one, or clear them all and start again.',
+		clear: 'all',
+		label: 'Clear all filters',
+	};
+}
+
 /** `1 item` / `4 locations`. Every count in a dialog body goes through this. */
 function plural(count: number, noun: string): string {
 	return `${count} ${count === 1 ? noun : `${noun}s`}`;
@@ -219,6 +332,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * heal itself rather than dead-end.
 	 */
 	const householdKey = useMemo(() => householdKeyFor(userId), [userId]);
+	const tripKey = useMemo(() => tripKeyFor(userId), [userId]);
 	const [selectedHousehold, setSelectedHousehold] = usePersistentState<string | null>(householdKey, null);
 
 	const api = usePantryData(selectedHousehold);
@@ -291,6 +405,36 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		return () => docked.removeEventListener('change', sync);
 	}, [drawerOpen]);
+	/**
+	 * Whether row 2's controls have to give up their words.
+	 *
+	 * A `ResizeObserver` on the content column rather than a media query,
+	 * because the drawer's three states change the available width by 340px
+	 * without the viewport moving at all.
+	 *
+	 * **It starts `true`.** The first paint happens before the observer fires,
+	 * and the compact row fits everywhere while the full one does not — so the
+	 * one frame that might be wrong is the one that only ever has too much room.
+	 */
+	const columnRef = useRef<HTMLElement>(null);
+	const [compact, setCompact] = useState(true);
+
+	useEffect(() => {
+		const el = columnRef.current;
+
+		// Guarded like `useSystemTheme`'s `matchMedia`: the same absence of a
+		// browser would otherwise throw here rather than degrade.
+		if (! el || ! window.ResizeObserver) return;
+
+		const observer = new ResizeObserver(([entry]) => {
+			setCompact(entry.contentRect.width < ROW2_FULL_PX);
+		});
+
+		observer.observe(el);
+
+		return () => observer.disconnect();
+	}, []);
+
 	const [sortMenuOpen, setSortMenuOpen] = useState(false);
 	const [sortBy, setSortBy] = useState<SortKey>('default');
 
@@ -351,8 +495,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 */
 	const [closeEditing, setCloseEditing] = useState(0);
 	const [openMembers, setOpenMembers] = useState(0);
-
-	const [shoppingListOpen, setShoppingListOpen] = useState(false);
 
 	/**
 	 * A code from an invite link, captured in the entry before sign-in.
@@ -591,20 +733,152 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	}, [locations, types, stores, activeLocation, activeType, activeStore]);
 
 	/*
-	 * The shopping list is contextual: it is whatever the store you are
-	 * filtering by is short of. There is no second store selector any more —
-	 * one store, chosen once, in the filter pane.
+	 * The shopping list is a **view of the filtered items**, not a thing anyone
+	 * keeps: every item currently low or out, grouped by where you would buy it.
+	 * Nothing is authored into it and nothing is authored out of it, which is
+	 * why there is no shopping-list tab and no way for the list and the pantry
+	 * to disagree.
 	 */
-	const storeColor = entityColorFor(activeStore ?? '', stores, dark);
+	const shoppingGroupsForView = useMemo(() => shoppingGroups(filtered, stores), [filtered, stores]);
 
-	const shoppingItems = useMemo(() => {
-		if (! activeStore) return [];
-		return items
-			.filter((it) => it.storeIds.includes(activeStore) && statusFor(it.qty, it.threshold, dark).key !== 'ok')
-			.sort((a, b) => (toInt(a.qty) <= 0 ? -1 : 1) - (toInt(b.qty) <= 0 ? -1 : 1));
-	}, [items, activeStore, dark]);
+	/** What is on this screen — the filtered count. */
+	const toBuyHere = useMemo(() => shoppingCount(filtered), [filtered]);
+
+	/**
+	 * What the household has to buy, filters or no filters.
+	 *
+	 * The trigger wears this one and nothing else: it answers *is there shopping
+	 * to do*, which is a fact about the household. The meta line answers *what
+	 * is on this screen*, and the two are allowed to disagree.
+	 */
+	const toBuyTotal = useMemo(() => shoppingCount(items), [items]);
+
+	/**
+	 * The ids a tick can still belong to.
+	 *
+	 * Deliberately the *unfiltered* set: narrowing to one store must not read as
+	 * having bought everything else, and a check whose row is merely filtered
+	 * out has not been bought.
+	 */
+	const buyableIds = useMemo(
+		() => new Set(items.filter(needsBuying).map((it) => it.id)),
+		[items]
+	);
+
+	const trip = useTripChecks(tripKey, api.currentHouseholdId, buyableIds);
+	const { setListMode } = trip;
+
+	/*
+	 * The mode is only meaningful while there is something to buy. It survives a
+	 * reload — the single most likely thing to go wrong on a phone in a shop —
+	 * but the trigger is hidden once the list would be empty, and a mode with no
+	 * way out is worse than one that lets go.
+	 */
+	const listMode = trip.listMode && toBuyTotal > 0;
+
+	const storeFilterName = activeStore ? termNameFor(activeStore, stores) : null;
+
+	/**
+	 * What the meta line says in list mode, at both widths.
+	 *
+	 * Three facts, and each one earns its place only when it is true: how much
+	 * there is to buy *here*, how many shops that is spread across, and how much
+	 * of it is already in the cart. A filter that is hiding something says so —
+	 * `6 of 11 to buy` — rather than quietly showing a short list.
+	 */
+	/**
+	 * How much of *this screen* is in the cart.
+	 *
+	 * A tick lives on the item, so filtering to one store leaves ticks on rows
+	 * that are no longer here. The line describes the screen, so it counts the
+	 * screen.
+	 */
+	const inCart = useMemo(
+		() => filtered.filter((it) => needsBuying(it) && trip.checked.has(it.id)).length,
+		[filtered, trip.checked]
+	);
+
+	const tripLine = useMemo(() => {
+		const parts: string[] = [];
+
+		if (storeFilterName) {
+			parts.push(`${toBuyHere} to buy at ${storeFilterName}`);
+		} else {
+			parts.push(toBuyHere < toBuyTotal ? `${toBuyHere} of ${toBuyTotal} to buy` : `${toBuyHere} to buy`);
+
+			if (shoppingGroupsForView.length > 1) parts.push(plural(shoppingGroupsForView.length, 'store'));
+		}
+
+		const short = parts.join(' · ');
+
+		/*
+		 * **The cart clause is the one that goes at 390.** The line shares its
+		 * row with *Back to items*, which keeps its words, and how many are
+		 * checked is the half a glance can spare — the trip bar below already
+		 * says it, next to the control that acts on it.
+		 */
+		return { short, full: inCart > 0 ? `${short} · ${inCart} in the cart` : short };
+	}, [storeFilterName, toBuyHere, toBuyTotal, shoppingGroupsForView, inCart]);
+
+	/**
+	 * What the rest of the household still has to buy, for the scoped empty
+	 * state. Multi-store items count as elsewhere only if they are not also here.
+	 */
+	const elsewhereCount = useMemo(() => (
+		activeStore
+			? items.filter((it) => needsBuying(it) && ! it.storeIds.includes(activeStore)).length
+			: 0
+	), [items, activeStore]);
+
+	/*
+	 * Escape leaves the mode. It is not an overlay, so nothing else claims the
+	 * key — but a sheet or a dialog over it does, and theirs has to win.
+	 */
+	useEffect(() => {
+		if (! listMode) return;
+
+		function onKey(e: KeyboardEvent) {
+			if (e.key !== 'Escape') return;
+			if (pending || showForm || editingId) return;
+
+			setListMode(false);
+		}
+
+		window.addEventListener('keydown', onKey);
+
+		return () => window.removeEventListener('keydown', onKey);
+	}, [listMode, pending, showForm, editingId, setListMode]);
 
 	// --- Item actions ------------------------------------------------------
+
+	/**
+	 * What the screen says when the filters rule everything out.
+	 *
+	 * Derived rather than branched at the call site so the *copy* and the
+	 * *action* are decided together — an action that clears a filter the title
+	 * never mentioned is the failure mode this shape prevents.
+	 */
+	const noMatch = useMemo(() => emptyCopy({
+		search,
+		locationName: activeLocation ? termNameFor(activeLocation, locations) : null,
+		typeName: activeType ? termNameFor(activeType, types) : null,
+		storeName: activeStore ? termNameFor(activeStore, stores) : null,
+		status: activeStatus,
+	}), [search, activeLocation, activeType, activeStore, activeStatus, locations, types, stores]);
+
+	/**
+	 * Clears the single filter the copy named.
+	 *
+	 * `emptyCopy` only reports `one` when exactly one filter is set, so this
+	 * cannot clear the wrong thing — it clears whichever one is set.
+	 */
+	function clearOneFilter() {
+		if (activeLocation) setActiveLocation(null);
+		else if (activeType) setActiveType(null);
+		else if (activeStore) setActiveStore(null);
+		else if (activeStatus) setActiveStatus(null);
+		else setSearch('');
+	}
 
 	function clearAllFilters() {
 		setActiveLocation(null); setActiveType(null); setActiveStore(null);
@@ -1064,6 +1338,29 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							</span>
 						)}
 					</div>
+
+					{/*
+					  * The way *in* to the shopping list, on mobile only, squared up
+					  * with the wordmark opposite the menu button. It is chrome — a
+					  * standing fact about the household rather than a fact about the
+					  * screen you are on — and up here it costs row 2 nothing, which
+					  * is what lets the pills and the sort share one line again.
+					  *
+					  * The way *out* stays in row 2 with the list it exits, where it
+					  * can keep its words. `‹ Back to items` beside a 27px wordmark at
+					  * 390 would leave neither of them room.
+					  */}
+					{! empty && ! listMode && toBuyTotal > 0 && (
+						<span class="ml-auto shrink-0">
+							<ShoppingListTrigger
+								listMode={false}
+								count={toBuyTotal}
+								onToggle={() => setListMode(true)}
+								compact
+								theme={theme}
+							/>
+						</span>
+					)}
 				</div>
 			</header>
 
@@ -1097,7 +1394,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			  * on a wide screen. Only the gutters are fixed.
 			  */}
 			<div class="px-[18px] md:px-[34px] py-6 md:py-[30px] pb-28 md:pb-[30px]">
-				<main>
+				<main ref={columnRef}>
 					{/*
 					  * The whole top bar is absent at zero items — search, the
 					  * status chips, the count and the sort trigger with them.
@@ -1131,194 +1428,265 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					)}
 
 					{/*
-					  * The shopping list is reached from here and nowhere else: it is
-					  * whatever the store you are filtering by is short of. The count
-					  * is the point — a store with nothing low does not need a list,
-					  * and the badge says so before you open it.
+					  * Row 2 is the state of what you are looking at, and the two
+					  * modes fill it differently.
+					  *
+					  * **Grid:** the three status pills, then the shopping-list
+					  * trigger immediately after them, then `Showing X of Y` and the
+					  * sort pushed right. That sequence is the on-ramp — the eye
+					  * crosses `9 in stock · 6 running low · 5 out` and lands on the
+					  * thing to do about it.
+					  *
+					  * **List:** the pills go, because you are already filtered to low
+					  * and out and `9 in stock` has nothing to say; the sort goes,
+					  * because the list has one fixed order. What is left is
+					  * *Back to items* on the left and the trip count on the right,
+					  * in the slot `Showing X of Y` occupies.
+					  *
+					  * **It is one line at every width.** The trigger moves into the
+					  * mobile header below `md`, which is exactly what buys the pills
+					  * and the sort room to share a row again at 390.
 					  */}
-					{activeStore && (
-						<div
-							class="flex items-center justify-between gap-4 mt-4 pl-[18px] pr-3 py-[11px] rounded-[15px]"
-							style={{ background: theme.surface, border: `1px solid ${storeColor.ring}` }}
-						>
-							<span class="flex items-center gap-2.5 text-[14.5px] min-w-0" style={{ color: theme.text }}>
-								<span class="w-2 h-2 rounded-full shrink-0" style={{ background: storeColor.dot }} />
-								<span class="truncate">
-									Filtering by <strong class="font-semibold" style={{ color: theme.textStrong }}>{termNameFor(activeStore, stores)}</strong>
-								</span>
-								<button
-									onClick={() => setActiveStore(null)}
-									class="pl-1 text-[13.5px] shrink-0"
-									style={{ color: theme.textMuted, textDecoration: 'underline', textUnderlineOffset: '3px' }}
-								>
-									Clear
-								</button>
-							</span>
-							<button
-								onClick={() => setShoppingListOpen(true)}
-								class="flex items-center gap-2.5 h-10 px-4 rounded-xl text-sm font-semibold shrink-0"
-								style={{ background: theme.inkBg, color: theme.inkText }}
-							>
-								<ShoppingCart size={16} />
-								Shopping list
-								<span
-									class="flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold"
-									style={{ background: '#BE3346', color: '#F2E9DA' }}
-								>
-									{shoppingItems.length}
-								</span>
-							</button>
-						</div>
-					)}
-
-
 					{! empty && (
-					<div class="flex items-center justify-between gap-4 flex-wrap pt-6 pb-4 px-0.5">
-						<div class="flex items-center gap-2.5 flex-wrap">
-							{STATUS_CHIPS.map(({ key, label, short }) => (
-								<StatusChip
-									key={key} statusKey={key} label={label} short={short} count={statusCounts[key]}
-									active={activeStatus === key} dark={dark} theme={theme}
-									onClick={() => setActiveStatus((prev) => prev === key ? null : key)}
-								/>
-							))}
-							{/*
-							  * On desktop the wordmark line is hidden, so this is where a
-							  * viewer learns why their controls are missing — once, rather
-							  * than as a disabled button on every card (D30).
-							  */}
-							{! mayEditItems && (
-								<span
-									class="inline-flex items-center px-3 py-[7px] rounded-full text-[13.5px]"
-									style={{ background: theme.neutralChipBg, color: theme.textMuted, border: `1px solid ${theme.border}` }}
-								>
-									View only
-								</span>
-							)}
-						</div>
-						{/*
-						  * Its own full-width row on mobile, so the count stays left and
-						  * the sort stays right rather than both wrapping to the left.
-						  * Inline at the end of the row from `md` up.
-						  */}
-						<div class="w-full md:w-auto flex items-center justify-between md:justify-end gap-[18px]">
-							<span class="text-[13px]" style={{ color: theme.textMuted }}>
-								Showing {Math.min(visibleCount, sorted.length)} of {sorted.length}
-							</span>
-							{/* Pulled to the edge so the trigger's padding does not read as a gap. */}
-							<div class="-mr-2.5 md:mr-0">
-								<SortMenu open={sortMenuOpen} setOpen={setSortMenuOpen} sortBy={sortBy} setSortBy={setSortBy} theme={theme} />
-							</div>
-						</div>
-					</div>
-					)}
-
-					{/*
-					  * A grid rather than a stack, per the spec: cards are dense
-					  * enough that eight scan in one pass on a desktop. `items-start`
-					  * keeps an expanded card from stretching its whole row.
-					  *
-					  * `auto-fit` with a 320px floor and a `1fr` ceiling: the tracks
-					  * always divide the row exactly, so the gutter is 16px at every
-					  * width and there is never a ragged remainder at the end.
-					  *
-					  * Both of the earlier attempts spent that remainder somewhere
-					  * visible and both were wrong. Capping the card inside a `1fr`
-					  * track pushed it between the cards — 104px between neighbours
-					  * at 1440, because the track stretched while the card did not.
-					  * Capping the *track* at 420 held the gutter but left up to a
-					  * full track of dead space at the right edge. Letting the track
-					  * stretch is what removes the remainder rather than relocating
-					  * it.
-					  *
-					  * The trade is `auto-fit`'s: it collapses empty tracks, so a
-					  * household holding fewer items than columns gets fewer, wider
-					  * cards rather than a short row of narrow ones. Once there are
-					  * more items than columns — the normal state of a pantry — it
-					  * is identical to `auto-fill`.
-					  *
-					  * Mobile stays an explicit single column: below 320px of content
-					  * the floor would overflow its own track.
-					  */}
-					<div class="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 items-start">
-						{/*
-						  * Full width, or these read as a message about the first
-						  * card rather than about the list — and the wider the
-						  * screen, the more off-centre they look.
-						  */}
-						{/*
-						  * Two different nothings. An empty *household* gets the
-						  * screen, an italic line and the only *Add item* on it; a
-						  * filter that matches nothing gets one quiet sentence,
-						  * because the way out is the filter the visitor just set.
-						  */}
-						{empty ? (
-							<div class="col-span-full flex flex-col items-center justify-center text-center gap-3.5 py-16 md:py-24 px-4 md:px-16">
-								<p class="font-disp italic text-[27px] font-medium leading-[1.3]" style={{ color: theme.textStrong }}>
-									Nothing in the larder yet.
-								</p>
-								<p class="text-[14.5px] leading-[1.5] max-w-[420px]" style={{ color: theme.textMuted }}>
-									Add your first item. Your locations, stores and types are already set up
-									in Filters — rename or recolour them whenever you like.
-								</p>
-								{mayEditItems ? (
-									<button
-										onClick={openAddForm}
-										class={`flex items-center justify-center gap-2.5 w-[158px] h-11 mt-1.5 rounded-[13px] text-base font-semibold ${PAGE_BUTTON_PRIMARY}`}
-										style={{ background: theme.inkBg, color: theme.inkText }}
-									>
-										<Plus size={18} strokeWidth={2.2} /> Add item
-									</button>
-								) : (
-									// The one thing the stripped top bar took with it that
-									// a viewer still needs: why there is nothing to press.
+					<div class={`flex items-center pt-6 pb-4 px-0.5 ${compact ? 'gap-2' : 'gap-3.5'}`}>
+						{! listMode && (
+							/*
+							 * When space is short the pills take the row's slack and
+							 * scroll inside it, so three counts can never wrap onto
+							 * three lines or shove the sort off the end. With room they
+							 * size to their content and the trigger sits right after
+							 * them.
+							 */
+							<div class={
+								compact
+									? 'flex-1 min-w-0 flex items-center gap-2 overflow-x-auto'
+									: 'flex items-center gap-3.5 flex-wrap'
+							}>
+								{STATUS_CHIPS.map(({ key, label, short }) => (
+									<StatusChip
+										key={key} statusKey={key} label={label} short={short} count={statusCounts[key]}
+										active={activeStatus === key} compact={compact} dark={dark} theme={theme}
+										onClick={() => setActiveStatus((prev) => prev === key ? null : key)}
+									/>
+								))}
+								{/*
+								  * On desktop the wordmark line is hidden, so this is where a
+								  * viewer learns why their controls are missing — once, rather
+								  * than as a disabled button on every card (D30).
+								  */}
+								{! mayEditItems && (
 									<span
-										class="inline-flex items-center px-3 py-[7px] mt-1.5 rounded-full text-[13.5px]"
+										class="inline-flex items-center shrink-0 px-3 h-10 rounded-full text-[13.5px]"
 										style={{ background: theme.neutralChipBg, color: theme.textMuted, border: `1px solid ${theme.border}` }}
 									>
 										View only
 									</span>
 								)}
 							</div>
-						) : sorted.length === 0 && (
-							<p class="col-span-full text-sm py-8 text-center" style={{ color: theme.textMuted }}>Nothing here yet.</p>
 						)}
-
-						{visibleItems.map((it) => (
-							<ItemCard
-								key={it.id}
-								item={it} open={openId === it.id}
-								locations={locations} types={types} stores={stores}
-								dark={dark} theme={theme} canEdit={mayEditItems}
-								onToggleOpen={() => toggleOpen(it.id)}
-								onAdjustQty={(delta) => void api.adjustQty(it.id, delta)}
-								onRemove={() => void removeItem(it.id)}
-								onStartEdit={() => startEdit(it)}
-							/>
-						))}
 
 						{/*
-						  * The tile sits in the grid rather than above it, so adding
-						  * something is where the shelf ends — the same gesture as
-						  * reaching past the last jar. Desktop only: on mobile the
-						  * bottom bar already carries it.
+						  * The trigger. In grid mode it is here from `md` up and in the
+						  * mobile header below it — one control, two homes, never both.
+						  * In list mode it is *Back to items* and belongs here at every
+						  * width, because it is the exit from what is on screen.
+						  *
+						  * `ml-0.5` is the 2px the boards set it off the last pill by,
+						  * on top of the row's own gap.
 						  */}
-						{mayEditItems && sorted.length > 0 && visibleCount >= sorted.length && (
-							<button
-								onClick={openAddForm}
-								class={`hidden md:flex flex-col items-center justify-center gap-2.5 min-h-[188px] p-5 rounded-[20px] font-disp italic text-base ${PAGE_CHIP_ADD}`}
-							>
-								<Plus size={20} strokeWidth={2.2} />
-								Something new on the shelf
-							</button>
+						{toBuyTotal > 0 && (
+							<span class={listMode ? 'shrink-0' : 'hidden md:inline-flex md:ml-0.5 shrink-0'}>
+								<ShoppingListTrigger
+									listMode={listMode}
+									count={toBuyTotal}
+									onToggle={() => setListMode(! listMode)}
+									compact={compact}
+									theme={theme}
+								/>
+							</span>
 						)}
 
-						{visibleCount < sorted.length && (
-							<div ref={sentinelRef} class="col-span-full py-4 text-center">
-								<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>Loading more…</span>
-							</div>
-						)}
+						{/*
+						  * `ml-auto` rather than a spacer: with room it pushes the tail
+						  * right, and with none it collapses — where a second `flex-1`
+						  * would have taken half the slack off the pills.
+						  */}
+						<div class="ml-auto shrink-0 flex items-center gap-[18px]">
+							{/*
+							  * The grid's `X of Y` is what row 2 gives up first at 390 —
+							  * the pills already carry the counts that matter and the
+							  * grid itself is directly below. The list's trip line stays
+							  * at every width: nothing else on screen says it.
+							  */}
+							<span
+								class={
+									'text-right ' + (compact ? 'text-[12.5px] ' : 'text-sm ') +
+									// Hidden on width, not on viewport: a docked drawer at
+									// 1280 is exactly as short of room as a phone is.
+									(listMode || ! compact ? '' : 'hidden')
+								}
+								style={{ color: theme.textMuted }}
+							>
+								{listMode
+									? (compact ? tripLine.short : tripLine.full)
+									: `Showing ${Math.min(visibleCount, sorted.length)} of ${sorted.length}`}
+							</span>
+
+							{/*
+							  * The list has one fixed order — out before low, then A–Z —
+							  * so offering to change it would be a lie.
+							  *
+							  * Pulled to the edge so the trigger's padding does not read
+							  * as a gap.
+							  */}
+							{! listMode && (
+								<div class="-mr-2 md:mr-0">
+									<SortMenu open={sortMenuOpen} setOpen={setSortMenuOpen} sortBy={sortBy} setSortBy={setSortBy} compact={compact} theme={theme} />
+								</div>
+							)}
+						</div>
 					</div>
+					)}
+
+					{/*
+					  * The shopping list **replaces** the content column rather than
+					  * covering it. A modal is a question — centred, focus-trapped,
+					  * dismissed to continue — and a shopping list is a reference you
+					  * read while doing something else, with a checkbox on every row.
+					  *
+					  * It obeys the filters, because it is a view of the same set
+					  * narrowed to low and out: a Type filter of *Produce* gives you the
+					  * produce run, and a Store filter collapses it to one card.
+					  */}
+					{listMode ? (
+						<ShoppingList
+							groups={shoppingGroupsForView}
+							checked={trip.checked}
+							onToggle={mayEditItems ? trip.toggle : undefined}
+							onOpenItem={mayEditItems ? startEdit : undefined}
+							onBack={() => trip.setListMode(false)}
+							storeFilterName={storeFilterName}
+							elsewhereCount={elsewhereCount}
+							onClearStoreFilter={() => setActiveStore(null)}
+							onClearFilters={clearAllFilters}
+							dark={dark}
+							theme={theme}
+						/>
+					) : (
+					<>
+						{/*
+						  * A grid rather than a stack, per the spec: cards are dense
+						  * enough that eight scan in one pass on a desktop. `items-start`
+						  * keeps an expanded card from stretching its whole row.
+						  *
+						  * `auto-fit` with a 320px floor and a `1fr` ceiling: the tracks
+						  * always divide the row exactly, so the gutter is 16px at every
+						  * width and there is never a ragged remainder at the end.
+						  *
+						  * Both of the earlier attempts spent that remainder somewhere
+						  * visible and both were wrong. Capping the card inside a `1fr`
+						  * track pushed it between the cards — 104px between neighbours
+						  * at 1440, because the track stretched while the card did not.
+						  * Capping the *track* at 420 held the gutter but left up to a
+						  * full track of dead space at the right edge. Letting the track
+						  * stretch is what removes the remainder rather than relocating
+						  * it.
+						  *
+						  * The trade is `auto-fit`'s: it collapses empty tracks, so a
+						  * household holding fewer items than columns gets fewer, wider
+						  * cards rather than a short row of narrow ones. Once there are
+						  * more items than columns — the normal state of a pantry — it
+						  * is identical to `auto-fill`.
+						  *
+						  * Mobile stays an explicit single column: below 320px of content
+						  * the floor would overflow its own track.
+						  */}
+						<div class="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 items-start">
+							{/*
+							  * Full width, or these read as a message about the first
+							  * card rather than about the list — and the wider the
+							  * screen, the more off-centre they look.
+							  */}
+							{/*
+							  * Two different nothings, and they are different screens.
+							  * An empty *household* is a state the app has to explain
+							  * and it carries the only *Add item*; a filter that matches
+							  * nothing is something the visitor did, so the copy names
+							  * what they did and the action undoes exactly that.
+							  *
+							  * Both go through `EmptyState`, so a filtered result can
+							  * never again read as the 14px grey sentence that looked
+							  * like a rendering failure.
+							  */}
+							{empty ? (
+								<EmptyState
+									title="Nothing in the larder yet."
+									body="Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like."
+									action={mayEditItems ? { label: 'Add item', icon: Plus, onClick: openAddForm } : undefined}
+									theme={theme}
+								>
+									{/*
+									  * The one thing the stripped top bar took with it that
+									  * a viewer still needs: why there is nothing to press.
+									  */}
+									{! mayEditItems && (
+										<span
+											class="inline-flex items-center px-3 py-[7px] mt-1.5 rounded-full text-[13.5px]"
+											style={{ background: theme.neutralChipBg, color: theme.textMuted, border: `1px solid ${theme.border}` }}
+										>
+											View only
+										</span>
+									)}
+								</EmptyState>
+							) : sorted.length === 0 && (
+								<EmptyState
+									title={noMatch.title}
+									body={noMatch.body}
+									action={noMatch.clear === 'none' ? undefined : {
+										label: noMatch.label ?? 'Clear all filters',
+										onClick: noMatch.clear === 'all' ? clearAllFilters : clearOneFilter,
+									}}
+									theme={theme}
+								/>
+							)}
+
+							{visibleItems.map((it) => (
+								<ItemCard
+									key={it.id}
+									item={it} open={openId === it.id}
+									locations={locations} types={types} stores={stores}
+									dark={dark} theme={theme} canEdit={mayEditItems}
+									onToggleOpen={() => toggleOpen(it.id)}
+									onAdjustQty={(delta) => void api.adjustQty(it.id, delta)}
+									onRemove={() => void removeItem(it.id)}
+									onStartEdit={() => startEdit(it)}
+								/>
+							))}
+
+							{/*
+							  * The tile sits in the grid rather than above it, so adding
+							  * something is where the shelf ends — the same gesture as
+							  * reaching past the last jar. Desktop only: on mobile the
+							  * bottom bar already carries it.
+							  */}
+							{mayEditItems && sorted.length > 0 && visibleCount >= sorted.length && (
+								<button
+									onClick={openAddForm}
+									class={`hidden md:flex flex-col items-center justify-center gap-2.5 min-h-[188px] p-5 rounded-[20px] font-disp italic text-base ${PAGE_CHIP_ADD}`}
+								>
+									<Plus size={20} strokeWidth={2.2} />
+									Something new on the shelf
+								</button>
+							)}
+
+							{visibleCount < sorted.length && (
+								<div ref={sentinelRef} class="col-span-full py-4 text-center">
+									<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>Loading more…</span>
+								</div>
+							)}
+						</div>
+					</>
+					)}
 				</main>
 			</div>
 			</div>
@@ -1407,12 +1775,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				theme={theme}
 			/>
 
-			<ShoppingListModal
-				open={shoppingListOpen}
-				store={activeStore ? termNameFor(activeStore, stores) : null}
-				items={shoppingItems}
-				onClose={() => setShoppingListOpen(false)} dark={dark} theme={theme}
-			/>
 		</div>
 	);
 }

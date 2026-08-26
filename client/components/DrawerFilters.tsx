@@ -3,7 +3,7 @@ import { ChevronUp, Pencil, Plus } from 'lucide-preact';
 
 import { TermPanel, TermRow } from './TermPanel';
 import type { Theme } from '../lib/theme';
-import { drawerDot, proposeColor, termColorFor } from '../lib/theme';
+import { chipDot, proposeColor } from '../lib/theme';
 import { DRAWER_CHIP, DRAWER_CHIP_ADD, DRAWER_CHIP_ON, DRAWER_ICON } from '../lib/controlStyles';
 import type { Term } from '../../shared/types';
 
@@ -127,7 +127,6 @@ export function FilterSection({
 						)}
 
 						{entities.map((e) => {
-							const c = termColorFor(e.ink);
 							const isActive = active === e.id;
 							const count = countFor?.(e.id);
 
@@ -137,10 +136,13 @@ export function FilterSection({
 									onClick={() => onSelect(isActive ? null : e.id)}
 									class={`flex items-center gap-[7px] h-[34px] px-[13px] rounded-full text-[13.5px] ${isActive ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
 								>
-									{/* The dot goes when the chip is on — the fill has said it. */}
-									{! isActive && (
-										<span class="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: c ? drawerDot(c) : e.ink }} />
-									)}
+									{/*
+									  * The dot stays when the chip is on. It is the only
+									  * thing carrying the term's colour, and dropping it on
+									  * selection stops the chip saying which term it is at
+									  * the moment you have picked it.
+									  */}
+									<span class="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: chipDot(e.ink, isActive) }} />
 									{e.name}
 									{count !== undefined && <span style={{ color: isActive ? '#BE3346' : d.inkFaint }}>{count}</span>}
 								</button>

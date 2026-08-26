@@ -103,6 +103,19 @@ export const PAGE_ICON =
 	'transition-colors text-ink-muted hover:text-ink hover:bg-surface-alt rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
 /**
+ * A bordered control on the page ground that has to be *found* — the shopping
+ * list trigger, in both of its labels.
+ *
+ * `line-strong` at rest rather than `line`, and ink rather than body text.
+ * Top-bar controls have almost no edge against the ground: `surface` on `line`
+ * separates from it at 1.53:1 on the border and barely at all on the fill, and
+ * this is the one control in the bar whose whole job is to be noticed. It is
+ * the heavier of the two outlines for that reason and no other.
+ */
+export const PAGE_BUTTON_SECONDARY =
+	'transition-colors bg-surface border border-line-strong text-ink hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+
+/**
  * A bordered icon control on the page ground — the mobile header's menu button.
  *
  * Its resting fill and border have to be classes rather than an inline style:
@@ -257,3 +270,60 @@ export const CARD_ACTION_GHOST =
  */
 export const CARD_HEADER =
 	'group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/* ---------- the shopping list ---------- */
+
+/**
+ * The hover step for a control whose fill is a runtime value.
+ *
+ * Brightness rather than a second set of colors: every value on the shopping
+ * list's trigger comes from `statusColor` at runtime, so there is nothing to
+ * write a literal hover shade against. The *direction* has to flip, though,
+ * which is why this is a pair — a status tint is pale in light and deep in
+ * dark, so hovering means darkening in one and lightening in the other. Both
+ * are written out in full because Tailwind resolves a class by scanning for a
+ * static string.
+ */
+export const PAGE_TINT_HOVER = {
+	light: 'hover:brightness-95',
+	dark: 'hover:brightness-125',
+};
+
+/**
+ * A shopping-list row.
+ *
+ * The row is not a target — the checkbox and the name are, and between them
+ * they cover it — so the hover belongs to the `<li>` and neither child paints
+ * its own. `surface-alt` is the row hover in both themes.
+ */
+export const LIST_ROW = 'transition-colors hover:bg-surface-alt';
+
+/**
+ * The checkbox, and the name beside it.
+ *
+ * Both offset their focus ring against `surface`, not the ground: these sit on
+ * a card, and a ring offset against the canvas draws its gap in the wrong
+ * colour and reads as a halo.
+ */
+export const LIST_TARGET =
+	'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The trip bar's ghost — *Hide 3 checked*, *Back to items*.
+ *
+ * It lifts to `surface` rather than sinking to `surface-alt`, which is the
+ * token the spec names: the bar *is* `surface-alt`, so sinking would give the
+ * control no hover at all. Lifting is the same one-step move in both themes.
+ */
+export const LIST_GHOST =
+	'transition-colors text-ink-body hover:bg-surface hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
+
+/**
+ * The same ghost, on a card instead of the bar.
+ *
+ * The empty state's *Clear the store filter* sits on `surface`, so it sinks to
+ * `surface-alt` — which is the token the spec names, and the direction that
+ * only works because the ground under it is the lighter of the two.
+ */
+export const LIST_GHOST_ON_CARD =
+	'transition-colors text-ink-body hover:bg-surface-alt hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';

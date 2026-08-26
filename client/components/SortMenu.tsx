@@ -42,6 +42,8 @@ type Props = {
 	setOpen: (open: boolean) => void;
 	sortBy: SortKey;
 	setSortBy: (key: SortKey) => void;
+	/** Short of room — drop the glyph and the word "Sort", and shorten the label. */
+	compact: boolean;
 	theme: Theme;
 };
 
@@ -55,7 +57,7 @@ type Props = {
  * It stays a popover at every size rather than becoming a sheet on mobile; six
  * rows do not earn one. They just grow to 44px.
  */
-export function SortMenu({ open, setOpen, sortBy, setSortBy, theme }: Props) {
+export function SortMenu({ open, setOpen, sortBy, setSortBy, compact, theme }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
 	const current = SORT_OPTIONS.find((o) => o.key === sortBy) ?? SORT_OPTIONS[0];
 
@@ -81,18 +83,18 @@ export function SortMenu({ open, setOpen, sortBy, setSortBy, theme }: Props) {
 		<div class="relative" ref={ref}>
 			<button
 				onClick={() => setOpen(! open)}
-				class={`inline-flex items-center gap-2 h-10 px-3 rounded-[11px] text-[13.5px] border transition-colors active:translate-y-px ${PAGE_FOCUS} ${open ? TRIGGER_ON : TRIGGER}`}
+				class={`inline-flex items-center gap-2 h-10 ${compact ? 'px-2.5' : 'px-3'} rounded-[11px] text-[13.5px] border transition-colors active:translate-y-px ${PAGE_FOCUS} ${open ? TRIGGER_ON : TRIGGER}`}
 				aria-haspopup="menu"
 				aria-expanded={open}
 				aria-label={`Sort: ${current.label}`}
 			>
-				<ArrowUpDown size={15} class="hidden md:block" style={{ color: theme.textFaint }} />
-				{/* The label alone carries it on mobile; "Sort" is the widest word here. */}
-				<span class="hidden md:inline" style={{ color: theme.textFaint }}>Sort</span>
-				<span class="font-semibold">
-					<span class="md:hidden">{current.short}</span>
-					<span class="hidden md:inline">{current.label}</span>
-				</span>
+				{/*
+				  * The label alone carries it when space is short; "Sort" is the
+				  * widest word here and the one the chevron already implies.
+				  */}
+				{! compact && <ArrowUpDown size={15} style={{ color: theme.textFaint }} />}
+				{! compact && <span style={{ color: theme.textFaint }}>Sort</span>}
+				<span class="font-semibold">{compact ? current.short : current.label}</span>
 				<ChevronDown size={15} style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
 			</button>
 

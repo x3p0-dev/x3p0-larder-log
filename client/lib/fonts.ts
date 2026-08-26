@@ -38,12 +38,11 @@
  *
  * IBM Plex Mono is **interim**. The Cellar spec has no monospace at all — its
  * role (uppercase section labels, 10.5px / 0.15em) belongs to Karla now. The
- * reskin took `font-mono` from 35 sites to ten, and the flows outside the shell
- * took it to four: the sign-in gate is redrawn and `JoinBox` is deleted. What
- * is left is `ShoppingListModal` (two), the switcher's invite-code field, and
- * one loading string in `Pantry`. The code field is arguably a real monospace
- * use and may survive on merit; the other three come out when their surfaces
- * are redrawn.
+ * reskin took `font-mono` from 35 sites to ten, the flows outside the shell
+ * took it to four, and the shopping list took it to **two**: `ShoppingListModal`
+ * is deleted. What is left is the switcher's invite-code field and one loading
+ * string in `Pantry`. The code field is arguably a real monospace use and may
+ * survive on merit; the loading string comes out with the surface it is on.
  *
  * `display=swap` because the fallbacks are a generic serif and a generic sans;
  * a first visit that quietly kept them would not look like this app.

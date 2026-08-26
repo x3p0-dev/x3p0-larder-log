@@ -163,8 +163,8 @@ const BENEFITS: { title: string; body: string }[] = [
 		body: 'Invite the people you shop with. Owners and editors add and change things, viewers just look. Everyone sees the same counts, so nobody comes home with a third jar of marinara.',
 	},
 	{
-		title: 'The shopping list is a filter, not a chore.',
-		body: 'Pick a store and Larder Log shows what’s low or out there. Nothing to tick off and nothing to keep in sync — it’s the same data, asked a different way.',
+		title: 'The shopping list is a view, not a chore.',
+		body: 'Everything low or out, grouped by the shop you buy it at. Tick things off as you go — nothing to keep in sync, because it’s the same data, asked a different way.',
 	},
 ];
 

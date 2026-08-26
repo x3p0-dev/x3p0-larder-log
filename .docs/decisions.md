@@ -1501,3 +1501,157 @@ names are distinct under `termKey`. Both failures are invisible when wrong — a
 mistyped token falls through to the legacy-hex derivation and renders in *some*
 colour, and a duplicate name leaves the household one term short with no error
 anywhere.
+
+---
+
+## D41. The shopping list is a mode, and its checks are local
+
+**Decided:** 2026-08-26
+
+**Supersedes the contextual modal** that D0-era design specced and Phase 2
+shipped: a store banner above the grid, and a `ShoppingListModal` listing that
+store's low and out items.
+
+The rule the list now follows: **it is a *view* of the items, not a thing you
+keep.** Every item currently low or out, grouped by where you would buy it.
+Nothing is authored into it and nothing is authored out of it — an item arrives
+when its count drops under its low-at and leaves when someone puts the count
+back up. That is why there is no shopping-list tab, no *add to list*, and no
+way for the list and the pantry to disagree.
+
+**It replaces the content column rather than covering it.** Three reasons, all
+of them already rules here:
+
+1. A modal is a *question* — centred, focus-trapped, dismissed to continue —
+   and D36 says so out loud. A shopping list is a reference you read while
+   doing something else.
+2. The modal had no interaction at all, so there was nothing to check off,
+   which is the one thing a shopping list is for.
+3. It was a dead end: no way to change store, fix a wrong count, or reach the
+   item without closing it first.
+
+**Rejected: one 720px document with the stores ruled across it.** A hairline
+and a small label are not enough separation when you are scanning four shops at
+once, and it left most of a 1440 screen empty. A card per store makes the store
+a *bounded object* rather than a label, and gives the width something to do.
+
+### The trigger is secondary, and placement does the work
+
+One control on **row 2, immediately after the three status pills**, with two
+labels: `Shopping list` + an ink count pill in grid mode, `‹ Back to items` in
+list mode. Both wear the same shell — `surface` on a `line strong` border with
+an ink label.
+
+**Placement is doing the work that colour was doing.** The eye crosses
+`9 in stock · 6 running low · 5 out` and lands on the thing to do about it. That
+sequence is the on-ramp, and it only exists because row 2 already summarises
+status.
+
+**Rejected: the amber trigger, built first.** It wore the low tokens on the
+argument that it is the one control that exists because something is running
+low. That argument was made against a top bar with a title and no status pills
+— **a top bar that does not exist**. Against the real one it lands a gap away
+from `6 running low`, which is already amber and means something else, and two
+amber controls side by side saying different things is worse than neither. It
+is secondary now, and *Add item* keeps the only ink fill on screen.
+
+The finding underneath it still stands and will bite again: **the status tints
+were designed to sit on a card.** On the ground the low tint reads 1.03:1 and
+the low border 1.16:1. Anything that wants to be amber out there needs the low
+*text* colour as its border — 5.08 light, 9.33 dark — not the border token.
+
+**When space is short it drops its label** for a 20px cart glyph and keeps the
+count pill — 74px instead of 165. It is the only element on that row with a
+fixed cost, and *Shopping list* is the most expendable phrase on the screen once
+the pill says 11 and the glyph says what kind of 11. **`‹ Back to items` keeps
+its words**: it is the exit, and an unlabelled back arrow on a screen with no
+title is a guess.
+
+### Row 2 sizes off the column, not the viewport — 2026-08-26
+
+**Found by using it**, not by drawing it. The boards switch row 2's controls to
+their compact forms at 390, on `md:`. That is wrong in the middle: a docked
+drawer costs **340px**, so a 1280 screen leaves 872 of content and is every bit
+as cramped as a phone while sitting well above every mobile breakpoint. The
+pills, the trigger and the sort all crushed together there.
+
+`ROW2_FULL_PX` is **910**, measured from the parts rather than chosen: three
+pills at full padding are 368, *Shopping list* with its pill is 165,
+`Showing 20 of 20` is ~112, the sort naming *Recently added* is ~207, plus the
+row's gaps. A `ResizeObserver` on the content column decides it, because the
+drawer's three states change the available width without the viewport moving at
+all. It starts `true` — the compact row fits everywhere and the full one does
+not, so the one frame before the observer fires is the one that can only have
+too much room.
+
+**The one thing that stays on the viewport is where the trigger lives.** Below
+`md` it moves into the mobile header, squared up with the wordmark opposite the
+menu button — it is chrome, a standing fact about the household rather than a
+fact about the screen you are on. That is what buys the status pills and the
+sort room to share one line again at 390, which they could not do with a third
+control between them. **The exit does not move**: `‹ Back to items` stays in row
+2 with the list it exits, where it can keep its words; beside a 27px wordmark at
+390 neither would have room.
+
+Row 2 gives up **`Showing X of Y`** first when compact — the pills already carry
+the counts that matter and the grid is directly below. The list's trip line
+never goes, because nothing else on screen says it.
+
+**Its count is the unfiltered total, always.** Scope to a store with nothing to
+buy and the meta line reads `0 to buy at Costco` while the trigger still holds
+11. The trigger answers *is there shopping to do*, which is a fact about the
+household; the meta line answers *what is on this screen*.
+
+It is hidden when nothing is low or out — the same argument that hides the sort
+trigger at zero items (D37): a control that can only disappoint.
+
+### Checks are local, and they expire
+
+Check state lives in `localStorage`, which makes it the **third** thing there
+after the theme override (D25) and the selected household (D33), and for the
+same reason: it is a property of this device. Reloading in a shop, on a phone
+with two bars of signal, has to come back to the list with the ticks intact.
+
+Three rules clear a check and none of them needs a button:
+
+1. The item leaves the list — anyone restocks it, and the check goes with the
+   row.
+2. Twenty-four hours pass. A shopping trip does not last a day, and a week-old
+   tick is a lie. The window runs from the **last** tick rather than the first,
+   so a slow shop cannot expire underneath someone still walking it.
+3. The household is switched. Checks belong to a list, not to you — which is
+   why the household id is stored *in* the record rather than used as its key.
+   A key per household would hand yesterday's ticks back when you switched away
+   and returned.
+
+**They are deliberately not shared.** Two people at two different stores would
+collide on the same rows, and a tick meaning "in *my* cart" cannot be read by
+someone else without saying whose. That is a real feature and it belongs with
+restocking, not before it — which is what the trip bar's empty right half is
+reserved for. Until restocking exists, coming home from the shop means stepping
+every item by hand.
+
+### Consequences
+
+- `ShoppingListModal` is deleted, along with the store banner above the grid.
+  The Store filter is now just a filter.
+- `shared/shoppingList.ts` owns the grouping and both orderings — groups A–Z
+  with the storeless one last, rows out-before-low then A–Z, the latter being
+  the *Needs restocking* sort reused rather than reinvented.
+- An item that names several stores appears under **every** one of them: you
+  can buy it at either, and picking one would be guessing. So the count is of
+  items, never of rows.
+- `Theme` gains `divider` — a hairline *inside* a card, softer than `border` in
+  light and identical to it in dark. At `#E2D5C0` a rule every 56px stripes a
+  card into a ladder; below `#3E3527` it disappears at the dark fill.
+- **Row 2 empties out and re-fills in list mode.** The status pills go — you are
+  already filtered to low and out, so `9 in stock` has nothing to say — and so
+  does the sort trigger, because the list has one fixed order. Row 1 does not
+  change at all, so the switch reads as the content changing rather than the app
+  changing.
+- **The status pills tighten at 390 rather than truncating**: padding 16 → 13,
+  gap 9 → 7, label 14 → 13.5, which brings the three of them from 368px to 332
+  against the 358 available. Shortening the copy was the other option and it is
+  worse — *running low* is the phrase, and *low* is a different, vaguer claim.
+- The marketing page's third benefit said "Nothing to tick off". It is now
+  wrong, and the copy is changed to match.

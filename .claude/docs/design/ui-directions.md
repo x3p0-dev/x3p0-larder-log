@@ -15,7 +15,17 @@ Above the tabs: wordmark, then the **household switcher** — a full-width butto
 
 **Add item** is a sheet: 480px from the right on desktop, a near-full-height bottom sheet with a grabber on mobile. Name → on-hand stepper + low-at → Location / Type / Store chip pickers (selected chip fills with its own term colour and takes ink text; unselected is neutral with a coloured dot; each group carries its `+ …` chip) → notes → sticky Cancel / Save item.
 
-**Shopping list is contextual only.** Filter by a store → banner above the list → modal of that store's low and out items.
+**The shopping list is a mode, not a surface.** A control in the top bar swaps the content column for the list, grouped by store — see *Shopping list*.
+
+### The top bar — two rows
+
+Recorded here from the build, because the document never described it and had drifted into describing something else.
+
+**Row 1** is search and the primary, and it is the same in every mode: a full-width **search field** — 52px, radius 16, surface fill on `line`, a 20px search glyph in meta, placeholder *What are you looking for?* at Karla 400 16px meta — with **Add item** at the same 52px height beside it. At 390 the primary drops its label and becomes a 52px square.
+
+**Row 2** is the state of what you are looking at. In the item grid: three **status pills** (`9 in stock` · `6 running low` · `5 out` — status tint, border, text and dot, 40px, radius 999, and each one filters), then the shopping-list control, then `Showing 20 of 20` and the sort trigger pushed right.
+
+> **There is no title in the right pane, and there never was.** The zero-items rule below used to say the top bar "keeps the title and the count", which described a component that does not exist — the count lives in `Showing X of Y` on row 2. Corrected in both places.
 
 ## Collapsed rail
 68px. Eight controls in three groups, `aria-label` on every one and a tooltip to the right after ~400 ms.
@@ -75,6 +85,7 @@ Ground is a gradient in both: `radial-gradient(135% 105% at 10% -12%, …)`.
 | Sunk / well | `#F2EADC` | `#221C14` |
 | Line | `#E2D5C0` | `#3E3527` |
 | Line strong | `#CFBEA3` | `#544737` |
+| Divider, inside a card | `#EEE4D2` | `#3E3527` |
 | Drawer (grad) | `#2B2419 → #1F1A13` | `#15110B → #0F0C07` |
 | Drawer raised | `#332B22` | `#231D15` |
 | Drawer well | `#191510` | `#0A0805` |
@@ -365,7 +376,7 @@ Creating drops straight into the app, seeds already in the drawer, no items.
 Types are the existing assignments from *Term colours*, unchanged. Locations and stores are new and generic on purpose — the sample data's Meat Freezer, Calfee Cattle and Publix are one household's vocabulary, not a default.
 
 - **Empty state**, centred in the content column: Playfair **italic 500 27px** *Nothing in the larder yet.* + meta *Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like.* + a single *Add item* primary.
-- **At zero items the top bar carries neither the sort trigger nor an Add item button.** Sorting nothing is a control that can only disappoint, and two *Add item* buttons on one screen is one too many. The top bar keeps the title and the count; the empty state owns the screen's only primary. Both come back with the first item.
+- **At zero items the top bar carries neither the sort trigger nor an Add item button.** Sorting nothing is a control that can only disappoint, and two *Add item* buttons on one screen is one too many. The top bar keeps search and the `Showing X of Y` count; the empty state owns the screen's only primary. Both come back with the first item.
 
 ### Invite accept — the `?join=` landing
 Four cases, all on the 440px card, all left-aligned. The header is shared: eyebrow `INVITATION` → 44px household tile (the initial on the household's term colour, exactly as the collapsed rail draws it) → *Join Calfee Household* → the role sentence.
@@ -395,7 +406,7 @@ No layout adaptations beyond that. Every card outside the shell is now short eno
 - **A dark focus halo for the composer field** — `rgba(212,99,107,.18)`, the light halo's alpha in the dark crimson. The token table gave light only; it is now in the composer table above.
 - **The wordmark scales to 38px** on the sign-in card and 32px on mobile — the first time it leaves 27px.
 - **A marketing headline scale**, Playfair 600 at 56px desktop / 34px mobile, above anything the type ramp currently carries. Public page only.
-- The **Gravatar mark is a placeholder on every board**: a ring with an inner dot. The real drawing — a ring broken at the top with a spoke to the centre, on lucide's 24px grid at stroke 2 — is in `Brand.tsx` as of 2026-08-26, so the boards and the build differ here and the build is right. The spinner's radius tracks it.
+- The **Gravatar mark is a placeholder** on every board: a ring with an inner dot. Swap the official asset in before build.
 
 ## The marketing page
 Public, at `/`. One offer, one call to action, repeated three times — nav, hero, close.
@@ -455,13 +466,235 @@ Mobile keeps the same anchored popover (six rows don't earn a sheet) at 44px row
 
 **Deltas from the shipped markup:** 248px not 176px (`w-44` was clipping *Quantity · fewest first*), rows 14px not 12px, radius 14 not 6, check instead of `#F2EADC` fill, and the trigger names the sort.
 
-**The sort trigger is hidden at zero items** — see *Flows outside the shell*.
+**The sort trigger is hidden at zero items** — see *Flows outside the shell*. It is also hidden in list mode — see *Shopping list*.
+
+## Shopping list
+
+**The rule: the shopping list is a *view* of the items, not a thing you keep.** It is every item currently low or out, grouped by where you'd buy it. Nothing is authored into it and nothing is authored out of it — an item arrives when its count drops under its low-at and leaves when someone puts the count back up. That is why there is no shopping-list tab, no "add to list", and no way for the list and the pantry to disagree.
+
+It replaces the content column rather than covering it, at the **full width of the column minus the 32px gutters** — one card per store, laid out in a grid.
+
+> **Why not the modal that was specced here.** Three reasons, all of them already rules in this document. A modal is a *question* — centred, focus-trapped, dismissed to continue — and the confirm spec says so out loud; a shopping list is a reference you read while doing something else. A modal had no interaction at all, so there was nothing to check off, which is the one thing a shopping list is for. And it was a dead end: no way to change store, fix a wrong count, or reach the item without closing it first. The modal was never designed, only assumed.
+
+> **And why not the single 720px document that replaced it.** One card with headers ruled across it made the stores too easy to miss — a hairline and a small label are not enough separation when you are scanning four shops at once — and it left most of a 1440 screen empty. Giving each store its own card fixes both at once: the store becomes a *bounded object* rather than a label, and the width finally has something to do with itself.
+
+### Entry and exit — one control, two labels
+
+The control sits on **row 2, immediately after the three status pills**, and it has two states whose labels say which:
+
+| Mode | Label | Treatment |
+|---|---|---|
+| Grid | `Shopping list` + an ink count pill | Surface fill, `line strong` border, ink label — secondary |
+| List | `‹ Back to items` | The same treatment |
+
+**Placement is doing the work that colour was doing.** The eye crosses `9 in stock · 6 running low · 5 out` and lands on the thing to do about it. That sequence is the on-ramp, and it only exists because row 2 already summarises status.
+
+> **An earlier draft made this amber, wearing the low tokens, and that was wrong for a reason worth keeping.** It was designed against a top bar that had a title and no status pills — an invention. Against the real one it lands a gap away from `6 running low`, which is already amber and means something else. Two amber controls side by side saying different things is worse than neither. It is secondary now, and **Add item** keeps the only ink fill on screen.
+
+> The finding underneath it still stands and will bite again: **the status tints were designed to sit on a card.** On the ground the low tint reads **1.03:1** and the low border **1.16:1**. Anything that wants to be amber out there needs the low *text* colour as its border — 5.08 light, 9.33 dark — not the border token.
+
+**It is hidden when nothing is low or out**, the same argument the sort trigger is hidden at zero items: a control that can only disappoint.
+
+**Its count is the unfiltered total, always.** Scope to a store with nothing to buy and the top bar reads `0 to buy at Costco` while the trigger still holds 11. The trigger answers *is there shopping to do*, which is a fact about the household; the top bar answers *what is on this screen*.
+
+> **The store banner is gone.** It existed to ring the modal's doorbell. With a permanent trigger that carries its own count, a second prompt above the grid pushes the grid down every time you filter a store and says what the top bar already said.
+
+**Row 1 does not change at all** — search and *Add item* stay exactly where they were, so the mode switch reads as the content changing rather than the app changing. *Add item* earns its place there: noticing at the shelf that you need something untracked is the most likely reason you'd add one, and an item added with 0 on hand lands on the list you're standing in.
+
+**Row 2 empties out and re-fills.** The three status pills go — you are already filtered to low and out, so `9 in stock` has nothing to say. The sort trigger goes, because the list has one fixed order and offering to change it would be a lie. What is left is `‹ Back to items` on the left and `11 to buy · 4 stores · 3 in the cart` pushed right, in the slot `Showing X of Y` occupies in the grid.
+
+**Search persists and narrows the cards.** It is the one row-1 element that could have gone either way; keeping it costs nothing, and a household with forty items low needs it more than the grid does.
+
+**Escape returns to the grid** when focus is inside the list and no sheet or dialog is open. The mode is not an overlay, so nothing else claims the key.
+
+### The list obeys the filters
+
+It is a view of the same filtered set, narrowed to low and out. A Type filter of *Produce* gives you the produce run; a Store filter collapses it to that one card. When any filter is hiding something, the count says so — `6 of 11 to buy` — rather than quietly showing you a short list.
+
+### The grid
+
+`repeat(auto-fill, minmax(min(460px, 100%), 1fr))`, 24px gap, `align-items: start` so each card keeps its natural height and the bottoms run ragged. At 1440 with the drawer docked that is **two columns**; it drops to one below about 940 and would take a third past ~1470 of column width. **`auto-fill`, not `auto-fit`** — with one store card left after a filter, auto-fit would stretch it across the whole screen; auto-fill leaves the empty track and the card stays one column wide.
+
+> **460 is the width at which the row stops working, measured rather than chosen.** Below it *Shredded Cheese* and its badge collide with `have 0 · low at 2`. Drawn at 340 in an early anatomy board and the two ran straight through each other. Below 460 the row takes its stacked form.
+
+Cards are ordered A–Z with `NO STORE` last, reading left to right.
+
+### The store card
+
+Card tokens, radius 20, `line` border in light and **`line strong` in dark** — the confirm modal's rule. The fill separates from the dark ground at 1.27:1, so the border is the edge.
+
+**The header is the tag component, stretched to the card's width.** Term tint fill, term border along the bottom, an 8px term-base dot, the store name in term text at Karla 700 12px / 0.12em uppercase, the count on the right. This is the one place a term's colour has ever filled a whole band, and it earns it: the store is the organising fact of the entire screen, and the doc already sanctions tags in the shopping list.
+
+Every pairing clears 4.5:1 on its own tint — tightest are Olive at 4.72 light and Clay at 4.65 dark.
+
+`NO STORE` takes the **sunk** fill with a `line` bottom border and a meta label, and has no dot — no term means no colour. It reads quieter by having no hue at all rather than by being dimmer. Opening one of its rows is how you give it a store.
+
+**Order inside a card:** out before low, then A–Z. That is the existing *Needs restocking* sort, reused rather than reinvented.
+
+### The row
+
+56px desktop, hairline between, no border above the first (the header's own border does that job):
+
+| Slot | Content |
+|---|---|
+| Left, 56px | The checkbox — 22px, radius 7, its own tap target |
+| Name | Playfair 600 17px, ink |
+| Status | `OUT` / `LOW` badge — Karla 700 9.5 / 0.1em uppercase in the status tint, border and text |
+| Right | `have 0 · low at 4`, meta 13px, right-aligned |
+
+**The row is not a click target.** The left 56px checks; the name and meta open the Edit sheet. Two controls, both over 44px, and no way to open a sheet when you meant to tick something — which on a phone in a shop is the whole game.
+
+**Below 460 the row stacks** — name and badge above, counts below, height 64, checkbox column 52. See the grid note for why.
+
+**The checkbox is the chip rule at 22px.** Off is surface on a 2px **meta** border; on is the inversion every selected control in this app uses — ink fill and cream check, cream fill and ink check in dark. Nothing new.
+
+> **It takes `meta`, not the composer field's border, and that is a contrast finding rather than a preference.** `#6E5F4B` is the strongest border in the dark palette and the toast leans on it — but the toast sits on the *ground*. On the card surface it falls to **2.45:1**, under the 3:1 a control outline needs, and an unchecked box you cannot see is the worst possible failure in this component. Meta gets it to 5.08 dark and 5.85 light, and holds 5.10 and 5.67 through row hover.
+
+**Checked rows do not move.** Strike the name, hold the badge at 55%, fill the box. Reordering a list under someone's thumb is the same failure the undo rule already names — an item that silently changes place is worse than one that doesn't respond.
+
+> **A checked row drops to `meta`, not to `faint`.** Faint reads at 3.18:1 on the surface and **2.77:1** once the row is hovered, and "did I already get the butter?" is a question you ask *about the checked rows*. The filled box and the strike have already said it is done; taking the legibility as well is punishment, not hierarchy.
+
+### The trip bar — where the trip lives
+
+A full-width bar **below** the grid, 24px down: sunk fill, `line` border, radius **15** (controls radius, not card radius — it is a bar, the same argument the toast makes). 52px desktop, 56px mobile. Left: ghost **`Hide 3 checked`** / `Show 3 checked`. Right: reserved.
+
+It appears only once something is checked. **A list with a checked row in it always has this bar** — if a board shows one without the other, the board is wrong.
+
+> **It used to be a footer inside the card, and the split into store cards is what moved it.** *Hide checked* is a fact about the trip, not about Costco. With several cards there is no one card for it to sit in, and putting a copy in each would be five controls doing one job.
+
+When everything is checked the bar becomes the completion note and grows to **70px** — the one variant carrying a disc and two lines rather than a single control. A **stocked**-token disc and check, *Everything's checked off.*, meta *Update your counts when you unpack.*, and a ghost *Back to items*. Green because nothing is wrong and nothing is pending — the third rung of the same ramp the item badges use, the same argument as *already a member*.
+
+> **The right half of the bar is deliberately empty, and it is reserved for restocking.** Checking a row means "it's in the cart", and the honest end of that sentence is setting the count when you unpack — which is a write to the item, which makes it shared, which is a different design. The bar exists now so that flow has somewhere to land later instead of arriving as a new surface.
+
+### Checks are local, and they expire
+
+Check state lives in `localStorage` against the household id, along with the fact that you were in list mode. **Reloading in a shop returns you to the list with your ticks intact** — the single most likely thing to go wrong on a phone with two bars of signal.
+
+Three rules clear a check, and none of them need a button:
+
+1. The item leaves the list — anyone restocks it, and the check goes with the row.
+2. Twenty-four hours pass. A shopping trip does not last a day, and a week-old tick is a lie.
+3. The household is switched. Checks belong to a list, not to you.
+
+They are **not shared**. Two people at two different stores would collide on the same rows, and a tick that means "in *my* cart" cannot be read by someone else without saying whose. That is a real feature and it belongs with restocking, not before it.
+
+### Empty and zero
+
+| Case | Screen |
+|---|---|
+| Nothing low or out | Unreachable — the trigger is hidden |
+| A store filter with nothing to buy | Stocked disc + check, *Nothing to buy at Costco.*, meta *Other stores have 7 items to buy.*, ghost *Clear the store filter* |
+| Filters hide everything to buy | Stocked disc, *Nothing to buy in this filter.*, ghost *Clear all filters* |
+
+One card, max-width 520, sitting in the grid's first track — an empty state stretched across 1036px would be absurd. Green in every case, never amber: amber is "hold on", and nothing here is being asked of anyone.
+
+### Mobile
+
+The grid collapses to one column at 16px gutters, cards 16px apart, rows stacked at 64. **Every control clears 44px**: the trip bar's ghost goes 34 → 44, and the top bar's *Add* goes 38 → 46. The rows and the checkbox column already cleared it; those did not, and they are the controls you press with one hand holding a basket.
+
+**The trigger drops its label and keeps the glyph and the count** — a shopping-cart SVG at 20px in ink, then the same inverted ink count pill, in the same surface-on-`line strong` shell. 74px instead of 165. It is the only element on that row with a fixed cost, and *Shopping list* is the most expendable word on the screen when the pill already says 11 and the icon already says what kind of 11.
+
+**The top bar takes three rows in grid mode**, because row 2's desktop contents cannot share 358px: search + *Add* (label dropped, a 52px square), then the status pills, then the cart trigger with `20 of 20` and a shortened `Sort · Recent` pushed right. In list mode it is back to two — search + *Add*, then `‹ Back to items` with the count — because the pills and the sort are both gone. **`‹ Back to items` keeps its words on mobile**: it is the exit, and an unlabelled back arrow on a screen with no title is a guess.
+
+> **The status pills tighten rather than truncate.** At desktop padding the three of them measure 368px against 358 available and wrap onto two lines each, which looks broken rather than tight. Padding 16 → 13, gap 9 → 7, label 14 → 13.5 brings them to 332 with room. Shortening the copy was the other option and it is worse — *running low* is the phrase, and *low* is a different, vaguer claim.
+
+### Motion
+
+Grid → list is a 160ms crossfade with the cards rising 8px, ease-out, staggered 20ms apart. Checking is 120ms on the box and 140ms on the row's treatment. Hiding checked rows collapses in 180ms and the grid reflows in 160ms. Under `prefers-reduced-motion` all of it becomes a fade and the row treatment applies instantly.
+
+### Keyboard and screen readers
+
+Each store card is a `<section>` labelled by its header (`<h3>`), holding a `<ul>` of `<li>`. The checkbox is a real checkbox with `aria-label` *"Chicken Thighs — in the cart"* and its own `aria-checked`. Tab order runs card by card, checkbox → name down each; the trip bar comes last. Entering the mode announces `Shopping list, 11 items to buy across 4 stores` through the existing polite live region. Hiding checked rows announces the new count.
+
+### Tokens
+
+| Part | Light | Dark |
+|---|---|---|
+| Card fill / border | `#FDFAF4` on `#E2D5C0` | `#2C251B` on `#544737` |
+| Store header fill / border / label | term `L tint` / `L border` / `L text` | term `D tint` / `D border` / `D text` |
+| `NO STORE` header | `#F2EADC` on `#E2D5C0`, label `#6F6049` | `#221C14` on `#3E3527`, label `#A5937A` |
+| Row hairline | `#EEE4D2` | `#3E3527` |
+| Row hover | `#F2EADC` | `#221C14` |
+| Name | `#241E17` | `#F2E9DA` |
+| Meta counts | `#6F6049` | `#A5937A` |
+| Checked name | `#6F6049`, struck | `#A5937A`, struck |
+| Checked counts | `#6F6049`, not struck | `#A5937A`, not struck |
+| Checkbox off | `#FDFAF4` on 2px `#6F6049` | `#2C251B` on 2px `#A5937A` |
+| Checkbox on | `#241E17` fill, `#F2E9DA` check | `#EFE3CE` fill, `#241E17` check |
+| Trigger, grid mode | `#F7EEDA` on 1.5px `#855A0F`, label `#855A0F` | `#2E2614` on 1.5px `#E2B85E`, label `#E2B85E` |
+| Trigger count pill | `#855A0F` fill, `#F7EEDA` text | `#E2B85E` fill, `#2E2614` text |
+| Trigger, list mode | `#FDFAF4` on `#CFBEA3`, `#241E17` | `#2C251B` on `#544737`, `#F2E9DA` |
+| Trigger, mobile grid | cart glyph `#241E17`, same shell | cart glyph `#F2E9DA`, same shell |
+| Trip bar fill / border | `#F2EADC` on `#E2D5C0` | `#221C14` on `#3E3527` |
+| Ghost label / hover | `#4C4237` / `#F2EADC` | `#DCD0BA` / `#221C14` |
+| Focus-visible | 2px `#BE3346`, 2px offset in the surface | 2px `#D4636B` |
+
+Status badges take the out and low tokens unchanged; the completion disc and the empty states take the stocked tokens unchanged. **No new colours.**
+
+> **A selected chip inside the drawer is cream-filled in both themes, not ink.** Drawn ink-on-dark first, per the chip table, and it vanished — the active *Costco* chip read as bare text. The chip table is written for chips on a light surface; the drawer is dark in both themes, so its selected chip takes the drawer's primary treatment exactly as the *Done* / *Add* pill and the toast's *Undo* already do. This settles half of the standing open question about drawer chips; the off-state half is still open.
+
+> **The light row hairline is the sort menu's divider, not `line`.** At `#E2D5C0` a rule every 56px stripes the card into a ladder — the border is doing edge work and cannot also do interior work. Dark has the opposite problem and keeps `#3E3527`: anything softer disappears at that fill.
+
+### Boards
+
+Own canvas — eight boards, each with its dark counterpart, 16 total:
+
+https://claude.ai/code/artifact/888ae656-3714-455c-ba43-b172e5fda94a
+
+1. **Entry** — desktop 1440 in grid mode, drawn against the real top bar, so the trigger is shown where you would actually find it
+2. Shopping list — desktop 1440, full width, two columns, part-checked, trip bar
+3. Scoped to Costco — one card in its own track
+4. Trip bar, all checked, beside the scoped empty state
+5. Row, checkbox, trigger and card-header anatomy
+6. **Mobile 390 — grid mode**, so the cart trigger is shown where it is found
+7. Mobile 390 — the list, one column
+8. Mobile 390 — hide-checked with the trip bar, and the empty state
 
 ## Item card
 Name (no icons beside it) · status badge or dot + expand chevron · term **tags** in their own colours (see Chips and tags — cards carry tags, never chips) · big numeral + "low at N" + stepper. Expands in place to notes + Edit / Remove.
 
 ## Sample dataset
-Ground Beef 75 (low 15, Meat Freezer, Calfee) · Ribeye 12 (low 6) · Chicken Thighs 4 (low 6, Upright, Aldi) LOW · Butter 2 (low 4, Upright, Costco) LOW · Black Beans 0 (low 4, Pantry, Publix) OUT · Jasmine Rice 3 (low 2, Pantry, Costco) · Frozen Peaches 8 (low 3, Chest) · Marinara 6 (low 3, Pantry). Totals 5 / 2 / 1. Default sort: recently added.
+
+Twenty items. Insertion order is the list order, so **Recently added** runs bottom-up from here.
+
+| # | Item | On hand | Low at | Location | Store | Type | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | Ground Beef | 75 | 15 | Meat Freezer | Calfee Cattle | Protein | — |
+| 2 | Ribeye | 12 | 6 | Meat Freezer | Calfee Cattle | Protein | — |
+| 3 | Chicken Thighs | 4 | 6 | Upright Freezer | Aldi | Protein | **LOW** |
+| 4 | Butter | 2 | 4 | Upright Freezer | Costco | Dairy | **LOW** |
+| 5 | Black Beans | 0 | 4 | Pantry | Publix | Protein | **OUT** |
+| 6 | Jasmine Rice | 3 | 2 | Pantry | Costco | Grain | — |
+| 7 | Frozen Peaches | 8 | 3 | Chest Freezer | — | Produce | — |
+| 8 | Marinara | 6 | 3 | Pantry | — | Condiment | — |
+| 9 | Olive Oil | 1 | 2 | Pantry | Costco | Condiment | **LOW** |
+| 10 | Bacon | 0 | 2 | Upright Freezer | Costco | Protein | **OUT** |
+| 11 | Chicken Breast | 14 | 8 | Upright Freezer | Costco | Protein | — |
+| 12 | Coffee | 1 | 2 | Pantry | Publix | Beverage | **LOW** |
+| 13 | Tortillas | 0 | 2 | Pantry | Publix | Grain | **OUT** |
+| 14 | Peanut Butter | 3 | 2 | Pantry | Publix | Condiment | — |
+| 15 | Frozen Corn | 2 | 4 | Chest Freezer | Aldi | Produce | **LOW** |
+| 16 | Pasta | 5 | 3 | Pantry | Aldi | Grain | — |
+| 17 | Ground Chuck | 8 | 10 | Meat Freezer | Calfee Cattle | Protein | **LOW** |
+| 18 | Shredded Cheese | 0 | 2 | Upright Freezer | Costco | Dairy | **OUT** |
+| 19 | Baking Soda | 0 | 1 | Pantry | — | Baking | **OUT** |
+| 20 | Cinnamon | 4 | 1 | Pantry | — | Spice | — |
+
+**Totals 9 stocked / 6 low / 5 out.** Default sort: recently added.
+
+**The shopping list it produces** — 11 to buy across five groups, which is the point of the extension:
+
+| Group | To buy |
+|---|---|
+| Aldi | Chicken Thighs · Frozen Corn |
+| Calfee Cattle | Ground Chuck |
+| Costco | Bacon · Shredded Cheese · Butter · Olive Oil |
+| Publix | Black Beans · Tortillas · Coffee |
+| `NO STORE` | Baking Soda |
+
+> **Why it grew from eight.** Every store in the old set had at most one low or out item, so the shopping list was five groups of one row and there was nothing to judge — no grouping to test, no scroll, no reason to hide checked rows, and the one flow that most needed sample data was the one the data couldn't exercise. The extension also gets a store with two *out* and two *low* (Costco) so within-group ordering is visible, and one storeless item so `NO STORE` is drawn rather than described.
+
+> **Knock-on:** items 9–20 are appended, and *Recently added* is newest-first, so they land at the **top** of the default grid. The app canvas's 27 boards were drawn against the original eight and would need a re-render to match. Nothing about their layout changes — only which rows appear — so this is a redraw, not a redesign.
 
 ## App icon
 **Oat** — ground `#E2D5C0`, L in ink `#241E17`, **Playfair Display roman 800 at 66% cap height**. 11.4:1.
@@ -490,7 +723,8 @@ The L is a converted outline, not `<text>` — icons render without webfont acce
 ## Gaps — not yet designed
 
 ### Changes existing screens (decide before building more)
-- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision.
+- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision. **The shopping list adds two more:** a Viewer gets no checkboxes and no *Add item*, which leaves the list a pure read surface — worth confirming it is still worth reaching.
+- **Restock — the flow the shopping-list footer reserves space for.** Checking a row means "it's in the cart"; the honest end of that sentence is setting the count when you unpack. That is a write to the item, so check state goes from local to shared, and the whole *checks expire* section is replaced by a trip that ends. The right half of the list footer is empty and waiting for it. Until it exists, coming home from the shop means stepping every item by hand — the actual chore the app leaves on the table.
 
 ### States an SPA hits constantly
 - Loading / skeleton on first paint; optimistic feedback on a stepper tap.
@@ -498,31 +732,42 @@ The L is a converted outline, not `<text>` — icons render without webfont acce
 - Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise.
 - **Session expiry.** What happens when the token dies with the app open — the sign-in card exists, but nothing says whether you get bounced to it, get it as a modal over your work, or keep reading a stale list until you touch something.
 
+### The document has drifted from the build
+Search **is** built — it is row 1 of the top bar — and this document simply never recorded it. It is written down now under *The top bar*, from a screenshot rather than from the canvas, so treat the numbers there as observed and not as decided. Still open on it: the focus state, what it matches (name only, or tags too), whether it is debounced, the no-results screen, and whether it reaches the term lists in the drawer.
+
+Four more components are in the build and were never in this document, found the same way. They are listed rather than specced, because one screenshot is not a spec:
+
+- **Filter chips carry counts** — `Pantry 10`, `Snack 0` — including zeroes.
+- **A leading `All items 20` chip** heads the Location group, selected, acting as that group's clear.
+- **The drawer has a collapse button** beside the wordmark, which is how the rail is reached; the rail spec describes the return trip but not the outbound one.
+- **The Filter and Settings tabs carry icons**, and the item card's stepper is asymmetric — minus on the sunk fill, plus on the ink primary.
+
+The lesson is the one worth writing down: **anything not drawn on a canvas drifts out of this document silently.** Two turns of shopping-list work were specced against a top bar with a title that does not exist.
+
 ### Flows outside the app shell
 Specced and drawn — see *Flows outside the shell* and *The marketing page*. What is left in that area:
 
+- **The real Gravatar mark.** Every CTA on the canvas carries a placeholder glyph.
 - **A proof section for the marketing page** — the slot is left open between the benefits and the band.
 - **Privacy and terms have no home.** They are deliberately out of the footer and out of Settings, so if either page ever has to exist, where it is linked from is undecided.
 - **Wrong-account-on-invite.** Signed in as someone the invite wasn't issued to. Probably the *already a member* shell with a "switch accounts" action, but it isn't drawn.
 - Sign-out confirmation, if any. Currently a plain ghost action with nothing behind it.
 
 ### Empty states
-Zero items in a new household is drawn (*Flows outside the shell*). Still open: no filter matches · no search results · a location with nothing in it · a shopping list with nothing low or out.
+Zero items in a new household is drawn (*Flows outside the shell*), and the shopping list's *scoped, nothing to buy* is drawn (*Shopping list*). Still open: no filter matches · a location with nothing in it · the shopping list's other empty, *Nothing to buy in this filter* — specced but not drawn, and near-identical to the one that is. **No search results** may already exist in the build; check before drawing it.
 
 ### Robustness
-- Tablet, 768–1024px. Only 1440 and 390 are drawn — for the app **and** the marketing page; the drawer's auto-collapse point, the grid's column count, and whether the marketing hero's two columns stack before 1024 are all undecided.
-- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating.
+- Tablet, 768–1024px. Only 1440 and 390 are drawn — for the app, the marketing page **and** the shopping list; the drawer's auto-collapse point, the grid's column count, whether the marketing hero's two columns stack before 1024, and which side of 720 the list row stops stacking are all undecided.
+- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating. The list row sets `white-space: nowrap` on both the name and the counts, so a long name has no drawn behaviour either.
 - Keyboard: focus trap in the drawer and sheets, Escape behaviour, and screen-reader labelling for the steppers — the app's primary control.
 - Typing a quantity directly rather than stepping to it.
-
-### Content note
-Every store in the sample data has at most one low or out item, so the shopping-list modal is always a single row. Worth widening the sample before judging whether it earns a modal.
 
 ## Open questions
 - Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites.
 - Invite links are cramped at 340px.
-- Each store has ≤1 low/out item in the sample data, so the shopping-list modal is a single row.
-- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one.
-- **Seeded stores are the weakest of the three groups.** Locations and types are near-universal; where someone shops is not, and Grocery / Warehouse / Market may just be three chips a new user deletes. Seeding no stores at all is defensible — the trade is that the Store filter then opens empty on day one.
+- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one. The shopping list raises the same question one level up — the mode itself is remembered across a reload but nothing says what a household switch does to it beyond clearing the checks.
+- **Seeded stores are the weakest of the three groups.** Locations and types are near-universal; where someone shops is not, and Grocery / Warehouse / Market may just be three chips a new user deletes. Seeding no stores at all is defensible — the trade is that the Store filter then opens empty on day one, and that every item lands in the shopping list's `NO STORE` group until someone makes one.
 - **Off-state chips inside the drawer change brightness by theme, but the drawer doesn't.** Chip Off is surface-on-line, which maps to `#FDFAF4` in light and `#2C251B` in dark — yet the drawer is dark in both. Both read fine; they just aren't the same idea. First visible on the first-run board. Either the drawer gets its own chip pair, or the rule becomes "chips take the surface of the pane they sit in" and the light-mode drawer keeps its bright chips on purpose.
+- **Top-bar controls have almost no edge against the ground.** The sort trigger's open state (`#F2EADC` on `#CFBEA3`) separates from the ground at **1.00:1 fill / 1.53:1 border**, and *Back to items* at 1.14 / 1.53. The shopping-list trigger only escapes it by taking a 1.5px `low text` border. Either the whole top bar sits on its own surface, or every control in it borrows that trick. Left alone for now because nothing in the bar is hard to find once you know it is there — which is exactly the assumption that made the shopping list hard to find.
 - **What does `/` do for someone already signed in?** Straight through to the app is the obvious answer; showing them the marketing page is the one that lets them find the pitch again to send to someone.
+- **Twenty-four hours is a guess.** It is the interval that clears a stale shopping-list check, picked because a trip does not last a day. Nothing has tested it, and the failure mode is silent: a tick that vanishes while you are still in the shop.

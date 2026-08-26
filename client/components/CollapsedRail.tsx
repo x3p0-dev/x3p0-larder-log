@@ -6,7 +6,7 @@ import {
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { RailFlyout } from './RailFlyout';
 import type { Theme } from '../lib/theme';
-import { drawerDot, termColorFor } from '../lib/theme';
+import { chipDot, termColorFor } from '../lib/theme';
 import type { HouseholdSummary, Term, ThemeOverride } from '../../shared/types';
 
 type Group = 'location' | 'store' | 'type';
@@ -372,7 +372,6 @@ export function CollapsedRail({
 								All items <span class={g.active === null ? 'text-accent' : 'text-on-dark-faint'}>{itemCount}</span>
 							</button>
 							{g.terms.map((t) => {
-								const c = termColorFor(t.ink);
 								const on = g.active === t.id;
 								const n = g.key === 'location' ? locationCounts[t.id] || 0 : undefined;
 
@@ -382,7 +381,8 @@ export function CollapsedRail({
 										onClick={() => { g.set(on ? null : t.id); setMenu(null); }}
 										class={`flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] ${on ? 'bg-drawer-press text-drawer-press-ink font-semibold' : 'bg-drawer-raised text-on-dark-muted hover:bg-drawer-card-hover'}`}
 									>
-										<span class="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c ? drawerDot(c) : t.ink }} />
+										{/* Cream-filled when selected, so the dot swaps to the light base. */}
+										<span class="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: chipDot(t.ink, on) }} />
 										{t.name}
 										{n !== undefined && <span class={on ? 'text-accent' : 'text-on-dark-faint'}>{n}</span>}
 									</button>

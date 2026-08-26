@@ -2491,3 +2491,47 @@ auth bypasses at once.
 `.spacefast/zero/artifact.json` on the next `--dry-run` — four queries where
 there were three, nine tables and zero migrations untouched. D27's regex trap is
 specifically a *schema* trap; handlers behave normally.
+
+---
+
+## 2026-08-26 (fourth) — building the shopping list: two small good things
+
+A client-only feature this round — no schema, no handlers — so most of the
+platform stayed out of the way, which is itself worth recording.
+
+### 👍 `sf dev --port` runs a second server beside the first, cleanly
+
+A dev server was already up on 4173 and its capability token was not
+recoverable from outside the process, so verification needed its own instance.
+`npx sf dev --port 4199` started, compiled the capsule, printed its own
+capability, and served `/`, `/zero.css`, `/client.js` and `/api/status` without
+either instance noticing the other. The in-memory state backend is presumably
+what makes this free.
+
+**Small ask:** when the port is taken, the error is a bare Node
+`EADDRINUSE: address already in use 127.0.0.1:4173` with an oclif stack trace.
+A one-line hint — "another `sf dev` may be running; try `--port`" — would save
+the guess.
+
+### 👍 The class-name scanner handles nested arbitrary values correctly
+
+`md:grid-cols-[repeat(auto-fill,minmax(min(460px,100%),1fr))]` — an arbitrary
+value with three levels of nesting and a `%` in it — compiled and appeared in
+`/zero.css` as
+`.md\:grid-cols-\[repeat\(auto-fill\,minmax\(min\(460px\,100\%\)\,1fr\)\)\]`.
+So did `ring-offset-surface-alt`, resolved from a `theme.json` palette slug.
+No caveats found.
+
+### 👎 (ours, not theirs) the escaped-selector grep caught us a fifth time
+
+Documented in our own instructions and we did it anyway: grepping `zero.css` for
+a hand-written escaped class name returns nothing and looks exactly like a
+missing class. The reliable check is to print the selectors and read them —
+
+```bash
+grep -oE '^\s*\.[^ {]+' zero.css | sed 's/^ *//' | sort -u
+```
+
+Not a platform bug. Recorded because the escaping is a real ergonomic cost of
+scanning source for static class names, and anyone verifying a Zero build by
+hand will hit it.

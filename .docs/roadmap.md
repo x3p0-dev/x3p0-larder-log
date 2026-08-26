@@ -498,6 +498,118 @@ terms would be linked from if they ever exist. Tablet — 768–1024 — is undr
 for the marketing page as well as the app; the hero splits its two columns at
 `xl` (1280), which is a choice made here rather than one the spec settled.
 
+### Phase 4.8 — The shopping list ✅ (2026-08-26)
+
+The spec's *Shopping list* section, governed by
+[D41](decisions.md#d41-the-shopping-list-is-a-mode-and-its-checks-are-local):
+**the list is a view of the items, not a thing you keep.** It replaces the
+content column rather than covering it.
+
+- **`ShoppingListModal` and the store banner are deleted.** The Store filter is
+  a filter again. A modal is a question, and it had nowhere to put a checkbox.
+- **`shared/shoppingList.ts`** owns the grouping and both orderings — groups
+  A–Z with the storeless one last, rows out-before-low then A–Z, which is the
+  *Needs restocking* sort reused rather than written twice. An item naming
+  several stores appears under **every** one of them, so the count is of items
+  and never of rows. `npm test` is at 150 assertions.
+- **`ShoppingList.tsx`** — one card per store in an `auto-fill` grid at a 460px
+  floor, `auto-fill` and not `auto-fit` so a single card left after a store
+  filter stays one column wide instead of stretching across the screen. The
+  card header is the tag component stretched to the card's width, which is the
+  one place a term's colour has ever filled a whole band.
+- **The row is not a click target.** The left column checks; the name and the
+  counts open the Edit sheet. Two controls, both over 44px, and no way to open
+  a sheet when you meant to tick something. Below `md` the row stacks, because
+  a long name and its badge collide with the counts on one line.
+- **`ShoppingListTrigger.tsx`** — one control, two labels, **secondary** in
+  both: `surface` on `line strong` with an ink label and an ink count pill. It
+  sits immediately after the three status pills, so placement does the work
+  colour would have. Hidden when nothing is low or out. Its count is the
+  household's, never the filtered one. At 390 it drops its label for a cart
+  glyph; *Back to items* keeps its words.
+- **`useTripChecks.ts`** — checks in `localStorage`, the third thing there
+  after the theme (D25) and the household (D33). Cleared when the item leaves
+  the list, after 24 hours of no ticking, or on a household switch.
+- **The trip bar** sits below the whole grid rather than inside a card, because
+  *Hide checked* is a fact about the trip and not about Costco. Its right half
+  is empty and reserved for restocking.
+- **In list mode the sort trigger is hidden** — the list has one fixed order,
+  and offering to change it would be a lie — and the meta line becomes
+  `11 to buy · 4 stores · 3 in the cart`. *Add item* stays: noticing at the
+  shelf that you need something untracked is the likeliest reason to add one.
+- **`Theme` gains `divider`**, a hairline inside a card. Softer than `border` in
+  light, identical to it in dark: at `#E2D5C0` a rule every 56px stripes a card
+  into a ladder, and below `#3E3527` it vanishes at the dark fill.
+- **The marketing page's third benefit said "Nothing to tick off"**, which the
+  checkbox makes false. The copy is changed; this is the only place the build
+  now differs from the front-door boards.
+
+**Corrected against the `-2` boards, 2026-08-26.** The first pass was built
+against a top bar the spec described and the app does not have — a title and a
+count, no search, no status pills. Three things changed once the real bar was
+drawn:
+
+- **The trigger stopped being amber.** It lands a gap away from `6 running low`,
+  which is already amber and means something else.
+- **It moved from beside Sort to immediately after the status pills**, which is
+  what makes it findable — the eye crosses the three counts and lands on the
+  thing to do about them.
+- **Row 2 empties out in list mode** — pills and sort both go, *Back to items*
+  takes the left, the trip count takes the right. Row 1 never changes.
+
+The mobile primary was left alone: the boards draw *Add item* at 390 as a 52px
+square in row 1, and the build's pinned bottom bar is correct — Justin's call.
+
+**The lesson, and it is the spec's own:** anything not drawn on a canvas drifts
+out of the design document silently. Two turns of work were specced against a
+component that did not exist.
+
+**Then corrected again from live use, 2026-08-26** — none of it in the boards:
+
+- **Row 2's compact forms now key off the measured content column**
+  (`ROW2_FULL_PX`, 910) rather than `md:`. The boards switch at 390, which is
+  wrong in the middle: a docked drawer costs 340px, so a 1280 screen leaves 872
+  and cramps exactly the way a phone does.
+- **The trigger moved into the mobile header** at the top right, level with the
+  wordmark. It is chrome rather than a fact about the current screen, and
+  taking it out of row 2 is what lets the status pills and the sort share one
+  line at 390 again.
+- **`Showing X of Y` is what row 2 gives up first** when compact.
+
+**Verified without a browser.** The capsule compiles and reloads; every new
+utility class is in `/zero.css`, checked by printing the selectors rather than
+hand-writing the escaped form — including the `auto-fill` grid,
+`ring-offset-surface-alt`, and both brightness hovers. `npm run typecheck` is
+clean and `npm test` passes. **Nobody has clicked any of it.**
+
+**Left undecided, and named as such in the spec:** which side of 720 the row
+stops stacking — `md` is chosen here for consistency with the rest of the app,
+not because the spec settled it. A Viewer gets no checkboxes and no *Add item*,
+which leaves the list a pure read surface; the spec flags that as worth
+confirming.
+
+
+### Empty results get the first-run treatment — 2026-08-26
+
+The household-with-nothing-in-it had the full screen — Playfair italic 27px, a
+420px body, one primary — and **every other empty result got `Nothing here yet.`
+in 14px grey**, which read as a rendering failure rather than an answer. Both
+now go through `EmptyState.tsx`, drawn from
+`larder-log-front-door/first-run-app-light.html`.
+
+`emptyCopy()` in `Pantry.tsx` decides the words *and* the action together, so an
+action can never clear a filter the title did not mention. Three families:
+
+- **A status chip on its own** — *Nothing's out.* / *Nothing's running low.* /
+  *Nothing's fully stocked.* — takes **no button**. The chip you pressed is
+  still on screen and now reads `0`; a second control for the job the first one
+  is still doing would be noise.
+- **One term or one search** names it — *Nothing in Pantry.*, *Nothing from
+  Grocery.*, *Nothing tagged Produce.*, *Nothing matches "beans".* — and offers
+  to unpick exactly that one.
+- **Anything else** cannot name a single cause without guessing which filter is
+  to blame, so it says so and clears the lot.
+
 ### The item grid is fluid, and the drawer docks at 1120 — 2026-08-26
 
 The content column was capped at `max-w-[1160px]` and the grid stepped

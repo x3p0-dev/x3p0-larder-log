@@ -15,7 +15,7 @@
 import type { StatusKey } from '../../shared/status';
 import { STATUS_LABEL, statusKeyFor } from '../../shared/status';
 import type { Term } from '../../shared/types';
-import { TERM_COLORS, termColorFor } from './palette';
+import { drawerDot, TERM_COLORS, termColorFor } from './palette';
 
 export { DEFAULT_PALETTE, TERM_COLORS, termColorFor, drawerDot, proposeColor } from './palette';
 export type { TermColor } from './palette';
@@ -116,6 +116,31 @@ export function themed(ink: string, dark: boolean): ThemedColor {
 		: { ink, bg: lighten(ink, 0.88), ring: lighten(ink, 0.72), dot: ink };
 }
 
+/**
+ * The dot on a chip inside the drawer.
+ *
+ * The drawer is dark in both themes, so at rest a term's dot takes the bright
+ * on-drawer ink. **A selected chip is cream-filled**, though — it takes the
+ * drawer's primary treatment, the same as the *Done* pill and the toast's
+ * *Undo* — and the on-drawer inks are tuned against near-black, so they wash
+ * out on cream. The light `base` is the value that was drawn for a light
+ * surface, and that is what a selected chip sits on.
+ *
+ * The dot stays in both states. It is the only thing on the chip carrying the
+ * term's colour, and a chip that drops it on selection stops saying which term
+ * it is at the moment you have picked it.
+ *
+ * Falls through to the stored value for a legacy raw hex, which resolves to no
+ * token — the same path `themed()` takes.
+ */
+export function chipDot(ink: string, selected: boolean): string {
+	const c = termColorFor(ink);
+
+	if (! c) return ink;
+
+	return selected ? c.base : drawerDot(c);
+}
+
 export function hashStr(s: string): number {
 	let h = 0;
 	for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -186,6 +211,16 @@ export type Theme = {
 	dark: boolean;
 	pageBg: string; surface: string; surfaceAlt: string;
 	border: string; borderStrong: string;
+	/**
+	 * A hairline *inside* a card, between rows of one list.
+	 *
+	 * Softer than `border` in light and identical to it in dark, and that
+	 * asymmetry is the whole reason it exists: at `#E2D5C0` a rule every 56px
+	 * stripes a shopping-list card into a ladder, because the border is doing
+	 * edge work and cannot also do interior work. Dark has the opposite problem
+	 * — anything softer than `#3E3527` disappears at that fill.
+	 */
+	divider: string;
 	text: string; textStrong: string; textMuted: string; textFaint: string;
 	neutralChipBg: string; neutralChipText: string;
 	primaryBg: string; primaryText: string;
@@ -275,7 +310,7 @@ export function getTheme(dark: boolean): Theme {
 			dark: true,
 			pageBg: 'radial-gradient(135% 105% at 10% -12%, #241E16 0%, #1F1912 45%, #191410 100%)',
 			surface: '#2C251B', surfaceAlt: '#221C14',
-			border: '#3E3527', borderStrong: '#544737',
+			border: '#3E3527', borderStrong: '#544737', divider: '#3E3527',
 			text: '#DCD0BA', textStrong: '#F2E9DA', textMuted: '#A5937A', textFaint: '#7E6E58',
 			neutralChipBg: '#221C14', neutralChipText: '#DCD0BA',
 			primaryBg: '#EFE3CE', primaryText: '#241E17',
@@ -297,7 +332,7 @@ export function getTheme(dark: boolean): Theme {
 			dark: false,
 			pageBg: 'radial-gradient(135% 105% at 10% -12%, #F9F3E9 0%, #F3EADC 45%, #EADFCD 100%)',
 			surface: '#FDFAF4', surfaceAlt: '#F2EADC',
-			border: '#E2D5C0', borderStrong: '#CFBEA3',
+			border: '#E2D5C0', borderStrong: '#CFBEA3', divider: '#EEE4D2',
 			text: '#4C4237', textStrong: '#241E17', textMuted: '#6F6049', textFaint: '#9B8B75',
 			neutralChipBg: '#F2EADC', neutralChipText: '#4C4237',
 			primaryBg: '#241E17', primaryText: '#F2E9DA',
@@ -336,6 +371,7 @@ export function drawerTheme(theme: Theme): Theme {
 		surfaceAlt: d.well,
 		border: d.line,
 		borderStrong: '#4A3E2E',
+		divider: d.line,
 		text: d.inkMuted,
 		textStrong: d.ink,
 		textMuted: d.inkFaint,

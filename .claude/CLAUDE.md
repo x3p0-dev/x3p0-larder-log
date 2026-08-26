@@ -84,7 +84,8 @@ the decision it was waiting on. What landed on 2026-08-25:
   dark quad for all sixteen term colors.
 - **New surfaces.** Item card, the dark left drawer (docked / slide-over /
   68px collapsed rail with flyouts), the Filter and Settings panes, the item
-  sheet for add *and* edit, the sort menu, and the contextual shopping list.
+  sheet for add *and* edit, and the sort menu. (The contextual shopping list
+  that landed with it has since been replaced — see Phase 4.8.)
 - **Interaction states** live in `client/lib/controlStyles.ts` as literal class
   strings — `DRAWER_*` and `PAGE_*`. Inline styles cannot express `:hover`,
   which is why the drawer shipped once with no feedback at all.
@@ -102,8 +103,8 @@ the decision it was waiting on. What landed on 2026-08-25:
   column: dropping it needs `sf db migrate --drop`, refilling it is additive.
 
 **Nothing here has been seen by a second person, or published** — see the
-blocker below. Ten `font-mono` sites remain, on the surfaces not yet redrawn:
-the sign-in gate, `JoinBox`, `ShoppingListModal`, and two loading strings.
+blocker below. Two `font-mono` sites remain: the switcher's invite-code field,
+which is arguably a real monospace use, and one loading string in `Pantry`.
 
 ### Destructive actions (Phase 4.6) are built — 2026-08-26
 
@@ -173,6 +174,91 @@ the app shell.
   `theme.json` gained `wordmark-md`, `wordmark-lg`, `headline-sm` and
   `headline`. `accent` exists because the page wordmark was hard-coding the
   light crimson in both themes.
+
+### The shopping list (Phase 4.8) is built — 2026-08-26
+
+The spec's *Shopping list*, governed by
+[D41](../.docs/decisions.md#d41-the-shopping-list-is-a-mode-and-its-checks-are-local):
+**the list is a view of the items, not a thing you keep.** It is a *mode* that
+replaces the content column, not a modal over it. `ShoppingListModal` and the
+store banner above the grid are **deleted**; the Store filter is a filter again.
+
+- **`shared/shoppingList.ts`** owns the grouping and both orderings — groups
+  A–Z with the storeless one last, rows out-before-low then A–Z, the latter
+  being the *Needs restocking* sort reused rather than written twice. An item
+  naming several stores appears under **every** one of them, so the count is of
+  items and never of rows. `npm test` is at 150 assertions.
+- **`ShoppingList.tsx`** — one card per store in
+  `md:grid-cols-[repeat(auto-fill,minmax(min(460px,100%),1fr))]`. **`auto-fill`,
+  not `auto-fit`**, and that is the opposite of the item grid on purpose: with
+  one card left after a store filter, `auto-fit` would stretch it across the
+  screen. The card header is the tag component stretched to the card's width.
+- **The row is not a click target.** The left column checks; the name and the
+  counts open the Edit sheet. Below `md` it stacks — the spec leaves the exact
+  breakpoint open and `md` is a choice made here.
+- **`ShoppingListTrigger.tsx`** sits **immediately after the three status
+  pills** and is **secondary** — `surface` on `line strong`, ink label, ink
+  count pill. Placement does the work colour would have: the eye crosses
+  `9 in stock · 6 running low · 5 out` and lands on the thing to do about it.
+  It was amber for one round, which put it a gap away from `6 running low` —
+  already amber, and meaning something else. Hidden when nothing is low or out.
+  **Its count is the household's, never the filtered one.** When space is short
+  it drops its label for a cart glyph; *Back to items* keeps its words.
+- **Row 2 sizes off the measured content column, not the viewport.** A
+  `ResizeObserver` on `<main>` sets `compact` below `ROW2_FULL_PX` (910, derived
+  from the parts), which is what the pills, the trigger and the sort all read.
+  `md:` was wrong in the middle: a docked drawer costs 340px, so a 1280 screen
+  leaves 872 and is as cramped as a phone. **Do not put these controls back on a
+  breakpoint.**
+- **Below `md` the trigger lives in the mobile header**, squared up with the
+  wordmark opposite the menu button — it is chrome, and moving it there is what
+  lets the status pills and the sort share one line at 390. The *exit* stays in
+  row 2 with the list it exits. Row 2 drops `Showing X of Y` when compact.
+- **`useTripChecks.ts`** — checks in `localStorage`, the **third** thing there
+  after the theme (D25) and the household (D33). Cleared when the item leaves
+  the list, after 24 hours with no ticking, or on a household switch. The
+  household id is stored *in* the record rather than used as its key, because a
+  key per household would hand yesterday's ticks back on a switch away and back.
+- **`Theme` gained `divider`** — a hairline *inside* a card. Softer than
+  `border` in light and identical to it in dark: at `#E2D5C0` a rule every 56px
+  stripes a card into a ladder, and anything below `#3E3527` vanishes at the
+  dark fill.
+- **Row 2 empties out and re-fills in list mode** — the status pills go (you are
+  already filtered to low and out) and so does the sort trigger (the list has
+  one fixed order). *Back to items* takes the left, `11 to buy · 4 stores · 3 in
+  the cart` the right. **Row 1 never changes**, so the switch reads as the
+  content changing rather than the app changing.
+- **The status pills tighten at 390 rather than truncating** — padding 16 → 13,
+  gap 9 → 7, label 14 → 13.5 — which is what makes room for the trigger's row.
+
+**Built twice.** The first pass was specced against a top bar with a title and
+no status pills, which **does not exist**; the `-2` boards drew the real one and
+the trigger changed colour and position. The mobile primary was left alone —
+the boards draw *Add item* at 390 as a square in row 1, and the pinned bottom
+bar is correct. **The lesson is the spec's own: anything not drawn on a canvas
+drifts out of the design document silently.**
+
+**One copy change on the marketing page**, and it is the only place the build
+now differs from the front-door boards: the third benefit said *"Nothing to tick
+off"*, which the checkbox makes false.
+
+**Nobody has clicked any of it.** Verified the usual way: the capsule compiles
+and reloads, `npm run typecheck` is clean, `npm test` passes, and every new
+utility class is in `/zero.css` — checked by **printing the selectors**, not by
+hand-writing the escaped form.
+
+### Empty results — 2026-08-26
+
+`EmptyState.tsx` is the app's one empty screen for the content column, drawn
+from the first-run board: Playfair italic 27px, a 420px body, at most one
+action. Before it, only the empty household got that treatment and every other
+empty result got `Nothing here yet.` in 14px grey.
+
+`emptyCopy()` in `Pantry.tsx` picks the words **and** the action together, so an
+action can never clear a filter the title did not name. **A status chip on its
+own gets no button** — the chip you pressed is still on screen and now reads
+`0`. One term or one search names itself and clears itself; anything more says
+so and clears everything.
 
 **`?signedout` is a dev-only switch and the only way to see any of this
 locally.** D14's loopback hole makes every local visitor a signed-in dev guest,
@@ -394,10 +480,11 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D36, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 governs row timestamps**; **D36 governs destructive actions** |
+| `.docs/decisions.md` | D1–D41, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 governs row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
+| `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |

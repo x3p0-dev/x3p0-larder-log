@@ -26,6 +26,8 @@ import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { fromInt, toInt } from '../shared/qty';
+import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
+import type { Item, Term } from '../shared/types';
 
 let fail = 0;
 let total = 0;
@@ -357,6 +359,63 @@ for (const [label, group] of [
 ] as const) {
 	check(`seeded ${label} have distinct keys`, new Set(group.map((t) => termKey(t.name))).size, group.length);
 }
+
+// --- the shopping list, which is a view of the items rather than a table ---
+//
+// Every rule here is invisible when wrong: a mis-ordered group still renders, a
+// dropped item still leaves a plausible-looking list, and nobody notices until
+// they are standing in the shop without the thing they came for.
+
+const STORES: Term[] = [
+	{ id: 's-costco', name: 'Costco', ink: 'color-10' },
+	{ id: 's-aldi', name: 'Aldi', ink: 'color-14' },
+];
+
+function item(name: string, qty: string, threshold: string, storeIds: string[]): Item {
+	return {
+		id: `i-${name}`, name, locationId: 'l-1', typeIds: [], storeIds,
+		qty, threshold, notes: '', createdAt: '2026-08-26T00:00:00.000Z',
+	};
+}
+
+const BASKET: Item[] = [
+	item('Butter', '2', '4', ['s-costco']),          // low
+	item('Bacon', '0', '2', ['s-costco']),           // out
+	item('Rice', '9', '2', ['s-costco']),            // stocked — not on the list
+	item('Frozen Corn', '2', '4', ['s-aldi']),       // low
+	item('Baking Soda', '0', '1', []),               // out, no store
+	item('Coffee', '1', '2', ['s-aldi', 's-costco']), // low, two stores
+];
+
+check('an item at its threshold is on the list', needsBuying(item('x', '4', '4', [])), true);
+check('an item above its threshold is not', needsBuying(item('x', '5', '4', [])), false);
+
+// The count is *items*, not rows: Coffee draws twice and is one thing to buy.
+check('the count is items, not rows', shoppingCount(BASKET), 5);
+
+const groups = shoppingGroups(BASKET, STORES);
+
+// A–Z with the storeless group last — it is the one you cannot walk into.
+check('groups run A-Z with no-store last', groups.map((g) => g.name), ['Aldi', 'Costco', '']);
+check('the storeless group is identified by a null id', groups[2].storeId, null);
+
+// Out before low, then A–Z. The same sentence the restock sort says.
+check('rows run out first, then A-Z', groups[1].items.map((i) => i.name), ['Bacon', 'Butter', 'Coffee']);
+
+// An item you can buy at either shop belongs on both lists; picking one would
+// be guessing.
+check('an item with two stores appears under both', groups[0].items.map((i) => i.name), ['Coffee', 'Frozen Corn']);
+
+// D16 refuses to delete a store while items reference it, but `id()` is not a
+// foreign key — a dangling reference lands in the storeless group rather than
+// drawing a card with no name.
+check(
+	'an unresolvable store falls into the storeless group',
+	shoppingGroups([item('Ghost', '0', '1', ['s-gone'])], STORES).map((g) => g.storeId),
+	[null]
+);
+
+check('a fully stocked pantry produces no groups', shoppingGroups([item('Rice', '9', '2', ['s-costco'])], STORES), []);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

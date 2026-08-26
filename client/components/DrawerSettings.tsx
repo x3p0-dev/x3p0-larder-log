@@ -120,7 +120,8 @@ function Section({
  * change every week.
  *
  * There is deliberately no terms block (they live in the Filter pane now) and
- * no shopping list (it is contextual to a store filter).
+ * no shopping list — it is a mode of the content column, reached from the top
+ * bar and nowhere else (D41).
  */
 export function DrawerSettings({
 	themeOverride, setThemeOverride, householdName, setHouseholdName,
