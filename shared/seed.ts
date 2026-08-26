@@ -15,25 +15,24 @@
 export type SeedTerm = {
 	name: string;
 	ink: string;
-	icon?: string;
 };
 
 export const SEED_LOCATIONS: SeedTerm[] = [
-	{ name: 'Upright Freezer', icon: 'snowflake', ink: 'color-1' },
-	{ name: 'Chest Freezer', icon: 'snowflake', ink: 'color-12' },
-	{ name: 'Pantry', icon: 'package', ink: 'color-10' },
+	{ name: 'Upright Freezer', ink: 'color-1' },
+	{ name: 'Chest Freezer', ink: 'color-12' },
+	{ name: 'Pantry', ink: 'color-10' },
 ];
 
 export const SEED_TYPES: SeedTerm[] = [
-	{ name: 'Protein', icon: 'beef', ink: 'color-6' },
-	{ name: 'Produce', icon: 'carrot', ink: 'color-10' },
-	{ name: 'Grain', icon: 'wheat', ink: 'color-8' },
-	{ name: 'Dairy', icon: 'milk', ink: 'color-1' },
-	{ name: 'Condiment', icon: 'droplet', ink: 'color-4' },
-	{ name: 'Baking', icon: 'cookie', ink: 'color-7' },
-	{ name: 'Snack', icon: 'popcorn', ink: 'color-14' },
-	{ name: 'Beverage', icon: 'coffee', ink: 'color-12' },
-	{ name: 'Spice', icon: 'flame', ink: 'color-5' },
+	{ name: 'Protein', ink: 'color-6' },
+	{ name: 'Produce', ink: 'color-10' },
+	{ name: 'Grain', ink: 'color-8' },
+	{ name: 'Dairy', ink: 'color-1' },
+	{ name: 'Condiment', ink: 'color-4' },
+	{ name: 'Baking', ink: 'color-7' },
+	{ name: 'Snack', ink: 'color-14' },
+	{ name: 'Beverage', ink: 'color-12' },
+	{ name: 'Spice', ink: 'color-5' },
 ];
 
 export const SEED_STORES: SeedTerm[] = [

@@ -29,9 +29,21 @@ declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
 
-Data lives in the database. The **only** remaining `localStorage` call site is
-the per-device theme override, and that is correct there (D25) — a dark-mode
-choice on a phone should not follow you to a desktop.
+Data lives in the database. **Two** `localStorage` call sites remain, both
+correct: the per-device theme override (D25) and which household this device is
+pointed at (D33). Same reasoning for both — a dark-mode choice on a phone should
+not follow you to a desktop, and neither should which pantry you were last
+looking at.
+
+**A user may belong to several households** as of 2026-08-25
+([D33](../.docs/decisions.md#d33-a-user-may-belong-to-several-households),
+which supersedes D18). Every query and scoped mutation names a household, and
+the id is a **selector, never an authority** — handlers resolve it against the
+caller's own memberships. Reads heal (`selectMembership` falls back to a
+deterministic default when the requested household is not yours), writes refuse
+(`findMembership` matches exactly or throws). Roles are per household: the same
+person can be an owner in one pantry and a viewer in another. It needed **no
+migration** — D3 built the schema for this.
 
 The React/Vite prototype in `src/` is **deleted**, along with `index.html`,
 `vite.config.js`, and the react/vite/tailwind dependencies. Zero compiles
@@ -47,7 +59,8 @@ and this file is `.claude/CLAUDE.md`, both behind the serving layer's 403 on
 dot-prefixed paths
 ([D29](../.docs/decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload)).
 **None of Phase 3 has been exercised by a second person** — that needs the
-published space.
+published space. The same is now true of D33: one identity in two households is
+verified server-side, but two *people* sharing one household is not.
 
 Phase 4's read-only pass landed on 2026-08-25: every write affordance is gated
 on `can()` and is **absent rather than disabled**, with one "View only" chip
@@ -58,9 +71,9 @@ been removed. The rest of Phase 4 was already built and the roadmap now says so.
 
 ### The Cellar reskin (Phase 4.5) is built, and is the bulk of the current diff
 
-Everything structural in `.claude/docs/design/ui-directions.md` is implemented
-**except the household switcher**, which is deferred by decision, not blocked —
-see the roadmap. What landed on 2026-08-25:
+Everything structural in `.claude/docs/design/ui-directions.md` is implemented,
+the household switcher included — it was the last one deferred, and D33 settled
+the decision it was waiting on. What landed on 2026-08-25:
 
 - **Tokens.** `theme.json` carries the warm-brown palette and an 8-step type
   scale as `light-dark()` pairs. Term colors became *tokens* rather than hexes
@@ -78,6 +91,15 @@ see the roadmap. What landed on 2026-08-25:
 - **Nine components were replaced and deleted**: `Sidebar`, `FacetSection`,
   `SettingsDrawer`, `TaxonomyManager`, `ItemFields`, `ChipPicker`,
   `IconPicker`, plus the `createTermFor` adapter.
+- **The household switcher is built** (2026-08-25) — the drawer's household row
+  and the rail's household flyout both open it: every household you belong to
+  with your role and item count, a check on the current one, then *New
+  household* and *Join with a link*. `HouseholdSwitcher` is the contents; each
+  host owns its own dismissal.
+- **Term icons were cut** and the `icon` column kept, holding `''`
+  ([D34](../.docs/decisions.md#d34-term-icons-are-cut-and-the-column-is-kept)).
+  `shared/icons.ts` and `client/lib/icons.ts` are gone. Do not "clean up" the
+  column: dropping it needs `sf db migrate --drop`, refilling it is additive.
 
 **Nothing here has been seen by a second person, or published** — see the
 blocker below. Ten `font-mono` sites remain, on the surfaces not yet redrawn:

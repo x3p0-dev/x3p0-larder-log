@@ -22,6 +22,7 @@ import { entityColorFor, getTheme, statusFor, termNameFor } from './lib/theme';
 import { clearPendingInvite, pendingInvite } from './lib/pendingInvite';
 import type { TaxonomyActions } from './lib/actions';
 
+import { normalizeCode } from '../shared/invite';
 import type { StatusKey } from '../shared/status';
 import { statusKeyFor } from '../shared/status';
 import type { Item, ItemDraft, ThemeOverride } from '../shared/types';
@@ -41,14 +42,22 @@ const STATUS_CHIPS: { key: StatusKey; label: string; short: string }[] = [
 ];
 
 /**
- * The theme override is the **only** thing still in localStorage, and
- * deliberately so: a dark-mode choice made on a phone should not follow you to
- * a desktop. Everything else now lives in the database (D25).
+ * The two things still in localStorage, and both for the same reason: they are
+ * properties of *this device*, not of the account (D25, D33).
+ *
+ * A dark-mode choice made on a phone should not follow you to a desktop, and
+ * neither should which household you were last looking at — the phone in the
+ * kitchen is pointed at the kitchen. Everything that is actually data lives in
+ * the database.
  *
  * Namespaced per identity so signing in as someone else picks up their choice.
  */
 function themeKeyFor(userId: string) {
 	return `larder.v4.${userId}.theme`;
+}
+
+function householdKeyFor(userId: string) {
+	return `larder.v4.${userId}.household`;
 }
 
 type Props = {
@@ -66,7 +75,38 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const dark = themeOverride === 'system' ? systemDark : themeOverride === 'dark';
 	const theme = getTheme(dark);
 
-	const api = usePantryData();
+	/*
+	 * The household this device is pointed at. A *request*, not an authority:
+	 * the server answers with a household the caller is actually a member of,
+	 * which is what makes a selection left over from one you have since left
+	 * heal itself rather than dead-end.
+	 */
+	const householdKey = useMemo(() => householdKeyFor(userId), [userId]);
+	const [selectedHousehold, setSelectedHousehold] = usePersistentState<string | null>(householdKey, null);
+
+	const api = usePantryData(selectedHousehold);
+
+	/*
+	 * Adopt the server's answer, but only when our own selection is not a real
+	 * one.
+	 *
+	 * The test is membership in the list, **not** whether the queries currently
+	 * agree with the selection. `useQuery` keeps the previous result until the
+	 * new subscription's first emit, so for a moment after a switch the pantry
+	 * still reports the household we just left — and "correcting" the selection
+	 * to match would cancel every switch the instant it was made.
+	 *
+	 * The list is what makes this safe: it takes no argument, so it is not part
+	 * of the switch and answers the only question that matters here — is this a
+	 * household we still belong to at all?
+	 */
+	useEffect(() => {
+		if (! api.households.length || ! api.currentHouseholdId) return;
+
+		const known = api.households.some((h) => h.id === selectedHousehold);
+
+		if (! known) setSelectedHousehold(api.currentHouseholdId);
+	}, [api.households, api.currentHouseholdId, selectedHousehold, setSelectedHousehold]);
 
 	// Filters and view state are all client-side; none of it is data.
 	const [activeLocation, setActiveLocation] = useState<string | null>(null);
@@ -90,6 +130,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editForm, setEditForm] = useState<ItemDraft | null>(null);
+	const [editError, setEditError] = useState('');
 
 	// Accordion state is UI, not data — the row itself carries no `open` field.
 	const [openId, setOpenId] = useState<string | null>(null);
@@ -118,15 +159,35 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	 */
 	const [pendingCode, setPendingCode] = useState<string | null>(() => pendingInvite());
 
-	async function joinWithCode(code: string): Promise<boolean> {
-		const joined = await api.redeemInvite(code);
+	/**
+	 * Redeems a code and lands on what it opened.
+	 *
+	 * Switching is the point: an invite is someone handing you a *particular*
+	 * pantry, so arriving in the one you already had would read as the link not
+	 * working.
+	 */
+	async function joinWithCode(code: string): Promise<string | null> {
+		const householdId = await api.redeemInvite(code);
 
 		// Only a redemption that actually created the membership consumes the
-		// code. A refusal — expired, revoked, already in a household — leaves it
+		// code. A refusal — expired, revoked, already a member there — leaves it
 		// in place so the message on screen still has something to refer to.
-		if (joined) dismissInvite();
+		if (! householdId) return null;
 
-		return joined;
+		if (pendingCode && normalizeCode(pendingCode) === normalizeCode(code)) dismissInvite();
+
+		setSelectedHousehold(householdId);
+
+		return householdId;
+	}
+
+	/** First run and the switcher both create; both then switch to what they made. */
+	async function createHousehold(name: string): Promise<string | null> {
+		const householdId = await api.createHousehold(name);
+
+		if (householdId) setSelectedHousehold(householdId);
+
+		return householdId;
 	}
 
 	function dismissInvite() {
@@ -282,7 +343,10 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		if (editingId === id) cancelEdit();
 		if (openId === id) setOpenId(null);
 
-		await api.removeItem(id);
+		// Only arm undo for a removal that happened. A refused delete leaves the
+		// row on screen, and undo re-inserts through `addItem` (D17) — so an
+		// undo offered for a row that never went anywhere produces a duplicate.
+		if (! await api.removeItem(id)) return;
 
 		clearTimeout(undoTimeoutRef.current);
 		setPendingRemoval(item);
@@ -362,6 +426,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 
 	function startEdit(item: Item) {
 		setEditingId(item.id);
+		setEditError('');
 		setEditForm({
 			name: item.name,
 			locationId: item.locationId,
@@ -373,16 +438,40 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		});
 	}
 
+	/**
+	 * The same two rules `addItem` enforces, said out loud.
+	 *
+	 * Returning silently here made Save a dead button: no message, no close, no
+	 * clue which field was at fault.
+	 */
 	async function saveEdit(id: string) {
-		if (! editForm || ! editForm.name.trim()) return;
+		if (! editForm) return;
 
-		await api.updateItem(id, editForm);
+		if (! editForm.name.trim()) {
+			setEditError('Give the item a name first.');
+			return;
+		}
+
+		if (! editForm.locationId) {
+			setEditError('Pick a location first.');
+			return;
+		}
+
+		setSaving(true);
+		const saved = await api.updateItem(id, editForm);
+		setSaving(false);
+
+		// The server refused. `api.error` says why; keep the sheet open so the
+		// edit is still there to correct, rather than discarding it.
+		if (! saved) return;
+
 		cancelEdit();
 	}
 
 	function cancelEdit() {
 		setEditingId(null);
 		setEditForm(null);
+		setEditError('');
 	}
 
 	// --- Non-ready states ---------------------------------------------------
@@ -392,7 +481,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			<Gate
 				status={api.status}
 				dark={dark}
-				onCreateHousehold={api.createHousehold}
+				onCreateHousehold={createHousehold}
 				onSignOut={onSignOut}
 				error={api.error}
 				onDismissError={api.dismissError}
@@ -430,7 +519,11 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					activeStore={activeStore} setActiveStore={setActiveStore}
 					activeType={activeType} setActiveType={setActiveType}
 					itemCount={items.length} locationCounts={locationCounts}
-					householdName={householdName} accountName={displayName}
+					householdName={householdName}
+					households={api.households} currentHouseholdId={api.currentHouseholdId}
+					onSelectHousehold={setSelectedHousehold}
+					onCreateHousehold={createHousehold} onJoinHousehold={joinWithCode}
+					accountName={displayName}
 					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
 					dark={dark}
 					onExpand={(tab) => { setDrawerTab(tab); setDrawerCollapsed(false); }}
@@ -449,7 +542,11 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				open={drawerOpen} onClose={() => setDrawerOpen(false)}
 				collapsed={drawerCollapsed}
 				onDismiss={() => { setDrawerOpen(false); setDrawerCollapsed(true); }}
-				householdName={householdName} accountName={displayName}
+				householdName={householdName}
+				households={api.households} currentHouseholdId={api.currentHouseholdId}
+				onSelectHousehold={setSelectedHousehold}
+				onCreateHousehold={createHousehold} onJoinHousehold={joinWithCode}
+				accountName={displayName}
 				settings={{
 					themeOverride, setThemeOverride,
 					householdName,
@@ -531,24 +628,29 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			)}
 
 			{/*
-			  * Someone followed an invite link while already belonging to a
-			  * household. D18 allows one membership, so `redeemInvite` would
-			  * refuse — say so here rather than letting them press a button that
-			  * cannot work.
+			  * An invite link followed by someone who already has a household.
+			  * Under D18 this could only be refused; now it is an offer, and
+			  * accepting it switches to what the link opened.
 			  */}
 			{pendingCode && (
 				<div class="max-w-5xl mx-auto px-6">
 					<div
-						class="flex items-start justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
+						class="flex items-center justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
 						style={{ background: theme.surfaceAlt, color: theme.textMuted, border: `1px solid ${theme.border}` }}
 					>
-						<span>
-							You followed an invite link, but you&rsquo;re already in {householdName || 'a household'}.
-							Leave it first if you meant to join another.
+						<span>You&rsquo;ve been invited to another household.</span>
+						<span class="flex items-center gap-3 shrink-0">
+							<button
+								onClick={() => void joinWithCode(pendingCode)}
+								class="font-semibold"
+								style={{ color: theme.textStrong, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+							>
+								Join
+							</button>
+							<button onClick={dismissInvite} aria-label="Dismiss invite">
+								<X size={15} />
+							</button>
 						</span>
-						<button onClick={dismissInvite} aria-label="Dismiss invite" class="shrink-0">
-							<X size={15} />
-						</button>
 					</div>
 				</div>
 			)}
@@ -737,7 +839,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				title={items.find((i) => i.id === editingId)?.name}
 				value={(editingId ? editForm : form) ?? emptyDraft()}
 				onChange={editingId ? setEditForm : setForm}
-				error={editingId ? '' : formError}
+				error={editingId ? editError : formError}
 				locations={locations} types={types} stores={stores}
 				taxonomy={taxonomy} canCreateTerms={mayEditTaxonomy}
 				defaultThreshold={defaultThreshold} saving={saving}
@@ -781,13 +883,13 @@ function Gate({
 }: {
 	status: ReturnType<typeof usePantryData>['status'];
 	dark: boolean;
-	onCreateHousehold: (name: string) => Promise<void>;
+	onCreateHousehold: (name: string) => Promise<string | null>;
 	onSignOut: () => void;
 	/** A refused join or household creation. The app shell's banner isn't mounted here. */
 	error: string | null;
 	onDismissError: () => void;
 	pendingCode: string | null;
-	onJoin: (code: string) => Promise<boolean>;
+	onJoin: (code: string) => Promise<string | null>;
 	onDismissInvite: () => void;
 }) {
 	const theme = getTheme(dark);
@@ -852,7 +954,7 @@ function Gate({
 				{pendingCode && (
 					<JoinBox
 						pendingCode={pendingCode}
-						onJoin={onJoin}
+						onJoin={async (code) => Boolean(await onJoin(code))}
 						onDismiss={onDismissInvite}
 						theme={theme}
 					/>
@@ -893,22 +995,22 @@ function Gate({
 				{! pendingCode && (
 					<JoinBox
 						pendingCode={null}
-						onJoin={onJoin}
+						onJoin={async (code) => Boolean(await onJoin(code))}
 						onDismiss={onDismissInvite}
 						theme={theme}
 					/>
 				)}
-			</>
-		);
-	}
 
-	if (status.state === 'blocked') {
-		return frame(
-			<>
-				<p class="text-sm mb-4" style={{ color: theme.text }}>{status.message}</p>
-				<button onClick={onSignOut} class="text-xs underline" style={{ color: theme.textFaint }}>
-					Sign out
-				</button>
+				{/*
+				  * The way out of the wrong account. Every other screen reaches
+				  * sign-out through the drawer, and there is no drawer until a
+				  * household exists.
+				  */}
+				<p class="mt-6">
+					<button onClick={onSignOut} class="text-xs underline" style={{ color: theme.textFaint }}>
+						Sign out
+					</button>
+				</p>
 			</>
 		);
 	}

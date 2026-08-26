@@ -6,10 +6,15 @@ import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCap
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
-import { normalizeIcon } from '../shared/icons';
 import { normalizeInk, normalizeName, normalizeNotes, termKey, isValidName } from '../shared/term';
 import { CODE_BYTES, codeFromBytes, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
-import type { HouseholdResult, PantryResult, TermKind } from '../shared/types';
+import type {
+	HouseholdListResult,
+	HouseholdResult,
+	HouseholdSummary,
+	PantryResult,
+	TermKind,
+} from '../shared/types';
 import { SEED_LOCATIONS, SEED_TYPES, SEED_STORES } from '../shared/seed';
 
 /**
@@ -17,7 +22,8 @@ import { SEED_LOCATIONS, SEED_TYPES, SEED_STORES } from '../shared/seed';
  *
  * Every mutation follows the same shape, and the order matters:
  *
- *   1. resolve the caller's membership and assert a capability (`server/auth.ts`)
+ *   1. resolve the caller's membership **in the household it names** and assert
+ *      a capability (`server/auth.ts`) — the id is a selector, never authority
  *   2. re-read any row it is about to touch and confirm the household matches
  *   3. normalize input through `shared/` — never trust what arrived
  *   4. write, cleaning up dependents itself (Zero has no cascading deletes)
@@ -108,6 +114,9 @@ export const schema = {
 		.index('by_household', ['householdId'])
 		.index('by_creator', ['createdBy']),
 
+	// `icon` is written as `''` and read by nothing: the glyph sets were cut
+	// before v1 (D34) and the column is kept because dropping one needs
+	// `sf db migrate --drop`, while filling it again later is additive.
 	locations: table({
 		householdId: id('households'),
 		name: string(),
@@ -115,6 +124,7 @@ export const schema = {
 		icon: string(),
 	}).index('by_household', ['householdId']),
 
+	// Same as `locations`: reserved, not read. See D34.
 	types: table({
 		householdId: id('households'),
 		name: string(),
@@ -122,7 +132,7 @@ export const schema = {
 		icon: string(),
 	}).index('by_household', ['householdId']),
 
-	// Stores render as outlined chips, so they carry no icon.
+	// Stores never had the column at all.
 	stores: table({
 		householdId: id('households'),
 		name: string(),
@@ -163,19 +173,68 @@ export default capsule({
 
 	queries: {
 		/**
-		 * The caller's household, its members, and its live invites.
+		 * Every household the caller belongs to, for the switcher.
+		 *
+		 * Deliberately thin: a name, this caller's role *there*, and an item
+		 * count. Anything more would be a second copy of `household`, refetched
+		 * every time any of them changed.
+		 *
+		 * Takes no argument, so it is the one subscription that survives a
+		 * switch untouched — which is what lets the switcher stay on screen and
+		 * keep its checkmark honest while the other two queries re-run.
+		 */
+		households: query(async (ctx): Promise<HouseholdListResult> => {
+			if (! isSignedIn(ctx.auth)) return { state: 'guest' };
+
+			const rows = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.collect();
+
+			if (rows.length === 0) return { state: 'no-household' };
+
+			const summaries: HouseholdSummary[] = [];
+
+			for (const row of rows) {
+				const household = await ctx.db.households.get(row.householdId);
+
+				// A membership whose household is gone is skipped rather than
+				// reported: there is nothing to switch to and nothing to fix.
+				if (! household) continue;
+
+				const items = await ctx.db.items
+					.withIndex('by_household', (r) => r.eq('householdId', row.householdId))
+					.collect();
+
+				summaries.push({
+					id: household.id,
+					name: household.name,
+					role: toRole(row.role),
+					itemCount: items.length,
+				});
+			}
+
+			if (summaries.length === 0) return { state: 'no-household' };
+
+			// Same ordering `selectMembership` defaults by, so the list's first
+			// row is the one an unset selection lands on.
+			summaries.sort((a, b) => a.id.localeCompare(b.id));
+
+			return { state: 'ready', households: summaries };
+		}),
+
+		/**
+		 * The named household, its members, and its live invites.
 		 *
 		 * Separate from `pantry` so an item edit does not refetch the member
 		 * list — the one split `invalidate()` actually makes worthwhile (D26).
 		 */
-		household: query(async (ctx): Promise<HouseholdResult> => {
-			const state = await membershipState(ctx);
+		household: query(async (ctx, householdId: string): Promise<HouseholdResult> => {
+			const state = await membershipState(ctx, householdId);
 
 			// Queries report rather than throw — a thrown query never reaches the
 			// client at all. See `QueryState` in `shared/types.ts`.
 			if (state.kind === 'guest') return { state: 'guest' };
 			if (state.kind === 'none') return { state: 'no-household' };
-			if (state.kind === 'blocked') return { state: 'blocked', message: state.message };
 
 			const { membership } = state;
 
@@ -197,6 +256,9 @@ export default capsule({
 
 			return {
 				state: 'ready',
+				// The id is the reconciliation point: the client stores a
+				// selection per device, and this is the household the server
+				// actually answered for (D33).
 				household: {
 					id: household.id,
 					name: household.name,
@@ -232,22 +294,23 @@ export default capsule({
 		 * complexity for savings that round to zero — the join rows dominate the
 		 * payload and they refetch with the items however it is carved up.
 		 */
-		pantry: query(async (ctx): Promise<PantryResult> => {
-			const state = await membershipState(ctx);
+		pantry: query(async (ctx, householdId: string): Promise<PantryResult> => {
+			const state = await membershipState(ctx, householdId);
 
 			if (state.kind === 'guest') return { state: 'guest' };
 			if (state.kind === 'none') return { state: 'no-household' };
-			if (state.kind === 'blocked') return { state: 'blocked', message: state.message };
 
-			const { householdId } = state.membership;
+			// Not necessarily the id that was asked for: `membershipState` falls
+			// back when the caller is no longer a member of the one they named.
+			const resolvedId = state.membership.householdId;
 
 			const [items, itemTypes, itemStores, locations, types, stores] = await Promise.all([
-				ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-				ctx.db.itemTypes.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-				ctx.db.itemStores.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-				ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-				ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-				ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+				ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
+				ctx.db.itemTypes.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
+				ctx.db.itemStores.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
+				ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
+				ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
+				ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
 			]);
 
 			// Joined here rather than in the client so the payload is
@@ -279,8 +342,8 @@ export default capsule({
 					typeIds: typesByItem.get(item.id) ?? [],
 					storeIds: storesByItem.get(item.id) ?? [],
 				})),
-				locations: locations.map((l) => ({ id: l.id, name: l.name, ink: l.ink, icon: l.icon })),
-				types: types.map((t) => ({ id: t.id, name: t.name, ink: t.ink, icon: t.icon })),
+				locations: locations.map((l) => ({ id: l.id, name: l.name, ink: l.ink })),
+				types: types.map((t) => ({ id: t.id, name: t.name, ink: t.ink })),
 				stores: stores.map((s) => ({ id: s.id, name: s.name, ink: s.ink })),
 			};
 		}),
@@ -288,20 +351,17 @@ export default capsule({
 
 	mutations: {
 		/**
-		 * First run: a signed-in identity with no membership gets a household and
-		 * an owner membership.
+		 * A new household, owned by the caller — their first, or their fifth.
+		 *
+		 * D18 refused this to anyone who already belonged somewhere. D33 dropped
+		 * that: the seeding below is what makes a second household usable the
+		 * moment it is created, and the client switches to the id returned.
 		 *
 		 * Kept out of `requireMembership()` so that helper stays resolve-or-throw
 		 * and remains usable from a read-only query context.
 		 */
 		createHousehold: mutation(async (ctx, name: string) => {
 			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
-
-			const existing = await ctx.db.memberships
-				.withIndex('by_user', (range) => range.eq('userId', ctx.auth.userId))
-				.collect();
-
-			if (existing.length > 0) throw new AccessError('You already belong to a household.');
 
 			const household = await ctx.db.households.insert({
 				name: normalizeName(name) || 'My Pantry',
@@ -324,7 +384,7 @@ export default capsule({
 					householdId: household.id,
 					name: seed.name,
 					ink: normalizeInk(seed.ink),
-					icon: normalizeIcon('location', seed.icon),
+					icon: '',
 				});
 			}
 
@@ -333,7 +393,7 @@ export default capsule({
 					householdId: household.id,
 					name: seed.name,
 					ink: normalizeInk(seed.ink),
-					icon: normalizeIcon('type', seed.icon),
+					icon: '',
 				});
 			}
 
@@ -345,13 +405,13 @@ export default capsule({
 				});
 			}
 
-			ctx.invalidate('household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry');
 
 			return { householdId: household.id };
 		}),
 
-		updateHousehold: mutation(async (ctx, patch: { name?: string; defaultThreshold?: string }) => {
-			const membership = await requireCapability(ctx, 'household:settings');
+		updateHousehold: mutation(async (ctx, householdId: string, patch: { name?: string; defaultThreshold?: string }) => {
+			const membership = await requireCapability(ctx, householdId, 'household:settings');
 
 			const next: { name?: string; defaultThreshold?: string } = {};
 
@@ -366,7 +426,7 @@ export default capsule({
 
 			await ctx.db.households.update(membership.householdId, next);
 
-			ctx.invalidate('household');
+			ctx.invalidate('households', 'household');
 		}),
 
 		// --- items ---
@@ -374,6 +434,7 @@ export default capsule({
 		addItem: mutation(
 			async (
 				ctx,
+				householdId: string,
 				draft: {
 					name: string;
 					locationId: string;
@@ -384,7 +445,7 @@ export default capsule({
 					storeIds?: string[];
 				}
 			) => {
-				const membership = await requireCapability(ctx, 'item:write');
+				const membership = await requireCapability(ctx, householdId, 'item:write');
 
 				if (! isValidName(draft.name)) throw new AccessError('An item needs a name.');
 
@@ -403,7 +464,10 @@ export default capsule({
 
 				await syncJoins(ctx.db, membership.householdId, item.id, draft.typeIds ?? [], draft.storeIds ?? []);
 
-				ctx.invalidate('pantry');
+				// The switcher shows an item count, so adding or removing a row
+				// changes the list. `adjustQty` and `updateItem` do not, which is
+				// why they leave `households` alone — the hot path stays cheap.
+				ctx.invalidate('pantry', 'households');
 
 				return { id: item.id };
 			}
@@ -412,6 +476,7 @@ export default capsule({
 		updateItem: mutation(
 			async (
 				ctx,
+				householdId: string,
 				itemId: string,
 				patch: {
 					name?: string;
@@ -423,7 +488,7 @@ export default capsule({
 					storeIds?: string[];
 				}
 			) => {
-				const membership = await requireCapability(ctx, 'item:write');
+				const membership = await requireCapability(ctx, householdId, 'item:write');
 
 				const item = assertInHousehold(await ctx.db.items.get(itemId), membership);
 
@@ -454,8 +519,8 @@ export default capsule({
 		),
 
 		/** The hottest path: `+1` / `-1`, clamped at zero by `fromInt`. */
-		adjustQty: mutation(async (ctx, itemId: string, delta: number) => {
-			const membership = await requireCapability(ctx, 'item:write');
+		adjustQty: mutation(async (ctx, householdId: string, itemId: string, delta: number) => {
+			const membership = await requireCapability(ctx, householdId, 'item:write');
 
 			const item = assertInHousehold(await ctx.db.items.get(itemId), membership);
 
@@ -472,22 +537,22 @@ export default capsule({
 		 * A hard delete. Undo is a client-held tombstone that re-runs `addItem`
 		 * (D17), so there is no `deletedAt` and nothing filters on one.
 		 */
-		removeItem: mutation(async (ctx, itemId: string) => {
-			const membership = await requireCapability(ctx, 'item:write');
+		removeItem: mutation(async (ctx, householdId: string, itemId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'item:write');
 
 			const item = assertInHousehold(await ctx.db.items.get(itemId), membership);
 
 			await clearJoinsForItem(ctx.db, item.id);
 			await ctx.db.items.delete(item.id);
 
-			ctx.invalidate('pantry');
+			ctx.invalidate('pantry', 'households');
 		}),
 
 		// --- taxonomy ---
 
 		createTerm: mutation(
-			async (ctx, kind: TermKind, draft: { name: string; ink: string; icon?: string }) => {
-				const membership = await requireCapability(ctx, 'taxonomy:write');
+			async (ctx, householdId: string, kind: TermKind, draft: { name: string; ink: string }) => {
+				const membership = await requireCapability(ctx, householdId, 'taxonomy:write');
 				const tableName = termTable(kind);
 
 				if (! isValidName(draft.name)) throw new AccessError('A name is required.');
@@ -504,18 +569,14 @@ export default capsule({
 
 				const name = normalizeName(draft.name);
 				const ink = normalizeInk(draft.ink);
-				const householdId = membership.householdId;
+				const owner = membership.householdId;
 
-				// Stores render as outlined chips and have no icon column at all.
+				// `stores` has no `icon` column; the other two get the empty string
+				// the reserved column holds (D34).
 				const row =
 					tableName === 'stores'
-						? await ctx.db.stores.insert({ householdId, name, ink })
-						: await ctx.db[tableName].insert({
-								householdId,
-								name,
-								ink,
-								icon: normalizeIcon(kind, draft.icon),
-							});
+						? await ctx.db.stores.insert({ householdId: owner, name, ink })
+						: await ctx.db[tableName].insert({ householdId: owner, name, ink, icon: '' });
 
 				ctx.invalidate('pantry');
 
@@ -526,11 +587,12 @@ export default capsule({
 		updateTerm: mutation(
 			async (
 				ctx,
+				householdId: string,
 				kind: TermKind,
 				termId: string,
-				patch: { name?: string; ink?: string; icon?: string }
+				patch: { name?: string; ink?: string }
 			) => {
-				const membership = await requireCapability(ctx, 'taxonomy:write');
+				const membership = await requireCapability(ctx, householdId, 'taxonomy:write');
 				const tableName = termTable(kind);
 
 				const term = assertInHousehold(
@@ -562,18 +624,14 @@ export default capsule({
 
 				if (patch.ink !== undefined) next.ink = normalizeInk(patch.ink);
 
-				if (patch.icon !== undefined && tableName !== 'stores') {
-					next.icon = normalizeIcon(kind, patch.icon);
-				}
-
 				await ctx.db[tableName].update(term.id, next);
 
 				ctx.invalidate('pantry');
 			}
 		),
 
-		deleteTerm: mutation(async (ctx, kind: TermKind, termId: string) => {
-			const membership = await requireCapability(ctx, 'taxonomy:write');
+		deleteTerm: mutation(async (ctx, householdId: string, kind: TermKind, termId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'taxonomy:write');
 			const tableName = termTable(kind);
 
 			const term = assertInHousehold(
@@ -623,8 +681,8 @@ export default capsule({
 
 		// --- invites and membership ---
 
-		createInvite: mutation(async (ctx, grantedRole: string) => {
-			const membership = await requireCapability(ctx, 'invite:create');
+		createInvite: mutation(async (ctx, householdId: string, grantedRole: string) => {
+			const membership = await requireCapability(ctx, householdId, 'invite:create');
 
 			const granted = toRole(grantedRole);
 
@@ -649,8 +707,8 @@ export default capsule({
 			return { code: invite.code, expiresAt: invite.expiresAt };
 		}),
 
-		revokeInvite: mutation(async (ctx, inviteId: string) => {
-			const membership = await requireCapability(ctx, 'invite:revoke');
+		revokeInvite: mutation(async (ctx, householdId: string, inviteId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'invite:revoke');
 
 			const invite = assertInHousehold(
 				await ctx.db.invites.get(inviteId),
@@ -670,17 +728,6 @@ export default capsule({
 
 			if (! isCodeShaped(code)) throw new AccessError('That invite code is not valid.');
 
-			// D18: one household per user, so redemption refuses rather than
-			// creating a second membership. This is also what stops a code from
-			// ever changing a current member's role in either direction.
-			const existing = await ctx.db.memberships
-				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-				.collect();
-
-			if (existing.length > 0) {
-				throw new AccessError('You already belong to a household. Leave it before joining another.');
-			}
-
 			const invite = await ctx.db.invites
 				.withIndex('by_code', (r) => r.eq('code', code))
 				.first();
@@ -692,6 +739,18 @@ export default capsule({
 				throw new AccessError('That invite is no longer valid.');
 			}
 
+			// D18 refused a second membership anywhere; D33 narrows that to the
+			// household the code is for. The check has to stay in some form: a
+			// code must never change a current member's role, in either
+			// direction, and a duplicate row would do exactly that.
+			const existing = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.collect();
+
+			if (existing.some((row) => row.householdId === invite.householdId)) {
+				throw new AccessError('You are already a member of that household.');
+			}
+
 			await ctx.db.memberships.insert({
 				householdId: invite.householdId,
 				userId: ctx.auth.userId,
@@ -699,13 +758,13 @@ export default capsule({
 				role: toRole(invite.role),
 			});
 
-			ctx.invalidate('household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry');
 
 			return { householdId: invite.householdId };
 		}),
 
-		changeRole: mutation(async (ctx, membershipId: string, nextRole: string) => {
-			const membership = await requireCapability(ctx, 'member:role');
+		changeRole: mutation(async (ctx, householdId: string, membershipId: string, nextRole: string) => {
+			const membership = await requireCapability(ctx, householdId, 'member:role');
 
 			const members = await ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
@@ -734,8 +793,8 @@ export default capsule({
 			ctx.invalidate('household');
 		}),
 
-		removeMember: mutation(async (ctx, membershipId: string) => {
-			const membership = await requireCapability(ctx, 'member:remove');
+		removeMember: mutation(async (ctx, householdId: string, membershipId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'member:remove');
 
 			const members = await ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
@@ -754,11 +813,11 @@ export default capsule({
 			await revokeInvitesBy(ctx.db, membership.householdId, target.userId);
 			await ctx.db.memberships.delete(target.id);
 
-			ctx.invalidate('household');
+			ctx.invalidate('households', 'household');
 		}),
 
-		leaveHousehold: mutation(async (ctx) => {
-			const membership = await requireMembership(ctx);
+		leaveHousehold: mutation(async (ctx, householdId: string) => {
+			const membership = await requireMembership(ctx, householdId);
 
 			const members = await ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
@@ -773,13 +832,14 @@ export default capsule({
 			await revokeInvitesBy(ctx.db, membership.householdId, membership.userId);
 			await ctx.db.memberships.delete(membership.id);
 
-			ctx.invalidate('household', 'pantry');
+			// The list is what the client falls back through: losing this row is
+			// how it learns to show one of the others, or the first-run screen.
+			ctx.invalidate('households', 'household', 'pantry');
 		}),
 
 		/** Owner only. Deletes every row scoped to the household, children first. */
-		deleteHousehold: mutation(async (ctx) => {
-			const membership = await requireCapability(ctx, 'household:delete');
-			const { householdId } = membership;
+		deleteHousehold: mutation(async (ctx, householdId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'household:delete');
 
 			// Order matters: join rows, then what they point at, then the
 			// household itself. Zero has no cascading deletes.
@@ -794,15 +854,15 @@ export default capsule({
 				'memberships',
 			] as const) {
 				const rows = await ctx.db[name]
-					.withIndex('by_household', (r) => r.eq('householdId', householdId))
+					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
 					.collect();
 
 				for (const row of rows) await ctx.db[name].delete(row.id);
 			}
 
-			await ctx.db.households.delete(householdId);
+			await ctx.db.households.delete(membership.householdId);
 
-			ctx.invalidate('household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry');
 		}),
 	},
 

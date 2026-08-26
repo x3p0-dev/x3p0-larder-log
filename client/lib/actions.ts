@@ -11,8 +11,8 @@ import type { TermKind } from '../../shared/types';
  */
 export type TaxonomyActions = {
 	/** Resolves to the new term's id, or null if the server refused. */
-	create: (kind: TermKind, draft: { name: string; ink: string; icon?: string }) => Promise<string | null>;
-	update: (kind: TermKind, id: string, patch: { name?: string; ink?: string; icon?: string }) => Promise<void>;
+	create: (kind: TermKind, draft: { name: string; ink: string }) => Promise<string | null>;
+	update: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
 	remove: (kind: TermKind, id: string) => Promise<void>;
 };
 

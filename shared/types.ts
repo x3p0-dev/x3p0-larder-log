@@ -14,15 +14,18 @@ import type { Role } from './roles';
 export type TermKind = 'location' | 'type' | 'store';
 
 /**
- * A taxonomy term. `ink` is the single base hex every tint, ring, and chip
- * color derives from; `icon` is a key into the matching set in `shared/icons.ts`
- * and is absent for stores, which render as outlined chips with no glyph.
+ * A taxonomy term. `ink` is a color *token* rather than a hex (D32) — the
+ * theme table in `client/lib/palette.ts` says what it looks like.
+ *
+ * No `icon`. The Cellar design identifies a term by its name and its color dot,
+ * so the picker and the glyph sets were cut before v1 (D34). The `icon` column
+ * survives on `locations` and `types`, written as `''` — a column is additive
+ * to re-populate and destructive to drop.
  */
 export type Term = {
 	id: string;
 	name: string;
 	ink: string;
-	icon?: string;
 };
 
 /** An inventory row. `qty` and `threshold` are decimal strings — see D4. */
@@ -74,10 +77,8 @@ export type QueryState<T> =
 	| ({ state: 'ready' } & T)
 	/** Signed out. The gate normally prevents this, but the query is defensive. */
 	| { state: 'guest' }
-	/** Signed in, no household yet — the first-run path. */
-	| { state: 'no-household' }
-	/** Something the user must be told about, e.g. the D18 multi-household bug. */
-	| { state: 'blocked'; message: string };
+	/** Signed in, belonging to no household at all — the first-run path. */
+	| { state: 'no-household' };
 
 export type PantryData = {
 	items: Item[];
@@ -93,5 +94,29 @@ export type HouseholdData = {
 	invites: Invite[];
 };
 
+/**
+ * One row of the household switcher.
+ *
+ * The count is items, because that is what the popover shows and what tells two
+ * pantries apart at a glance. `role` is this user's role *there* — it can
+ * differ in every household they belong to.
+ */
+export type HouseholdSummary = {
+	id: string;
+	name: string;
+	role: Role;
+	itemCount: number;
+};
+
+/**
+ * Just the list. Which one is *current* is not answered here — the `household`
+ * query already echoes back the id it resolved, and two queries answering the
+ * same question is two answers to keep in agreement.
+ */
+export type HouseholdListData = {
+	households: HouseholdSummary[];
+};
+
 export type PantryResult = QueryState<PantryData>;
 export type HouseholdResult = QueryState<HouseholdData>;
+export type HouseholdListResult = QueryState<HouseholdListData>;

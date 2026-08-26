@@ -61,7 +61,9 @@ fixed the same day; the whole sequence is in
 - ✅ `pantry` and `household` queries; item, taxonomy, invite, and membership
   mutations, all declaring `invalidate()`
 - ✅ Server-side validation and clamping, reusing `shared/qty.ts` — plus
-  `shared/term.ts` (names, ink), `shared/icons.ts` (D23), `shared/invite.ts`
+  `shared/term.ts` (names, ink), `shared/icons.ts` (D23, since removed —
+  [D34](decisions.md#d34-term-icons-are-cut-and-the-column-is-kept)),
+  `shared/invite.ts`
   (codes, expiry), `shared/roles.ts` (D20 capabilities)
 - ✅ Platform spike: six unknowns answered, recorded in [notes](notes.md) and
   `.claude/docs/spacefast.md`
@@ -215,6 +217,28 @@ Phase 2 port carried more across than this list assumed.
 browser pass over the read-only UI — none of which
 can be finished without either real data or the published space.
 
+### Three bugs found by reading, fixed 2026-08-25
+
+All three were code that compiled, typechecked, and did the wrong thing.
+
+- **A refused delete still offered Undo.** `removeItem` resolved `void`, so the
+  toast was armed whether or not the row went anywhere — and undo re-inserts
+  through `addItem` (D17), so pressing it on a failed delete produced a
+  duplicate. `removeItem` and `updateItem` now report success.
+- **Save was a dead button when editing.** `saveEdit` returned silently on a
+  blank name, and `ItemSheet`'s error prop was wired for the add flow only: no
+  message, no close, no clue. It now validates name *and* location like `addItem`,
+  shows the message, sets `saving`, and keeps the sheet open when the server
+  refuses rather than discarding the edit.
+- **The default threshold wrote on every keystroke.** Clearing the field to
+  retype sent `''`, and `normalizeQty('')` is `"0"` — a household whose new items
+  all start out already low. It is a draft committed on blur now, like the
+  household name beside it, and anything that isn't a quantity snaps back.
+
+**Also:** the first-run screen has a sign-out. It was the one screen with no way
+off it, since sign-out lives in a drawer that does not exist until you have a
+household.
+
 **Done when:** nothing from the prototype is missing.
 
 ## Phase 5 — Ship
@@ -231,13 +255,7 @@ can be finished without either real data or the published space.
 Parked deliberately — see [non-goals](overview.md#non-goals) for the ones that
 are parked permanently.
 
-- Household switching UI (schema already supports it; only the UI is missing —
-  and queries can take arguments, so a household id can be a query parameter).
-  Households are already named and the name already has a home in the header
-  ([D3](decisions.md#d3-multi-household-schema-single-household-ui)), so the
-  switcher is a control, not a data change
 - Item photos via Zero storage
-- Multiple households per person
 - Roles beyond owner/editor/viewer — a contributor tier, per-location
   permissions ([D20](decisions.md#d20-three-roles-owner-editor-viewer) settled
   the base set)
@@ -266,6 +284,13 @@ two are not to be built.
   tokens work
 - ✅ **Sort menu** — the trigger names the active sort; six options in three
   groups split by hairlines, a crimson check rather than a fill
+- ✅ **Term icons cut** — the reskin took the glyphs off the item card and
+  deleted `IconPicker`, leaving a validated, seeded, tested field nothing could
+  show or change. `shared/icons.ts` and `client/lib/icons.ts` are gone, along
+  with the `icon` argument on `createTerm` / `updateTerm` and six assertions.
+  **The column stays**, holding `''`
+  ([D34](decisions.md#d34-term-icons-are-cut-and-the-column-is-kept)) — dropping
+  it is destructive, refilling it is additive
 - ✅ **App icon** — title, favicons and `theme-color` injected at boot, icons
   inlined as data URIs. The SVG favicon is deliberately not linked: browsers
   prefer it at 16px, which defeats the hand-cut `favicon-16.png`
@@ -291,7 +316,11 @@ two are not to be built.
   that opened one takes the lit treatment. Badges count that group's active
   filter, crimson, ringed in the rail colour — the one place crimson touches
   the rail. Tooltips at 400ms; Escape and outside-click close a flyout
-- **Household switcher — DEFERRED, see below**
+- ✅ **Household switcher** — the spec's popover, in the drawer and in the rail
+  flyout: every household you belong to with your role and its item count, a
+  crimson check on the current one, then *New household* and *Join with a link*.
+  Built on [D33](decisions.md#d33-a-user-may-belong-to-several-households), which
+  ended D18's one-household rule — see below
 - ✅ **Settings pane** — the six sections now live *inside* the drawer, in the
   spec's order: Account, Household, Members, Appearance, Default threshold,
   **Invites last**. No terms block (they moved to the Filter pane) and no
@@ -352,7 +381,29 @@ initial on its term colour", but a household is not a term and carries no
 terracotta. It wants either a real `households.ink` column — a schema change,
 so D27 governs — or a rule for deriving one.
 
-### The household switcher contradicts D18 — deferred, not dropped
+### The household switcher is built, and D18 is gone
+
+**Done 2026-08-25**, and it was the decision the note below predicted rather
+than the component. [D33](decisions.md#d33-a-user-may-belong-to-several-households)
+replaced D18's one-household rule with a read-heals / write-refuses split:
+`selectMembership` for queries, `findMembership` for mutations, a `households`
+query for the list, and a `householdId` argument on every scoped query and
+mutation. **No migration** — the artifact still reports nine tables and zero
+operations, exactly as D3 and D18 promised it would.
+
+Which household you are looking at is per device, in `localStorage`, and every
+query echoes the household it actually resolved so a stale selection repairs
+itself. Roles are now per household: the same person is an owner in one pantry
+and a viewer in another, verified against a real capsule.
+
+Leaving and deleting a household are deliberately **not** in the switcher —
+leave stays in Settings, and `deleteHousehold` still has no client caller at
+all.
+
+**Not verified, and it cannot be here:** two people in one household, and one
+person in two households on a *published* space. `sf dev` issues one identity.
+
+### What the deferral said at the time
 
 The spec draws a full-width button opening a popover of **every** household you
 belong to — name, role, item count, a check on the current one — plus *New

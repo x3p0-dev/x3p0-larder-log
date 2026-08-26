@@ -40,7 +40,7 @@ larder-log/
     types.ts           # Item, Term, QueryState — the domain vocabulary
     roles.ts           # the D20 capability matrix; can()
     identity.ts        # who counts as signed in (the dev-guest bypass)
-    membership.ts      # D18's one-household rule; D22's last-owner guard
+    membership.ts      # D33's read-heals/write-refuses rule; D22's last-owner guard
     invite.ts          # code generation, 14-day expiry (D24)
     joinLink.ts        # ?join=<code> links: build, parse, strip, group (D28)
     palette.ts         # WHICH color tokens exist — no colors in it (D32)
@@ -133,59 +133,64 @@ single largest correctness risk in this app.
 
 The rules, which every handler must follow without exception:
 
-1. **Never accept a `householdId` from client arguments as authority.** Resolve
-   the caller's household server-side from `ctx.auth.userId` via `memberships`.
+1. **A `householdId` from client arguments is a selector, never an authority.**
+   Since [D33](decisions.md#d33-a-user-may-belong-to-several-households) a
+   caller may belong to several households, so one has to be named — but naming
+   it proves nothing. Look the id up among the caller's own memberships
+   (`ctx.auth.userId` via `memberships`) and work from the row you find, or
+   refuse.
 2. **Re-read before you write.** For any update or delete, `get()` the row,
    confirm its `householdId` matches the caller's, then write.
 3. **Reject guests** in every handler that writes. Check `ctx.auth.isGuest`.
 
-4. **Never `.first()` a membership lookup.** One household per user is a rule
-   the handler enforces, not one the schema guarantees — so a multi-row result
-   is a bug, and picking a row silently lands the caller's edits in an arbitrary
-   household. See
-   [D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema).
+4. **Never `.first()` a membership lookup.** A user's memberships come back in
+   whatever order the index returns, so `.first()` is a coin toss dressed as an
+   answer. Which household a request is about is decided by one of two pure
+   functions in `shared/membership.ts`, and which one you call depends on
+   whether you are reading or writing.
 
-A single shared helper enforces this so it can't be forgotten per-handler:
+**A read heals, a write refuses**
+([D33](decisions.md#d33-a-user-may-belong-to-several-households)). A query
+honors the household the client asked for, and falls back to a deterministic
+default when the caller is no longer a member of it — a stale selection should
+repair itself, not strand someone. A mutation matches exactly or throws, because
+a write redirected to a household the caller did not name is silent corruption.
+
+Two shared helpers in `server/auth.ts` enforce this so it can't be forgotten
+per-handler:
 
 ```ts
-// Resolves the caller's household, or throws.
-async function requireHousehold(ctx) {
-  if (ctx.auth.isGuest) throw new Error('Sign in required');
+// Queries. Reports rather than throws — see QueryState in shared/types.ts.
+const state = await membershipState(ctx, householdId);   // 'ok' | 'guest' | 'none'
 
-  const rows = await ctx.db.memberships
-    .withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-    .collect();
-
-  if (! rows.length) throw new Error('No household');
-
-  // Deliberately not `.first()`. The schema permits many memberships (D3) but
-  // the app supports one (D18); more than one means the switcher shipped
-  // without this check being revisited.
-  if (rows.length > 1) {
-    throw new Error('Multiple households; switcher not implemented');
-  }
-
-  return rows[0].householdId;
-}
+// Mutations. Throws, and never falls back.
+const membership = await requireMembership(ctx, householdId);
+const membership = await requireCapability(ctx, householdId, 'item:write');
 ```
 
-First run is a separate path, not a branch inside this helper: a signed-in
-identity with no membership gets a household and an owner membership created for
-it once, and every handler after that calls `requireHousehold()` and expects
-exactly one.
+`requireCapability` reads the role from the membership row it resolved, so
+[D20](decisions.md#d20-three-roles-owner-editor-viewer)'s matrix applies **per
+household**: the same person can be an owner in one pantry and a viewer in
+another.
+
+First run is a separate path, not a branch inside these helpers: `createHousehold`
+creates a household and an owner membership, and every other handler resolves an
+existing one.
 
 ### Roles
 
 Membership decides *reach*; `role` decides *permission*. A handler that writes
-checks both — `requireHousehold()` for the boundary, then a capability:
+checks both — `requireMembership()` for the boundary, then a capability — and
+`requireCapability()` is the two in one call:
 
 ```ts
-import { can } from '../shared/roles';
-
-const { householdId, role } = await requireMembership(ctx);
-
-if (! can(role, 'item:write')) throw new Error('Not allowed');
+// The whole check, for the household this request named.
+const membership = await requireCapability(ctx, householdId, 'item:write');
 ```
+
+The role comes off the membership row that was resolved, so it is the caller's
+role **in that household** — not a property of the person
+([D33](decisions.md#d33-a-user-may-belong-to-several-households)).
 
 `can()` is a pure function over the matrix in
 [data-model.md](data-model.md#roles), living in `shared/roles.ts` so the server

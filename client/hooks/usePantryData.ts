@@ -4,7 +4,9 @@ import { useMutation, useQuery } from '@spacefast/zero/client';
 import type { Role } from '../../shared/roles';
 import type {
 	HouseholdData,
+	HouseholdListResult,
 	HouseholdResult,
+	HouseholdSummary,
 	ItemDraft,
 	PantryData,
 	PantryResult,
@@ -14,9 +16,15 @@ import type {
 /**
  * The bridge between the capsule and the UI.
  *
- * Two live subscriptions (`pantry`, `household`) and every mutation the app
- * calls. Components below this take plain data and callbacks; nothing else in
- * `client/` imports from `@spacefast/zero/client`.
+ * Three live subscriptions — `households`, `pantry`, `household` — and every
+ * mutation the app calls. Components below this take plain data and callbacks;
+ * nothing else in `client/` imports from `@spacefast/zero/client`.
+ *
+ * Since D33 a caller can belong to several households, so every scoped mutation
+ * names the one it is for. That id is **not** taken from the caller's argument
+ * list: it is the id the `household` query says it answered for, injected here,
+ * so a component can no more write to the wrong household than it can read from
+ * one. The server verifies it against the caller's memberships regardless.
  */
 
 /**
@@ -37,59 +45,84 @@ export type PantryStatus =
 	| { state: 'loading' }
 	| { state: 'guest' }
 	| { state: 'no-household' }
-	| { state: 'blocked'; message: string }
 	| { state: 'ready'; pantry: PantryData; household: HouseholdData };
 
 export type PantryApi = {
 	status: PantryStatus;
+	/** Every household the caller belongs to. Empty until the list arrives. */
+	households: HouseholdSummary[];
+	/**
+	 * The household the server actually answered for, which is not always the
+	 * one that was asked for — a selection left over from a household you have
+	 * since left resolves to a different one. The caller reconciles against
+	 * this rather than trusting what it stored.
+	 */
+	currentHouseholdId: string;
 	/** The last mutation error, for a banner. Cleared by `dismissError`. */
 	error: string | null;
 	dismissError: () => void;
 
-	createHousehold: (name: string) => Promise<void>;
+	/** Resolves to the new household's id, so the caller can switch to it. */
+	createHousehold: (name: string) => Promise<string | null>;
 	updateHousehold: (patch: { name?: string; defaultThreshold?: string }) => Promise<void>;
 
 	addItem: (draft: ItemDraft) => Promise<string | null>;
-	updateItem: (id: string, patch: Partial<ItemDraft>) => Promise<void>;
+	/** True when the server accepted the edit. False leaves the sheet open. */
+	updateItem: (id: string, patch: Partial<ItemDraft>) => Promise<boolean>;
 	adjustQty: (id: string, delta: number) => Promise<void>;
-	removeItem: (id: string) => Promise<void>;
+	/** True when the row is really gone — the undo toast is armed on this. */
+	removeItem: (id: string) => Promise<boolean>;
 
-	createTerm: (kind: TermKind, draft: { name: string; ink: string; icon?: string }) => Promise<string | null>;
-	updateTerm: (kind: TermKind, id: string, patch: { name?: string; ink?: string; icon?: string }) => Promise<void>;
+	createTerm: (kind: TermKind, draft: { name: string; ink: string }) => Promise<string | null>;
+	updateTerm: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
 	deleteTerm: (kind: TermKind, id: string) => Promise<void>;
 
 	/** Resolves to the new code, or null when the server refused. */
 	createInvite: (role: Role) => Promise<{ code: string; expiresAt: string } | null>;
 	revokeInvite: (inviteId: string) => Promise<void>;
-	/** Resolves true only when the membership was actually created. */
-	redeemInvite: (code: string) => Promise<boolean>;
+	/** The joined household's id, or null when the server refused. */
+	redeemInvite: (code: string) => Promise<string | null>;
 
 	changeRole: (membershipId: string, role: Role) => Promise<void>;
 	removeMember: (membershipId: string) => Promise<void>;
 	leaveHousehold: () => Promise<void>;
 };
 
-export function usePantryData(): PantryApi {
-	const pantryResult = useQuery<PantryResult>('pantry');
-	const householdResult = useQuery<HouseholdResult>('household');
+export function usePantryData(selectedHouseholdId: string | null): PantryApi {
+	/*
+	 * `''` rather than null, because the capsule's queries take a string. An
+	 * empty one means "no preference" — a first load on a new device, or one
+	 * whose stored selection has not been read yet — and the server answers
+	 * with the caller's default household.
+	 */
+	const preferred = selectedHouseholdId ?? '';
+
+	/*
+	 * The list takes no argument on purpose: it is the one subscription a
+	 * switch does not disturb, so the switcher keeps its rows while the pantry
+	 * underneath it is still catching up.
+	 */
+	const listResult = useQuery<HouseholdListResult>('households');
+	const pantryResult = useQuery<PantryResult>('pantry', preferred);
+	const householdResult = useQuery<HouseholdResult>('household', preferred);
 
 	const [error, setError] = useState<string | null>(null);
 
 	const rawCreateHousehold = useMutation<[string], { householdId: string }>('createHousehold');
-	const rawUpdateHousehold = useMutation<[{ name?: string; defaultThreshold?: string }], void>('updateHousehold');
-	const rawAddItem = useMutation<[ItemDraft], { id: string }>('addItem');
-	const rawUpdateItem = useMutation<[string, Partial<ItemDraft>], void>('updateItem');
-	const rawAdjustQty = useMutation<[string, number], void>('adjustQty');
-	const rawRemoveItem = useMutation<[string], void>('removeItem');
-	const rawCreateTerm = useMutation<[TermKind, { name: string; ink: string; icon?: string }], { id: string }>('createTerm');
-	const rawUpdateTerm = useMutation<[TermKind, string, { name?: string; ink?: string; icon?: string }], void>('updateTerm');
-	const rawDeleteTerm = useMutation<[TermKind, string], void>('deleteTerm');
-	const rawCreateInvite = useMutation<[string], { code: string; expiresAt: string }>('createInvite');
-	const rawRevokeInvite = useMutation<[string], void>('revokeInvite');
+	const rawUpdateHousehold = useMutation<[string, { name?: string; defaultThreshold?: string }], void>('updateHousehold');
+	const rawAddItem = useMutation<[string, ItemDraft], { id: string }>('addItem');
+	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
+	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
+	const rawRemoveItem = useMutation<[string, string], void>('removeItem');
+	const rawCreateTerm = useMutation<[string, TermKind, { name: string; ink: string }], { id: string }>('createTerm');
+	const rawUpdateTerm = useMutation<[string, TermKind, string, { name?: string; ink?: string }], void>('updateTerm');
+	const rawDeleteTerm = useMutation<[string, TermKind, string], void>('deleteTerm');
+	const rawCreateInvite = useMutation<[string, string], { code: string; expiresAt: string }>('createInvite');
+	const rawRevokeInvite = useMutation<[string, string], void>('revokeInvite');
 	const rawRedeemInvite = useMutation<[string], { householdId: string }>('redeemInvite');
-	const rawChangeRole = useMutation<[string, string], void>('changeRole');
-	const rawRemoveMember = useMutation<[string], void>('removeMember');
-	const rawLeaveHousehold = useMutation<[], void>('leaveHousehold');
+	const rawChangeRole = useMutation<[string, string, string], void>('changeRole');
+	const rawRemoveMember = useMutation<[string, string], void>('removeMember');
+	const rawLeaveHousehold = useMutation<[string], void>('leaveHousehold');
 
 	/**
 	 * Runs a mutation and surfaces its failure.
@@ -118,7 +151,6 @@ export function usePantryData(): PantryApi {
 		for (const result of [householdResult, pantryResult]) {
 			if (result.state === 'guest') return { state: 'guest' };
 			if (result.state === 'no-household') return { state: 'no-household' };
-			if (result.state === 'blocked') return { state: 'blocked', message: result.message };
 		}
 
 		if (pantryResult.state !== 'ready' || householdResult.state !== 'ready') {
@@ -131,74 +163,97 @@ export function usePantryData(): PantryApi {
 		return { state: 'ready', pantry, household };
 	}, [pantryResult, householdResult]);
 
+	const households = useMemo(() => (
+		! isLoading(listResult) && listResult.state === 'ready' ? listResult.households : []
+	), [listResult]);
+
+	/*
+	 * The household every scoped mutation below is aimed at. Empty until the
+	 * query answers, which is also when the UI that calls them is still behind
+	 * the loading gate — and if one slips through anyway, the server refuses a
+	 * write with no household named rather than guessing at one.
+	 */
+	const currentHouseholdId = status.state === 'ready' ? status.household.household.id : '';
+
 	return {
 		status,
+		households,
+		currentHouseholdId,
 		error,
 		dismissError: useCallback(() => setError(null), []),
 
 		createHousehold: useCallback(async (name) => {
-			await run(() => rawCreateHousehold(name));
+			const result = await run(() => rawCreateHousehold(name));
+
+			return result ? result.householdId : null;
 		}, [run, rawCreateHousehold]),
 
 		updateHousehold: useCallback(async (patch) => {
-			await run(() => rawUpdateHousehold(patch));
-		}, [run, rawUpdateHousehold]),
+			await run(() => rawUpdateHousehold(currentHouseholdId, patch));
+		}, [run, rawUpdateHousehold, currentHouseholdId]),
 
 		addItem: useCallback(async (draft) => {
-			const result = await run(() => rawAddItem(draft));
+			const result = await run(() => rawAddItem(currentHouseholdId, draft));
 			return result ? result.id : null;
-		}, [run, rawAddItem]),
+		}, [run, rawAddItem, currentHouseholdId]),
 
-		updateItem: useCallback(async (id, patch) => {
-			await run(() => rawUpdateItem(id, patch));
-		}, [run, rawUpdateItem]),
+		// A refusal has to be distinguishable from success: the edit sheet stays
+		// open on false so the typing survives, the way `addItem` keeps its draft.
+		updateItem: useCallback(async (id, patch) => (
+			(await run(() => rawUpdateItem(currentHouseholdId, id, patch).then(() => true))) === true
+		), [run, rawUpdateItem, currentHouseholdId]),
 
 		adjustQty: useCallback(async (id, delta) => {
-			await run(() => rawAdjustQty(id, delta));
-		}, [run, rawAdjustQty]),
+			await run(() => rawAdjustQty(currentHouseholdId, id, delta));
+		}, [run, rawAdjustQty, currentHouseholdId]),
 
-		removeItem: useCallback(async (id) => {
-			await run(() => rawRemoveItem(id));
-		}, [run, rawRemoveItem]),
+		// `void` here is what armed the undo toast for removals the server had
+		// refused — and undo re-runs `addItem`, so pressing it duplicated the row.
+		removeItem: useCallback(async (id) => (
+			(await run(() => rawRemoveItem(currentHouseholdId, id).then(() => true))) === true
+		), [run, rawRemoveItem, currentHouseholdId]),
 
 		createTerm: useCallback(async (kind, draft) => {
-			const result = await run(() => rawCreateTerm(kind, draft));
+			const result = await run(() => rawCreateTerm(currentHouseholdId, kind, draft));
 			return result ? result.id : null;
-		}, [run, rawCreateTerm]),
+		}, [run, rawCreateTerm, currentHouseholdId]),
 
 		updateTerm: useCallback(async (kind, id, patch) => {
-			await run(() => rawUpdateTerm(kind, id, patch));
-		}, [run, rawUpdateTerm]),
+			await run(() => rawUpdateTerm(currentHouseholdId, kind, id, patch));
+		}, [run, rawUpdateTerm, currentHouseholdId]),
 
 		deleteTerm: useCallback(async (kind, id) => {
-			await run(() => rawDeleteTerm(kind, id));
-		}, [run, rawDeleteTerm]),
+			await run(() => rawDeleteTerm(currentHouseholdId, kind, id));
+		}, [run, rawDeleteTerm, currentHouseholdId]),
 
 		createInvite: useCallback(async (role) => (
-			run(() => rawCreateInvite(role))
-		), [run, rawCreateInvite]),
+			run(() => rawCreateInvite(currentHouseholdId, role))
+		), [run, rawCreateInvite, currentHouseholdId]),
 
 		revokeInvite: useCallback(async (inviteId) => {
-			await run(() => rawRevokeInvite(inviteId));
-		}, [run, rawRevokeInvite]),
+			await run(() => rawRevokeInvite(currentHouseholdId, inviteId));
+		}, [run, rawRevokeInvite, currentHouseholdId]),
 
-		// The boolean matters: the caller clears the stashed code on success and
-		// keeps it on failure, so an expired-code message stays on screen with
-		// the code still in the box.
-		redeemInvite: useCallback(async (code) => (
-			(await run(() => rawRedeemInvite(code))) !== null
-		), [run, rawRedeemInvite]),
+		// The returned id matters twice: the caller clears the stashed code on
+		// success and keeps it on failure, and the household it names is the one
+		// to switch to. Redemption takes no current household — the code says
+		// which one it is for.
+		redeemInvite: useCallback(async (code) => {
+			const result = await run(() => rawRedeemInvite(code));
+
+			return result ? result.householdId : null;
+		}, [run, rawRedeemInvite]),
 
 		changeRole: useCallback(async (membershipId, role) => {
-			await run(() => rawChangeRole(membershipId, role));
-		}, [run, rawChangeRole]),
+			await run(() => rawChangeRole(currentHouseholdId, membershipId, role));
+		}, [run, rawChangeRole, currentHouseholdId]),
 
 		removeMember: useCallback(async (membershipId) => {
-			await run(() => rawRemoveMember(membershipId));
-		}, [run, rawRemoveMember]),
+			await run(() => rawRemoveMember(currentHouseholdId, membershipId));
+		}, [run, rawRemoveMember, currentHouseholdId]),
 
 		leaveHousehold: useCallback(async () => {
-			await run(() => rawLeaveHousehold());
-		}, [run, rawLeaveHousehold]),
+			await run(() => rawLeaveHousehold(currentHouseholdId));
+		}, [run, rawLeaveHousehold, currentHouseholdId]),
 	};
 }

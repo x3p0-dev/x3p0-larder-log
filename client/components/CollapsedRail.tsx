@@ -3,10 +3,11 @@ import {
 	ChevronRight, MapPin, Moon, PanelLeftOpen, SlidersHorizontal, Store as StoreIcon, Sun, Tag,
 } from 'lucide-preact';
 
+import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { RailFlyout } from './RailFlyout';
 import type { Theme } from '../lib/theme';
 import { drawerDot, termColorFor } from '../lib/theme';
-import type { Term, ThemeOverride } from '../../shared/types';
+import type { HouseholdSummary, Term, ThemeOverride } from '../../shared/types';
 
 type Group = 'location' | 'store' | 'type';
 type Menu = Group | 'household' | 'appearance' | 'account';
@@ -24,6 +25,11 @@ type Props = {
 	itemCount: number;
 	locationCounts: Record<string, number>;
 	householdName: string;
+	households: HouseholdSummary[];
+	currentHouseholdId: string;
+	onSelectHousehold: (id: string) => void;
+	onCreateHousehold: (name: string) => Promise<string | null>;
+	onJoinHousehold: (code: string) => Promise<string | null>;
 	accountName: string;
 	themeOverride: ThemeOverride;
 	setThemeOverride: (v: ThemeOverride) => void;
@@ -61,8 +67,9 @@ const RAIL_BTN_ON =
 export function CollapsedRail({
 	locations, stores, types,
 	activeLocation, setActiveLocation, activeStore, setActiveStore, activeType, setActiveType,
-	itemCount, locationCounts, householdName, accountName,
-	themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
+	itemCount, locationCounts, householdName,
+	households, currentHouseholdId, onSelectHousehold, onCreateHousehold, onJoinHousehold,
+	accountName, themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
 }: Props) {
 	const [menu, setMenu] = useState<Menu | null>(null);
 	const [menuTop, setMenuTop] = useState(0);
@@ -263,13 +270,16 @@ export function CollapsedRail({
 
 			{menu === 'household' && (
 				<RailFlyout top={menuTop} onClose={() => setMenu(null)} label="Household" railRef={railRef}>
-					<p class="px-1.5 pt-1 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-on-dark-label">Household</p>
-					<p class="px-2 pb-2 text-[13px] text-on-dark">{householdName || 'Your household'}</p>
-					{/*
-					  * Switching, creating and joining are not here: D18 gives each
-					  * user exactly one household, and the switcher is deferred until
-					  * that is revisited. See the roadmap.
-					  */}
+					{/* Switch, new, join — the flyout the rail spec's control table asks for. */}
+					<HouseholdSwitcher
+						households={households}
+						currentId={currentHouseholdId}
+						onSelect={onSelectHousehold}
+						onCreate={onCreateHousehold}
+						onJoin={onJoinHousehold}
+						onDone={() => setMenu(null)}
+					/>
+					<span class="block h-px mx-1.5 my-2 bg-drawer-raised" />
 					<button
 						onClick={() => { setMenu(null); onExpand('settings'); }}
 						class="flex items-center justify-between gap-2 w-full px-2 py-1.5 rounded-[9px] text-[12.5px] text-[#C3B49C] hover:bg-drawer-raised"

@@ -1975,3 +1975,50 @@ palette, dark mode, typography, drawer, collapsed rail, item sheet, sort menu,
 icons — is built and unpublishable. The gap between what runs locally and what
 is live grows every day the blocker stands, and none of it can be verified by a
 second person until a publish succeeds.
+
+---
+
+## 2026-08-25 (late) — Multi-household work: three good notes, one sharp edge
+
+Nothing publish-related was attempted; the blocker above is unchanged. This is
+what a day of ordinary capsule work turned up.
+
+### 👍 Query arguments work exactly as the type declarations promised
+
+`useQuery(name, ...args)` and `query(async (ctx, householdId: string) => …)`
+compose without ceremony. Three queries now, one of which takes an argument that
+changes on a click, and the client re-subscribes with no extra plumbing. This is
+the feature that was invisible in the docs (see the 2026-08-24 entry) — **one
+example with an argument in `/docs/zero.md` would still be worth writing**,
+because every example there still takes only `ctx`.
+
+### 👍 `ctx.invalidate()` addresses a query by name, and that is the right call
+
+A query that takes an argument is still invalidated by its name alone, so a
+mutation does not have to know which household ids are currently subscribed.
+Worth documenting explicitly — the alternative design (invalidate one argument
+variant) is plausible enough that a reader has to guess.
+
+### 👍 Endpoints remain the only way to test server logic without a browser
+
+`endpoint()` with a writable `ctx.db` and a real `ctx.auth` let us verify the
+multi-household authorization path — a user who is `owner` in one household and
+`viewer` in another, `item:write` allowed in the first and refused in the second
+— in one request, then delete the endpoint. There is no other way to exercise a
+handler locally: there is no test harness for capsule code, no way to invoke a
+mutation from a script, and `sf dev` issues a single fixed identity. **A
+first-class way to call a query or mutation from the CLI — `sf dev invoke
+<name> [args…]` — would replace this whole dance.**
+
+### 😕 `sf dev` has `--port` but the failure mode does not mention it
+
+Starting a second dev server while one is running prints a bare
+`EADDRINUSE: address already in use 127.0.0.1:4173` with an eight-frame oclif
+stack trace and no hint that `-p/--port` exists. The flag is in `sf dev --help`
+(which itself is not discoverable from `sf --help`, per the earlier entry). A
+one-line "another dev server is already on 4173 — pass `--port` to run a second"
+would cost nothing.
+
+Two dev servers on different ports coexist cleanly otherwise, with separate
+in-memory state and separate capability tokens. That is genuinely useful and
+nowhere documented.

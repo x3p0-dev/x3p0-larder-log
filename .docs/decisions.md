@@ -378,7 +378,9 @@ additive migration, so this stays cheap to reverse.
 
 ## D18. One household per user, enforced in the handler — not in the schema
 
-**Decided:** 2026-08-24
+**Decided:** 2026-08-24. **Superseded by [D33](#d33-a-user-may-belong-to-several-households)
+on 2026-08-25** — the "reaching multi-household later" paragraph below is what
+happened, and it cost no migration, exactly as written.
 
 The schema stays exactly as [D3](#d3-multi-household-schema-single-household-ui)
 describes: `memberships` is a plain join, and nothing prevents a user from
@@ -1107,3 +1109,100 @@ fall back to `darkDot` through `drawerDot()`, which reads slightly dim. That
 also forced `ThemedColor` to grow a `dot` alongside `ink`: the solid fill and
 the text had been close enough to share one value in light, and in dark they
 are not.
+
+---
+
+## D33. A user may belong to several households
+
+**Decided:** 2026-08-25. Supersedes [D18](#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema).
+
+The schema has permitted this since [D3](#d3-multi-household-schema-single-household-ui);
+only the handler refused. The refusal is gone, and with it the `blocked` query
+state that existed to report it. **No migration** — the artifact still reports
+nine tables and zero migration operations.
+
+**Which household a request is about is now a question with two answers**, and
+`shared/membership.ts` gives both:
+
+- `selectMembership(rows, preferred)` — for **queries**. Honors the preference
+  when the caller is a member of it, and otherwise falls back to a deterministic
+  default (lowest household id).
+- `findMembership(rows, householdId)` — for **mutations**. Exact match or
+  nothing.
+
+**A read heals; a write refuses.** These are deliberately different. A stale
+selection is normal — you left a household on your phone, or someone removed
+you while a tab was open — and blocking a read on it strands you on a screen
+with nothing to press. A *write* redirected the same way would land an edit in a
+household you never named, which is precisely the silent corruption D18's throw
+was protecting against. That guarantee survives; only its scope changed.
+
+**The client asks, the server answers, the client believes the answer.** The
+selection lives in `localStorage`, per device, keyed by identity —
+`larder.v4.<userId>.household`. It is the second and last exception to
+[D25](#d25-no-preferences-table), and for the same reason as the first: the
+phone in the kitchen is pointed at the kitchen, and a switch there should not
+move a desktop in another room. Every query echoes the household it actually
+resolved, and `Pantry` writes that id back over its stored guess, so a selection
+pointing at a household you have left repairs itself on the next result rather
+than needing a reset.
+
+**A `householdId` from the client became a selector, not an authority.** The old
+architecture rule — never accept one — could not survive a switcher, since
+something has to name the household. The rule is now that naming proves nothing:
+every handler looks the id up among the caller's own memberships and works from
+the row it finds. An id belonging to a stranger and an id belonging to a
+household you just left fail identically, with one message.
+
+**Roles are per household, and that is the point.** The same person is an owner
+in one pantry and a viewer in another. `requireCapability(ctx, householdId, cap)`
+reads the role from the membership row it resolved, so
+[D20](#d20-three-roles-owner-editor-viewer)'s matrix now applies per household
+rather than per person. Verified against a real capsule on 2026-08-25 through a
+temporary endpoint: owner in Alpha, viewer in Beta, `item:write` allowed in the
+first and refused in the second, for one identity in one request.
+
+**`redeemInvite` still refuses a second membership — in the same household.**
+An invite must never change a current member's role in either direction, and a
+duplicate membership row would do exactly that. Joining a *different* household
+is now the ordinary case.
+
+**Rejected: storing the current household server-side.** A `lastHouseholdId`
+column or a `userPrefs` table would sync the choice across devices, which is the
+wrong behavior — see above — and it would be a schema edit under
+[D27](#d27-the-schema-has-to-be-a-literal-in-the-server-entry) for something
+localStorage already does correctly.
+
+**Rejected: putting the household id in the URL** (`/?h=<id>`). Bookmarkable,
+and it makes a household id a thing people paste around; `?join=` codes are
+already the sharing mechanism ([D28](#d28-an-invite-link-is-joincode-not-joincode)),
+and they carry a role and an expiry.
+
+**Still not built, deliberately:** leaving or deleting a household from the
+switcher. Both exist elsewhere — leave in Settings, delete only in the capsule —
+and destructive actions in a menu you open to *navigate* is how people delete
+the wrong thing.
+
+---
+
+## D34. Term icons are cut, and the column is kept
+
+**Decided:** 2026-08-25
+
+A location and a type each stored an `icon` key, validated server-side against
+per-kind sets in `shared/icons.ts` and rendered through `client/lib/icons.ts`.
+The Cellar reskin identifies a term by its name and its color dot — the icon
+circles came off the item card, and `IconPicker` was deleted with the rest of
+the pre-Cellar surfaces. What was left was a validated, seeded, tested field
+that nothing on screen could show or change.
+
+So the feature is gone: both icon modules, the `icon` argument on `createTerm`
+and `updateTerm`, the seed keys, and six assertions.
+
+**The column stays**, holding `''`. Dropping it needs `sf db migrate --drop`
+against a live space; filling it again later is additive and applies on publish
+with no flags. The asymmetry decides it — keeping an unread column costs a
+`icon: ''` in one insert, and removing it buys nothing.
+
+**If icons come back**, the natural home is the drawer's filter rows rather than
+the item card, and the glyph vocabulary is in git history at `shared/icons.ts`.

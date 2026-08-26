@@ -5,15 +5,14 @@
  * runner, no dependencies. Run with `npm test`.
  *
  * What earns a test here is logic that is either invisible when wrong or
- * expensive when wrong: the authorization matrix, the one-household rule, the
- * last-owner guard, and invite expiry. Zero has no row-level security and its
+ * expensive when wrong: the authorization matrix, which household a request
+ * resolves to, the last-owner guard, and invite expiry. Zero has no row-level security and its
  * `id()` columns are not foreign keys, so these functions are the only thing
  * enforcing several of the app's rules.
  */
 
 import { can, invitableRoles, canInviteRole, toRole, isRole, ROLES, DEFAULT_ROLE } from '../shared/roles';
-import { normalizeIcon, isIconKey, iconKeysFor } from '../shared/icons';
-import { resolveMembership, wouldStrandHousehold } from '../shared/membership';
+import { findMembership, selectMembership, wouldStrandHousehold } from '../shared/membership';
 import {
 	expiryFrom, isExpired, daysUntilExpiry, codeFromBytes, isCodeShaped,
 	normalizeCode, NEVER_EXPIRES, CODE_BYTES,
@@ -70,28 +69,44 @@ check('degraded role is least privileged', can(toRole('superuser'), 'item:write'
 check('null degrades', toRole(null), 'viewer');
 check('isRole rejects junk', isRole('admin'), false);
 
-// --- D23: icons ---
-check('valid location icon kept', normalizeIcon('location', 'snowflake'), 'snowflake');
-check('junk location icon -> default', normalizeIcon('location', 'not-real'), 'box');
-check('type icon from wrong set rejected', normalizeIcon('type', 'snowflake'), 'utensils');
-check('store has no icon', normalizeIcon('store', 'snowflake'), '');
-check('store icon set is null', iconKeysFor('store'), null);
-check('isIconKey cross-set', isIconKey('location', 'beef'), false);
 
 
-
-
-// --- D18: membership resolution never silently picks ---
+// --- D33: which household a request resolves to ---
+//
+// A read heals and a write refuses, and the two must not drift into each other:
+// `selectMembership` falling through to a default is only safe *because*
+// `findMembership` never does.
 const m = (id: string, role: string) => ({ id, householdId: 'h1', userId: 'u' + id, role });
+/** A membership in a named household, for the multi-household cases. */
+const mh = (id: string, householdId: string, role = 'owner') => ({ id, householdId, userId: 'u1', role });
 
-check('no rows', resolveMembership([]).kind, 'none');
-check('one row', resolveMembership([m('a', 'owner')]).kind, 'one');
-check('two rows is a bug, not a pick', resolveMembership([m('a','owner'), m('b','editor')]).kind, 'many');
+check('no rows', selectMembership([]).kind, 'none');
+check('no rows, even with a preference', selectMembership([], 'h1').kind, 'none');
 
-const one = resolveMembership([m('a', 'owner')]);
+const one = selectMembership([m('a', 'owner')]);
 check('role parsed', one.kind === 'one' && one.membership.role, 'owner');
-const junk = resolveMembership([m('a', 'superuser')]);
+const junk = selectMembership([m('a', 'superuser')]);
 check('junk role degrades to viewer', junk.kind === 'one' && junk.membership.role, 'viewer');
+
+const many = [mh('a', 'h-zebra'), mh('b', 'h-apple'), mh('c', 'h-mango')];
+
+const picked = selectMembership(many, 'h-mango');
+check('a query gets the household it asked for', picked.kind === 'one' && picked.membership.householdId, 'h-mango');
+
+const fallback = selectMembership(many, 'h-gone');
+check('a stale selection heals rather than dead-ends', fallback.kind === 'one' && fallback.membership.householdId, 'h-apple');
+const unset = selectMembership(many);
+check('no preference lands on the same default', unset.kind === 'one' && unset.membership.householdId, 'h-apple');
+const reversed = selectMembership([...many].reverse());
+check('the default does not depend on row order', reversed.kind === 'one' && reversed.membership.householdId, 'h-apple');
+
+// The write half: exact or nothing. A mutation that silently retargeted would
+// land an edit in a household the caller never named.
+check('a write gets the household it named', findMembership(many, 'h-zebra')?.householdId, 'h-zebra');
+check('a write never falls back', findMembership(many, 'h-gone'), null);
+check('a write on an empty list', findMembership([], 'h-apple'), null);
+check('a write with no household named', findMembership(many, ''), null);
+check('roles degrade on the write path too', findMembership([mh('a', 'h1', 'superuser')], 'h1')?.role, 'viewer');
 
 // --- D22: last-owner protection ---
 const solo = [m('a', 'owner')];

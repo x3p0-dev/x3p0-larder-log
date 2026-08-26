@@ -1,11 +1,13 @@
 import type { ComponentProps } from 'preact';
-import { ChevronRight, House, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { ChevronRight, ChevronsUpDown, House, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
 
 import { FilterSection } from './DrawerFilters';
 import { DrawerSettings } from './DrawerSettings';
+import { HouseholdSwitcher } from './HouseholdSwitcher';
 import type { Theme } from '../lib/theme';
 import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
-import type { Item, Term } from '../../shared/types';
+import type { HouseholdSummary, Item, Term } from '../../shared/types';
 
 export type DrawerTab = 'filter' | 'settings';
 
@@ -39,6 +41,12 @@ type Props = {
 	onDismiss: () => void;
 
 	householdName: string;
+	/** Every household the caller belongs to, for the switcher popover (D33). */
+	households: HouseholdSummary[];
+	currentHouseholdId: string;
+	onSelectHousehold: (id: string) => void;
+	onCreateHousehold: (name: string) => Promise<string | null>;
+	onJoinHousehold: (code: string) => Promise<string | null>;
 	accountName: string;
 	/** Everything the Settings pane needs, passed through untouched. */
 	settings: Omit<ComponentProps<typeof DrawerSettings>, 'theme'>;
@@ -71,11 +79,43 @@ export function Drawer({
 	activeLocation, setActiveLocation, activeType, setActiveType, activeStore, setActiveStore,
 	locationCounts, anyFilterActive, onClearAll,
 	tab, setTab, open, onClose, collapsed, onDismiss,
-	householdName, accountName, settings,
+	householdName, households, currentHouseholdId,
+	onSelectHousehold, onCreateHousehold, onJoinHousehold,
+	accountName, settings,
 	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, canEditTaxonomy,
 	theme,
 }: Props) {
 	const d = theme.drawer;
+	const [switcherOpen, setSwitcherOpen] = useState(false);
+	const switcherRef = useRef<HTMLDivElement>(null);
+
+	/*
+	 * The same two dismissals `RailFlyout` gives the rail's menus, for the same
+	 * reason: a popover that only closes by choosing something traps whoever
+	 * opened it to look. `pointerdown` rather than `click` so a drag that starts
+	 * inside and ends outside — selecting the name in the create field — does
+	 * not close it mid-gesture.
+	 */
+	useEffect(() => {
+		if (! switcherOpen) return;
+
+		function onKey(e: KeyboardEvent) {
+			if (e.key === 'Escape') { e.stopPropagation(); setSwitcherOpen(false); }
+		}
+
+		function onDown(e: PointerEvent) {
+			if (switcherRef.current?.contains(e.target as Node)) return;
+			setSwitcherOpen(false);
+		}
+
+		document.addEventListener('keydown', onKey);
+		document.addEventListener('pointerdown', onDown);
+
+		return () => {
+			document.removeEventListener('keydown', onKey);
+			document.removeEventListener('pointerdown', onDown);
+		};
+	}, [switcherOpen]);
 
 	return (
 		<>
@@ -117,22 +157,46 @@ export function Drawer({
 				</div>
 
 				{/*
-				  * The household is shown, not switched. The spec draws a popover
-				  * listing every household you belong to — that needs a query which
-				  * does not exist, and D18 gives each user exactly one household.
-				  * See the roadmap before building the switcher.
+				  * The switcher the spec draws, now that a user may belong to more
+				  * than one household (D33). It stays a button with a single
+				  * household too — that is where *New household* and *Join with a
+				  * link* live, and hiding them until you already have two would
+				  * mean there was no way to get the second one.
 				  */}
-				<div
-					class="flex items-center gap-2.5 mx-5 mt-3.5 px-3 h-12 rounded-[13px]"
-					style={{ background: d.raised, border: `1px solid #423728` }}
-				>
-					<span class="shrink-0 flex items-center justify-center w-[30px] h-[30px] rounded-[9px]" style={{ background: '#4A3E2E', color: d.inkMuted }}>
-						<House size={15} />
-					</span>
-					<span class="flex-1 min-w-0 flex flex-col gap-px">
-						<span class="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: d.label }}>Household</span>
-						<span class="text-sm truncate" style={{ color: d.ink }}>{householdName || 'Your household'}</span>
-					</span>
+				<div class="relative mx-5 mt-3.5" ref={switcherRef}>
+					<button
+						onClick={() => setSwitcherOpen((v) => ! v)}
+						class="flex items-center gap-2.5 w-full px-3 h-12 rounded-[13px] text-left transition-colors hover:bg-drawer-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset"
+						style={{ background: d.raised, border: `1px solid #423728` }}
+						aria-expanded={switcherOpen}
+						aria-haspopup="dialog"
+					>
+						<span class="shrink-0 flex items-center justify-center w-[30px] h-[30px] rounded-[9px]" style={{ background: '#4A3E2E', color: d.inkMuted }}>
+							<House size={15} />
+						</span>
+						<span class="flex-1 min-w-0 flex flex-col gap-px">
+							<span class="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: d.label }}>Household</span>
+							<span class="text-sm truncate" style={{ color: d.ink }}>{householdName || 'Your household'}</span>
+						</span>
+						<ChevronsUpDown size={15} class="shrink-0" style={{ color: d.inkFaint }} />
+					</button>
+
+					{switcherOpen && (
+						<div
+							role="dialog"
+							aria-label="Switch household"
+							class="absolute left-0 right-0 top-full mt-1.5 z-50 max-h-[60vh] overflow-y-auto rounded-2xl p-2 bg-drawer-well border border-drawer-line shadow-2xl"
+						>
+							<HouseholdSwitcher
+								households={households}
+								currentId={currentHouseholdId}
+								onSelect={onSelectHousehold}
+								onCreate={onCreateHousehold}
+								onJoin={onJoinHousehold}
+								onDone={() => setSwitcherOpen(false)}
+							/>
+						</div>
+					)}
 				</div>
 
 				<div class="grid grid-cols-2 gap-1 mx-5 mt-[18px] p-1 rounded-xl" style={{ background: d.well }}>

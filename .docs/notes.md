@@ -96,9 +96,11 @@ summarized here.
 
   Consequence, and it shaped the whole query layer: **a query must never throw
   for an expected condition.** `household` and `pantry` return a discriminated
-  `QueryState` (`ready` / `guest` / `no-household` / `blocked`) instead. Before
-  this, a first-run user with no household would have sat on a blank screen
-  forever with nothing to route them to setup.
+  `QueryState` (`ready` / `guest` / `no-household`) instead. Before this, a
+  first-run user with no household would have sat on a blank screen forever with
+  nothing to route them to setup. A fourth arm, `blocked`, existed to report
+  D18's one-household violation and went away with it
+  ([D33](decisions.md#d33-a-user-may-belong-to-several-households)).
 
 - **What does `useQuery` return before the first result?** A hardcoded empty
   **array** — `useState(() => getQueryValue(name, ...args) ?? [])` — regardless

@@ -1,9 +1,18 @@
 /**
- * The one-household-per-user rule (D18), as a pure function.
+ * Which household a request is about, as pure functions.
  *
- * The database read stays in the handler; the *decision* lives here so it can
- * be tested without a server and can never be quietly re-implemented as
- * `.first()` at a second call site.
+ * D18 gave every user exactly one household and this file enforced it. D33
+ * replaced that: a user may belong to several, so *choosing* one is now a real
+ * decision with two different answers depending on who is asking.
+ *
+ * - A **query** is a read, and a stale selection should heal rather than dead-
+ *   end, so `selectMembership` falls back to a deterministic default.
+ * - A **mutation** is a write, and a write must never land in a household the
+ *   caller did not name, so `findMembership` matches exactly or returns null.
+ *
+ * The database read stays in the handler; the decision lives here so it can be
+ * tested without a server and can never be quietly re-implemented as `.first()`
+ * at a second call site.
  */
 
 import { toRole, type Role } from './roles';
@@ -38,36 +47,72 @@ export type Membership = {
 
 export type MembershipResolution =
 	| { kind: 'none' }
-	| { kind: 'one'; membership: Membership }
-	| { kind: 'many'; count: number };
+	| { kind: 'one'; membership: Membership };
 
 /**
- * Resolves a caller's memberships to exactly one, or says why it can't.
+ * Widens a stored row into a `Membership`.
  *
- * Deliberately **not** `.first()`. The schema permits many memberships (D3) but
- * the app supports one (D18), so a multi-row result is a bug — and silently
- * picking a row lands the caller's edits in an arbitrary household, which is
- * the kind of failure that produces no error and no clue.
+ * An unrecognized stored role degrades to the least privileged value rather
+ * than throwing: a corrupt row should lock someone out, never hand them access
+ * they were never granted.
  */
-export function resolveMembership(rows: readonly MembershipLike[]): MembershipResolution {
+function toMembership(row: MembershipLike): Membership {
+	return {
+		id: row.id,
+		householdId: row.householdId,
+		userId: row.userId,
+		role: toRole(row.role),
+	};
+}
+
+/**
+ * The household a **query** should answer for: the one asked for, or a stable
+ * default when the request names none — or names one the caller has since been
+ * removed from.
+ *
+ * The fallback is what makes a stale device selection self-healing. The client
+ * stores the id it last looked at (per device, D33); memberships change from
+ * other devices and other people. Blocking on a mismatch would strand someone
+ * who was simply removed from one of their households, so the query answers for
+ * a household they *are* in and echoes its id back, and the client re-points at
+ * what it was actually shown.
+ *
+ * Ordering by id rather than by insertion is arbitrary but *deterministic*,
+ * which is the property that matters: two queries in the same render must not
+ * disagree about which household is being shown.
+ */
+export function selectMembership(
+	rows: readonly MembershipLike[],
+	preferredHouseholdId?: string | null
+): MembershipResolution {
 	if (rows.length === 0) return { kind: 'none' };
 
-	if (rows.length > 1) return { kind: 'many', count: rows.length };
+	if (preferredHouseholdId) {
+		const preferred = rows.find((row) => row.householdId === preferredHouseholdId);
 
-	const row = rows[0]!;
+		if (preferred) return { kind: 'one', membership: toMembership(preferred) };
+	}
 
-	return {
-		kind: 'one',
-		membership: {
-			id: row.id,
-			householdId: row.householdId,
-			userId: row.userId,
-			// An unrecognized stored role degrades to the least privileged value
-			// rather than throwing: a corrupt row should lock someone out, never
-			// hand them access they were never granted.
-			role: toRole(row.role),
-		},
-	};
+	const sorted = [...rows].sort((a, b) => a.householdId.localeCompare(b.householdId));
+
+	return { kind: 'one', membership: toMembership(sorted[0]!) };
+}
+
+/**
+ * The household a **mutation** may write to: exactly the one named, or nothing.
+ *
+ * No fallback, deliberately. `selectMembership`'s healing behavior is right for
+ * a read and dangerous for a write — an edit quietly redirected into a
+ * different household is the failure that produces no error and no clue, which
+ * is what D18's refusal was originally guarding against.
+ */
+export function findMembership(
+	rows: readonly MembershipLike[],
+	householdId: string
+): Membership | null {
+	const row = rows.find((candidate) => candidate.householdId === householdId);
+
+	return row ? toMembership(row) : null;
 }
 
 /**

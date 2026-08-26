@@ -44,8 +44,11 @@ memberships: table({
 ```
 
 `by_user` is the hot path: every request resolves the caller's household through
-it — and never with `.first()`
-([D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema)).
+it, and it now returns **several rows for one user**
+([D33](decisions.md#d33-a-user-may-belong-to-several-households)). Never
+`.first()` it — a query picks through `selectMembership` (honor the requested
+household, fall back to a deterministic default) and a mutation through
+`findMembership` (exact match or refuse).
 
 `role` is the authorization level, defaulting to the least privileged value. See
 [Roles](#roles) below.
@@ -81,9 +84,10 @@ because it is the one date encoding that compares correctly as a plain string �
 the [D4](decisions.md#d4-numbers-are-strings) trap does not apply to it.
 Redemption checks `revoked` **and** expiry.
 
-Redemption **rejects a caller who already has a membership**, since
-[D18](decisions.md#d18-one-household-per-user-enforced-in-the-handler--not-in-the-schema)
-permits exactly one per user.
+Redemption **rejects a caller who is already a member of that invite's
+household** — a code must never change a current member's role in either
+direction. Joining a *second* household is the ordinary case since
+[D33](decisions.md#d33-a-user-may-belong-to-several-households).
 
 ### `locations`, `types`, `stores`
 
@@ -92,16 +96,18 @@ separate tables because they attach to items differently (one location per item,
 many types and stores) and because merging them into one polymorphic table buys
 nothing here.
 
-`icon` holds a key from a closed, curated set — never an upload, and validated
-server-side against `shared/icons.ts`
-([D23](decisions.md#d23-icons-are-a-closed-set-and-the-keys-live-in-shared)).
+`icon` is **reserved and unread**. The glyph sets were cut before v1
+([D34](decisions.md#d34-term-icons-are-cut-and-the-column-is-kept)); the column
+survives because dropping one needs `sf db migrate --drop` while filling it
+again is additive. Inserts write `''`. D23's closed-set rule is what it would
+come back under.
 
 ```ts
 locations: table({
   householdId: id("households"),
   name: string(),
   ink: string(),                 // a color TOKEN (`color-7`), not a hex — D32
-  icon: string(),                // key from shared/icons.ts
+  icon: string(),                // reserved, always "" — D34
 }).index("by_household", ["householdId"]),
 
 types: table({
@@ -202,6 +208,12 @@ Membership grants *reach*; `role` grants *permission*. Both are checked: the
 household check decides whether the row is yours to touch at all, the role check
 decides what you may do to it.
 
+Both are **per household**. Since
+[D33](decisions.md#d33-a-user-may-belong-to-several-households) one person can
+hold an owner row in one household and a viewer row in another, so the role that
+applies is always the one on the membership the request resolved to — never "the
+user's role".
+
 ## Roles
 
 `memberships.role` is one of `"owner"`, `"editor"`, `"viewer"` and is the sole
@@ -277,12 +289,16 @@ Undo therefore produces a new row `id`.
 
 ## Query surface (initial)
 
-Resolved server-side from `ctx.auth`; no household id crosses the wire. Every
+The caller is resolved from `ctx.auth`. A **household id does cross the wire**
+since [D33](decisions.md#d33-a-user-may-belong-to-several-households) — every
+query and every scoped mutation names one — but it is a selector, not authority:
+the handler resolves it against the caller's own memberships or refuses. Every
 mutation checks a capability from [Roles](#roles) before it writes.
 
 | Handler | Kind | Purpose |
 |---|---|---|
-| `household` | query | The caller's household + members |
+| `households` | query | Every household the caller belongs to — name, their role there, item count. Takes no argument |
+| `household` | query | The named household + members + live invites |
 | `pantry` | query | Items with their types/stores joined, plus all three taxonomies |
 | `addItem` | mutation | Create an item and its join rows |
 | `updateItem` | mutation | Patch fields and reconcile join rows |

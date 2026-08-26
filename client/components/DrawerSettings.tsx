@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ChevronUp, LogOut, Pencil } from 'lucide-preact';
 
@@ -10,6 +10,7 @@ import { DRAWER_BUTTON, DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_INPUT }
 import type { Invite, Member, ThemeOverride } from '../../shared/types';
 import type { Role } from '../../shared/roles';
 import { can } from '../../shared/roles';
+import { isQty } from '../../shared/qty';
 
 const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
 	{ key: 'system', label: 'Auto' },
@@ -108,6 +109,16 @@ export function DrawerSettings({
 	const [creatingInvite, setCreatingInvite] = useState(false);
 
 	/*
+	 * A draft, committed on blur — the same treatment the name gets, and for a
+	 * sharper reason. Writing on every keystroke sent the empty string the
+	 * moment you cleared the field to retype, and `normalizeQty('')` is "0": a
+	 * household whose new items all start out already low.
+	 */
+	const [thresholdDraft, setThresholdDraft] = useState(defaultThreshold);
+
+	useEffect(() => { setThresholdDraft(defaultThreshold); }, [defaultThreshold]);
+
+	/*
 	 * The household name and the default threshold are both `updateHousehold`,
 	 * which the server gates on `household:settings` — owner only. Their
 	 * controls are absent rather than disabled for everyone else (D30); the
@@ -122,6 +133,18 @@ export function DrawerSettings({
 		setCreatingInvite(true);
 		await onCreateInvite(role);
 		setCreatingInvite(false);
+	}
+
+	/** Anything that isn't a quantity snaps back rather than being clamped to 0. */
+	function commitThreshold() {
+		const next = thresholdDraft.trim();
+
+		if (! isQty(next)) {
+			setThresholdDraft(defaultThreshold);
+			return;
+		}
+
+		if (next !== defaultThreshold) setDefaultThreshold(next);
 	}
 
 	function commitName() {
@@ -213,8 +236,10 @@ export function DrawerSettings({
 			<Section title="Default low-stock threshold" theme={theme}>
 				{mayEditSettings ? (
 					<input
-						value={defaultThreshold}
-						onInput={(e) => setDefaultThreshold(e.currentTarget.value)}
+						value={thresholdDraft}
+						onInput={(e) => setThresholdDraft(e.currentTarget.value)}
+						onBlur={commitThreshold}
+						onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
 						inputMode="decimal"
 						class={`h-10 px-3 rounded-[10px] text-[15px] w-24 ${DRAWER_INPUT}`}
 						aria-label="Default low-stock threshold"
