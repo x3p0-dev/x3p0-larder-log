@@ -27,10 +27,12 @@
  * load bearing rather than a browser-synthesised slant.
  *
  * IBM Plex Mono is **interim**. The Cellar spec has no monospace at all — its
- * role (uppercase section labels, 10.5px / 0.15em) belongs to Karla now — but
- * 35 `font-mono` sites still reference it. It comes out with the component
- * pass; loading it until then keeps those legible instead of dropping them to
- * whatever `ui-monospace` resolves to.
+ * role (uppercase section labels, 10.5px / 0.15em) belongs to Karla now. The
+ * reskin took `font-mono` from 35 sites down to ten, and the ten left are the
+ * surfaces that have not been redrawn yet: the sign-in gate, `JoinBox`,
+ * `ShoppingListModal`, and a couple of loading strings in `Pantry`. It comes
+ * out when those do; loading it until then keeps them legible instead of
+ * dropping them to whatever `ui-monospace` resolves to.
  *
  * `display=swap` because the fallbacks are a generic serif and a generic sans;
  * a first visit that quietly kept them would not look like this app.

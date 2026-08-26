@@ -100,23 +100,31 @@ server-side against `shared/icons.ts`
 locations: table({
   householdId: id("households"),
   name: string(),
-  ink: string(),                 // base hex; tints derive from it
+  ink: string(),                 // a color TOKEN (`color-7`), not a hex — D32
   icon: string(),                // key from shared/icons.ts
 }).index("by_household", ["householdId"]),
 
 types: table({
   householdId: id("households"),
   name: string(),
-  ink: string(),
+  ink: string(),                 // color token — D32
   icon: string(),                // key from shared/icons.ts
 }).index("by_household", ["householdId"]),
 
 stores: table({
   householdId: id("households"),
   name: string(),
-  ink: string(),                 // no icon; stores render as outlined chips
+  ink: string(),                 // color token — D32
 }).index("by_household", ["householdId"])
 ```
+
+**`ink` holds a token, not a color.** A term stores `color-7`; what that looks
+like is decided by the active theme in `client/lib/palette.ts`, so re-theming
+restyles every term in every household without rewriting a row
+([D32](decisions.md#d32-a-term-stores-a-color-token-not-a-color)).
+`normalizeInk()` still accepts a legacy `#rrggbb` — rows written before that
+decision hold one — but nothing new writes a hex.
+
 
 ### `items`
 

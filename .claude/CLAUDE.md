@@ -56,20 +56,51 @@ which amends D20). Verified locally against the real code path — `sf dev` make
 you an owner, so a throwaway endpoint rewrote the caller's own role, and it has
 been removed. The rest of Phase 4 was already built and the roadmap now says so.
 
+### The Cellar reskin (Phase 4.5) is built, and is the bulk of the current diff
+
+Everything structural in `.claude/docs/design/ui-directions.md` is implemented
+**except the household switcher**, which is deferred by decision, not blocked —
+see the roadmap. What landed on 2026-08-25:
+
+- **Tokens.** `theme.json` carries the warm-brown palette and an 8-step type
+  scale as `light-dark()` pairs. Term colors became *tokens* rather than hexes
+  ([D32](../.docs/decisions.md#d32-a-term-stores-a-color-token-not-a-color));
+  `shared/palette.ts` says which exist, `client/lib/palette.ts` says what they
+  look like.
+- **Both themes.** Light and dark come from the same table, including a full
+  dark quad for all sixteen term colors.
+- **New surfaces.** Item card, the dark left drawer (docked / slide-over /
+  68px collapsed rail with flyouts), the Filter and Settings panes, the item
+  sheet for add *and* edit, the sort menu, and the contextual shopping list.
+- **Interaction states** live in `client/lib/controlStyles.ts` as literal class
+  strings — `DRAWER_*` and `PAGE_*`. Inline styles cannot express `:hover`,
+  which is why the drawer shipped once with no feedback at all.
+- **Nine components were replaced and deleted**: `Sidebar`, `FacetSection`,
+  `SettingsDrawer`, `TaxonomyManager`, `ItemFields`, `ChipPicker`,
+  `IconPicker`, plus the `createTermFor` adapter.
+
+**Nothing here has been seen by a second person, or published** — see the
+blocker below. Ten `font-mono` sites remain, on the surfaces not yet redrawn:
+the sign-in gate, `JoinBox`, `ShoppingListModal`, and two loading strings.
+
 Phase 4's typography question is also closed, in the opposite direction from
 the one the notes predicted. Zero has no webfont mechanism — `theme.json`'s
 `fontFace` is discarded silently — but the `--font-disp` / `--font-sans` /
 `--font-mono` tokens it emits are already complete stacks, so the only missing
 piece is a stylesheet. `client/lib/fonts.ts` appends a Google Fonts `<link>`
 for Playfair Display and Karla at boot (plus IBM Plex Mono, interim — the
-Cellar spec has no monospace, but 35 `font-mono` sites still reference one)
+Cellar spec has no monospace, but ten `font-mono` sites still reference one)
 ([D31](../.docs/decisions.md#d31-webfonts-are-declared-by-the-client-at-boot-and-served-by-google)).
 The Cellar reskin's token layer is in for **both** themes — see Phase 4.5 in
 the roadmap. Layout is untouched: the drawer, item card, and add-item sheet are
 still the pre-Cellar components, so the app currently reads as the same
 interface in a new palette.
 The family names there must keep matching the `theme.json` literals exactly —
-that is the entire contract between the two files. Self-hosting was built first
+that is the entire contract between the two files. `client/lib/appIcon.ts` does
+the same trick for the page title, favicons and `theme-color`: the generated
+shell exposes only a title, and `sf dev` hardcodes even that, so all of it is
+appended to `document.head` at boot. The icons are inlined as data URIs
+because `sf dev` serves no project static files. Self-hosting was built first
 and rejected: `sf dev` serves no project static files, so a self-hosted face is
 invisible locally and appears only after a publish. **Confirmed rendering under
 `sf dev` on 2026-08-25** — the whole reason for choosing a remote URL was that
@@ -280,7 +311,7 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 100 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 111 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's

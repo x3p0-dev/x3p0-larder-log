@@ -159,7 +159,7 @@ from `ctx.auth.userId` and asserting a capability. Phase 3 is the client half.
 - ✅ The docs are out of the publish payload
   ([D29](decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload))
   — the thing that had to be decided before an invite link went to anyone
-- ✅ `npm test` — 100 assertions; `npm run typecheck` clean; the artifact still
+- ✅ `npm test` — 111 assertions; `npm run typecheck` clean; the artifact still
   reports nine tables, two queries, sixteen mutations, and **zero migrations**,
   which is what a client-only phase should produce
 
@@ -264,9 +264,17 @@ two are not to be built.
   single lightest control, since crimson never carries a button
 - **Item card + list** — the densest surface, and the first real proof the
   tokens work
-- **`font-mono` retirement** — 35 sites still use a monospace the spec dropped.
-  Their role is Karla uppercase labels now. IBM Plex Mono keeps loading until
-  they are converted
+- ✅ **Sort menu** — the trigger names the active sort; six options in three
+  groups split by hairlines, a crimson check rather than a fill
+- ✅ **App icon** — title, favicons and `theme-color` injected at boot, icons
+  inlined as data URIs. The SVG favicon is deliberately not linked: browsers
+  prefer it at 16px, which defeats the hand-cut `favicon-16.png`
+- **`font-mono` retirement** — down from 35 sites to **ten**, all on surfaces
+  the reskin has not reached: the sign-in gate, `JoinBox`, `ShoppingListModal`,
+  and two loading strings in `Pantry`. IBM Plex Mono keeps loading until those
+  are redrawn
+- **Surfaces still pre-Cellar** — the sign-in gate, `JoinBox`, the shopping-list
+  modal, `UndoToast`, and empty states (which the spec has never drawn)
 - ✅ **Item card + list** — 20px radius, status on the edge, 42px Playfair
   numerals, named term chips with a color dot, 46px steppers; the list is a
   3-column grid
@@ -316,6 +324,18 @@ data gives each store one row. Empty states are not designed.
 
 **Not in the spec but now in the data:** the sample dataset names a "Meat
 Freezer" location and an "Aldi" store that `shared/seed.ts` does not seed.
+
+### Left open at the end of 2026-08-25
+
+- **A `site.webmanifest`.** The icon README specifies one in full, and the
+  192/512/maskable PNGs are staged for it. Not built: it makes the app
+  installable, which is a product decision rather than an icon swap.
+- **Five icon files the README's markup wants are missing** — `favicon.ico`,
+  `favicon-48.png`, and the three source SVGs. The `.ico` is the one that
+  matters; the sized-PNG pair is the substitute for it.
+- **The household tile's colour** on the collapsed rail borrows the first
+  location's, since a household has no `ink` of its own.
+- **Eight of sixteen `onDrawer` values** are unspecified and fall back.
 
 ### Two things the rail spec leaves ambiguous
 

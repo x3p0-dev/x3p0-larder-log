@@ -1097,9 +1097,13 @@ the token indirection happens in TypeScript, not in CSS.
 **What still stores a hex:** `theme.json`'s palette, and the status colors in
 `theme.ts`. Neither is user data — they are the theme itself.
 
-**Each token carries eight values, not five.** The dark spec (2026-08-25) added
+**Each token carries nine values, not five.** The dark spec (2026-08-25) added
 a full second quad — dark dot, tint, border, text — rather than a lightened
-first one, so nothing about a term's dark appearance is derived either. That
+first one, so nothing about a term's dark appearance is derived either. A ninth,
+`onDrawer`, is the dot on the drawer: that surface is the darkest in *both*
+themes and needs an ink brighter than `darkDot`. **Only eight of the sixteen
+are specified** — the design's sample data exercises eight colors — and the rest
+fall back to `darkDot` through `drawerDot()`, which reads slightly dim. That
 also forced `ThemedColor` to grow a `dot` alongside `ink`: the solid fill and
 the text had been close enough to share one value in light, and in dark they
 are not.

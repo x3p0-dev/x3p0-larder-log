@@ -23,8 +23,15 @@ larder-log/
       usePantryData.ts # the ONLY module importing @spacefast/zero/client
       usePersistentState.ts  # theme override only — everything else is server
       useSystemTheme.ts
-    lib/               # theme derivation, icon components, taxonomy action shape
-                       #   pendingInvite.ts holds an invite code across sign-in (D28)
+    lib/
+      theme.ts         # the Theme object, status colors, chip styles
+      palette.ts       # what each color token LOOKS like in this theme (D32)
+      controlStyles.ts # hover/active/focus class names — DRAWER_* and PAGE_*
+      fonts.ts         # the Google Fonts <link>, injected at boot (D31)
+      appIcon.ts       # title, favicons and theme-color, injected at boot
+      icons.ts         # the lucide components behind shared/icons.ts keys (D23)
+      actions.ts       # the taxonomy action shape
+      pendingInvite.ts # holds an invite code across sign-in (D28)
   server/
     index.ts           # capsule(): the schema, 2 queries, 16 mutations
     schema.ts          # ReadDb / WriteDb only — the tables CANNOT live here (D27)
@@ -36,12 +43,15 @@ larder-log/
     membership.ts      # D18's one-household rule; D22's last-owner guard
     invite.ts          # code generation, 14-day expiry (D24)
     joinLink.ts        # ?join=<code> links: build, parse, strip, group (D28)
+    palette.ts         # WHICH color tokens exist — no colors in it (D32)
     term.ts            # name/ink validation
     icons.ts           # icon KEYS (the components live in client/lib) (D23)
     seed.ts            # starter taxonomies for a new household
     qty.ts             # the string <-> integer boundary (D4)
     status.ts          # out / low / ok derivation (D9)
-  tests/shared.test.ts # 100 assertions; `npm test`, no runner
+  tests/shared.test.ts # 111 assertions; `npm test`, no runner
+  icons/               # favicons and PWA icons; served at /icons/ in production
+  theme.json           # the palette and type scale, as light-dark() pairs
   .docs/               # these documents — dot-prefixed to stay out of the
                        #   publish payload's web root (D29)
   .claude/CLAUDE.md    # project instructions, dot-prefixed for the same reason
@@ -229,10 +239,23 @@ unstyled. Branch to whole literals instead. `theme.json`'s `settings.safelist`
 is the escape hatch for classes only ever assembled at runtime.
 
 That rule is why [D7](decisions.md#d7-keep-the-prototypes-theme-system-dont-adopt-the-kit-wholesale)
-survived the port intact rather than becoming a problem: **a user-picked hex can
-never be a utility class here.** The prototype already derived its colors into
-inline `style` objects, so every location, type, store, and status still gets
-its palette from one stored `ink` value with nothing to compile.
+survived the port intact rather than becoming a problem: **a term's color can
+never be a utility class here.** Every location, type, store, and status gets
+its palette from inline `style` objects with nothing to compile.
+
+Since the Cellar reskin the stored value is a *token* rather than a hex
+([D32](decisions.md#d32-a-term-stores-a-color-token-not-a-color)), resolved
+through `client/lib/palette.ts`. Two consequences worth holding on to:
+
+- **Static class names still matter, for a different reason.** A `:hover` or
+  `:focus-visible` cannot be written in a style object at all, so every
+  interactive control's states live in `client/lib/controlStyles.ts` as literal
+  class strings resolving against `theme.json` tokens. That file exists because
+  the drawer shipped once with no hover feedback anywhere.
+- **`theme.json` values are `light-dark()` pairs**, so one slug serves both
+  themes the way Zero's own platform tokens do. An unused token is pruned from
+  `zero.css` and looks identical to a rejected one — see CLAUDE.md's
+  verification notes for how to tell the difference.
 
 `theme.json` is **WordPress theme.json v3** — undocumented publicly; we
 recovered the shape from `@spacefast/zero-compile`. Palette entries become
