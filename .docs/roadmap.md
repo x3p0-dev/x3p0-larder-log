@@ -589,6 +589,50 @@ which leaves the list a pure read surface; the spec flags that as worth
 confirming.
 
 
+### Phase 4.9 — Household colour ✅ (2026-08-26)
+
+`.claude/docs/design/ui-directions.md` § *Household colour*, drawn on
+`.claude/docs/design/larderloghouseholdcolourboards.html` (four screens, light
+and dark). Governed by
+[D42](decisions.md#d42-a-household-has-a-colour-and-it-is-one-of-the-sixteen).
+
+**The one schema change since Phase 2, and it is additive**: `households.ink`,
+a colour token defaulting to `""`. `sf publish --dry-run` still shows nine
+tables and sixteen mutations; the column applies on the next publish without a
+flag.
+
+- **`shared/household.ts`** — `householdLetter()` skips articles, `householdInk()`
+  resolves an unset colour from the row **id**, `toHouseholdInk()` decides what
+  gets stored. All three in `shared/` because the server answers them too: the
+  invite preview hands a colour to a guest. `npm test` is at 165 assertions.
+- **`HouseholdTile`** — one shape at every size, radius 30% and the letter at
+  42%, both derived. It replaced four separate drawings: the rail's, the
+  switcher's house glyph, the invite card's local component, and the Settings
+  row that had none.
+- **`HouseholdIdentity`** — swatch, field, inline picker. Used on the drawer
+  (Settings › Household), on the first-run card, and in the New household
+  dialog. **Two deliberate departures from the boards**: no tile preview in
+  Settings, because the drawer's household row above it already shows the tile;
+  and no caption under the picker, because a collision is allowed and the line
+  therefore described the absence of a rule.
+- **Every picker draws one palette now**, following the theme rather than the
+  surface it opens over. It fixed a second instance of the same bug — the item
+  sheet's picker drew light bases in dark mode — and left one divergence open in
+  `notes.md`: a term chip's dot on the drawer is still `drawerDot(c)`.
+- **`ModalShell`** was extracted from `ConfirmDialog` so *New household* could be
+  the confirm shell rather than a lookalike. `ConfirmDialog` renders through it
+  and behaves as before.
+- **The switcher no longer creates.** *New household* opens the dialog; joining
+  stays inline.
+
+**Verified without a browser**: `npm run typecheck` clean, 165 assertions pass,
+the artifact shows `ink` on `households` with `default: ""`, all three
+`--tile` classes are in `/zero.css` in the right order, and the real handlers
+were driven over `POST /__spacefast/zero/run` — an explicit `color-7` stored, an
+omitted colour resolving to a stable default, `updateHousehold` writing a new
+one, and `invitePreview` returning the household's own colour rather than a
+location's. **Nobody has clicked any of it.**
+
 ### Empty results get the first-run treatment — 2026-08-26
 
 The household-with-nothing-in-it had the full screen — Playfair italic 27px, a

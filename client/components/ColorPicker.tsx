@@ -9,10 +9,8 @@ type Props = {
 	/**
 	 * Whether this picker is on the drawer rather than the page.
 	 *
-	 * It changes both the well it sits in and the swatches themselves: a term's
-	 * light base is tuned to read on cream and goes muddy on near-black, so the
-	 * dark values are what get drawn there. The token written is the same
-	 * either way.
+	 * It changes the well it sits in and the ring on the selected dot — never
+	 * the dots themselves. See the note above.
 	 */
 	onDark?: boolean;
 	/** Override the well, for a picker nested inside an already-recessed panel. */
@@ -26,8 +24,19 @@ type Props = {
  *
  * `onChange` emits a color *token*, never a hex — what gets stored is
  * `color-7`, so re-theming later restyles every term without touching a row.
+ *
+ * **The dots are the palette, and the palette follows the theme** — light bases
+ * in light, dark variants in dark — at every call site, on the drawer and on a
+ * card alike. A token has one appearance per theme; a picker that drew a
+ * different value depending on the surface it opened over meant pressing one
+ * colour and getting another (D42).
+ *
+ * `onDark` therefore governs the well and the selected ring only. What it used
+ * to govern as well — the dots — is now `theme.dark`.
  */
 export function ColorPicker({ value, onChange, theme, onDark = false, well, class: className = '' }: Props) {
+	const dark = theme.dark;
+
 	return (
 		<div
 			class={
@@ -43,7 +52,7 @@ export function ColorPicker({ value, onChange, theme, onDark = false, well, clas
 		>
 			{DEFAULT_PALETTE.map((token, i) => {
 				const c = termColorFor(token);
-				const swatch = ! c ? 'transparent' : onDark ? c.darkDot : c.base;
+				const swatch = ! c ? 'transparent' : dark ? c.darkDot : c.base;
 				const selected = value === token;
 
 				return (
@@ -59,7 +68,8 @@ export function ColorPicker({ value, onChange, theme, onDark = false, well, clas
 								: 'none',
 						}}
 						aria-pressed={selected}
-						aria-label={`Choose color ${i + 1}`}
+						aria-label={c ? c.name : `Choose color ${i + 1}`}
+						title={c?.name}
 					/>
 				);
 			})}

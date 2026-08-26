@@ -4,7 +4,8 @@ import { Check, Clock } from 'lucide-preact';
 import type { InvitePreview } from '../../shared/types';
 import type { Role } from '../../shared/roles';
 import type { Theme } from '../lib/theme';
-import { fallbackInk, statusColor, termColorFor } from '../lib/theme';
+import { statusColor } from '../lib/theme';
+import { HouseholdTile } from './HouseholdTile';
 import { Eyebrow, GravatarButton, IconDisc, OutsideCard, Spinner } from './OutsideShell';
 import { SignedInRow } from './FirstRun';
 import { PAGE_BUTTON_DIALOG, PAGE_BUTTON_GHOST } from '../lib/controlStyles';
@@ -44,28 +45,6 @@ type Props = {
 	pending: boolean;
 	theme: Theme;
 };
-
-/**
- * The household tile: the initial on the household's own colour.
- *
- * The same drawing the collapsed rail uses, so the card and the rail agree the
- * moment you land inside. Karla rather than Playfair — the display face is for
- * the household's *name* underneath, and two Playfair glyphs at different sizes
- * one above the other read as a mistake.
- */
-function HouseholdTile({ name, ink }: { name: string; ink: string }) {
-	const color = termColorFor(ink) ?? termColorFor(fallbackInk(name));
-
-	return (
-		<span
-			class="flex items-center justify-center w-11 h-11 rounded-[15px] shrink-0 text-[20px] font-semibold"
-			style={{ background: color?.base ?? '#A85E33', color: '#F2E9DA' }}
-			aria-hidden="true"
-		>
-			{(name || 'H').charAt(0).toUpperCase()}
-		</span>
-	);
-}
 
 /**
  * Who invited you, as what, and what that lets you do.
@@ -234,7 +213,7 @@ export function InviteLanding({
 			<Eyebrow theme={theme}>Invitation</Eyebrow>
 
 			<div class="mt-[18px]">
-				<HouseholdTile name={preview.household.name} ink={preview.household.ink} />
+				<HouseholdTile ink={preview.household.ink} name={preview.household.name} size={44} dark={theme.dark} />
 			</div>
 
 			<h1

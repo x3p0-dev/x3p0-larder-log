@@ -29,11 +29,12 @@ declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
 
-Data lives in the database. **Two** `localStorage` call sites remain, both
-correct: the per-device theme override (D25) and which household this device is
-pointed at (D33). Same reasoning for both — a dark-mode choice on a phone should
-not follow you to a desktop, and neither should which pantry you were last
-looking at.
+Data lives in the database. **Three** `localStorage` call sites remain, all
+correct: the per-device theme override (D25), which household this device is
+pointed at (D33), and the shopping trip's ticks (D41). Same reasoning for the
+first two — a dark-mode choice on a phone should not follow you to a desktop,
+and neither should which pantry you were last looking at; the third is a record
+of what is in *this* person's cart right now.
 
 **A user may belong to several households** as of 2026-08-25
 ([D33](../.docs/decisions.md#d33-a-user-may-belong-to-several-households),
@@ -246,6 +247,87 @@ off"*, which the checkbox makes false.
 and reloads, `npm run typecheck` is clean, `npm test` passes, and every new
 utility class is in `/zero.css` — checked by **printing the selectors**, not by
 hand-writing the escaped form.
+
+### Household colour (Phase 4.9) is built — 2026-08-26
+
+The spec's *Household colour*, governed by
+[D42](../.docs/decisions.md#d42-a-household-has-a-colour-and-it-is-one-of-the-sixteen).
+**The one schema change since Phase 2, and it is additive**: `households.ink`,
+a colour token defaulting to `''`. Nine tables and sixteen mutations still; the
+column applies on the next publish with no flag.
+
+- **The rail, the switcher and the invite card all drew a tile that nothing
+  set.** The rail took the *first location's* colour and `invitePreview`
+  returned the same stand-in, so every seeded household was olive and renaming a
+  location could recolour a pantry. `invitePreview` no longer reads `locations`.
+- **`shared/household.ts`** — `householdLetter()` (first letter of the first word
+  that is not an article: *The Lake Cabin* gives **L**), `householdInk()`
+  (an unset colour resolves from the row **id**, so it survives a rename), and
+  `toHouseholdInk()` (a token or `''`; a legacy hex is refused, unlike
+  `normalizeInk` for terms). In `shared/` because the server answers them too.
+  `npm test` is at 165 assertions.
+- **`HouseholdTile.tsx`** — one shape at every size, radius **30%** of the side
+  and the letter Playfair 700 at **42%**, both derived so a fifth size is a
+  number rather than a table entry. The fill follows the **theme**, not the
+  surface: light `base` + cream letter, dark variant + near-black. Rail hover and
+  press are the colour mixed 10% toward white and 9% toward black — derived, via
+  `--tile` / `--tile-hover` / `--tile-press` custom properties, because a
+  `:hover` cannot be an inline style. This replaced the hard-coded
+  `#A85E33 / #B96A3C / #98522B` triple, which was one household's terracotta
+  written down as though it were a token.
+- **`HouseholdIdentity.tsx` is the term composer**, not a new component — 26px
+  swatch, 40–44px field at radius 11, the 8 × 2 picker **inline**. Settings'
+  pencil flips the section into `TermPanel` (`HOUSEHOLD · EDITING`, *Done*).
+  Owners only. **No tile preview**, and that is the one place the build
+  knowingly differs from the boards: the spec asks for a 34px preview on the
+  grounds that the tile is elsewhere, but the drawer's own household row is
+  directly above the panel and already shows it.
+- **Every picker draws one palette, and it follows the theme** — light `base` in
+  light, the dark variant in dark, on the drawer and on a card alike.
+  `ColorPicker`'s `onDark` now governs the **well and the selected ring only**,
+  and `TermRow`'s swatch takes the same rule. The old surface-dependent dot was
+  wrong in two places, not one: in dark mode the item sheet drew light bases
+  while the chips it recoloured took `darkDot`.
+  **One divergence survives on purpose** — a term chip's dot on the drawer is
+  still `drawerDot(c)` in both themes, so the Filter tab shows a light base in
+  the picker and a brighter ink on the chip below. Only eight of sixteen
+  `onDrawer` values exist; the question is written up in `.docs/notes.md` under
+  *Product questions*, to settle when they are finished. **Do not "fix" it in
+  passing.**
+- **A collision is allowed and nothing mentions it.** There is **no uniqueness
+  rule**, and nothing is disabled (D36's reason: a disabled control cannot
+  explain itself). The spec's caption — *Aqua — also used by **The Shop**.* —
+  was built and removed: with nothing restricted there is nothing to explain, so
+  it printed the absence of a rule. That is the **second** deliberate departure
+  from the boards, with the missing tile preview. `TermColor` gained `name` and
+  it now survives only as each dot's `aria-label` and `title`, which is the one
+  place it earns its keep — sixteen bare circles announce as "Choose color 7".
+- **`ModalShell.tsx` is `ConfirmDialog`'s box, extracted** — scrim, focus trap,
+  Escape, the fade, and `DialogButtons`. `NewHouseholdDialog` is the confirm
+  shell with a form in it, which is what the spec asks for in so many words. The
+  switcher's inline create form is **gone**: a name and a colour do not fit in a
+  264px flyout without pushing the household list off the bottom. Joining stays
+  inline — a code is one field.
+- **The colour arrives already chosen** on both creation surfaces: the first
+  unused across the households you are in, walking the sixteen in order.
+- **A just-created household now actually opens.** `Pantry`'s selection heal
+  adopts the server's answer whenever the selection is absent from `households`
+  — but that list is a separate live query and re-emits *after* the create
+  mutation resolves, so for one round trip a brand-new id looked stale and got
+  bounced back to the household you were already in. Joining had the same hole,
+  and so did the switcher's old inline create; this is **not** new to the
+  dialog. A deliberate selection now `claim`s the id and the heal waits.
+  **Do not "simplify" the claim away** — "not in the list" only means stale if
+  the list is current, and nothing can ask it whether it is. Two signals release
+  it: the list carrying the id, or `household` resolving to it.
+
+**Verified without a browser**: typecheck clean, 165 assertions pass, the
+artifact shows `ink` on `households` with `default: ""`, the three `--tile`
+classes are in `/zero.css` in the right order (base → hover → active), and the
+**real handlers** were driven over `POST /__spacefast/zero/run` — an explicit
+`color-7` stored, an omitted colour resolving to a stable default,
+`updateHousehold` writing a new one, `invitePreview` returning the household's
+own colour. **Nobody has clicked any of it.**
 
 ### Empty results — 2026-08-26
 
@@ -480,11 +562,12 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D41, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 governs row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list** |
+| `.docs/decisions.md` | D1–D42, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 governs row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
 | `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
+| `.claude/docs/design/larderloghouseholdcolourboards.html` | **The 8 boards for the household colour** — four screens, light and dark |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |

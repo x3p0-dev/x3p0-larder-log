@@ -3,7 +3,7 @@ import { Trash2, X } from 'lucide-preact';
 
 import { ColorPicker } from './ColorPicker';
 import type { Theme } from '../lib/theme';
-import { drawerDot, termColorFor } from '../lib/theme';
+import { termColorFor } from '../lib/theme';
 import { DRAWER_TRASH, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK } from '../lib/controlStyles';
 
 type Skin = {
@@ -95,7 +95,8 @@ export function TermPanel({
  * One row inside the panel: swatch, name, and a trailing ghost action.
  *
  * The swatch opens the sixteen **inline**, on a further-recessed sub-panel that
- * pushes the panel taller — nothing floats over the surface behind it.
+ * pushes the panel taller — nothing floats over the surface behind it. Both the
+ * swatch and those sixteen are the theme's palette, not the surface's (D42).
  */
 export function TermRow({
 	name, ink, placeholder, autoFocus, count, onName, onColor, onAction, action, onDark = false, theme,
@@ -124,7 +125,9 @@ export function TermRow({
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const s = panelSkin(theme, onDark);
 	const c = termColorFor(ink);
-	const swatch = ! c ? 'transparent' : onDark ? drawerDot(c) : c.base;
+	/* The swatch is the picker's selected dot, so it takes the picker's rule:
+	 * the palette, following the theme rather than the surface (D42). */
+	const swatch = ! c ? 'transparent' : theme.dark ? c.darkDot : c.base;
 	const Action = action === 'delete' ? Trash2 : X;
 
 	return (

@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ChevronUp, LogOut, Pencil } from 'lucide-preact';
 
+import { HouseholdIdentity } from './HouseholdIdentity';
+import { HouseholdTile } from './HouseholdTile';
 import { MembersPanel } from './MembersPanel';
+import { TermPanel } from './TermPanel';
 import { InvitesPanel } from './InvitesPanel';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
@@ -23,6 +26,9 @@ type Props = {
 	setThemeOverride: (value: ThemeOverride) => void;
 	householdName: string;
 	setHouseholdName: (value: string) => void;
+	/** The household's colour token, already resolved by the server (D42). */
+	householdInk: string;
+	setHouseholdInk: (value: string) => void;
 	defaultThreshold: string;
 	setDefaultThreshold: (value: string) => void;
 	accountName: string;
@@ -125,6 +131,7 @@ function Section({
  */
 export function DrawerSettings({
 	themeOverride, setThemeOverride, householdName, setHouseholdName,
+	householdInk, setHouseholdInk,
 	defaultThreshold, setDefaultThreshold,
 	accountName, accountEmail, onSignOut,
 	members, invites, me, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember,
@@ -133,7 +140,7 @@ export function DrawerSettings({
 	const d = theme.drawer;
 	/* Panels paint from a Theme; hand them one whose surfaces are the drawer's. */
 	const inner = drawerTheme(theme);
-	const [renaming, setRenaming] = useState(false);
+	const [editing, setEditing] = useState(false);
 	const [nameDraft, setNameDraft] = useState(householdName);
 	const [creatingInvite, setCreatingInvite] = useState(false);
 
@@ -176,10 +183,19 @@ export function DrawerSettings({
 		if (next !== defaultThreshold) setDefaultThreshold(next);
 	}
 
+	/**
+	 * *Done* closes the panel and writes the name. The colour has already been
+	 * written — a swatch press is a decision, and there is nothing to type after
+	 * it — so this only has the field to reconcile.
+	 *
+	 * An emptied field snaps back rather than being saved: the server refuses a
+	 * nameless household anyway, and the refusal would arrive as a banner over a
+	 * panel that had already closed.
+	 */
 	function commitName() {
 		const next = nameDraft.trim();
 		if (next && next !== householdName) setHouseholdName(next);
-		setRenaming(false);
+		setEditing(false);
 	}
 
 	return (
@@ -209,29 +225,44 @@ export function DrawerSettings({
 				{/*
 				  * Read state with a pencil, not a live field. A text input that is
 				  * always armed invites an accidental rename of the one name every
-				  * member sees.
+				  * member sees — and the same goes for the colour beside it.
+				  *
+				  * The pencil already existed and had nothing to edit but the name.
+				  * It now flips the section into the Filter tab's editing panel,
+				  * one row deep (D42): no add row and no trash, because a household
+				  * is one row rather than a list, and leaving is a different verb
+				  * with its own control below.
+				  *
+				  * **No tile preview.** The spec asks for one on the grounds that
+				  * the tile is somewhere else while you are in Settings. It is not:
+				  * the drawer's own household row is directly above this panel and
+				  * carries the tile, so a preview would be a second copy of a thing
+				  * already on screen.
 				  */}
-				{renaming && mayEditSettings ? (
-					<input
-						value={nameDraft}
-						onInput={(e) => setNameDraft(e.currentTarget.value)}
-						onBlur={commitName}
-						onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-						class={`h-10 px-3 rounded-[10px] text-[15px] ${DRAWER_INPUT}`}
-						aria-label="Household name"
-						// eslint-disable-next-line
-						ref={(el) => el?.focus()}
-					/>
+				{editing && mayEditSettings ? (
+					<TermPanel label="Household" mode="editing" onDone={commitName} onDark theme={theme}>
+						<HouseholdIdentity
+							name={nameDraft}
+							ink={householdInk}
+							onName={setNameDraft}
+							onInk={setHouseholdInk}
+							onSubmit={commitName}
+							autoFocus
+							onDark
+							theme={theme}
+						/>
+					</TermPanel>
 				) : (
-					<div class="flex items-center gap-2 pl-0.5 pr-1">
+					<div class="flex items-center gap-2.5 pl-0.5 pr-1">
+						<HouseholdTile ink={householdInk} name={householdName} size={34} dark={theme.dark} />
 						<span class="flex-1 min-w-0 font-disp text-[19px] font-semibold truncate" style={{ color: d.ink }}>
 							{householdName || 'Your household'}
 						</span>
 						{mayEditSettings && (
 							<button
-								onClick={() => { setNameDraft(householdName); setRenaming(true); }}
+								onClick={() => { setNameDraft(householdName); setEditing(true); }}
 								class={`shrink-0 flex items-center justify-center w-[34px] h-[34px] rounded-[10px] ${DRAWER_CHIP}`}
-								title="Rename household"
+								title="Edit name and colour"
 							>
 								<Pencil size={15} />
 							</button>

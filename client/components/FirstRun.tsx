@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Theme } from '../lib/theme';
+import { proposeColor } from '../lib/theme';
+import { HouseholdIdentity } from './HouseholdIdentity';
 import { Eyebrow, OutsideCard } from './OutsideShell';
-import { PAGE_BUTTON_PRIMARY, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK } from '../lib/controlStyles';
+import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
 
 /**
  * A signed-in account with no household gets one screen, not a wizard.
@@ -21,7 +23,7 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 	email: string;
 	/** The Gravatar avatar, when the identity carries one. */
 	picture?: string;
-	onCreate: (name: string) => Promise<unknown>;
+	onCreate: (name: string, ink: string) => Promise<unknown>;
 	onSignOut: () => void;
 	theme: Theme;
 }) {
@@ -32,8 +34,14 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 	 * only thing that will tell two pantries apart in the switcher.
 	 */
 	const [name, setName] = useState(() => `${displayName.trim() || 'My'}’s Household`);
+	/*
+	 * Pre-picked, so nobody has to decide something they have no opinion about
+	 * (D42). Nothing is taken yet on this screen — it is reachable only with no
+	 * households at all — so this is always the palette's first.
+	 */
+	const [ink, setInk] = useState(() => proposeColor([]));
 	const [creating, setCreating] = useState(false);
-	const field = useRef<HTMLInputElement | null>(null);
+	const field = useRef<HTMLDivElement | null>(null);
 
 	/*
 	 * Focus *and select*, once. `autoFocus` alone would leave the caret at the
@@ -41,8 +49,10 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 	 * field the first time someone clicked back into it to fix a typo.
 	 */
 	useEffect(() => {
-		field.current?.focus();
-		field.current?.select();
+		const input = field.current?.querySelector('input');
+
+		input?.focus();
+		input?.select();
 	}, []);
 
 	const blocked = creating || ! name.trim();
@@ -51,7 +61,7 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 		if (blocked) return;
 
 		setCreating(true);
-		await onCreate(name.trim());
+		await onCreate(name.trim(), ink);
 		setCreating(false);
 	}
 
@@ -71,28 +81,31 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 				them by. You can rename it later, and invite people once it exists.
 			</p>
 
-			<label class="block mt-6">
-				<span class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: theme.textMuted }}>
-					Household name
+			<div class="mt-6" ref={field}>
+				<span class="block text-label font-bold uppercase tracking-[0.15em] mb-[9px]" style={{ color: theme.textMuted }}>
+					Household name and colour
 				</span>
 				{/*
-				  * The composer's field, and the composer's focus treatment — a
-				  * crimson border under a crimson halo. It is the only control on
-				  * the card, so it arrives focused and stays that way.
+				  * The composer's row, on cream. The swatch is *part of* the field
+				  * rather than a second question, which is what keeps this "one
+				  * field, one button, nothing else" — Enter still finishes the
+				  * screen without the picker ever opening.
 				  */}
-				<input
-					ref={field}
-					value={name}
-					onInput={(e) => setName(e.currentTarget.value)}
-					onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit(); } }}
-					aria-label="Household name"
-					class={`w-full h-12 sm:h-11 mt-[9px] px-[13px] rounded-[11px] text-[15px] border focus:border-accent ${theme.dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO}`}
-					style={{ background: theme.surface, borderColor: theme.textFaint, color: theme.textStrong }}
+				<HouseholdIdentity
+					name={name}
+					ink={ink}
+					onName={setName}
+					onInk={setInk}
+					onSubmit={() => void submit()}
+					fieldHeight={44}
+					fieldLine={theme.textFaint}
+					theme={theme}
 				/>
-			</label>
+			</div>
 
 			<p class="text-[12.5px] leading-[1.5] mt-[9px]" style={{ color: theme.textMuted }}>
 				Taken from your Gravatar name — change it to whatever you call the place.
+				The colour is how you will tell it apart later.
 			</p>
 
 			<button

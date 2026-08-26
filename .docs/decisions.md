@@ -1655,3 +1655,159 @@ every item by hand.
   worse — *running low* is the phrase, and *low* is a different, vaguer claim.
 - The marketing page's third benefit said "Nothing to tick off". It is now
   wrong, and the copy is changed to match.
+
+## D42: A household has a colour, and it is one of the sixteen
+
+*2026-08-26*
+
+**A household stores a colour token, and the tile drawn from it is the only
+thing naming which household you are in on the 68px rail.**
+
+The rail, the switcher and the invite card all drew that tile already. **Nothing
+set it.** The rail took the first *location's* colour and `invitePreview`
+returned the same stand-in, so every household created from the seeds was olive,
+and renaming a location could recolour a pantry. Four households called *The
+Tadlock House*, *The Lake Cabin*, *Mom's Pantry* and *Apartment 4B* were told
+apart by reading them.
+
+`households.ink` is additive — a new column with a default, which publishes
+without `--drop` or `--rename`.
+
+### The colour is a token, not a hex
+
+Same rule as [D32](#d32-a-term-stores-a-color-token-not-a-color), and the same
+sixteen slots: a re-theme restyles every household without touching a row.
+`toHouseholdInk()` refuses a legacy hex outright, which `normalizeInk()` for
+terms accepts — households never had one, and storing a value the resolver would
+reject is exactly how the stored colour and the drawn colour come apart.
+
+### An unset colour resolves from the id, not the name
+
+Every row written before the column holds `""`, forever, because nothing
+backfills them. `householdInk()` hashes the **id** into the sixteen:
+
+- **The id, not the name**, so the default is fixed across a rename. A colour
+  that moves when someone corrects a typo is the opposite of what the tile is
+  for.
+- **Spread over all sixteen, not pinned to one neutral.** The point is telling
+  several households apart, and a shared default would fail exactly the people
+  who never picked one.
+- **In `shared/`, so the server answers the same way.** `invitePreview` hands a
+  colour to a signed-out guest; a fallback computed one way there and another in
+  the client would draw two tiles for one household.
+
+New households never take this path: both creation surfaces arrive with a colour
+already chosen — the first unused across the households you are in, walking the
+sixteen in order.
+
+### It is the term composer, not a new component
+
+A household is a coloured, named thing in a list, which is what every location,
+store and type already is. So the identity row is `TermRow`'s geometry: a 26px
+swatch ringed in its own colour, a 40–44px field at radius 11, and the same 8 × 2
+picker opening **inline**, pushing the panel taller rather than floating over
+anything. Settings' pencil flips the section into the Filter tab's editing panel,
+one row deep — no add row and no trash, because a household is one row and
+*leaving* is a different verb with its own control below.
+
+**No tile preview**, though the spec asks for one. Its reasoning is that the
+tile is elsewhere while you are in Settings — but it is not: the drawer's own
+household row sits directly above the panel and carries the tile, so a preview
+would be a second copy of something already on screen. This is the one place the
+build knowingly differs from the boards.
+
+### Every picker draws one palette, and it follows the theme
+
+A token has **one appearance per theme** — the light `base` in light, the dark
+variant in dark — and every picker and swatch in the app now draws that, on the
+drawer and on a card alike. Previously the dot depended on the surface the
+picker happened to open over, which meant pressing one colour and getting
+another. That was not only the household's problem: in dark mode the item
+sheet's picker drew light bases while the chips it recoloured on that same sheet
+took `darkDot`.
+
+`ColorPicker`'s `onDark` therefore governs the **well and the selected ring
+only**. `TermRow`'s swatch takes the same rule.
+
+**One divergence survives and is deliberately unsettled**: a term chip's dot on
+the drawer is `drawerDot(c)`, an `onDrawer` override tuned against near-black,
+in both themes — so the Filter tab now shows a light base in the picker and a
+brighter ink on the chip below it. Only eight of the sixteen `onDrawer` values
+are specified at all, so the divergence is already partial; it is written up in
+[notes.md](notes.md#product-questions) to settle when they are finished.
+
+### A collision is allowed, and nothing says anything about it
+
+There is **no uniqueness rule.** It would fail the moment someone belongs to
+seventeen households, and a household you do not own should not get to dictate
+what yours looks like. Nothing is disabled either, for the reason the live trash
+already carries ([D36](#d36-undo-what-comes-back-confirm-what-doesnt)): a
+disabled control cannot explain itself.
+
+The spec asks for a caption naming the colour and flagging the clash — *Aqua —
+also used by **The Shop**.* It was built and then removed. Once nothing is
+restricted there is nothing to explain, so the line was describing the *absence*
+of a rule, which is a sentence no interface needs to print; and the swatch and
+the ringed dot already answer "which one is chosen". The colour names survive as
+the dots' `aria-label` and `title`, which is the one place they do real work —
+sixteen bare circles announce as "Choose color 7" otherwise.
+
+This is the second deliberate departure from the boards, with the missing tile
+preview.
+
+### The letter skips articles
+
+*The Tadlock House* gives T, *The Lake Cabin* gives L. Taking the literal first
+character would make every household beginning "The" a T, which is precisely the
+case the colour exists to disambiguate. Only articles are skipped — *Under the
+Stairs* gives U, and a stopword list long enough to be "correct" stops being
+predictable from the name.
+
+### Rejected
+
+- **A hand-picked hover/pressed pair per colour.** Thirty-two more values. The
+  rail's states are derived instead — 10% toward white, 9% toward black — which
+  is exactly what the boards draw, and it replaces the hard-coded
+  `#A85E33 / #B96A3C / #98522B` that was one household's terracotta written down
+  as though it were a token.
+- **Recolouring from the rail's household flyout.** It switches, creates and
+  joins. Management expands the drawer, the same line the quick filters hold.
+- **Creating inline in the switcher.** A name and a colour do not fit in a 264px
+  flyout without pushing the household list off the bottom. *New household* opens
+  a 420px dialog on the confirm shell instead, and its header tile is the live
+  preview. Joining stays inline — a code is one field and nothing else.
+
+### A just-made household has to outrank the selection heal
+
+`Pantry` keeps a per-device household selection (D33) and heals it: if the
+selection is not in `households`, it adopts whatever the server resolved. The
+list is the right test — it takes no argument, so it does not lag a switch the
+way the scoped queries do.
+
+**But it does lag a create.** `createHousehold` and `redeemInvite` return an id
+the server has already written, while `households` is a separate live query that
+re-emits a beat later. In that window the heal saw a selection the list did not
+contain, read it as stale, and put you back where you started — so a household
+you had just made or just joined did not open. The switcher's old inline create
+had the same hole; the dialog did not introduce it.
+
+So a deliberate selection *claims* the id, and the heal waits rather than
+correcting. "Not in the list" only means stale if the list is current, and there
+is no way to ask it whether it is. Waiting is safe because the id is real: the
+scoped queries answer for it immediately. Two signals release the claim — the
+list carrying it, or `household` resolving to it, the latter being conclusive
+because that query only ever resolves to one of the caller's memberships.
+
+### Consequences
+
+- `HouseholdTile`, `HouseholdIdentity`, `NewHouseholdDialog` and `ModalShell` are
+  new; `ModalShell` is `ConfirmDialog`'s box, extracted rather than rebuilt,
+  because the spec calls the household dialog "the confirm shell" in so many
+  words.
+- `createHousehold` takes a colour; `updateHousehold` accepts one under the same
+  `household:settings` capability as the name — both are the one look every
+  member of the household sees.
+- `invitePreview` no longer reads `locations` at all.
+- `TermColor` gained `name`, and every dot in every picker is now labelled with
+  it. The names were a trailing comment nothing read.
+- The switcher's generic house glyph is gone; each row is its household's tile.

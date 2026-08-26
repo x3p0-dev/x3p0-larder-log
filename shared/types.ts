@@ -102,7 +102,7 @@ export type PantryData = {
 };
 
 export type HouseholdData = {
-	household: { id: string; name: string; defaultThreshold: string };
+	household: { id: string; name: string; defaultThreshold: string; ink: string };
 	me: { membershipId: string; userId: string; role: Role };
 	members: Member[];
 	invites: Invite[];
@@ -120,6 +120,14 @@ export type HouseholdSummary = {
 	name: string;
 	role: Role;
 	itemCount: number;
+	/**
+	 * The colour token the tile is drawn in, already resolved (D42).
+	 *
+	 * Never `''`: the server runs `householdInk()` over the stored value, so a
+	 * row written before the column existed arrives with its stable default
+	 * rather than leaving every reader to compute one.
+	 */
+	ink: string;
 };
 
 /**

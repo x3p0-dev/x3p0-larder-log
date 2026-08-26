@@ -24,8 +24,17 @@ households: table({
   name: string(),
   createdBy: string(),                    // ctx.auth.userId of the creator
   defaultThreshold: string().default("1"), // numeric-as-string
+  ink: string().default(""),              // colour token; "" means unset
 })
 ```
+
+`ink` is a colour **token** (`color-7`), exactly as `terms.ink` is
+([D32](decisions.md#d32-a-term-stores-a-color-token-not-a-color)). It was added
+after the fact, so every row written before it holds `""` — and nothing
+backfills them. `householdInk()` in `shared/household.ts` resolves that to a
+default derived from the row **id**, which both the client and the server call
+so the rail and the invite card never draw the same household two colours
+([D42](decisions.md#d42-a-household-has-a-colour-and-it-is-one-of-the-sixteen)).
 
 `createdBy` is **provenance only and never consulted for access**. Ownership
 lives entirely in `memberships.role`, and a household may have several owners
@@ -302,7 +311,7 @@ mutation checks a capability from [Roles](#roles) before it writes.
 
 | Handler | Kind | Purpose |
 |---|---|---|
-| `households` | query | Every household the caller belongs to — name, their role there, item count. Takes no argument |
+| `households` | query | Every household the caller belongs to — name, colour, their role there, item count. Takes no argument |
 | `household` | query | The named household + members + live invites |
 | `pantry` | query | Items with their types/stores joined, plus all three taxonomies |
 | `addItem` | mutation | Create an item and its join rows |
@@ -310,7 +319,7 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path |
 | `removeItem` | mutation | Delete an item and its joins |
 | `createTerm` / `renameTerm` / `recolorTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind |
-| `updateHousehold` | mutation | Name and `defaultThreshold` — owner only |
+| `updateHousehold` | mutation | Name, colour and `defaultThreshold` — owner only |
 | `createInvite` / `revokeInvite` / `redeemInvite` | mutation | Membership; the invite carries its role |
 | `changeRole` | mutation | Promote or demote a member — owner only, last-owner guarded |
 | `removeMember` / `leaveHousehold` | mutation | Membership removal, last-owner guarded |

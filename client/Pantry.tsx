@@ -19,6 +19,7 @@ import { ShoppingList } from './components/ShoppingList';
 import { ShoppingListTrigger } from './components/ShoppingListTrigger';
 import { ToastStack } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { NewHouseholdDialog } from './components/NewHouseholdDialog';
 import type { ConfirmTone } from './components/ConfirmDialog';
 
 import { useSystemTheme } from './hooks/useSystemTheme';
@@ -337,6 +338,24 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 	const api = usePantryData(selectedHousehold);
 
+	/**
+	 * A household we have just created or joined, which the list has not caught
+	 * up with yet.
+	 *
+	 * `createHousehold` and `redeemInvite` both return an id the server has
+	 * already written — but `households` is a *separate* live query and re-emits
+	 * a beat later. In that window the heal below sees a selection the list does
+	 * not contain, reads it as stale, and puts you back where you started. It is
+	 * the whole reason a brand-new household did not open.
+	 */
+	const claimed = useRef<string | null>(null);
+
+	/** Create and join both switch to what they got, and hold off the heal. */
+	function selectNewHousehold(householdId: string) {
+		claimed.current = householdId;
+		setSelectedHousehold(householdId);
+	}
+
 	/*
 	 * Adopt the server's answer, but only when our own selection is not a real
 	 * one.
@@ -350,13 +369,33 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * The list is what makes this safe: it takes no argument, so it is not part
 	 * of the switch and answers the only question that matters here — is this a
 	 * household we still belong to at all?
+	 *
+	 * **Except immediately after creating or joining one**, when the list is not
+	 * yet evidence of anything. "Not in the list" only means stale if the list is
+	 * current, and there is no way to ask it whether it is — so a deliberate
+	 * selection says so, and waiting is safe: the id is real, so the `household`
+	 * and `pantry` queries answer for it while the list catches up.
 	 */
 	useEffect(() => {
 		if (! api.households.length || ! api.currentHouseholdId) return;
 
 		const known = api.households.some((h) => h.id === selectedHousehold);
+		/*
+		 * The second confirmation, and the reason a claim cannot get stuck: the
+		 * `household` query echoes back the id it *resolved*, and it only ever
+		 * resolves to a membership. So either signal proves the selection real,
+		 * and whichever arrives first releases the claim.
+		 */
+		const serverAgrees = api.currentHouseholdId === selectedHousehold;
 
-		if (! known) setSelectedHousehold(api.currentHouseholdId);
+		if (known || serverAgrees) {
+			claimed.current = null;
+			return;
+		}
+
+		if (claimed.current === selectedHousehold) return;
+
+		setSelectedHousehold(api.currentHouseholdId);
 	}, [api.households, api.currentHouseholdId, selectedHousehold, setSelectedHousehold]);
 
 	// Filters and view state are all client-side; none of it is data.
@@ -478,6 +517,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * waits.
 	 */
 	const [pending, setPending] = useState<Pending | null>(null);
+	/* *New household*, from the drawer's switcher and the rail's flyout (D42). */
+	const [newHousehold, setNewHousehold] = useState(false);
 
 	/*
 	 * The dialog outlives `pending` by the length of its exit fade, and a
@@ -565,16 +606,16 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		if (pendingCode && normalizeCode(pendingCode) === normalizeCode(code)) dismissInvite();
 
-		setSelectedHousehold(householdId);
+		selectNewHousehold(householdId);
 
 		return householdId;
 	}
 
-	/** First run and the switcher both create; both then switch to what they made. */
-	async function createHousehold(name: string): Promise<string | null> {
-		const householdId = await api.createHousehold(name);
+	/** First run and the dialog both create; both then switch to what they made. */
+	async function createHousehold(name: string, ink: string): Promise<string | null> {
+		const householdId = await api.createHousehold(name, ink);
 
-		if (householdId) setSelectedHousehold(householdId);
+		if (householdId) selectNewHousehold(householdId);
 
 		return householdId;
 	}
@@ -594,6 +635,11 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const stores = pantry?.stores ?? [];
 	const defaultThreshold = household?.household.defaultThreshold ?? '1';
 	const householdName = household?.household.name ?? '';
+	/*
+	 * Already resolved by the server (D42), so `''` here only ever means the
+	 * query has not landed — never "this household has no colour".
+	 */
+	const householdInk = household?.household.ink ?? '';
 	const members = household?.members ?? [];
 	const invites = household?.invites ?? [];
 	// The least privileged role until the query says otherwise, so a control is
@@ -1235,10 +1281,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					activeStore={activeStore} setActiveStore={setActiveStore}
 					activeType={activeType} setActiveType={setActiveType}
 					itemCount={items.length} locationCounts={locationCounts}
-					householdName={householdName}
+					householdName={householdName} householdInk={householdInk}
 					households={api.households} currentHouseholdId={api.currentHouseholdId}
 					onSelectHousehold={setSelectedHousehold}
-					onCreateHousehold={createHousehold} onJoinHousehold={joinWithCode}
+					onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
 					accountName={displayName}
 					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
 					dark={dark}
@@ -1263,15 +1309,17 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				open={drawerOpen} onClose={() => setDrawerOpen(false)}
 				collapsed={drawerCollapsed}
 				onDismiss={() => { setDrawerOpen(false); setDrawerCollapsed(true); }}
-				householdName={householdName}
+				householdName={householdName} householdInk={householdInk}
 				households={api.households} currentHouseholdId={api.currentHouseholdId}
 				onSelectHousehold={setSelectedHousehold}
-				onCreateHousehold={createHousehold} onJoinHousehold={joinWithCode}
+				onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
 				accountName={displayName}
 				settings={{
 					themeOverride, setThemeOverride,
 					householdName,
 					setHouseholdName: (v) => void api.updateHousehold({ name: v }),
+					householdInk,
+					setHouseholdInk: (v) => void api.updateHousehold({ ink: v }),
 					defaultThreshold,
 					setDefaultThreshold: (v) => void api.updateHousehold({ defaultThreshold: v }),
 					accountName: displayName, accountEmail: email, onSignOut,
@@ -1775,6 +1823,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				theme={theme}
 			/>
 
+			<NewHouseholdDialog
+				open={newHousehold}
+				taken={api.households.map((h) => h.ink)}
+				onCreate={createHousehold}
+				onCancel={() => setNewHousehold(false)}
+				dark={dark}
+				theme={theme}
+			/>
+
 		</div>
 	);
 }
@@ -1808,7 +1865,7 @@ function Gate({
 	displayName: string;
 	email: string;
 	picture?: string;
-	onCreateHousehold: (name: string) => Promise<string | null>;
+	onCreateHousehold: (name: string, ink: string) => Promise<string | null>;
 	onSignOut: () => void;
 	/** A refused household creation. The app shell's banner isn't mounted here. */
 	error: string | null;

@@ -15,6 +15,7 @@
 import type { StatusKey } from '../../shared/status';
 import { STATUS_LABEL, statusKeyFor } from '../../shared/status';
 import type { Term } from '../../shared/types';
+import { hashStr } from '../../shared/household';
 import { drawerDot, TERM_COLORS, termColorFor } from './palette';
 
 export { DEFAULT_PALETTE, TERM_COLORS, termColorFor, drawerDot, proposeColor } from './palette';
@@ -141,15 +142,38 @@ export function chipDot(ink: string, selected: boolean): string {
 	return selected ? c.base : drawerDot(c);
 }
 
-export function hashStr(s: string): number {
-	let h = 0;
-	for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-	return h;
+/**
+ * `hex` moved `amount` of the way toward `toward`.
+ *
+ * The household tile's hover and pressed fills are derived rather than tabled
+ * (D42): 10% toward white and 9% toward black. Sixteen colours would otherwise
+ * need thirty-two hand-picked shades, and the rail shipped once with a single
+ * household's terracotta triple hard-coded as though it were a token.
+ */
+export function mixHex(hex: string, toward: string, amount: number): string {
+	const a = parse(hex);
+	const b = parse(toward);
+
+	if (! a || ! b) return hex;
+
+	const at = (i: number) => Math.round(a[i]! * (1 - amount) + b[i]! * amount);
+
+	return `#${[at(0), at(1), at(2)].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function parse(hex: string): [number, number, number] | null {
+	const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+
+	if (! m) return null;
+
+	const n = parseInt(m[1]!, 16);
+
+	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 /** The token an unresolvable term falls back to. Deterministic, so it is stable. */
 export function fallbackInk(name: string): string {
-	return TERM_COLORS[hashStr(name) % TERM_COLORS.length].id;
+	return TERM_COLORS[hashStr(name) % TERM_COLORS.length]!.id;
 }
 
 /**

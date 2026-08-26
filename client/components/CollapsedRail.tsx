@@ -4,9 +4,10 @@ import {
 } from 'lucide-preact';
 
 import { HouseholdSwitcher } from './HouseholdSwitcher';
+import { HouseholdTile } from './HouseholdTile';
 import { RailFlyout } from './RailFlyout';
 import type { Theme } from '../lib/theme';
-import { chipDot, termColorFor } from '../lib/theme';
+import { chipDot } from '../lib/theme';
 import type { HouseholdSummary, Term, ThemeOverride } from '../../shared/types';
 
 type Group = 'location' | 'store' | 'type';
@@ -41,10 +42,12 @@ type Props = {
 	itemCount: number;
 	locationCounts: Record<string, number>;
 	householdName: string;
+	/** The household's colour token, resolved by the server (D42). */
+	householdInk: string;
 	households: HouseholdSummary[];
 	currentHouseholdId: string;
 	onSelectHousehold: (id: string) => void;
-	onCreateHousehold: (name: string) => Promise<string | null>;
+	onNewHousehold: () => void;
 	onJoinHousehold: (code: string) => Promise<string | null>;
 	accountName: string;
 	themeOverride: ThemeOverride;
@@ -179,8 +182,8 @@ function Control({
 export function CollapsedRail({
 	locations, stores, types,
 	activeLocation, setActiveLocation, activeStore, setActiveStore, activeType, setActiveType,
-	autoOnly, itemCount, locationCounts, householdName,
-	households, currentHouseholdId, onSelectHousehold, onCreateHousehold, onJoinHousehold,
+	autoOnly, itemCount, locationCounts, householdName, householdInk,
+	households, currentHouseholdId, onSelectHousehold, onNewHousehold, onJoinHousehold,
 	accountName, themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
 }: Props) {
 	const [menu, setMenu] = useState<Menu | null>(null);
@@ -261,8 +264,6 @@ export function CollapsedRail({
 		{ key: 'type', label: 'Filter by type', Icon: Tag, terms: types, active: activeType, set: setActiveType },
 	];
 
-	const householdColor = termColorFor(locations[0]?.ink ?? '') ;
-
 	return (
 		<aside
 			class={
@@ -295,21 +296,22 @@ export function CollapsedRail({
 				chrome={chrome}
 				onClick={(e) => toggle('household', e)}
 			>
-				<span
-					/*
-					 * Brightness rather than two more hex values: this fill is
-					 * whatever the household resolved to, so a hard-coded hover
-					 * shade would only be right for terracotta.
-					 */
-					class="flex items-center justify-center w-10 h-10 rounded-xl font-disp text-[17px] font-bold transition-[filter] group-hover:brightness-110 group-active:brightness-90"
-					style={{
-						background: householdColor?.base ?? '#A85E33',
-						color: '#241E17',
-						boxShadow: menu === 'household' ? '0 0 0 2px #F2E9DA' : 'none',
-					}}
-				>
-					{(householdName || 'H').charAt(0).toUpperCase()}
-				</span>
+				{/*
+				  * The 40px tile, and on the rail it is the **only** thing naming
+				  * which household you are in — which is the whole reason a
+				  * household has a colour at all (D42). Hover and press come off
+				  * the chosen colour rather than a hard-coded triple; the rail
+				  * shipped once with one household's terracotta written down as
+				  * though it were a token.
+				  */}
+				<HouseholdTile
+					ink={householdInk}
+					name={householdName}
+					size={40}
+					dark={dark}
+					ring={menu === 'household' ? '#F2E9DA' : undefined}
+					interactive
+				/>
 			</Control>
 
 			<span class="w-6 h-px bg-drawer-line" />
@@ -424,8 +426,9 @@ export function CollapsedRail({
 						households={households}
 						currentId={currentHouseholdId}
 						onSelect={onSelectHousehold}
-						onCreate={onCreateHousehold}
+						onNewHousehold={onNewHousehold}
 						onJoin={onJoinHousehold}
+						dark={dark}
 						onDone={() => setMenu(null)}
 					/>
 					<span class="block h-px mx-1.5 my-2 bg-drawer-raised" />

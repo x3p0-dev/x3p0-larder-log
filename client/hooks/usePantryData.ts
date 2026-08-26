@@ -64,8 +64,8 @@ export type PantryApi = {
 	dismissError: () => void;
 
 	/** Resolves to the new household's id, so the caller can switch to it. */
-	createHousehold: (name: string) => Promise<string | null>;
-	updateHousehold: (patch: { name?: string; defaultThreshold?: string }) => Promise<void>;
+	createHousehold: (name: string, ink: string) => Promise<string | null>;
+	updateHousehold: (patch: { name?: string; defaultThreshold?: string; ink?: string }) => Promise<void>;
 
 	addItem: (draft: ItemDraft) => Promise<string | null>;
 	/** True when the server accepted the edit. False leaves the sheet open. */
@@ -125,8 +125,8 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 
 	const [error, setError] = useState<string | null>(null);
 
-	const rawCreateHousehold = useMutation<[string], { householdId: string }>('createHousehold');
-	const rawUpdateHousehold = useMutation<[string, { name?: string; defaultThreshold?: string }], void>('updateHousehold');
+	const rawCreateHousehold = useMutation<[string, string], { householdId: string }>('createHousehold');
+	const rawUpdateHousehold = useMutation<[string, { name?: string; defaultThreshold?: string; ink?: string }], void>('updateHousehold');
 	const rawAddItem = useMutation<[string, ItemDraft], { id: string }>('addItem');
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
 	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
@@ -200,8 +200,8 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 		error,
 		dismissError: useCallback(() => setError(null), []),
 
-		createHousehold: useCallback(async (name) => {
-			const result = await run(() => rawCreateHousehold(name));
+		createHousehold: useCallback(async (name, ink) => {
+			const result = await run(() => rawCreateHousehold(name, ink));
 
 			return result ? result.householdId : null;
 		}, [run, rawCreateHousehold]),

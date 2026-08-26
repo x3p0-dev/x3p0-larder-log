@@ -11,7 +11,7 @@ Above the tabs: wordmark, then the **household switcher** — a full-width butto
 
 **Filter tab** — Location, Store, Type. Each section header has a pencil + chevron; the pencil flips *that section only* into editing (`color swatch · name field · delete`, an "Add …" row, **Done** in the header). The swatch opens the 16-colour picker (8 × 2). A dashed `+ …` chip also ends each chip list. `Clear all filters` last.
 
-**Settings tab**, in order: Account → Household (name read-only with a pencil; switcher lives in the header) → Members → Appearance → Default low-stock threshold → **Invites last** (Owner / Editor / Viewer, 14-day expiry, copy, revoke). No terms block, no shopping list.
+**Settings tab**, in order: Account → Household (name **and colour** behind a pencil — see *Household colour*; switcher lives in the header) → Members → Appearance → Default low-stock threshold → **Invites last** (Owner / Editor / Viewer, 14-day expiry, copy, revoke). No terms block, no shopping list.
 
 **Add item** is a sheet: 480px from the right on desktop, a near-full-height bottom sheet with a grabber on mobile. Name → on-hand stepper + low-at → Location / Type / Store chip pickers (selected chip fills with its own term colour and takes ink text; unselected is neutral with a coloured dot; each group carries its `+ …` chip) → notes → sticky Cancel / Save item.
 
@@ -33,7 +33,7 @@ Recorded here from the build, because the document never described it and had dr
 | # | Control | Glyph | Click |
 |---|---|---|---|
 | 1 | Expand | panel-right-open | Opens the drawer on the last pane |
-| 2 | Household | the household's initial on its term colour | Flyout — switch, new, join |
+| 2 | Household | the household's initial on its term colour, set in Settings — see *Household colour* | Flyout — switch, new, join |
 | 3 | Location | map pin | Flyout — quick filter |
 | 4 | Store | storefront | Flyout — quick filter |
 | 5 | Type | tag | Flyout — quick filter |
@@ -61,6 +61,8 @@ Dividers after 2 and after 5.
 | Open / active | `#F2E9DA` · `#241E17` | fill + 2px cream ring | fill + 2px cream ring |
 
 Expand is the exception — it carries `#332B22` at rest (hover `#3D3429`, pressed `#453A2C`) and has no active state.
+
+> **The Household tile's three fills above are terracotta because that is the sample household's colour, not because they are tokens.** They are derived from whatever colour the household is set to — see *Household colour*.
 
 Desktop only: expanding reflows the content column rather than covering it, so nothing overlaps the grid.
 
@@ -178,6 +180,85 @@ Creating a term from a sheet uses **the Filter tab's editing panel, re-skinned f
 | Add pill | ink / cream — `#EBE1D0` / `#B0A088` while the field is empty | cream / ink |
 
 The earlier design had this as a floating pill-shaped capsule with a popover — a shape that existed nowhere else in the app. It is gone.
+
+## Household colour
+
+Every household carries one of the sixteen term colours. It is not decoration: on the 68px rail the tile is the **only** thing naming which household you are in, and four households called *The Tadlock House*, *The Lake Cabin*, *Mom's Pantry* and *Apartment 4B* are told apart by hue long before anyone reads them.
+
+The rail, the switcher and the invite landing all drew that tile already. Nothing set it. This closes that.
+
+### The identity row
+
+**It is the inline composer, not a new component** — a 26px swatch ringed in its own colour, a 40–44px field at radius 11, and the same 8 × 2 picker opening *inline*, pushing the panel taller rather than floating over anything. A household is a coloured, named thing in a list, which is exactly what every location, store and type already is.
+
+One row, two surfaces, the way the composer already works:
+
+| Part | On the drawer (Settings) | On a card (creation) |
+|---|---|---|
+| Panel fill / hairline | `#262019` / `#3B3126` | `#F3EBDD` / `#DFD2BC` |
+| Field | `#191510` on `#3B3126`, `#6E5F4B` focused | `#FDFAF4` on `#9B8B75` |
+| Focus halo | `rgba(190,51,70,.14)` | same |
+| Picker sub-panel | `#1B1610` | `#EBE1D0` |
+| Ring on the current colour | cream `#F2E9DA` | ink `#241E17`, cream in dark |
+| Commit | *Done* pill, ink on cream | the *Create household* primary |
+
+The ring follows the general form of rule 3 — the marker has to beat the surface it sits on — so it is cream on the drawer in **both** themes, and ink on a card in light, cream in dark.
+
+**Picking a colour another of your households already wears is allowed**, and the line under the picker says so: *Aqua — also used by **The Shop**.* Nothing is disabled, for the reason the enabled trash already carries: a disabled control cannot explain itself. There is **no uniqueness rule** — it would fail the moment someone belongs to seventeen households, and a household you do not own should not get to dictate what yours looks like.
+
+> **The picker's dots are the values the tile will take** — light bases in light mode, dark variants in dark. The Filter tab's drawn picker uses dark-variant dots in *both*, so in light mode you press one colour and get another. That is a bug in that board rather than a rule; fix it when those boards are next re-rendered.
+
+### The tile
+
+One shape at four sizes — 68 on the rail, 44 on the invite card and the switcher header, 34 in a list row, 26 as the composer swatch. Radius is **30% of the side**; the letter is Playfair 700 at **42%** of the side in `#FDFAF4`, which the term-base rule flips to `#17130D` on the dark variants.
+
+**The letter is the first letter of the first word that is not an article.** *The Tadlock House* gives T, *The Lake Cabin* gives L. Taking the literal first character would make every household beginning "The" a T — precisely the case the colour exists to disambiguate. A household with no name yet, in the dialog before you type, shows the colour alone and no letter.
+
+Rail states, all derived from the chosen colour so that none of the sixteen needs a hand-picked pair:
+
+| State | Fill |
+|---|---|
+| Rest | the colour |
+| Hover | mixed **10% toward white** |
+| Pressed | mixed **9% toward black**, `scale(.94)` |
+| Focus-visible | rest + 2px `#D4636B`, 2px offset in the rail colour |
+| Open | rest + a 2px cream ring |
+
+This replaces the hard-coded `#A85E33 / #B96A3C / #98522B` in *Collapsed rail → Control states*, which was one household's terracotta written down as though it were a token.
+
+### Settings › Household
+
+The pencil already existed and had nothing to edit but the name. It now flips the section into the identity row — the Filter tab's editing panel, one row deep: same recessed fill on a hairline, same micro-label header (`HOUSEHOLD · EDITING`), same *Done* pill. No add row and no trash, because a household is one row rather than a list; **leaving is a different verb** and keeps its own ghost crimson row below, unchanged.
+
+**The panel carries a live 34px tile preview.** Every other picker in the app recolours something already on screen. The household tile lives on the rail and in the switcher, both of which are somewhere else while you are in Settings, so the panel shows the thing it is about to change.
+
+**Owners only**, the same rule the term pencils follow. An Editor sees the rest state and *Leave household*, and no pencil. Section order is unchanged — the colour lives inside Household, not in a new block.
+
+### Creating a household
+
+Both entry points use the same row.
+
+**First run** keeps its shape: eyebrow → title → body → micro-label → row → hint → *Create household* → the signed-in row. The micro-label becomes **`HOUSEHOLD NAME AND COLOUR`**, which is the whole disclosure a 26px circle beside a text field needs; without it, it reads as decoration.
+
+> **This does not break "one field, one button, nothing else."** The swatch is *part of* the field row, exactly as it is in the term composer — not a second question. Enter still finishes the screen without the picker ever opening.
+
+**New household**, reached from the switcher and from the rail's household flyout, opens a **420px dialog on the confirm shell** — radius 18, ghost *Cancel* plus the ink/cream primary right-aligned, Escape and scrim both cancel. Its header tile is the live preview, so it needs no separate preview row. *Create household* is disabled until the field has a name.
+
+**The colour arrives already chosen** — the first unused across the households you are in, walking the sixteen in order. Nobody has to decide something they have no opinion about, and two of your own households never land on the same colour by default.
+
+### What does not get a picker
+
+**Not the rail's household flyout.** It switches, creates and joins. Recolouring is management, and management expands the drawer — the same line the quick filters already hold.
+
+### Boards
+
+Own canvas — four boards, each with its dark counterpart, 8 total:
+https://claude.ai/code/artifact/e1f6b350-f914-48ee-a721-a29be7a80f24
+
+1. The identity row — both surfaces, three states each, plus the tile and letter rules
+2. Settings › Household — rest, editing, picker open
+3. Creating a household — first run and the dialog, each with the picker open
+4. Where the colour shows — switcher, rail flyout, the five rail-tile states, invite card
 
 ## Destructive actions
 Specced here and drawn — canvas link under *Boards* at the end of the section. Scope is Owner and Editor; the Viewer variant is still open and does not block this.
@@ -354,13 +435,13 @@ The failure card is left-aligned where the sign-in card is centred: it is a mess
 ### First run — name it, then land in it
 Sign-in comes first; there is no anonymous mode. A signed-in account with no household gets one screen, not a wizard.
 
-**The card.** 440px, the same width as every other card outside the shell. Left-aligned. Eyebrow `NEW HOUSEHOLD` → title Playfair 600 26 *Name your household* → body → `HOUSEHOLD NAME` micro-label → field → hint → *Create household* → the signed-in row.
+**The card.** 440px, the same width as every other card outside the shell. Left-aligned. Eyebrow `NEW HOUSEHOLD` → title Playfair 600 26 *Name your household* → body → `HOUSEHOLD NAME AND COLOUR` micro-label → the identity row (swatch + field) → hint → *Create household* → the signed-in row.
 
-- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the Gravatar display name plus *'s Household*, selected, so Enter alone finishes the screen.
+- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the Gravatar display name plus *'s Household*, selected, so Enter alone finishes the screen. The swatch beside it arrives pre-picked with the first colour unused across your households — see *Household colour*.
 - **Hint**, meta 12.5: *Taken from your Gravatar name — change it to whatever you call the place.*
 - **Signed-in row** under a hairline: avatar, name, email in meta, ghost *Sign out*. It answers "which account am I attaching this to" before the household exists rather than after.
 
-**One field, one button, nothing else.** An earlier draft previewed the seeded terms here in a recessed panel — fifteen chips explaining what a household is before you had made one. It is gone. The screen asks for a name; the terms explain themselves in the drawer a second later, where they are also editable.
+**One field, one button, nothing else.** An earlier draft previewed the seeded terms here in a recessed panel — fifteen chips explaining what a household is before you had made one. It is gone. The screen asks for a name; the terms explain themselves in the drawer a second later, where they are also editable. The colour swatch that now sits in the field row is not a counter-example: it is part of the field, not a second question.
 
 ### The empty household
 Creating drops straight into the app, seeds already in the drawer, no items.

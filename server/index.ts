@@ -17,6 +17,7 @@ import type {
 	TermKind,
 } from '../shared/types';
 import { SEED_LOCATIONS, SEED_TYPES, SEED_STORES } from '../shared/seed';
+import { householdInk, toHouseholdInk } from '../shared/household';
 
 /**
  * The Larder Log capsule.
@@ -84,11 +85,15 @@ function termLabel(kind: TermKind): string {
  */
 export const schema = {
 
+	// `ink` is the household's colour token (D42) — the tile on the rail, in the
+	// switcher and on the invite card. Added after the fact, so a row from before
+	// it holds '' and `householdInk()` resolves that to a stable default.
 	households: table({
 		name: string(),
 		// Provenance only. Ownership is memberships.role — see D22.
 		createdBy: string(),
 		defaultThreshold: string().default('1'),
+		ink: string().default(''),
 	}),
 
 	memberships: table({
@@ -211,6 +216,9 @@ export default capsule({
 					name: household.name,
 					role: toRole(row.role),
 					itemCount: items.length,
+					// Resolved here, once, so the switcher and the rail never have
+					// to decide what an unset colour looks like.
+					ink: householdInk(household.ink, household.id),
 				});
 			}
 
@@ -264,6 +272,7 @@ export default capsule({
 					id: household.id,
 					name: household.name,
 					defaultThreshold: household.defaultThreshold,
+					ink: householdInk(household.ink, household.id),
 				},
 				me: { membershipId: membership.id, userId: membership.userId, role: membership.role },
 				members: members.map((m) => ({
@@ -388,14 +397,11 @@ export default capsule({
 				.withIndex('by_household', (r) => r.eq('householdId', invite.householdId))
 				.collect();
 
-			// The tile is drawn in the household's first location colour, which
-			// is what the collapsed rail already uses — so the invite card and
-			// the rail agree the moment you land inside.
-			const locations = await ctx.db.locations
-				.withIndex('by_household', (r) => r.eq('householdId', invite.householdId))
-				.collect();
-
-			const household = { name: row.name, ink: locations[0]?.ink ?? '' };
+			// The household's own colour now, not its first location's — which is
+			// what this stood in for until `households.ink` existed (D42). The
+			// card and the rail still agree the moment you land inside, and they
+			// agree on something somebody chose.
+			const household = { name: row.name, ink: householdInk(row.ink, row.id) };
 
 			// Checked before expiry: someone who is already in is already in, and
 			// telling them a link they cannot use has also run out would be two
@@ -426,13 +432,18 @@ export default capsule({
 		 * Kept out of `requireMembership()` so that helper stays resolve-or-throw
 		 * and remains usable from a read-only query context.
 		 */
-		createHousehold: mutation(async (ctx, name: string) => {
+		createHousehold: mutation(async (ctx, name: string, ink?: string) => {
 			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
 
 			const household = await ctx.db.households.insert({
 				name: normalizeName(name) || 'My Pantry',
 				createdBy: ctx.auth.userId,
 				defaultThreshold: '1',
+				// Both creation surfaces arrive with one already picked — the first
+				// colour unused across the caller's households. An absent or bogus
+				// one stores '' and takes the id-derived default rather than
+				// pinning every such household to one shared token.
+				ink: toHouseholdInk(ink),
 			});
 
 			await ctx.db.memberships.insert({
@@ -476,10 +487,10 @@ export default capsule({
 			return { householdId: household.id };
 		}),
 
-		updateHousehold: mutation(async (ctx, householdId: string, patch: { name?: string; defaultThreshold?: string }) => {
+		updateHousehold: mutation(async (ctx, householdId: string, patch: { name?: string; defaultThreshold?: string; ink?: string }) => {
 			const membership = await requireCapability(ctx, householdId, 'household:settings');
 
-			const next: { name?: string; defaultThreshold?: string } = {};
+			const next: { name?: string; defaultThreshold?: string; ink?: string } = {};
 
 			if (patch.name !== undefined) {
 				if (! isValidName(patch.name)) throw new AccessError('A household needs a name.');
@@ -489,6 +500,10 @@ export default capsule({
 			if (patch.defaultThreshold !== undefined) {
 				next.defaultThreshold = normalizeQty(patch.defaultThreshold);
 			}
+
+			// Colour rides the same capability as the name: both are the one look
+			// every member of the household sees, so both are the owner's.
+			if (patch.ink !== undefined) next.ink = toHouseholdInk(patch.ink);
 
 			await ctx.db.households.update(membership.householdId, next);
 

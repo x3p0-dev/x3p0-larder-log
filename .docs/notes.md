@@ -274,6 +274,36 @@ Two more were opened and left open on purpose by the signed-out flows
   Market may be three chips a new user deletes. The trade against seeding none
   is a Store filter that opens empty on day one.
 
+One more was opened by the household colour (D42) and deliberately left for
+later:
+
+- **A term's dot on the drawer is not the palette, and now nothing else is.**
+  Every picker draws the palette following the theme — light `base` in light,
+  `darkDot` in dark. A term *chip* on the drawer does not: `chipDot()` at rest
+  returns `drawerDot(c)`, which is the `onDrawer` override where the theme
+  specifies one and `darkDot` where it does not, in **both** themes. So in light
+  mode the Filter tab now shows a light base in the picker and a bright
+  drawer ink on the chip two rows below it.
+
+  That is deliberate as far as it goes — the drawer is near-black in both themes
+  and the light bases were tuned for cream — but it means the drawer carries a
+  seventeenth-through-thirty-second set of values that the picker no longer
+  admits exists. Three ways out, none obviously right:
+
+  1. **Leave it.** The chip's dot is legible against the drawer, which is the
+     job. The picker answers "what will this look like on an item card", which
+     is where a term is mostly seen.
+  2. **Draw `drawerDot(c)` in the picker when it is on the drawer.** Matches the
+     chip beside it exactly, and reintroduces the surface-dependent dot the
+     palette rule was adopted to remove.
+  3. **Make `chipDot()` theme-driven too** and drop `onDrawer` entirely. One
+     palette everywhere, at the cost of the eight hand-tuned drawer inks and
+     some contrast on near-black.
+
+  Only **eight of sixteen** `onDrawer` values are specified in the first place
+  (see the roadmap), so the divergence is already partial. Worth settling when
+  those eight are finished rather than before.
+
 ## Paid off in Phase 2
 
 Both of the costs this section used to track are gone.

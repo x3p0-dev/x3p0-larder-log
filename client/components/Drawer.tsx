@@ -1,10 +1,11 @@
 import type { ComponentProps } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { ChevronRight, ChevronsUpDown, House, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
+import { ChevronRight, ChevronsUpDown, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
 
 import { FilterSection } from './DrawerFilters';
 import { DrawerSettings } from './DrawerSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
+import { HouseholdTile } from './HouseholdTile';
 import type { Theme } from '../lib/theme';
 import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
 import type { HouseholdSummary, Item, Term, TermKind } from '../../shared/types';
@@ -52,7 +53,9 @@ type Props = {
 	households: HouseholdSummary[];
 	currentHouseholdId: string;
 	onSelectHousehold: (id: string) => void;
-	onCreateHousehold: (name: string) => Promise<string | null>;
+	/** The household's colour token, resolved by the server (D42). */
+	householdInk: string;
+	onNewHousehold: () => void;
 	onJoinHousehold: (code: string) => Promise<string | null>;
 	accountName: string;
 	/** Everything the Settings pane needs, passed through untouched. */
@@ -88,8 +91,8 @@ export function Drawer({
 	activeLocation, setActiveLocation, activeType, setActiveType, activeStore, setActiveStore,
 	countFor, anyFilterActive, onClearAll,
 	tab, setTab, open, onClose, collapsed, onDismiss,
-	householdName, households, currentHouseholdId,
-	onSelectHousehold, onCreateHousehold, onJoinHousehold,
+	householdName, householdInk, households, currentHouseholdId,
+	onSelectHousehold, onNewHousehold, onJoinHousehold,
 	accountName, settings,
 	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, canEditTaxonomy, closeEditing,
 	theme,
@@ -199,9 +202,7 @@ export function Drawer({
 						aria-expanded={switcherOpen}
 						aria-haspopup="dialog"
 					>
-						<span class="shrink-0 flex items-center justify-center w-[30px] h-[30px] rounded-[9px]" style={{ background: '#4A3E2E', color: d.inkMuted }}>
-							<House size={15} />
-						</span>
+						<HouseholdTile ink={householdInk} name={householdName} size={30} dark={theme.dark} />
 						<span class="flex-1 min-w-0 flex flex-col gap-px">
 							<span class="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: d.label }}>Household</span>
 							<span class="text-sm truncate" style={{ color: d.ink }}>{householdName || 'Your household'}</span>
@@ -219,8 +220,9 @@ export function Drawer({
 								households={households}
 								currentId={currentHouseholdId}
 								onSelect={onSelectHousehold}
-								onCreate={onCreateHousehold}
+								onNewHousehold={onNewHousehold}
 								onJoin={onJoinHousehold}
+								dark={theme.dark}
 								onDone={() => setSwitcherOpen(false)}
 							/>
 						</div>

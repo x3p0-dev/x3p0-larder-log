@@ -2535,3 +2535,52 @@ grep -oE '^\s*\.[^ {]+' zero.css | sed 's/^ *//' | sort -u
 Not a platform bug. Recorded because the escaping is a real ergonomic cost of
 scanning source for static class names, and anyone verifying a Zero build by
 hand will hit it.
+
+## 2026-08-26 — an additive column, and where the artifact actually keeps the schema
+
+Adding one column (`households.ink`, `string().default('')`) to a nine-table
+schema, then verifying it without publishing.
+
+### 👍 an additive column needs nothing
+
+Declared in the literal in `server/index.ts`, ran `npx sf publish --dry-run`,
+and `.spacefast/zero/artifact.json` showed it immediately with its default
+intact. Still nine tables and sixteen mutations. No flag, no prompt, no
+ceremony — exactly what the docs promise for an additive change.
+
+### 🤔 the schema is under `server.schema`, and `db.migrations` is empty
+
+`sf publish --dry-run` prints only a file plan — folder, file count, bytes,
+mode, SPA, target. Nothing about the schema. The artifact's top-level keys are
+`format · appName · serverRuntime · client · server · db · realtime · limits ·
+futureCapabilities · sourceManifest`, and the two plausible places to look are
+misleading:
+
+- **`db`** is `{"backend":"mysql","migrations":[]}` — and `migrations` was `[]`
+  both before and after adding the column. It is not a diff against the live
+  database, so an empty array is not evidence that nothing will change.
+- The schema itself is **`server.schema`**, an object keyed by table name, each
+  with `columns` (`name` / `type` / `nullable` / `default`) and `indexes`.
+  `server.queries`, `server.mutations` and `server.endpoints` are string arrays
+  beside it.
+
+Neither is documented. A one-line `Schema  9 tables, 1 new column` in the dry-run
+output would remove the need to know any of this.
+
+### 👍 `sf dev --port` exists and is not in `--help`
+
+A second instance on `--port 4174` started cleanly beside one already on 4173,
+with its own capability token and its own in-memory database. That is what made
+this verifiable at all: the first instance was somebody else's session and its
+token was not available to us. `--port` joins `dev`, `db`, `logs` and `storage`
+on the list of things that work and are not listed.
+
+### 👍 `mutation.run` accepts a short argument list
+
+`{"op":"mutation.run","name":"createHousehold","args":["The Lake Cabin"]}` for a
+handler declared `(ctx, name: string, ink?: string)` ran with `ink` undefined
+rather than erroring on arity. Combined with `query.run`, the undocumented
+`POST /__spacefast/zero/run` remains the single most useful thing in this
+runtime for verifying work in an environment with no browser: four handlers were
+exercised end to end — a mutation with the argument, the same mutation without
+it, a patch, and the guest-facing query reading the result back.

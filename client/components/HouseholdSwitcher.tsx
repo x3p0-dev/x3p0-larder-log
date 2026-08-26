@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
-import { Check, House, Link2, Plus } from 'lucide-preact';
+import { Check, Link2, Plus } from 'lucide-preact';
 
+import { HouseholdTile } from './HouseholdTile';
 import { DRAWER_BUTTON, DRAWER_INPUT } from '../lib/controlStyles';
 import { isCodeShaped, normalizeCode } from '../../shared/invite';
 import type { HouseholdSummary } from '../../shared/types';
@@ -16,8 +17,12 @@ import type { HouseholdSummary } from '../../shared/types';
  *
  * Joining lives here because an invite code is how you acquire a household you
  * did not create, which makes it a sibling of *New household* rather than a
- * settings task. The signed-out path through `JoinBox` still exists for someone
- * who has no household at all.
+ * settings task.
+ *
+ * **Creating does not happen here.** *New household* hands off to a dialog on
+ * the confirm shell (D42) — a name and a colour will not fit in a 264px flyout
+ * without pushing the list of households off the bottom of it. Joining stays
+ * inline, because a code is one field and nothing else.
  */
 
 type Props = {
@@ -25,39 +30,22 @@ type Props = {
 	/** The one being shown right now — the server's answer, not the stored guess. */
 	currentId: string;
 	onSelect: (id: string) => void;
-	/** Resolves to the new household's id. */
-	onCreate: (name: string) => Promise<string | null>;
+	/** Opens the New household dialog. The popover closes; the host takes over. */
+	onNewHousehold: () => void;
 	/** Resolves to the joined household's id. */
 	onJoin: (code: string) => Promise<string | null>;
 	/** Close the popover — called only after something actually happened. */
 	onDone: () => void;
+	/** The tile follows the theme, not the drawer it sits on. */
+	dark: boolean;
 };
 
-type Form = 'none' | 'create' | 'join';
+type Form = 'none' | 'join';
 
-export function HouseholdSwitcher({ households, currentId, onSelect, onCreate, onJoin, onDone }: Props) {
+export function HouseholdSwitcher({ households, currentId, onSelect, onNewHousehold, onJoin, onDone, dark }: Props) {
 	const [form, setForm] = useState<Form>('none');
-	const [name, setName] = useState('');
 	const [code, setCode] = useState('');
 	const [busy, setBusy] = useState(false);
-
-	async function create() {
-		const trimmed = name.trim();
-
-		if (busy || ! trimmed) return;
-
-		setBusy(true);
-		const id = await onCreate(trimmed);
-		setBusy(false);
-
-		// A refusal is already in the error banner. Keep the form and the typing.
-		if (! id) return;
-
-		onSelect(id);
-		setName('');
-		setForm('none');
-		onDone();
-	}
 
 	async function join() {
 		const entered = normalizeCode(code);
@@ -97,9 +85,7 @@ export function HouseholdSwitcher({ households, currentId, onSelect, onCreate, o
 							}
 							aria-current={current ? 'true' : undefined}
 						>
-							<span class="shrink-0 flex items-center justify-center w-7 h-7 rounded-[9px] bg-drawer-well text-on-dark-muted">
-								<House size={14} />
-							</span>
+							<HouseholdTile ink={household.ink} name={household.name} size={34} dark={dark} />
 							<span class="flex-1 min-w-0 flex flex-col gap-px">
 								<span class="text-[13.5px] truncate text-on-dark">{household.name}</span>
 								{/* Role and size, the two things that tell two pantries apart. */}
@@ -115,35 +101,7 @@ export function HouseholdSwitcher({ households, currentId, onSelect, onCreate, o
 
 			<span class="block h-px mx-1.5 my-2 bg-drawer-raised" />
 
-			{form === 'create' ? (
-				<div class="flex flex-col gap-2 px-1 pb-1">
-					<input
-						value={name}
-						onInput={(e) => setName(e.currentTarget.value)}
-						onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void create(); } }}
-						placeholder="Cabin pantry"
-						aria-label="New household name"
-						class={`h-9 px-3 rounded-[10px] text-[13.5px] ${DRAWER_INPUT}`}
-						// eslint-disable-next-line
-						ref={(el) => el?.focus()}
-					/>
-					<div class="flex items-center gap-2">
-						<button
-							onClick={() => void create()}
-							disabled={busy || ! name.trim()}
-							class={`h-8 px-3 rounded-[10px] text-[12.5px] font-medium disabled:opacity-50 ${DRAWER_BUTTON}`}
-						>
-							{busy ? 'Creating…' : 'Create'}
-						</button>
-						<button
-							onClick={() => { setForm('none'); setName(''); }}
-							class="text-[12.5px] text-on-dark-faint hover:text-on-dark-muted"
-						>
-							Cancel
-						</button>
-					</div>
-				</div>
-			) : form === 'join' ? (
+			{form === 'join' ? (
 				<div class="flex flex-col gap-2 px-1 pb-1">
 					<input
 						value={code}
@@ -176,7 +134,7 @@ export function HouseholdSwitcher({ households, currentId, onSelect, onCreate, o
 			) : (
 				<div class="flex flex-col">
 					<button
-						onClick={() => setForm('create')}
+						onClick={() => { onDone(); onNewHousehold(); }}
 						class="flex items-center gap-2 w-full px-2 py-1.5 rounded-[9px] text-[12.5px] text-on-dark-muted hover:bg-drawer-raised"
 					>
 						<Plus size={14} /> New household

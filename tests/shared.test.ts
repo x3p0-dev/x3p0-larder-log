@@ -23,6 +23,7 @@ import {
 } from '../shared/term';
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
+import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { fromInt, toInt } from '../shared/qty';
@@ -416,6 +417,39 @@ check(
 );
 
 check('a fully stocked pantry produces no groups', shoppingGroups([item('Rice', '9', '2', ['s-costco'])], STORES), []);
+
+// --- household identity (D42) ---
+//
+// The letter is what a 68px rail shows and nothing else, so "every household
+// beginning The is a T" is the failure the rule exists to prevent.
+
+check('the letter skips a leading article', householdLetter('The Tadlock House'), 'T');
+check('and takes the next word, not the first character', householdLetter('The Lake Cabin'), 'L');
+check('a name with no article keeps its first letter', householdLetter("Mom's Pantry"), 'M');
+check('a digit-bearing name is not special', householdLetter('Apartment 4B'), 'A');
+check('leading punctuation is skipped', householdLetter('  “Nan’s” larder '), 'N');
+check('an article alone still draws something', householdLetter('The'), 'T');
+check('no name yet draws no letter', householdLetter('   '), '');
+
+// `households.ink` is additive, so '' is a real stored value forever. Both
+// halves of the app resolve it the same way or the rail and the invite card
+// disagree about the same household.
+check('a stored token is used as-is', householdInk('color-7', 'h1'), 'color-7');
+check('an unset colour resolves to a token', isColorSlot(householdInk('', 'h1')), true);
+check('and resolves to the same one every time', householdInk('', 'h1'), householdInk('', 'h1'));
+check('a legacy hex is not a household colour', isColorSlot(householdInk('#a85e33', 'h1')), true);
+
+// Hashing the id rather than the name is what keeps the default fixed across a
+// rename — the one thing a household's colour must not do.
+check(
+	'two households get different defaults',
+	householdInk('', 'h-zebra') !== householdInk('', 'h-apple'),
+	true
+);
+
+check('only a token is stored', toHouseholdInk('color-3'), 'color-3');
+check('a hex is refused rather than stored', toHouseholdInk('#a85e33'), '');
+check('and so is nothing at all', toHouseholdInk(undefined), '');
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);
