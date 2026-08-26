@@ -212,7 +212,11 @@ this check is possible at all.
 
 ### Publishing is blocked, and it is not our bug
 
-**Do not attempt a publish before re-reading this.** As of 2026-08-25:
+**Do not attempt a publish before re-reading this.** As of 2026-08-25, and
+**re-checked on 2026-08-26 — nothing has changed**; npm's `latest` is still
+`spacefast@0.0.26` (no `next`/`beta` tag, and `@spacefast/zero` tops out there
+too), so there is nothing to update and a plain `npx sf publish` dies at
+*Creating version* on the missing header, before it ever reaches `finalize`:
 
 1. The API now rejects publishes from agent-attributed credentials unless they
    carry an `x-spacefast-rationale` header. **npm's `spacefast@0.0.26` cannot

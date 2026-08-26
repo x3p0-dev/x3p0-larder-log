@@ -2258,3 +2258,120 @@ variant with a **base** utility (`fixed min-[1120px]:sticky`,
 media block. Four of our five `min-[1120px]:` usages were that shape and were
 correct. Only the two paired with a `md:` class were broken, which is why it
 looked like an isolated glitch rather than a rule.
+
+## 2026-08-26 — publishing is still blocked on the same header (bug)
+
+Retried a publish with no shims, no injected headers, no flags: `npx sf publish`
+straight from the pinned devDependency. It fails in exactly the place it failed
+on 2026-08-25.
+
+```
+Preparing update...   Files 78   Mode website   Auth signed in
+✓ Updating space  larderlog (spc_7770744a870a43f5927213fa397c780e)
+⠋ Creating version
+Agent mutations require a rationale of 1 to 1024 characters in the
+x-spacefast-rationale request header.
+Learn more: https://spacefast.com/docs/errors/validation_error
+```
+
+Nothing has moved on any of the four fronts:
+
+1. **npm is still on `spacefast@0.0.26`.** `npm view spacefast dist-tags` →
+   `{ latest: '0.0.26' }`, published 2026-08-22. `npm view spacefast versions`
+   lists nothing past 0.0.26, and there is no `next`/`beta`/`canary` tag.
+   `@spacefast/zero` tops out at 0.0.26 as well. So the "update dependencies
+   first" step is a no-op — we are already on the newest thing npm has.
+2. 0.0.26 still cannot send the header — no flag, no env var.
+3. The 0.0.27 standalone binary still can't compile a Zero capsule, so it isn't
+   a way around this for a Zero project.
+4. Untested this round: we never got as far as `finalize`, so whether
+   `runtime_api_not_found` is fixed is still unknown.
+
+**One thing did improve, slightly.** This run failed *earlier* than the
+2026-08-25 attempt — at `Creating version` rather than at `finalize` — so no
+version row was created and there is no new `status=failed` record to explain
+later. The space is untouched: `sf status` resolves, `GET /api/status` returns
+`ok`, `GET /` returns 200, **v2 is still live**.
+
+### The friction, stated plainly
+
+An agent-attributed credential is refused at the API, and **the only CLI on npm
+has no way to comply**. The two are shipped by the same project on different
+release channels, and the channel that got the fix (binary, 0.0.27) is the one
+that cannot build a Zero capsule. That leaves a Zero project with agent
+credentials in a state with no supported path forward — not a hard problem to
+work around, just one with no legitimate door.
+
+Three fixes, cheapest first:
+
+- **Publish 0.0.27 to npm.** This is presumably already intended; it just hasn't
+  happened in the four days since 0.0.26.
+- **Give 0.0.26 an escape hatch** — `SPACEFAST_RATIONALE` env var or
+  `--rationale`. A one-line change to a released CLI, and it would unblock every
+  pinned project without a version bump.
+- **Say which CLI versions can comply** in the error body. The message names the
+  header and links to a generic `validation_error` page; it does not say "your
+  CLI cannot send this, upgrade to ≥0.0.27". We only knew that from having
+  investigated it ourselves the day before.
+
+The error text itself is good — it names the header, the length bounds, and
+links out. The gap is that it assumes the reader can act on it.
+
+## 2026-08-26 (later) — a fresh human login does not clear the agent classification (bug)
+
+Follow-up to the entry above. We tried to establish a human-attributed session
+and publish from it. **It made no difference**, and that is the finding worth
+sending.
+
+Sequence, all on the same machine:
+
+1. `npx sf publish` from the agent session → `Agent mutations require a
+   rationale…`. Expected.
+2. Justin ran `npx sf publish` **himself, in his own terminal** → identical
+   error. That killed the theory that the classification comes from the
+   ambient environment.
+3. `npx sf logout` → `npx sf login` (browser device flow, completed by hand) →
+   `npx sf whoami` reports *Justin Tadlock (justintadlock@gmail.com)*.
+   `~/.spacefast/auth.json` mtime confirms it was rewritten at 11:48:12.
+4. `npx sf publish -m "…"` two minutes later → **identical error**, same stage
+   (`Creating version`).
+
+So: a credential minted seconds earlier by an interactive browser login, for a
+human account, still has its publishes rejected as *agent mutations*. Whatever
+drives the classification is not the credential, and re-authenticating is not a
+way out of it.
+
+### Why this is worth a fix
+
+The CLI bundle carries **787** references to an `x-spacefast-client` header and
+**17** to `CLAUDECODE`/`CLAUDE_CODE` sitting next to an `isAgent` check, which
+suggests the client self-reports the environment it believes it is running in.
+If that is the mechanism, then the label is a property of *where the binary was
+launched*, not *who is driving* — and there is no documented way to correct it.
+That produces the state we are in:
+
+- the account owner cannot publish his own space from his own machine;
+- `sf login` offers `--handoff` to *become* an agent session, but nothing to
+  assert the opposite;
+- the only CLI on npm (0.0.26) cannot send the header the API demands, so the
+  compliant path does not exist at this version either.
+
+`sf publish -m/--message` is **not** a substitute — we tried it. The message
+lands on the version's changelog, not on the mutation, and the request is
+rejected before a version is created.
+
+### Asks
+
+1. **A way to state the rationale on 0.0.26** — `--rationale` or
+   `SPACEFAST_RATIONALE`. This is the whole fix; everything else is a
+   workaround.
+2. **Make the error say what the caller can do.** It names the header and links
+   to the generic `validation_error` page. It does not say which CLI versions
+   can send it, or that re-authenticating will not help. We burned a logout, a
+   browser login and three publish attempts finding that out.
+3. **Reconsider sticky/ambient agent classification**, or document it. If a
+   freshly minted human credential is still treated as an agent because of the
+   surrounding process, that should be stated somewhere discoverable.
+
+Nothing was damaged: no version row was created in any of the three attempts,
+`GET /api/status` returns `ok`, `GET /` returns 200, and **v2 is still live**.
