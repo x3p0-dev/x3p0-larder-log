@@ -152,6 +152,45 @@ summarized here.
   `useMutation` — thrown, rejected promise, empty result — still needs a
   browser.
 
+### Answered while building the signed-out flows (2026-08-26)
+
+- **There is an HTTP way to call a query by name.**
+  `POST /__spacefast/zero/run` with `{"op":"query.run","name":…,"args":[…]}`
+  returns `{"op":"query.result","ok":true,"data":…}` — the same envelope the
+  websocket carries, and the same handler `useQuery` reaches. It wants the
+  bearer capability **and** the bootstrap cookie; the cookie alone answers
+  `{"error":"unauthorized"}`. `mutation.run` works the same way. This is now the
+  cheapest honest check in the box and it retires most of the
+  throwaway-endpoint pattern. Undocumented — written up in
+  `.claude/docs/spacefast.md`.
+- **Zero's sign-in is a full-page redirect, and it reports no failures.**
+  `signInWithGravatar` ends in `location.assign`, so its promise never settles
+  observably and the app is torn down. On the way back nothing on `useAuth()`
+  separates "abandoned a sign-in ten seconds ago" from "never pressed
+  anything" — both are `isGuest: true`. The *didn't come back* state is
+  therefore our own bookkeeping: a timestamped marker in `sessionStorage`, in
+  `client/lib/signInAttempt.ts`. The **one** auth failure an app can catch is
+  the public wrapper throwing *"Gravatar sign-in is unavailable for this
+  Spacefast runtime"*, which is every `sf dev`.
+- **`@spacefast/zero/client` does not export `signInWithGravatar`.** The
+  `exports` map resolves `./client` to `dist/public-client.d.ts`, which
+  re-exports only the Lakebed-compatible `signInWithGoogle` — the same function,
+  Gravatar end to end. Aliased at the import in `client/index.tsx`.
+- **A query can answer a guest.** Nothing at the framework level gates a query
+  on authentication; `isSignedIn` is our own check, applied per handler.
+  `invitePreview` is the first read in the app that deliberately does not apply
+  it (D39).
+- **A new query needs no ceremony in the artifact.** D27's regex trap is
+  specifically a *schema* trap — `invitePreview` appeared on the next
+  `--dry-run` with tables and migrations untouched.
+
+### Still open after that round
+
+- **The two Gravatar handoff states cannot be reached locally.** *Returning*
+  and *didn't come back* both need a real sign-in round trip, which `sf dev`
+  has no way to perform. They are built from the marker above and have never
+  rendered. Add them to the list of things the published space has to confirm.
+
 ### Answered by the v2 publish (2026-08-24)
 
 - **Does the space's public visibility survive a publish? Yes — confirmed on the
@@ -224,6 +263,16 @@ summarized here.
 All settled as of 2026-08-24 — see [decisions.md](decisions.md), D16-D26.
 Nothing product-shaped is blocking Phase 3; what remains open above is platform
 behavior and the source-exposure decision.
+
+Two more were opened and left open on purpose by the signed-out flows
+(D37, D40), both named in the design spec's own *Open questions*:
+
+- **What does `/` do for someone already signed in?** Straight through to the
+  app is what is built. Showing them the marketing page is the answer that lets
+  them find the pitch again to send to somebody.
+- **Should a new household seed any stores at all?** Grocery / Warehouse /
+  Market may be three chips a new user deletes. The trade against seeding none
+  is a Store filter that opens empty on day one.
 
 ## Paid off in Phase 2
 

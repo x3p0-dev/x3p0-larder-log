@@ -18,6 +18,20 @@ import { readJoinCode, stripJoinParam } from '../../shared/joinLink';
 const KEY = 'larder.pendingInvite';
 
 /**
+ * Whether the visitor has already said yes to the stashed code.
+ *
+ * **Signing in is the accept.** A signed-out visitor on a valid invite presses
+ * one button, and showing them the same card again on the way back would make
+ * that press look like it did nothing. This records the consent so the app can
+ * redeem on arrival instead.
+ *
+ * Only the landing card sets it. A link followed by someone who is *already*
+ * signed in has consented to nothing yet, and gets the card with its two
+ * buttons.
+ */
+const ACCEPTED_KEY = 'larder.pendingInvite.accepted';
+
+/**
  * Captures a `?join=` code from the current URL into the stash.
  *
  * Called once from the client entry, before the sign-in gate decides anything,
@@ -62,6 +76,43 @@ export function pendingInvite(): string | null {
 export function clearPendingInvite(): void {
 	try {
 		sessionStorage.removeItem(KEY);
+		sessionStorage.removeItem(ACCEPTED_KEY);
+	} catch {
+		// Nothing to clear.
+	}
+}
+
+/** Records that the visitor pressed *Sign in with Gravatar to join*. */
+export function markInviteAccepted(): void {
+	try {
+		sessionStorage.setItem(ACCEPTED_KEY, '1');
+	} catch {
+		// Private-mode refusal. The code itself is still in the URL, and the
+		// visitor lands on the invite card again rather than in the household —
+		// one extra press, not a dead end.
+	}
+}
+
+/** True when the stashed code has already been accepted and only needs redeeming. */
+export function inviteAccepted(): boolean {
+	try {
+		return sessionStorage.getItem(ACCEPTED_KEY) === '1';
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Spends the consent without dropping the code.
+ *
+ * Called when an accepted code is refused — expired between the press and the
+ * return, revoked, or for a household the visitor turns out to already be in.
+ * The code stays so the landing card can say which of those happened; the
+ * consent goes so it is not silently retried on the next render.
+ */
+export function clearInviteAccepted(): void {
+	try {
+		sessionStorage.removeItem(ACCEPTED_KEY);
 	} catch {
 		// Nothing to clear.
 	}

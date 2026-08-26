@@ -66,8 +66,12 @@
 				{ "slug": "item-sm", "name": "Item name (mobile)", "size": "18.5px" },
 				{ "slug": "item", "name": "Item name", "size": "21px" },
 				{ "slug": "wordmark", "name": "Wordmark", "size": "27px" },
+				{ "slug": "wordmark-md", "name": "Wordmark (card, mobile)", "size": "32px" },
+				{ "slug": "wordmark-lg", "name": "Wordmark (card)", "size": "38px" },
 				{ "slug": "qty-sm", "name": "Quantity (mobile)", "size": "28px" },
-				{ "slug": "qty", "name": "Quantity", "size": "42px" }
+				{ "slug": "qty", "name": "Quantity", "size": "42px" },
+				{ "slug": "headline-sm", "name": "Marketing headline (mobile)", "size": "34px" },
+				{ "slug": "headline", "name": "Marketing headline", "size": "56px" }
 			]
 		}
 	}

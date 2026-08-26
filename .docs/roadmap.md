@@ -393,6 +393,111 @@ surfaces, and which non-destructive events earn a plain toast (saved, copied,
 invite sent, term added — a toast on every save would be noise). Neither blocks
 anything.
 
+### Phase 4.7 — Flows outside the shell ✅ (2026-08-26)
+
+The spec's *Flows outside the shell* and *The marketing page*, built. Everything
+before the app: the public page, sign-in, the handoff, the first household, and
+the `?join=` landing. Scope is Owner and Editor, as with destructive actions.
+
+- **Two pages, not one**
+  ([D37](decisions.md#d37-the-signed-out-surface-is-two-pages-not-one)). `/`
+  signed out is a marketing page; any other URL is a bounce to the sign-in card.
+  The entry routes on the visitor's reason for being there — invitation, then an
+  abandoned sign-in, then the path.
+- **`MarketingPage.tsx`.** Nav, hero, three benefit cards, the *Three ways to
+  slice it* band, closing CTA, footer. 1120 content column, 22px gutters at 390.
+  No proof section: the slot is left open between the benefits and the band.
+- **The hero mock is the real `ItemCard`, and its steppers work.** Three sample
+  rows — stocked, low, out — with live plus and minus, so a visitor can press
+  minus twice on the low card and watch it turn crimson. The status ramp doing
+  its job *in their own hand* is the pitch; a screenshot could neither do that
+  nor stay in step with the component. The arithmetic is
+  `fromInt(toInt(qty) + step)`, the same expression `adjustQty` runs, so the
+  clamp at zero comes from `shared/qty` rather than a second copy of the rule.
+  Nothing resets. `ItemCard` gained one optional prop, `canExpand`, because the
+  accordion has no *Edit* or *Remove* to reveal here and a chevron that expands
+  nothing beside a stepper that works reads as broken.
+- **`SignInCard.tsx`.** The 440px card, centred — the one surface that greets
+  rather than asks — plus the two other handoff states. *Returning* replaces the
+  card's contents rather than the card, so nothing jumps. *Didn't come back* is
+  **amber, not crimson**, and left-aligned: it destroyed nothing, and it is a
+  message with a body to read.
+- **`FirstRun.tsx`.** One field, one button, the signed-in row, and nothing
+  else. Prefilled from the Gravatar name and selected on mount, so Enter alone
+  finishes the screen. The earlier draft's recessed panel of fifteen seeded
+  chips is gone — the terms explain themselves in the drawer a second later,
+  where they are also editable.
+- **`InviteLanding.tsx`** and a new `invitePreview` query
+  ([D39](decisions.md#d39-an-invite-preview-is-the-one-query-that-answers-a-guest)),
+  the only read in the app that answers a guest. Four cases on one card, with a
+  shared header. Already-a-member is **green** — the third rung of the same
+  status ramp, since nothing is wrong and the thing you wanted is already true.
+  **Signing in is the accept**
+  ([D38](decisions.md#d38-signing-in-is-the-accept)); the in-app invite banner
+  is deleted, and so is `JoinBox`.
+- **The empty household.** Playfair italic 27px *Nothing in the larder yet.*, and
+  at zero items the top bar carries neither the sort trigger nor an *Add item* —
+  sorting nothing can only disappoint, and two *Add item* buttons on one screen
+  is one too many. Both come back with the first item.
+- **Generic seeds** ([D40](decisions.md#d40-seeded-terms-are-generic-and-there-are-still-three-stores)):
+  Pantry · Refrigerator · Freezer and Grocery · Warehouse · Market.
+- **Ramp additions**: `wordmark-md` 32, `wordmark-lg` 38, `headline-sm` 34,
+  `headline` 56 — the first sizes above the wordmark the app has carried. Plus
+  `Theme.accent` (crimson, theme-aware — the page wordmark had been hard-coding
+  the light value in both themes), `Theme.dark`, and a disabled fill/text pair.
+- **The composer's focus halo**, both themes, which the token table had
+  specified and nothing had implemented.
+
+Built from the spec first and then corrected against
+`.claude/docs/design/larder-log-front-door/` — eighteen boards, nine screens
+light and dark, which landed mid-build. The boards moved a dozen things: the
+invite card leads with the tile on its own line and a *"Sarah Calfee invited you
+as an Editor"* sentence rather than the role first; the blocked cards drop the
+eyebrow and the household header entirely; the marketing nav has **no CTA**
+below `sm`; and every card outside the shell takes a `0 24px 60px` lift rather
+than the item card's hairline shadow.
+
+**Two things Justin caught by clicking, fixed 2026-08-26:**
+
+- **The closing CTA sat flush against its own edges on a narrow screen.** The
+  wrapper was a bare `<div>` inside a `flex flex-col items-center` column, so it
+  was shrink-to-fit — and a `w-full` button inside a shrink-to-fit box resolves
+  to 100% of *its own content*, which is a button with no padding at all. The
+  wrapper is `w-full sm:w-auto` now, and `GravatarButton` carries `px-5` so no
+  layout above it can reproduce the effect.
+- **Every control on the item card was inert under the pointer** — the
+  steppers, *Edit*, *Remove*, and the header row. All four were painted with
+  inline styles, and an inline `background` outranks `hover:bg-line`, so the
+  hover rules would not have worked even if they had been written. Five
+  constants in `controlStyles.ts` (`CARD_STEPPER`, `CARD_STEPPER_PRIMARY`,
+  `CARD_ACTION`, `CARD_ACTION_GHOST`, `CARD_HEADER`) carry hover, active and a
+  focus ring offset against `surface` rather than the page ground. **At zero the
+  minus stays faint and does not brighten on hover** — it is still live, because
+  the clamp is the server's and a disabled control cannot explain itself (D36),
+  but nothing about it should promise a change it will not make. This is the
+  third time inline styles have shipped a control with no feedback; the note at
+  the top of `controlStyles.ts` now says so.
+
+**Verified without a browser.** The capsule compiles and reloads; every new
+class and all four type tokens are in `/zero.css`; the artifact still shows nine
+tables, sixteen mutations and **zero migrations**, with `invitePreview` the
+fourth query. All four preview cases were exercised through the real query path
+— valid, expired, revoked and unknown, plus already-a-member — using `sf dev`'s
+HTTP `query.run` endpoint and a throwaway `/api/__probe` that has been removed.
+`npm test` is at 135 assertions. **Nobody has clicked any of it.**
+
+**`?signedout` is a new dev-only switch.** D14's loopback hole makes every local
+visitor a signed-in dev guest, which put the marketing page, the sign-in card
+and the invite landing out of reach in the one environment they can be clicked
+in. It only ever removes access and is ignored off loopback. It comes out with
+D14.
+
+**Still open, and named as such in the spec:** a proof section, the Viewer
+wording on the invite card, wrong-account-on-invite, session expiry, and where privacy and
+terms would be linked from if they ever exist. Tablet — 768–1024 — is undrawn
+for the marketing page as well as the app; the hero splits its two columns at
+`xl` (1280), which is a choice made here rather than one the spec settled.
+
 ### The item grid is fluid, and the drawer docks at 1120 — 2026-08-26
 
 The content column was capped at `max-w-[1160px]` and the grid stepped

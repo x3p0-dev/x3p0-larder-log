@@ -9,9 +9,11 @@ import { StatusChip } from './components/StatusChip';
 import { SortMenu } from './components/SortMenu';
 import type { SortKey } from './components/SortMenu';
 import { ItemSheet } from './components/ItemSheet';
-import { PAGE_BUTTON, PAGE_BUTTON_PRIMARY, PAGE_CHIP_ADD, PAGE_INPUT } from './lib/controlStyles';
+import { PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_CHIP_ADD, PAGE_INPUT } from './lib/controlStyles';
 import { ItemCard } from './components/ItemCard';
-import { JoinBox } from './components/JoinBox';
+import { FirstRun } from './components/FirstRun';
+import { InviteLanding } from './components/InviteLanding';
+import { OutsideShell } from './components/OutsideShell';
 import { ShoppingListModal } from './components/ShoppingListModal';
 import { ToastStack } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -19,11 +21,11 @@ import type { ConfirmTone } from './components/ConfirmDialog';
 
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
-import { usePantryData } from './hooks/usePantryData';
+import { usePantryData, useInvitePreview } from './hooks/usePantryData';
 import { useToasts } from './hooks/useToasts';
 
 import { entityColorFor, getTheme, statusFor, termNameFor } from './lib/theme';
-import { clearPendingInvite, pendingInvite } from './lib/pendingInvite';
+import { clearInviteAccepted, clearPendingInvite, inviteAccepted, pendingInvite } from './lib/pendingInvite';
 import type { TaxonomyActions } from './lib/actions';
 
 import { normalizeCode } from '../shared/invite';
@@ -197,10 +199,12 @@ type Props = {
 	userId: string;
 	displayName: string;
 	email: string;
+	/** The Gravatar avatar, when the identity carries one. */
+	picture?: string;
 	onSignOut: () => void;
 };
 
-export function Pantry({ userId, displayName, email, onSignOut }: Props) {
+export function Pantry({ userId, displayName, email, picture, onSignOut }: Props) {
 	const systemDark = useSystemTheme();
 	const themeKey = useMemo(() => themeKeyFor(userId), [userId]);
 	const [themeOverride, setThemeOverride] = usePersistentState<ThemeOverride>(themeKey, 'system');
@@ -359,6 +363,50 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const [pendingCode, setPendingCode] = useState<string | null>(() => pendingInvite());
 
 	/**
+	 * What that code says about itself, for the landing card.
+	 *
+	 * The same subscription the signed-out landing uses; this one answers with
+	 * `member` as well, because the caller now has an identity to compare
+	 * against.
+	 */
+	const invitePreview = useInvitePreview(pendingCode);
+
+	/**
+	 * A code the visitor already said yes to, on the way in.
+	 *
+	 * **Signing in is the accept** — someone who pressed *Sign in with Gravatar
+	 * to join* while signed out has consented, and showing them the same card
+	 * again on the way back would make that press look like it did nothing. So
+	 * this redeems on arrival instead. A link followed while *already* signed in
+	 * carries no consent and gets the card with its two buttons.
+	 *
+	 * Read once into state rather than called during render: the flag is
+	 * cleared as soon as the consent is spent, and a render that re-read it
+	 * would flip the screen out from under an in-flight request.
+	 */
+	const [autoJoining, setAutoJoining] = useState(() => Boolean(pendingInvite()) && inviteAccepted());
+
+	useEffect(() => {
+		if (! pendingCode || ! autoJoining) return;
+
+		let live = true;
+
+		void joinWithCode(pendingCode).then((householdId) => {
+			if (! live) return;
+
+			// The consent is spent either way. A refusal — expired between the
+			// press and the return, revoked, or a household they turn out to
+			// already be in — hands the screen to the landing card, which is the
+			// only thing that can say which of those happened.
+			if (! householdId) clearInviteAccepted();
+
+			setAutoJoining(false);
+		});
+
+		return () => { live = false; };
+	}, [pendingCode, autoJoining]);
+
+	/**
 	 * Redeems a code and lands on what it opened.
 	 *
 	 * Switching is the point: an invite is someone handing you a *particular*
@@ -484,6 +532,16 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	}, [filtered, sortBy]);
 
 	const visibleItems = sorted.slice(0, visibleCount);
+
+	/**
+	 * A household with nothing in it yet — not a filter that matches nothing.
+	 *
+	 * The difference is the whole reason this is `items` rather than `sorted`.
+	 * An empty result *from a filter* is a thing the visitor did and can undo;
+	 * an empty pantry is a state the app has to explain, and it is the one that
+	 * takes the screen's only primary and strips the top bar back.
+	 */
+	const empty = items.length === 0;
 
 	const locationCounts = useMemo(() => Object.fromEntries(
 		locations.map((loc) => [loc.id, items.filter((i) => i.locationId === loc.id).length])
@@ -818,18 +876,53 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 
 	// --- Non-ready states ---------------------------------------------------
 
+	/*
+	 * An invite link takes the whole screen, ahead of everything else.
+	 *
+	 * It was a banner inside the app before, which was the right size for the
+	 * one case D18 allowed — "you already have a household, this is a refusal".
+	 * Since D33 it is a real offer with a role attached, and it belongs on the
+	 * same card the signed-out landing uses rather than as a strip above the
+	 * pantry you were already looking at.
+	 *
+	 * `autoJoining` holds the card in its checking state while the accepted code
+	 * is redeemed, so a consented join never flashes the buttons it does not
+	 * need.
+	 */
+	if (pendingCode) {
+		return (
+			<OutsideShell dark={dark} theme={theme}>
+				<InviteLanding
+					preview={autoJoining ? null : invitePreview}
+					signedIn
+					displayName={displayName} email={email} picture={picture}
+					onSignIn={() => {}}
+					onJoin={async () => { await joinWithCode(pendingCode); }}
+					onDismiss={(householdId) => {
+						if (householdId) setSelectedHousehold(householdId);
+
+						dismissInvite();
+					}}
+					onSignOut={onSignOut}
+					pending={false}
+					theme={theme}
+				/>
+			</OutsideShell>
+		);
+	}
+
 	if (api.status.state !== 'ready') {
 		return (
 			<Gate
 				status={api.status}
 				dark={dark}
+				displayName={displayName}
+				email={email}
+				picture={picture}
 				onCreateHousehold={createHousehold}
 				onSignOut={onSignOut}
 				error={api.error}
 				onDismissError={api.dismissError}
-				pendingCode={pendingCode}
-				onJoin={joinWithCode}
-				onDismissInvite={dismissInvite}
 			/>
 		);
 	}
@@ -949,8 +1042,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					{/* Left, the same side the drawer comes from. */}
 					<button
 						onClick={() => { setDrawerOpen(true); setDrawerCollapsed(false); }}
-						class={`shrink-0 flex items-center justify-center w-11 h-11 rounded-[13px] ${PAGE_BUTTON}`}
-						style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
+						class={`shrink-0 flex items-center justify-center w-11 h-11 rounded-[13px] ${PAGE_BUTTON_OUTLINE}`}
 						aria-label="Open menu"
 					>
 						<Menu size={19} />
@@ -958,10 +1050,10 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 
 					<div class="min-w-0 flex flex-col">
 						<h1
-							class="font-disp text-wordmark font-bold leading-[1.06] tracking-[-0.015em]"
+							class="font-disp text-wordmark font-extrabold leading-[1.06] tracking-[-0.015em]"
 							style={{ color: theme.textStrong }}
 						>
-							Larder <span class="italic font-semibold" style={{ color: '#BE3346' }}>Log</span>
+							Larder <span class="italic" style={{ color: '#BE3346' }}>Log</span>
 						</h1>
 						{householdName && (
 							<span
@@ -1000,40 +1092,20 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			)}
 
 			{/*
-			  * An invite link followed by someone who already has a household.
-			  * Under D18 this could only be refused; now it is an offer, and
-			  * accepting it switches to what the link opened.
-			  */}
-			{pendingCode && (
-				<div class="px-[18px] md:px-[34px]">
-					<div
-						class="flex items-center justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
-						style={{ background: theme.surfaceAlt, color: theme.textMuted, border: `1px solid ${theme.border}` }}
-					>
-						<span>You&rsquo;ve been invited to another household.</span>
-						<span class="flex items-center gap-3 shrink-0">
-							<button
-								onClick={() => void joinWithCode(pendingCode)}
-								class="font-semibold"
-								style={{ color: theme.textStrong, textDecoration: 'underline', textUnderlineOffset: '3px' }}
-							>
-								Join
-							</button>
-							<button onClick={dismissInvite} aria-label="Dismiss invite">
-								<X size={15} />
-							</button>
-						</span>
-					</div>
-				</div>
-			)}
-
-			{/*
 			  * No max width. The column is whatever the drawer leaves it, so the
 			  * grid below can keep adding tracks instead of stranding whitespace
 			  * on a wide screen. Only the gutters are fixed.
 			  */}
 			<div class="px-[18px] md:px-[34px] py-6 md:py-[30px] pb-28 md:pb-[30px]">
 				<main>
+					{/*
+					  * The whole top bar is absent at zero items — search, the
+					  * status chips, the count and the sort trigger with them.
+					  * Every one of them is a control over nothing, and the empty
+					  * state below is meant to own the screen and carry its only
+					  * primary. All of it comes back with the first item.
+					  */}
+					{! empty && (
 					<div class="flex items-center gap-3.5">
 						<label class={`flex-1 min-w-0 flex items-center gap-[11px] h-[50px] px-[18px] rounded-[15px] focus-within:border-ink-muted ${PAGE_INPUT}`}>
 							<Search size={18} style={{ color: theme.textFaint }} />
@@ -1056,6 +1128,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 							</button>
 						)}
 					</div>
+					)}
 
 					{/*
 					  * The shopping list is reached from here and nowhere else: it is
@@ -1099,6 +1172,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					)}
 
 
+					{! empty && (
 					<div class="flex items-center justify-between gap-4 flex-wrap pt-6 pb-4 px-0.5">
 						<div class="flex items-center gap-2.5 flex-wrap">
 							{STATUS_CHIPS.map(({ key, label, short }) => (
@@ -1137,6 +1211,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 							</div>
 						</div>
 					</div>
+					)}
 
 					{/*
 					  * A grid rather than a stack, per the spec: cards are dense
@@ -1171,7 +1246,41 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						  * card rather than about the list — and the wider the
 						  * screen, the more off-centre they look.
 						  */}
-						{sorted.length === 0 && (
+						{/*
+						  * Two different nothings. An empty *household* gets the
+						  * screen, an italic line and the only *Add item* on it; a
+						  * filter that matches nothing gets one quiet sentence,
+						  * because the way out is the filter the visitor just set.
+						  */}
+						{empty ? (
+							<div class="col-span-full flex flex-col items-center justify-center text-center gap-3.5 py-16 md:py-24 px-4 md:px-16">
+								<p class="font-disp italic text-[27px] font-medium leading-[1.3]" style={{ color: theme.textStrong }}>
+									Nothing in the larder yet.
+								</p>
+								<p class="text-[14.5px] leading-[1.5] max-w-[420px]" style={{ color: theme.textMuted }}>
+									Add your first item. Your locations, stores and types are already set up
+									in Filters — rename or recolour them whenever you like.
+								</p>
+								{mayEditItems ? (
+									<button
+										onClick={openAddForm}
+										class={`flex items-center justify-center gap-2.5 w-[158px] h-11 mt-1.5 rounded-[13px] text-base font-semibold ${PAGE_BUTTON_PRIMARY}`}
+										style={{ background: theme.inkBg, color: theme.inkText }}
+									>
+										<Plus size={18} strokeWidth={2.2} /> Add item
+									</button>
+								) : (
+									// The one thing the stripped top bar took with it that
+									// a viewer still needs: why there is nothing to press.
+									<span
+										class="inline-flex items-center px-3 py-[7px] mt-1.5 rounded-full text-[13.5px]"
+										style={{ background: theme.neutralChipBg, color: theme.textMuted, border: `1px solid ${theme.border}` }}
+									>
+										View only
+									</span>
+								)}
+							</div>
+						) : sorted.length === 0 && (
 							<p class="col-span-full text-sm py-8 text-center" style={{ color: theme.textMuted }}>Nothing here yet.</p>
 						)}
 
@@ -1218,7 +1327,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			  * Mobile's primary action, pinned rather than scrolled past. The grid
 			  * carries matching bottom padding so the last card clears it.
 			  */}
-			{mayEditItems && (
+			{mayEditItems && ! empty && (
 				<div
 					class="md:hidden fixed inset-x-0 bottom-0 z-30 px-5 pt-3.5 pb-5"
 					style={{ background: theme.ground, borderTop: `1px solid ${theme.border}` }}
@@ -1316,47 +1425,42 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
  * failed query to the client — it simply never emits, leaving `useQuery` on its
  * initial value forever. Without an explicit `no-household` state a first-run
  * user would stare at a blank screen. See `QueryState` in `shared/types.ts`.
+ *
+ * Three states and no fourth. An invite is deliberately not one of them any
+ * more: it takes the whole screen a few hundred lines up, before this is ever
+ * reached.
  */
 function Gate({
 	status,
 	dark,
+	displayName,
+	email,
+	picture,
 	onCreateHousehold,
 	onSignOut,
 	error,
 	onDismissError,
-	pendingCode,
-	onJoin,
-	onDismissInvite,
 }: {
 	status: ReturnType<typeof usePantryData>['status'];
 	dark: boolean;
+	displayName: string;
+	email: string;
+	picture?: string;
 	onCreateHousehold: (name: string) => Promise<string | null>;
 	onSignOut: () => void;
-	/** A refused join or household creation. The app shell's banner isn't mounted here. */
+	/** A refused household creation. The app shell's banner isn't mounted here. */
 	error: string | null;
 	onDismissError: () => void;
-	pendingCode: string | null;
-	onJoin: (code: string) => Promise<string | null>;
-	onDismissInvite: () => void;
 }) {
 	const theme = getTheme(dark);
 
-	// Named at creation rather than assigned a default and renamed later. The
-	// schema has always been multi-household (D3), so a household's name is the
-	// thing that will tell two of them apart once a switcher exists.
-	const [name, setName] = useState('My Pantry');
-	const [creating, setCreating] = useState(false);
-
 	const frame = (children: preact.ComponentChildren) => (
-		<div
-			class="font-sans min-h-screen w-full flex items-center justify-center px-6"
-			style={{ background: theme.pageBg, color: theme.text, colorScheme: dark ? 'dark' : 'light' }}
-		>
-			<div class="max-w-sm w-full text-center">
+		<OutsideShell dark={dark} theme={theme}>
+			<div class="w-full max-w-[440px]">
 				{error && (
 					<div
 						role="alert"
-						class="flex items-start justify-between gap-3 px-3 py-2 rounded-md text-sm mb-4 text-left"
+						class="flex items-start justify-between gap-3 px-3.5 py-2.5 rounded-[13px] text-sm mb-4"
 						style={{
 							background: theme.surfaceAlt,
 							color: theme.dangerText,
@@ -1371,99 +1475,30 @@ function Gate({
 				)}
 				{children}
 			</div>
-		</div>
+		</OutsideShell>
 	);
 
 	if (status.state === 'loading') {
 		return frame(
-			<p class="font-mono text-xs uppercase tracking-widest" style={{ color: theme.textFaint }}>
-				Loading&hellip;
-			</p>
+			<p class="text-[13.5px] text-center" style={{ color: theme.textFaint }}>Loading&hellip;</p>
 		);
 	}
 
 	if (status.state === 'no-household') {
-		const submit = async () => {
-			if (creating) return;
-			setCreating(true);
-			await onCreateHousehold(name);
-			setCreating(false);
-		};
-
 		return frame(
-			<>
-				{/*
-				  * An invited visitor is here to join something that already
-				  * exists, so the invite comes first and the first-run form
-				  * follows it. Without a code this renders as a single line of
-				  * link text below the form.
-				  */}
-				{pendingCode && (
-					<JoinBox
-						pendingCode={pendingCode}
-						onJoin={async (code) => Boolean(await onJoin(code))}
-						onDismiss={onDismissInvite}
-						theme={theme}
-					/>
-				)}
-
-				<h1 class="font-disp text-2xl font-semibold mb-2" style={{ color: theme.textStrong }}>
-					Welcome to Larder Log
-				</h1>
-				<p class="text-sm mb-5" style={{ color: theme.textMuted }}>
-					Name your household to start tracking what&rsquo;s in the pantry and the freezer.
-					You&rsquo;ll get a starter set of locations, types, and stores to edit.
-				</p>
-
-				<label class="block text-left mb-4">
-					<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textMuted }}>
-						Household name
-					</span>
-					<input
-						value={name}
-						onInput={(e) => setName(e.currentTarget.value)}
-						onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit(); } }}
-						placeholder="My Pantry"
-						aria-label="Household name"
-						class="mt-1 w-full px-3 py-2 rounded border text-sm outline-none"
-						style={{ borderColor: theme.borderStrong, background: theme.surface, color: theme.text }}
-					/>
-				</label>
-
-				<button
-					onClick={() => void submit()}
-					disabled={creating || ! name.trim()}
-					class="w-full px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
-					style={{ background: theme.primaryBg, color: theme.primaryText }}
-				>
-					{creating ? 'Setting up…' : 'Create household'}
-				</button>
-
-				{! pendingCode && (
-					<JoinBox
-						pendingCode={null}
-						onJoin={async (code) => Boolean(await onJoin(code))}
-						onDismiss={onDismissInvite}
-						theme={theme}
-					/>
-				)}
-
-				{/*
-				  * The way out of the wrong account. Every other screen reaches
-				  * sign-out through the drawer, and there is no drawer until a
-				  * household exists.
-				  */}
-				<p class="mt-6">
-					<button onClick={onSignOut} class="text-xs underline" style={{ color: theme.textFaint }}>
-						Sign out
-					</button>
-				</p>
-			</>
+			<FirstRun
+				displayName={displayName}
+				email={email}
+				picture={picture}
+				onCreate={onCreateHousehold}
+				onSignOut={onSignOut}
+				theme={theme}
+			/>
 		);
 	}
 
 	// 'guest' — the gate in index.tsx normally catches this first.
 	return frame(
-		<p class="text-sm" style={{ color: theme.textMuted }}>Sign in to use Larder Log.</p>
+		<p class="text-sm text-center" style={{ color: theme.textMuted }}>Sign in to use Larder Log.</p>
 	);
 }

@@ -271,8 +271,18 @@ export function CollapsedRail({
 			}
 			style={{ background: theme.drawer.bg }}
 		>
-			<Control id="expand" label="Open drawer" on={false} chrome={chrome} onClick={() => onExpand('filter')}>
-				<span class="flex items-center justify-center w-10 h-10 rounded-xl bg-drawer-raised text-[#C3B49C]">
+			<Control id="expand" label="Open drawer" on={false} tile chrome={chrome} onClick={() => onExpand('filter')}>
+				<span
+					/*
+					 * Brightness, for the same reason the household tile below uses
+					 * it: the fill is a token that differs by theme, so a literal
+					 * hover shade would only be right in one of them. This is the
+					 * one rail control with a fill at rest, and it covered the
+					 * button's own `hover:bg-drawer-raised` completely — so it had
+					 * no hover at all while every button under it did.
+					 */
+					class="flex items-center justify-center w-10 h-10 rounded-xl bg-drawer-raised text-[#C3B49C] transition-[filter] group-hover:brightness-125 group-active:brightness-90"
+				>
 					<PanelLeftOpen size={18} />
 				</span>
 			</Control>

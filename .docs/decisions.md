@@ -1384,3 +1384,120 @@ data belonging to more than one screen; anywhere else it would be theatre.
 
 `deleteHousehold` had shipped server-side since Phase 2 and had no client
 caller until now.
+
+---
+
+## D37. The signed-out surface is two pages, not one
+
+**Decided:** 2026-08-26
+
+Everything before the app shell had one screen: a sign-in card that greeted the
+visitor and asked in the same breath. The design spec's *Flows outside the
+shell* splits it.
+
+**`/` is a marketing page. Any other URL hit while signed out is a bounce, and
+shows the sign-in card with an eyebrow saying why.** Collapsing them makes the
+front door either a wall for someone who has never heard of the app or a sales
+pitch for someone who only wanted their pantry, and there is no single page that
+is both without being worse at each.
+
+The routing runs in the visitor's own order of intent, not the URL's: an
+invitation is the most specific reason to be on the page, an abandoned sign-in
+is next, and only after both does which path they landed on matter.
+
+**Rejected:** routing this properly. `sf publish --dry-run` prints `SPA false`
+and the published space serves nothing at an unknown path (D28), so the bounce
+is reachable today only by a sign-out or an expired session landing somewhere
+other than `/`. It is one `location.pathname` test, and it stays that way until
+the platform can route.
+
+**Open, and deliberately so:** what `/` does for someone who is *already*
+signed in. Straight through to the app is what is built — but showing them the
+marketing page is the answer that lets them find the pitch again to send to
+someone, and that is a real thing to want.
+
+---
+
+## D38. Signing in is the accept
+
+**Decided:** 2026-08-26
+
+An invite link is followed by someone who is signed out by definition, and Zero
+signs in with a **full-page redirect** — `location.assign`, not a popup. So the
+`?join=` landing has to survive a teardown, and the visitor comes back to a
+fresh page with no memory of having agreed to anything.
+
+**Pressing *Sign in with Gravatar to join* is the acceptance.** The consent is
+written to `sessionStorage` beside the code, before the redirect, and the app
+redeems on arrival rather than showing the same card a second time. A press that
+appeared to do nothing would be worse than an extra click; it would look broken.
+
+A link followed by someone **already** signed in carries no consent and gets the
+card with its two buttons. Same card, different question.
+
+The consent is *spent* on the first attempt either way. If the server refuses —
+expired in the meantime, revoked, or a household they turn out to already be in
+— the flag is cleared and the landing card takes the screen, because it is the
+only thing that can say which of those happened.
+
+**This replaces the in-app banner.** Under D18 an invite arriving at someone who
+already had a household could only be refused, and a strip above the pantry was
+the right size for that. D33 made it a real offer with a role attached, and an
+offer belongs on the same card the signed-out landing uses.
+
+---
+
+## D39. An invite preview is the one query that answers a guest
+
+**Decided:** 2026-08-26
+
+The `?join=` landing has to name the household and the role before anyone signs
+in. Every other read in the app resolves a membership first and cannot.
+
+**`invitePreview(code)` takes the code as its authorization.** Whoever holds one
+was meant to see the household's name, who sent it, and what they are being
+offered. It is a read, it writes nothing, and it grants nothing.
+
+**What it will not do is confirm that a code existed.** Unknown, malformed and
+**revoked** all return the same bare `invalid`, matching `redeemInvite`'s
+refusal to distinguish them — naming the household behind a dead link would tell
+a stranger something about it. The landing renders `invalid` as the expired
+screen with one sentence changed, which is the spec's own construction.
+
+Expiry is the exception the design asks for: an expired code is one somebody was
+genuinely given, and the screen exists to say who to ask for another. It names
+the household and the inviter; the security note it trades against is that a
+code holder learns the code was real, and a code holder already knew.
+
+**Only the already-a-member case carries a household id**, so its *Open X* can
+switch to it. A non-member holding a code has no business learning one, and the
+other three variants offer no destination to switch to.
+
+---
+
+## D40. Seeded terms are generic, and there are still three stores
+
+**Decided:** 2026-08-26
+
+The seeds were the design's sample data: Upright Freezer, Chest Freezer,
+Costco, Publix, Calfee Cattle. That is one household's vocabulary shipped as
+everybody's default.
+
+Locations and stores are now generic — **Pantry · Refrigerator · Freezer** and
+**Grocery · Warehouse · Market**. Types were already generic and keep their
+assignments from the spec's *Term colours* table; only the order changed, to the
+spec's. The aim is that a new household recognises its own shelves and renames
+them, rather than deleting three that belong to someone else.
+
+**Stores are the weak third.** Locations and types are near-universal; where
+someone shops is not, and Grocery / Warehouse / Market may be three chips a new
+user deletes. Seeding none is defensible and was considered. The trade against
+it: the Store filter would open empty on day one, and a filter group with
+nothing in it teaches nothing about what a store is for. Three generic ones lose
+less than an empty pane does. Revisit after somebody has actually used it.
+
+`npm test` now asserts every seed's colour token resolves and every group's
+names are distinct under `termKey`. Both failures are invisible when wrong — a
+mistyped token falls through to the legacy-hex derivation and renders in *some*
+colour, and a duplicate name leaves the household one term short with no error
+anywhere.

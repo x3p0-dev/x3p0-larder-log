@@ -15,6 +15,25 @@ type Props = {
 };
 
 /**
+ * The hover step, one per theme.
+ *
+ * Brightness rather than a second set of colors: every value on this chip comes
+ * from `statusColor` at runtime, so there is nothing to write a literal hover
+ * shade against — the same reason the rail's tiles use it. The *direction* has
+ * to flip, though, which is why this is a pair: the tint is pale in light and
+ * deep in dark, so hovering means darkening in one and lightening in the other.
+ * Both are written out in full because Tailwind resolves a class by scanning
+ * for a static string.
+ *
+ * The step is sized to match the page's neutral controls, which move about
+ * twelve units between `surface` and `surface-alt`.
+ */
+const CHIP_HOVER = {
+	light: 'hover:brightness-95',
+	dark: 'hover:brightness-125',
+};
+
+/**
  * A status count, and the filter for it.
  *
  * The chip always wears its own status tint — a count of what is out should
@@ -29,7 +48,11 @@ export function StatusChip({ statusKey, label, short, count, active, dark, theme
 		<button
 			onClick={onClick}
 			aria-pressed={active}
-			class="flex items-center gap-[7px] md:gap-2 px-[13px] md:px-3.5 py-2 md:py-[7px] rounded-full text-[12.5px] md:text-[13.5px] transition-shadow"
+			class={
+				'flex items-center gap-[7px] md:gap-2 px-[13px] md:px-3.5 py-2 md:py-[7px] rounded-full ' +
+				'text-[12.5px] md:text-[13.5px] transition-[box-shadow,filter] active:translate-y-px ' +
+				CHIP_HOVER[dark ? 'dark' : 'light']
+			}
 			style={{
 				background: c.bg,
 				border: `1px solid ${c.ring}`,
@@ -39,7 +62,17 @@ export function StatusChip({ statusKey, label, short, count, active, dark, theme
 			}}
 		>
 			<span class="w-1.5 h-1.5 md:w-[7px] md:h-[7px] rounded-full shrink-0" style={{ background: c.dot }} />
-			{count} <span class="md:hidden">{short}</span><span class="hidden md:inline">{label}</span>
+			{/*
+			  * The count and its word are one flex item, not two. Flat, they each
+			  * took the container's gap — so the space inside "3 low" was the same
+			  * as the space after the dot, and the number read as detached from
+			  * the word it counts.
+			  */}
+			<span class="flex items-center gap-1">
+				{count}
+				<span class="md:hidden">{short}</span>
+				<span class="hidden md:inline">{label}</span>
+			</span>
 		</button>
 	);
 }

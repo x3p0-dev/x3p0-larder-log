@@ -3,6 +3,9 @@ import { Plus, Minus, ChevronDown, Pencil, Trash2 } from 'lucide-preact';
 import type { Theme, ThemedColor } from '../lib/theme';
 import { entityColorFor, statusFor, termNameFor } from '../lib/theme';
 import type { Item, Term } from '../../shared/types';
+import {
+	CARD_ACTION, CARD_ACTION_GHOST, CARD_HEADER, CARD_STEPPER, CARD_STEPPER_PRIMARY,
+} from '../lib/controlStyles';
 
 type Props = {
 	item: Item;
@@ -14,6 +17,15 @@ type Props = {
 	theme: Theme;
 	/** `item:write`. False strips the steppers, edit, and remove — see D30. */
 	canEdit: boolean;
+	/**
+	 * False drops the chevron and the header's button semantics.
+	 *
+	 * For the marketing page's hero, where the steppers are live but there is
+	 * no *Edit* or *Remove* behind the accordion to reveal. A chevron that
+	 * expands nothing, sitting beside a stepper that works, reads as broken —
+	 * and a public page is the worst place to ship a dead control.
+	 */
+	canExpand?: boolean;
 	onToggleOpen: () => void;
 	onAdjustQty: (delta: number) => void;
 	onRemove: () => void;
@@ -40,7 +52,7 @@ function TermChip({ name, color }: { name: string; color: ThemedColor }) {
 }
 
 export function ItemCard({
-	item, open, locations, types, stores, dark, theme, canEdit,
+	item, open, locations, types, stores, dark, theme, canEdit, canExpand = true,
 	onToggleOpen, onAdjustQty, onRemove, onStartEdit,
 }: Props) {
 	const s = statusFor(item.qty, item.threshold, dark);
@@ -59,6 +71,38 @@ export function ItemCard({
 	 * the brand color and is meant to shout.
 	 */
 	const qtyColor = s.key === 'ok' ? theme.textStrong : s.key === 'out' ? s.dot : s.ink;
+
+	const header = (
+		<>
+			<span class="font-disp text-item-sm sm:text-item font-semibold leading-[1.15] break-words min-w-0" style={{ color: theme.textStrong }}>
+				{item.name}
+			</span>
+
+			<span class="flex items-center gap-2 shrink-0">
+				{/*
+				  * In stock is a dot; low and out get the word. A badge on every
+				  * card would make the healthy majority as loud as the problems.
+				  */}
+				{s.key === 'ok' ? (
+					<span class="w-2 h-2 rounded-full" style={{ background: s.dot }} aria-label={s.label} />
+				) : (
+					<span
+						class="px-[11px] py-1 rounded-full text-[11.5px] font-bold uppercase tracking-[0.04em]"
+						style={{ background: s.bg, color: s.ink }}
+					>
+						{s.label}
+					</span>
+				)}
+				{canExpand && (
+					<ChevronDown
+						size={17}
+						class="shrink-0 transition-[transform,color] text-ink-faint group-hover:text-ink-muted"
+						style={{ transform: open ? 'rotate(180deg)' : 'none' }}
+					/>
+				)}
+			</span>
+		</>
+	);
 
 	return (
 		/*
@@ -85,33 +129,22 @@ export function ItemCard({
 			class="flex flex-col min-h-[188px] p-5 rounded-[20px]"
 			style={{ background: theme.surface, border: `1px solid ${edge}`, boxShadow: theme.cardShadow }}
 		>
-			<button onClick={onToggleOpen} class="w-full text-left flex items-start justify-between gap-3" aria-expanded={open}>
-				<span class="font-disp text-item-sm sm:text-item font-semibold leading-[1.15] break-words min-w-0" style={{ color: theme.textStrong }}>
-					{item.name}
-				</span>
-
-				<span class="flex items-center gap-2 shrink-0">
-					{/*
-					  * In stock is a dot; low and out get the word. A badge on every
-					  * card would make the healthy majority as loud as the problems.
-					  */}
-					{s.key === 'ok' ? (
-						<span class="w-2 h-2 rounded-full" style={{ background: s.dot }} aria-label={s.label} />
-					) : (
-						<span
-							class="px-[11px] py-1 rounded-full text-[11.5px] font-bold uppercase tracking-[0.04em]"
-							style={{ background: s.bg, color: s.ink }}
-						>
-							{s.label}
-						</span>
-					)}
-					<ChevronDown
-						size={17}
-						class="shrink-0 transition-transform"
-						style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none' }}
-					/>
-				</span>
-			</button>
+			{/*
+			  * The same row either way; only the element around it changes. A
+			  * card that cannot expand is not a button, and giving it
+			  * `aria-expanded` would promise an accordion that isn't there.
+			  */}
+			{canExpand ? (
+				<button
+					onClick={onToggleOpen}
+					class={`w-full text-left flex items-start justify-between gap-3 ${CARD_HEADER}`}
+					aria-expanded={open}
+				>
+					{header}
+				</button>
+			) : (
+				<div class="w-full flex items-start justify-between gap-3">{header}</div>
+			)}
 
 			<div class="flex flex-wrap gap-1.5 pt-2.5">
 				<TermChip name={termNameFor(item.locationId, locations)} color={entityColorFor(item.locationId, locations, dark)} />
@@ -138,17 +171,29 @@ export function ItemCard({
 
 				{canEdit && (
 					<div class="flex gap-2 shrink-0">
+						{/*
+						  * The fill and the ink are classes, not inline styles. An
+						  * inline `background` outranks `hover:bg-line`, so this
+						  * pair shipped looking pressable and answering to nothing
+						  * — the same mistake the drawer made before
+						  * `controlStyles.ts` existed.
+						  *
+						  * At zero the minus stays faint and does **not** brighten
+						  * on hover. It is still live, because the clamp is the
+						  * server's and a disabled control cannot explain itself
+						  * (D36) — but nothing about it should promise a change it
+						  * will not make.
+						  */}
 						<button
 							onClick={() => onAdjustQty(-1)}
-							class="w-[46px] h-[46px] rounded-[14px] flex items-center justify-center"
-							style={{ background: theme.surfaceAlt, color: atZero ? theme.textFaint : theme.text }}
+							class={`w-[46px] h-[46px] rounded-[14px] flex items-center justify-center ${CARD_STEPPER} ${atZero ? 'text-ink-faint' : 'text-ink-body hover:text-ink'}`}
 							aria-label={`Decrease ${item.name}`}
 						>
 							<Minus size={17} strokeWidth={2.4} />
 						</button>
 						<button
 							onClick={() => onAdjustQty(1)}
-							class="w-[46px] h-[46px] rounded-[14px] flex items-center justify-center"
+							class={`w-[46px] h-[46px] rounded-[14px] flex items-center justify-center ${CARD_STEPPER_PRIMARY}`}
 							style={{ background: theme.inkBg, color: theme.inkText }}
 							aria-label={`Increase ${item.name}`}
 						>
@@ -169,14 +214,13 @@ export function ItemCard({
 						<div class="flex items-center gap-2 pt-3.5">
 							<button
 								onClick={onStartEdit}
-								class="flex items-center gap-[7px] h-9 px-3.5 rounded-[11px] text-[13.5px] font-medium"
-								style={{ background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text }}
+								class={`flex items-center gap-[7px] h-9 px-3.5 rounded-[11px] text-[13.5px] font-medium border border-line text-ink-body hover:text-ink ${CARD_ACTION}`}
 							>
 								<Pencil size={14} /> Edit
 							</button>
 							<button
 								onClick={onRemove}
-								class="flex items-center gap-[7px] h-9 px-3.5 text-[13.5px]"
+								class={`flex items-center gap-[7px] h-9 px-3.5 rounded-[11px] text-[13.5px] ${CARD_ACTION_GHOST}`}
 								style={{ color: theme.dangerText }}
 							>
 								<Trash2 size={14} /> Remove

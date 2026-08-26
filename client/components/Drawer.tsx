@@ -167,8 +167,8 @@ export function Drawer({
 				style={{ background: d.bg }}
 			>
 				<div class="flex items-center justify-between gap-3 pt-6 pl-[22px] pr-5">
-					<span class="font-disp text-wordmark font-bold leading-[1.08] tracking-[-0.015em]" style={{ color: d.ink }}>
-						Larder <span class="italic font-semibold" style={{ color: '#D4636B' }}>Log</span>
+					<span class="font-disp text-wordmark font-extrabold leading-[1.08] tracking-[-0.015em]" style={{ color: d.ink }}>
+						Larder <span class="italic" style={{ color: '#D4636B' }}>Log</span>
 					</span>
 					{/*
 					  * The collapsed desktop rail is not drawn in the spec, so folding

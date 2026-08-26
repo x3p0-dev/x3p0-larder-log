@@ -22,17 +22,28 @@
  */
 
 /*
- * Full weight axes, and italics for both: the design uses Playfair italic for
- * the wordmark's second half and for empty-state prose, so the italic face is
- * load bearing rather than a browser-synthesised slant.
+ * **The full variable axis of both display and body faces, roman and italic.**
+ *
+ * `400..900` is Playfair Display's entire range — it has no lighter cut — and
+ * asking for the range rather than a list of stops is what makes Google serve
+ * the *variable* font: one file per subset covering every weight in between,
+ * rather than one file per stop. So `font-weight: 537` is as available as 700,
+ * which is what makes weight worth experimenting with in a browser at all.
+ *
+ * Italic is not optional here. The design uses Playfair italic for the
+ * wordmark's second half and for the empty state's prose, so a
+ * browser-synthesised slant — which is what a roman-only request would get you
+ * — would be visibly wrong on a Didone, where the italic is a different
+ * drawing rather than a sheared one.
  *
  * IBM Plex Mono is **interim**. The Cellar spec has no monospace at all — its
  * role (uppercase section labels, 10.5px / 0.15em) belongs to Karla now. The
- * reskin took `font-mono` from 35 sites down to ten, and the ten left are the
- * surfaces that have not been redrawn yet: the sign-in gate, `JoinBox`,
- * `ShoppingListModal`, and a couple of loading strings in `Pantry`. It comes
- * out when those do; loading it until then keeps them legible instead of
- * dropping them to whatever `ui-monospace` resolves to.
+ * reskin took `font-mono` from 35 sites to ten, and the flows outside the shell
+ * took it to four: the sign-in gate is redrawn and `JoinBox` is deleted. What
+ * is left is `ShoppingListModal` (two), the switcher's invite-code field, and
+ * one loading string in `Pantry`. The code field is arguably a real monospace
+ * use and may survive on merit; the other three come out when their surfaces
+ * are redrawn.
  *
  * `display=swap` because the fallbacks are a generic serif and a generic sans;
  * a first visit that quietly kept them would not look like this app.
@@ -48,13 +59,24 @@ const HREF =
 	'&display=swap';
 
 /*
- * The stylesheet lives on `fonts.googleapis.com` but every `src` inside it
- * points at `fonts.gstatic.com`, so the second host is worth warming while the
- * first is still being fetched. Font requests are CORS-mode even when they
- * look same-origin, hence `crossorigin` — a preconnect without it opens a
- * connection the font fetch cannot reuse.
+ * Two hosts, warmed differently, and the difference is not cosmetic.
+ *
+ * The stylesheet lives on `fonts.googleapis.com`; every `src` inside it points
+ * at `fonts.gstatic.com`. That is a serial chain — the browser cannot even
+ * learn the font URLs until the CSS has landed — so both connections are worth
+ * opening at once.
+ *
+ * **`crossorigin` on the second only.** A font fetch is CORS-mode even when it
+ * looks same-origin, so a preconnect without the attribute opens a connection
+ * it cannot reuse. The stylesheet is an ordinary CSS request, and adding
+ * `crossorigin` there would open a *second* connection for the same reason,
+ * inverted. Getting either one wrong costs a whole round trip and looks like
+ * nothing at all.
  */
-const PRECONNECT = 'https://fonts.gstatic.com';
+const PRECONNECT: { href: string; cors: boolean }[] = [
+	{ href: 'https://fonts.googleapis.com', cors: false },
+	{ href: 'https://fonts.gstatic.com', cors: true },
+];
 
 const LINK_ID = 'larder-log-fonts';
 
@@ -68,11 +90,15 @@ export function installFonts(): void {
 	if (typeof document === 'undefined') return;
 	if (document.getElementById(LINK_ID)) return;
 
-	const warm = document.createElement('link');
-	warm.rel = 'preconnect';
-	warm.href = PRECONNECT;
-	warm.crossOrigin = '';
-	document.head.appendChild(warm);
+	for (const { href, cors } of PRECONNECT) {
+		const warm = document.createElement('link');
+		warm.rel = 'preconnect';
+		warm.href = href;
+
+		if (cors) warm.crossOrigin = '';
+
+		document.head.appendChild(warm);
+	}
 
 	const sheet = document.createElement('link');
 	sheet.id = LINK_ID;

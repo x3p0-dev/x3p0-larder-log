@@ -161,7 +161,7 @@ Creating a term from a sheet uses **the Filter tab's editing panel, re-skinned f
 | Part | Light | Dark |
 |---|---|---|
 | Panel fill / hairline | `#F3EBDD` / `#DFD2BC` | `#221C14` / `#453B2B` |
-| Field | `#FDFAF4` on `#9B8B75` + `rgba(190,51,70,.14)` halo | `#2C251B` on `#6E5F4B` |
+| Field | `#FDFAF4` on `#9B8B75` + `rgba(190,51,70,.14)` halo | `#2C251B` on `#6E5F4B` + `rgba(212,99,107,.18)` halo |
 | Picker sub-panel | `#EBE1D0` | `#1C170F` |
 | Selection ring on the current colour | ink `#241E17` | cream `#F2E9DA` |
 | Add pill | ink / cream — `#EBE1D0` / `#B0A088` while the field is empty | cream / ink |
@@ -307,6 +307,126 @@ https://claude.ai/code/artifact/90919b0d-9995-4153-b096-ee9bbb10cd40
 
 Kept separate from the 27-board app canvas because these are component states, not screens; the two mobile boards are the only ones that show them in place.
 
+## Flows outside the shell
+Everything before the app: the public page, sign-in, the first household, and the `?join=` landing. Drawn — canvas link under *Boards* at the end of the section. Owner and Editor only, as with destructive actions; what a Viewer sees on the invite landing stays under *Gaps*.
+
+**The rule: the signed-out surface is two pages, not one.** `/` is a marketing page for someone who has never heard of Larder Log. Any other URL, hit while signed out, is a bounce — it shows the sign-in card, and the card's eyebrow says why. Collapsing them into one page makes the front door either a wall for visitors or a sales pitch for someone who only wanted their pantry.
+
+### Sign-in — one button, one provider
+Gravatar, and nothing else. No password field, so no sign-up form, no forgot-password, no reset, and no strength rules — four screens that never have to exist. Signing in for the first time creates the account, which is why the card says so out loud: a single-button auth page with no visible *Sign up* reads as broken otherwise.
+
+**The card.** 440px, radius 20, card tokens, centred on the ground gradient. Text is centred — this is the one surface in the app that greets rather than asks. Order: eyebrow → app icon → wordmark → tagline → instruction → button → footnote.
+
+| Part | Treatment |
+|---|---|
+| Eyebrow | `SIGN-IN REQUIRED`, section-label type (Karla 700 10.5 / 0.15em uppercase), meta |
+| App icon | 56px, the Oat tile, unchanged by theme |
+| Wordmark | Playfair 38px, "Log" italic 600 crimson |
+| Tagline | Body 15.5 — *What's in the pantry and the freezer, who's running low, and what to buy where.* |
+| Instruction | Meta 13.5 — *Sign in to open your household.* |
+| Button | Full width, 48px, radius 13, ink/cream primary, Gravatar mark 20px on the left |
+| Footnote | Meta 13 — *New here? Signing in creates your account.* |
+
+**Crimson is still never a button.** The one control on the page is the ordinary primary.
+
+### The handoff, three states
+| State | Treatment |
+|---|---|
+| Pressed | The button takes the disabled tokens, the mark becomes a spinner, label *Opening Gravatar…* Nothing else on the card moves. |
+| Returning | The card's contents are replaced: a 44px spinner disc on the sunk fill, *Signing you in…*, meta *One moment — bringing your household across.* Same card, same width, so nothing jumps. |
+| Didn't come back | Amber icon disc (**low** tokens) + clock, *Sign-in didn't finish*, body *The Gravatar window closed before it came back. Nothing was changed, and nothing was shared.*, full-width *Try again*. |
+
+> **The failure is amber, not crimson.** Same rule the blocked dialog runs on: amber is "hold on", crimson is "gone". A closed OAuth window destroyed nothing, so it does not get the out tokens. It also isn't a modal — there is nothing underneath it to go back to.
+
+The failure card is left-aligned where the sign-in card is centred: it is a message with a body to read, and the confirm modal's icon → title → body → action order already exists for exactly that shape.
+
+### First run — name it, then land in it
+Sign-in comes first; there is no anonymous mode. A signed-in account with no household gets one screen, not a wizard.
+
+**The card.** 440px, the same width as every other card outside the shell. Left-aligned. Eyebrow `NEW HOUSEHOLD` → title Playfair 600 26 *Name your household* → body → `HOUSEHOLD NAME` micro-label → field → hint → *Create household* → the signed-in row.
+
+- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the Gravatar display name plus *'s Household*, selected, so Enter alone finishes the screen.
+- **Hint**, meta 12.5: *Taken from your Gravatar name — change it to whatever you call the place.*
+- **Signed-in row** under a hairline: avatar, name, email in meta, ghost *Sign out*. It answers "which account am I attaching this to" before the household exists rather than after.
+
+**One field, one button, nothing else.** An earlier draft previewed the seeded terms here in a recessed panel — fifteen chips explaining what a household is before you had made one. It is gone. The screen asks for a name; the terms explain themselves in the drawer a second later, where they are also editable.
+
+### The empty household
+Creating drops straight into the app, seeds already in the drawer, no items.
+
+**What gets seeded:**
+
+| Group | Seeded |
+|---|---|
+| Locations | Pantry olive · Refrigerator slate · Freezer teal |
+| Stores | Grocery denim · Warehouse mustard · Market clay |
+| Types | Produce olive · Dairy slate · Protein brick · Grain ochre · Condiment plum · Beverage teal · Snack clay · Baking terracotta · Spice mulberry |
+
+Types are the existing assignments from *Term colours*, unchanged. Locations and stores are new and generic on purpose — the sample data's Meat Freezer, Calfee Cattle and Publix are one household's vocabulary, not a default.
+
+- **Empty state**, centred in the content column: Playfair **italic 500 27px** *Nothing in the larder yet.* + meta *Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like.* + a single *Add item* primary.
+- **At zero items the top bar carries neither the sort trigger nor an Add item button.** Sorting nothing is a control that can only disappoint, and two *Add item* buttons on one screen is one too many. The top bar keeps the title and the count; the empty state owns the screen's only primary. Both come back with the first item.
+
+### Invite accept — the `?join=` landing
+Four cases, all on the 440px card, all left-aligned. The header is shared: eyebrow `INVITATION` → 44px household tile (the initial on the household's term colour, exactly as the collapsed rail draws it) → *Join Calfee Household* → the role sentence.
+
+The role is a **bold word in the sentence**, not a pill. A role is not a term, and the tag component means "term" everywhere else in the app.
+
+| Case | Body | Footer |
+|---|---|---|
+| Valid, signed out | Role sentence + *This invite expires 9 September.* | *Sign in with Gravatar to join* |
+| Valid, signed in | Same, plus the signed-in row | Ghost *Not now* · **Join household**, right-aligned pair |
+| Expired or revoked | Amber disc + clock, *This invite has expired*, *Invites last 14 days. Ask Sarah Calfee for a new link — the old one won't start working again.* | Signed in: *Open Larder Log*. Signed out: *Sign in with Gravatar* |
+| Already a member | **Stocked** disc + check, *You're already in Calfee Household*, *This invite is for a household you're already a member of, so there's nothing to accept.* | *Open Calfee Household* |
+
+> **Already-a-member is green, not amber.** It is the third rung of the same status ramp the item badges use — nothing is wrong, nothing is pending, the thing you wanted is already true. Amber would ask someone to fix a problem they don't have.
+
+Revoked shares the expired screen with one line changed (*This invite is no longer valid.*). From outside the household, a revoked link and an expired one are the same event, and telling them apart would tell a stranger something about the household.
+
+Signed out on a valid invite, **signing in is the accept** — the join applies on return rather than showing the same card a second time.
+
+### Mobile
+Same cards at `100% − 32px`, centred — the confirm modal's mobile width. Buttons go to 48–50px and every affordance inside a card clears 44px, *Sign out* included: at 13.5px text it was an 18px target.
+
+No layout adaptations beyond that. Every card outside the shell is now short enough to sit inside 390 × 844 without scrolling, which is the whole reason to keep these screens down to one decision each.
+
+### Deltas and additions
+- **Card borders take `line strong` in dark, `line` in light.** Inherited from the confirm modal's finding: at `#2C251B` on `#1F1912` a card separates at 1.27:1 and the shadow does nothing. Every card outside the shell follows the modal, not the item card.
+- **A dark focus halo for the composer field** — `rgba(212,99,107,.18)`, the light halo's alpha in the dark crimson. The token table gave light only; it is now in the composer table above.
+- **The wordmark scales to 38px** on the sign-in card and 32px on mobile — the first time it leaves 27px.
+- **A marketing headline scale**, Playfair 600 at 56px desktop / 34px mobile, above anything the type ramp currently carries. Public page only.
+- The **Gravatar mark is a placeholder on every board**: a ring with an inner dot. The real drawing — a ring broken at the top with a spoke to the centre, on lucide's 24px grid at stroke 2 — is in `Brand.tsx` as of 2026-08-26, so the boards and the build differ here and the build is right. The spinner's radius tracks it.
+
+## The marketing page
+Public, at `/`. One offer, one call to action, repeated three times — nav, hero, close.
+
+**Anatomy.** Nav (icon + wordmark left, *Sign in with Gravatar* right) → hero → three benefit cards → the *Three ways to slice it* band → closing CTA → footer. Content column 1120 inside 160px margins at 1440; 22px gutters at 390. Same ground gradient, same cards, same tokens as the app — this is an extension of the system, not a separate brand.
+
+- **Hero.** Headline *Know what's in the freezer before you get to the store.* over the sub-paragraph, CTA at 268 × 52, then *Signing in creates your account. There's no separate sign-up.* On the right, a real mock: three item cards from the sample data, one stocked, one low, one out. The status ramp doing its job **is** the product demo, so the hero image is the app rather than a picture of a pantry.
+- **Benefits**, three cards, each answering a doubt rather than naming a feature: *A count, not a hunch.* / *The whole household, one list.* / *The shopping list is a filter, not a chore.*
+- **The band** explains the data model — Location, Store, Type — one column each with a live chip row under it, and *Sixteen colours, yours to name and assign* on a hairline below. Someone deciding whether to sign up needs to understand the model, and three chip rows do it faster than a paragraph.
+- **Footer.** Icon, wordmark, `© 2026 Larder Log`. Nothing else — no legal links, no nav, no second column. A footer on a one-page site whose only action is at the top of the page has no work to do.
+
+**No proof section.** No testimonials, no logos, no counts. There is nothing real to put there yet, and invented quotes on a public page are worse than a shorter page. The slot sits between the benefits and the band for whenever there is something true to fill it with.
+
+**The store in the hero mock is "Grocery", not a real chain.** Publix and Costco are fine in a spec; on a public page a named chain inside a screenshot reads as a partnership.
+
+At 390 the page stacks, the hero mock uses the **mobile item-card ramp** (names 18.5, quantities 28) and 44px steppers, and the band's three columns become three stacked blocks.
+
+### Boards
+Own canvas — nine boards, each with its dark counterpart, 18 total, on **Light** and **Dark** pages:
+https://claude.ai/code/artifact/5c742401-cc59-44bc-9f49-2c9c1af8ee93
+
+1. Marketing · desktop 1440
+2. Marketing · 390
+3. Sign-in required
+4. Gravatar handoff — pressed, returning, didn't come back
+5. First run · name it, with the seeded panel
+6. First run · the seeded, empty app
+7. Invite · valid — signed out and signed in
+8. Invite · expired and already a member
+9. Flows · 390 — sign-in, name it, invite
+
 ## Sort menu
 The trigger names the active sort — `⇅ Sort  Recently added ⌄` — so the menu is only opened to change it. Ghost at rest; `#FDFAF4` + `#E2D5C0` on hover; `#F2EADC` + `#CFBEA3` when open; crimson focus ring.
 
@@ -334,6 +454,8 @@ Selection is a check rather than a fill so hover still reads on the selected row
 Mobile keeps the same anchored popover (six rows don't earn a sheet) at 44px rows, with the trigger label shortened to "Recent".
 
 **Deltas from the shipped markup:** 248px not 176px (`w-44` was clipping *Quantity · fewest first*), rows 14px not 12px, radius 14 not 6, check instead of `#F2EADC` fill, and the trigger names the sort.
+
+**The sort trigger is hidden at zero items** — see *Flows outside the shell*.
 
 ## Item card
 Name (no icons beside it) · status badge or dot + expand chevron · term **tags** in their own colours (see Chips and tags — cards carry tags, never chips) · big numeral + "low at N" + stepper. Expands in place to notes + Edit / Remove.
@@ -368,23 +490,28 @@ The L is a converted outline, not `<text>` — icons render without webfont acce
 ## Gaps — not yet designed
 
 ### Changes existing screens (decide before building more)
-- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only.
+- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision.
 
 ### States an SPA hits constantly
 - Loading / skeleton on first paint; optimistic feedback on a stepper tap.
 - Failure: save failed, offline, and the concurrent-edit case — two household members changing one item, including Undo pressed on a removal someone else has since acted on.
 - Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise.
+- **Session expiry.** What happens when the token dies with the app open — the sign-in card exists, but nothing says whether you get bounced to it, get it as a modal over your work, or keep reading a stale list until you touch something.
 
 ### Flows outside the app shell
-- Sign-in, and the invite-accept landing page the `?join=` link opens.
-- First run: create a household, name it, add the first location and first item.
+Specced and drawn — see *Flows outside the shell* and *The marketing page*. What is left in that area:
+
+- **A proof section for the marketing page** — the slot is left open between the benefits and the band.
+- **Privacy and terms have no home.** They are deliberately out of the footer and out of Settings, so if either page ever has to exist, where it is linked from is undecided.
+- **Wrong-account-on-invite.** Signed in as someone the invite wasn't issued to. Probably the *already a member* shell with a "switch accounts" action, but it isn't drawn.
+- Sign-out confirmation, if any. Currently a plain ghost action with nothing behind it.
 
 ### Empty states
-Zero items in a new household · no filter matches · no search results · a location with nothing in it · a shopping list with nothing low or out.
+Zero items in a new household is drawn (*Flows outside the shell*). Still open: no filter matches · no search results · a location with nothing in it · a shopping list with nothing low or out.
 
 ### Robustness
-- Tablet, 768–1024px. Only 1440 and 390 are drawn; the drawer's auto-collapse point and the grid's column count are undecided.
-- Long content: long item and household names, 20+ terms in one group, four-digit quantities.
+- Tablet, 768–1024px. Only 1440 and 390 are drawn — for the app **and** the marketing page; the drawer's auto-collapse point, the grid's column count, and whether the marketing hero's two columns stack before 1024 are all undecided.
+- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating.
 - Keyboard: focus trap in the drawer and sheets, Escape behaviour, and screen-reader labelling for the steppers — the app's primary control.
 - Typing a quantity directly rather than stepping to it.
 
@@ -392,6 +519,10 @@ Zero items in a new household · no filter matches · no search results · a loc
 Every store in the sample data has at most one low or out item, so the shopping-list modal is always a single row. Worth widening the sample before judging whether it earns a modal.
 
 ## Open questions
+- Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites.
 - Invite links are cramped at 340px.
 - Each store has ≤1 low/out item in the sample data, so the shopping-list modal is a single row.
 - Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one.
+- **Seeded stores are the weakest of the three groups.** Locations and types are near-universal; where someone shops is not, and Grocery / Warehouse / Market may just be three chips a new user deletes. Seeding no stores at all is defensible — the trade is that the Store filter then opens empty on day one.
+- **Off-state chips inside the drawer change brightness by theme, but the drawer doesn't.** Chip Off is surface-on-line, which maps to `#FDFAF4` in light and `#2C251B` in dark — yet the drawer is dark in both. Both read fine; they just aren't the same idea. First visible on the first-run board. Either the drawer gets its own chip pair, or the rule becomes "chips take the surface of the pane they sit in" and the light-mode drawer keeps its bright chips on purpose.
+- **What does `/` do for someone already signed in?** Straight through to the app is the obvious answer; showing them the marketing page is the one that lets them find the pitch again to send to someone.

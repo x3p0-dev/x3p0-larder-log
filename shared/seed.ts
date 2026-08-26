@@ -9,6 +9,12 @@
  * Sample *items* are deliberately not seeded. Under localStorage they were free
  * — "Reset to sample data" wiped them — but in a shared database they are fake
  * inventory that someone has to delete a row at a time.
+ *
+ * Locations and stores are generic on purpose. The sample dataset's Meat
+ * Freezer, Calfee Cattle and Publix are one household's vocabulary, not a
+ * default — a new household should recognise its own shelves in these, and
+ * rename them rather than delete them. Types keep the assignments from the
+ * spec's *Term colours* table, which were already generic.
  */
 
 /** `ink` is a color token from `shared/palette.ts`, not a hex. */
@@ -18,25 +24,25 @@ export type SeedTerm = {
 };
 
 export const SEED_LOCATIONS: SeedTerm[] = [
-	{ name: 'Upright Freezer', ink: 'color-1' },
-	{ name: 'Chest Freezer', ink: 'color-12' },
 	{ name: 'Pantry', ink: 'color-10' },
+	{ name: 'Refrigerator', ink: 'color-1' },
+	{ name: 'Freezer', ink: 'color-12' },
 ];
 
 export const SEED_TYPES: SeedTerm[] = [
-	{ name: 'Protein', ink: 'color-6' },
 	{ name: 'Produce', ink: 'color-10' },
-	{ name: 'Grain', ink: 'color-8' },
 	{ name: 'Dairy', ink: 'color-1' },
+	{ name: 'Protein', ink: 'color-6' },
+	{ name: 'Grain', ink: 'color-8' },
 	{ name: 'Condiment', ink: 'color-4' },
-	{ name: 'Baking', ink: 'color-7' },
-	{ name: 'Snack', ink: 'color-14' },
 	{ name: 'Beverage', ink: 'color-12' },
+	{ name: 'Snack', ink: 'color-14' },
+	{ name: 'Baking', ink: 'color-7' },
 	{ name: 'Spice', ink: 'color-5' },
 ];
 
 export const SEED_STORES: SeedTerm[] = [
-	{ name: 'Costco', ink: 'color-10' },
-	{ name: 'Publix', ink: 'color-1' },
-	{ name: 'Calfee Cattle', ink: 'color-6' },
+	{ name: 'Grocery', ink: 'color-2' },
+	{ name: 'Warehouse', ink: 'color-9' },
+	{ name: 'Market', ink: 'color-14' },
 ];

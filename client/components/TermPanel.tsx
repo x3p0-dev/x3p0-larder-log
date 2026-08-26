@@ -4,7 +4,7 @@ import { Trash2, X } from 'lucide-preact';
 import { ColorPicker } from './ColorPicker';
 import type { Theme } from '../lib/theme';
 import { drawerDot, termColorFor } from '../lib/theme';
-import { DRAWER_TRASH } from '../lib/controlStyles';
+import { DRAWER_TRASH, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK } from '../lib/controlStyles';
 
 type Skin = {
 	panel: string;
@@ -18,6 +18,8 @@ type Skin = {
 	count: string;
 	doneBg: string;
 	doneInk: string;
+	/** The field's focus halo, as a class — `:focus` cannot be an inline style. */
+	halo: string;
 	/** The picker sits on a further-recessed sub-panel inside the panel. */
 	well: string;
 };
@@ -35,12 +37,14 @@ export function panelSkin(theme: Theme, onDark: boolean): Skin {
 			panel: '#262019', hairline: theme.drawer.line, label: '#C3B49C',
 			field: theme.drawer.well, fieldLine: theme.drawer.line, ink: theme.drawer.ink,
 			ghost: '#6E5F4B', count: '#9E8C74', doneBg: theme.drawer.ink, doneInk: '#241E17',
+			halo: PANEL_FIELD_HALO_DARK,
 			well: theme.drawer.bg,
 		}
 		: {
 			panel: theme.surfaceAlt, hairline: theme.border, label: theme.textMuted,
 			field: theme.surface, fieldLine: theme.border, ink: theme.textStrong,
 			ghost: theme.textMuted, count: theme.textFaint, doneBg: theme.inkBg, doneInk: theme.inkText,
+			halo: theme.dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO,
 			well: theme.ground,
 		};
 }
@@ -145,7 +149,7 @@ export function TermRow({
 					onInput={(e) => onName(e.currentTarget.value)}
 					placeholder={placeholder}
 					autoFocus={autoFocus}
-					class="flex-1 min-w-0 h-10 px-3 rounded-[11px] text-sm outline-none"
+					class={`flex-1 min-w-0 h-10 px-3 rounded-[11px] text-sm ${s.halo}`}
 					style={{ background: s.field, border: `1px solid ${s.fieldLine}`, color: s.ink }}
 					aria-label={placeholder ?? 'Term name'}
 				/>

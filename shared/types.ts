@@ -134,3 +134,45 @@ export type HouseholdListData = {
 export type PantryResult = QueryState<PantryData>;
 export type HouseholdResult = QueryState<HouseholdData>;
 export type HouseholdListResult = QueryState<HouseholdListData>;
+
+/**
+ * What an invite link says about itself, before anyone accepts it.
+ *
+ * The `?join=` landing is the one screen a **signed-out** visitor can reach
+ * that reads the database, so this is the one query with no membership behind
+ * it. The code is the authorization: whoever holds it was meant to see the
+ * household's name and the role they are being offered.
+ *
+ * It does not follow `QueryState`, because "guest" is not a failure here — it
+ * is half the audience. Loading is still the platform's absent-value signal.
+ */
+export type InviteHousehold = {
+	name: string;
+	/** The colour token the household tile is drawn in — see `client/lib/theme.ts`. */
+	ink: string;
+};
+
+export type InvitePreview =
+	/**
+	 * Unknown, malformed, **or revoked**.
+	 *
+	 * Revoked collapses into this deliberately. `redeemInvite` already refuses
+	 * to distinguish missing from revoked from expired, on the grounds that
+	 * separating them tells a guesser which codes exist; a preview that named
+	 * the household behind a revoked link would give that back. The landing
+	 * renders it as the expired screen with one sentence changed.
+	 */
+	| { state: 'invalid' }
+	/** A real code, past its 14 days. The inviter is named so it can be replaced. */
+	| { state: 'expired'; household: InviteHousehold; role: Role; inviter: string }
+	/**
+	 * Signed in, and already in the household this code is for.
+	 *
+	 * The **only** variant carrying an id, so the card's *Open X* can switch to
+	 * it. A non-member holding a code has no business learning one, and the
+	 * other three variants do not offer a destination to switch to.
+	 */
+	| { state: 'member'; household: InviteHousehold; householdId: string }
+	| { state: 'valid'; household: InviteHousehold; role: Role; inviter: string; expiresAt: string };
+
+export type InvitePreviewResult = InvitePreview;

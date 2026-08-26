@@ -24,7 +24,7 @@ WordPress, say so rather than building it.
 right now — see the blocker below.** A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, two live queries, and sixteen mutations. The schema is
+`.docs/data-model.md`, four live queries, and sixteen mutations. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -130,6 +130,66 @@ idioms that were there before.
   caller.
 - ***Recently added* sorts on `createdAt`** (D35). It previously applied no sort
   at all, so it rendered oldest-first — the opposite of its label.
+
+### Flows outside the shell (Phase 4.7) are built — 2026-08-26
+
+The spec's *Flows outside the shell* and *The marketing page*. Everything before
+the app shell.
+
+- **The signed-out surface is two pages**
+  ([D37](../.docs/decisions.md#d37-the-signed-out-surface-is-two-pages-not-one)):
+  `/` is a marketing page, any other URL is a bounce to the sign-in card. The
+  entry routes on the visitor's reason for being there — invitation, then an
+  abandoned sign-in, then the path.
+- **New components.** `MarketingPage`, `SignInCard` (plus `SigningInCard` and
+  `SignInFailedCard`), `FirstRun`, `InviteLanding`, and the furniture they share
+  in `OutsideShell` and `Brand`. `JoinBox` and the in-app invite banner are
+  **deleted**; the `Gate` in `Pantry.tsx` no longer handles invites at all.
+- **The hero mock is the real `ItemCard` and its steppers are live** — three
+  sample rows, stocked / low / out, with working plus and minus so a visitor
+  watches the ramp move rather than reading about it. `HeroMock` holds the
+  quantities so a press re-renders three cards and not the page. The step is
+  `fromInt(toInt(qty) + step)`, the same expression `adjustQty` runs — do not
+  reimplement the clamp. `ItemCard`'s `canExpand={false}` drops the chevron:
+  there is no *Edit* or *Remove* behind the accordion on a public page.
+- **`invitePreview` is the one query that answers a guest**
+  ([D39](../.docs/decisions.md#d39-an-invite-preview-is-the-one-query-that-answers-a-guest)).
+  The code is the authorization. Unknown, malformed and **revoked** collapse to
+  one bare `invalid` — naming the household behind a dead link would tell a
+  stranger something about it. Expired is the exception, because that screen
+  exists to say who to ask for a new one.
+- **Signing in is the accept**
+  ([D38](../.docs/decisions.md#d38-signing-in-is-the-accept)). The consent is
+  written beside the code in `sessionStorage` *before* the redirect, and
+  `Pantry` redeems on arrival. Zero's sign-in is a full-page
+  `location.assign` — there is no popup and no promise that survives it.
+- **The empty household.** At zero items the top bar carries neither the sort
+  trigger nor an *Add item*; the empty state owns the screen's only primary.
+  `empty` is `items.length === 0`, **not** `sorted.length === 0` — a filter that
+  matches nothing is a different screen and keeps its one quiet sentence.
+- **Seeds are generic now** — Pantry · Refrigerator · Freezer and Grocery ·
+  Warehouse · Market ([D40](../.docs/decisions.md#d40-seeded-terms-are-generic-and-there-are-still-three-stores)).
+- **`Theme` gained `dark`, `accent`, `disabledBg` and `disabledText`**;
+  `theme.json` gained `wordmark-md`, `wordmark-lg`, `headline-sm` and
+  `headline`. `accent` exists because the page wordmark was hard-coding the
+  light crimson in both themes.
+
+**`?signedout` is a dev-only switch and the only way to see any of this
+locally.** D14's loopback hole makes every local visitor a signed-in dev guest,
+which puts the whole signed-out surface out of reach under `sf dev`. It only
+ever *removes* access and is ignored off loopback. Take it out with D14.
+
+**`POST /__spacefast/zero/run` calls a query by name over plain HTTP** and is
+now the cheapest honest verification we have — it exercises the handler the
+client calls rather than a copy of it in a throwaway endpoint. It needs the
+bearer token **and** the bootstrap cookie; the cookie alone answers
+`{"error":"unauthorized"}`. All five `invitePreview` branches were checked this
+way. Undocumented; written up in `.claude/docs/spacefast.md`.
+
+**`signInWithGravatar` is not exported publicly.** `@spacefast/zero/client`
+resolves to `dist/public-client.d.ts`, which exports only `signInWithGoogle` —
+the same function, Lakebed compatibility. `client/index.tsx` aliases it on
+import. Do not "fix" the name back.
 
 **The item grid is fluid and the drawer docks at 1120px, not `md`.** Cards are
 `md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))]` — tracks always divide the
@@ -338,6 +398,7 @@ most of it is already decided.
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
+| `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |
 | `.claude/docs/zero-agent-rules.md` | Zero's own `AGENTS.md`, verbatim — the best runtime reference |
@@ -493,6 +554,24 @@ Cheapest first:
   ```bash
   grep -nF -e '.md\:flex' -e '.min-\[1120px\]\:hidden' zero.css
   ```
+- **`POST /__spacefast/zero/run` runs a query by name**, over plain HTTP, and is
+  the closest thing to a real client this environment has. It beats the
+  throwaway-endpoint trick because it exercises *the handler the client calls*
+  rather than a copy of its logic. It needs the bearer token **and** the
+  bootstrap cookie — the cookie alone answers `{"error":"unauthorized"}`, which
+  reads like a bad token rather than a missing scheme.
+
+  ```bash
+  curl -s -X POST -H "authorization: Bearer $CAP" -H "origin: http://127.0.0.1:4173" \
+    -H 'content-type: application/json' -b "spacefast_zero_dev_4173=$CAP" \
+    -d '{"op":"query.run","name":"invitePreview","args":["AAAAAAAAAA"]}' \
+    http://127.0.0.1:4173/__spacefast/zero/run
+  ```
+
+  `mutation.run` takes the same envelope. Seed whatever rows the case needs with
+  a throwaway endpoint first, then drive the real query — and **delete the
+  endpoint before you finish**, checking the artifact's endpoint list to prove
+  it went.
 - **Curl the published space** for anything auth-related; it needs no bootstrap
   token. `https://larderlog.view.fast/api/status` returning `ok` is the cheapest
   proof that a publish's server half landed.
@@ -508,6 +587,14 @@ Cheapest first:
 Do not claim something works because it compiled. Three hard limits:
 
 - **There is no browser in this environment.** Justin has to click. Ask him.
+- **The signed-out screens need `?signedout` to be reachable at all locally** —
+  `http://127.0.0.1:4173/?signedout` for the marketing page,
+  `/?signedout&join=<code>` for the invite landing, `/anything?signedout` for
+  the sign-in card. D14 makes every loopback visitor a signed-in dev guest
+  otherwise. Pressing the sign-in button under `sf dev` throws
+  *"Gravatar sign-in is unavailable for this Spacefast runtime"*, which the
+  entry catches and releases the button on; the *returning* and *didn't come
+  back* handoff states cannot be reached locally at all.
 - **There is no sign-in on `sf dev`**, and it issues one fixed identity
   (`guest:local`). So a second tab is the same user: enough to watch a mutation
   propagate, not enough to test two members of a household. Anything touching

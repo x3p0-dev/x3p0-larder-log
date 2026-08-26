@@ -2375,3 +2375,119 @@ rejected before a version is created.
 
 Nothing was damaged: no version row was created in any of the three attempts,
 `GET /api/status` returns `ok`, `GET /` returns 200, and **v2 is still live**.
+
+---
+
+## 2026-08-26 (later still) — building the signed-out flows: one very good discovery, two naming traps
+
+Context: implementing the design spec's *Flows outside the shell* and marketing
+page — a public page, the sign-in card and its handoff states, first run, and a
+`?join=` landing that has to render for a **signed-out** visitor.
+
+### 👍 `POST /__spacefast/zero/run` is a plain HTTP way to call a query, and it is the best verification tool in the box
+
+The client bundle has an HTTP fallback beside the websocket — `requestHttpRun`
+in `dist/client.js` — and `sf dev` serves it. It takes the same envelope the
+realtime channel does:
+
+```bash
+CAP=…   # the #zero-dev-capability= fragment from the banner
+curl -s -X POST \
+  -H "authorization: Bearer $CAP" \
+  -H "origin: http://127.0.0.1:4174" \
+  -H 'content-type: application/json' \
+  -b "spacefast_zero_dev_4174=$CAP" \
+  -d '{"op":"query.run","name":"invitePreview","args":["AAAAAAAAAA"]}' \
+  http://127.0.0.1:4174/__spacefast/zero/run
+```
+
+```json
+{ "op": "query.result", "ok": true, "name": "invitePreview",
+  "args": ["AAAAAAAAAA"], "data": { "state": "valid", … } }
+```
+
+This is a real improvement on the throwaway-endpoint trick we have been using.
+An endpoint proves *a copy of* a handler's logic; this calls **the query the
+client calls**, by name, and returns exactly what `useQuery` would receive. We
+used it to exercise all five branches of a new query — valid, expired, revoked,
+unknown, malformed, already-a-member — in one shell loop with no code added to
+the capsule. `mutation.run` takes the same shape.
+
+**Ask:** document it. There is nothing in `zero.md` or in the scaffolded
+`AGENTS.md` about `/__spacefast/zero/run`, and it is the single most useful
+thing we have found for verifying a capsule without a browser. An agent working
+on a Zero app cannot click, and this is the substitute.
+
+### 😕 The bearer token is required *and* the cookie is required, and only one of them is documented
+
+`CLAUDE.md`'s bootstrap dance — POST the capability to `/bootstrap`, get a
+`Set-Cookie`, then send the cookie — is enough for `/zero.css` and for a custom
+endpoint. It is **not** enough for `/__spacefast/zero/run`, which answers:
+
+```json
+{ "error": "unauthorized" }
+```
+
+…to a request carrying only the cookie. Adding `authorization: Bearer $CAP`
+alongside the cookie makes it work. We lost a round trip assuming the cookie was
+sufficient because it had been everywhere else. The error is also the same
+`unauthorized` for "no credential" and "wrong kind of credential", so it points
+at the token rather than at the scheme.
+
+### 👎 `signInWithGravatar` exists but is not exported from `@spacefast/zero/client`
+
+`dist/client.d.ts` declares both `signInWithGravatar` and, for Lakebed source
+compatibility, `signInWithGoogle`. The package's `exports` map points `./client`
+at `dist/public-client.d.ts`, which re-exports **only** `signInWithGoogle` —
+and `SignInWithGoogle`, not `SignInWithGravatar`. So an app on the documented
+import path has to write "Google" for a button that says Gravatar and a flow
+that is Gravatar end to end. `useAuth().provider` is typed `"guest" | "gravatar"`
+in the same file, so the runtime has no doubt about which it is.
+
+Not a bug, and trivially aliased at the import. But it is a wrong name on the
+public surface of a product whose auth is Gravatar, and it will read as a
+mistake to anyone auditing the code.
+
+### ❓ There is no sign-in failure signal, so "the visitor came back signed out" has to be inferred
+
+`signInWithGravatar` ends in `window.location.assign` — a full-page redirect,
+not a popup — so the promise never settles in a way the page can observe, and
+the app is torn down. On the way back there is no error, no status, and nothing
+on `useAuth()` that separates "this visitor abandoned a sign-in ten seconds ago"
+from "this visitor has never pressed anything". Both are `isGuest: true`.
+
+We implemented the spec's *didn't come back* state by writing a timestamped
+marker to `sessionStorage` before the redirect and reading it on arrival. That
+works, and it is entirely our own bookkeeping. A `lastSignInAttempt` or an
+`error` on the auth value would let an app tell someone their sign-in failed
+without inventing a side channel.
+
+The public `signInWithGoogle` wrapper *does* throw
+`"Gravatar sign-in is unavailable for this Spacefast runtime."` when the runtime
+has no sign-in — which is every `sf dev` — and that is genuinely useful. It is
+the one auth failure an app can catch.
+
+### 👎 `sf dev`'s fixed identity puts the entire signed-out surface out of reach
+
+Known, and already in our notes as D14: `sf dev` issues one guest identity and
+no sign-in, so an app that wants to be usable locally has to accept that guest
+as signed in. The consequence we hit this round is new. Once you do that, **the
+signed-out screens cannot be reached at all** — the marketing page, the sign-in
+card, the invite landing and the handoff states are unreachable in the only
+environment anyone can click them in.
+
+We added an app-level `?signedout` switch, loopback-only, to turn our own bypass
+off for one page load. It works, but it is a workaround for a gap in the dev
+server, and every Zero app that has a signed-out surface will need its own.
+
+**Ask:** a way to be a guest on `sf dev` on purpose — `sf dev --no-auth`, a
+second capability that issues an anonymous identity, or a documented query
+parameter. Failing that, a local sign-in stub, which would close both of our
+auth bypasses at once.
+
+### 👍 A new query lands in the artifact with no ceremony
+
+`invitePreview` was added to the `queries` block and showed up in
+`.spacefast/zero/artifact.json` on the next `--dry-run` — four queries where
+there were three, nine tables and zero migrations untouched. D27's regex trap is
+specifically a *schema* trap; handlers behave normally.

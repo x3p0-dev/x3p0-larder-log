@@ -1,11 +1,25 @@
-import { SignInWithGoogle, signOut, useAuth } from '@spacefast/zero/client';
+import { useEffect, useState } from 'preact/hooks';
+/*
+ * `signInWithGoogle` **is** the Gravatar flow. The name is Lakebed source
+ * compatibility — `@spacefast/zero/client` exports the same function under both
+ * names internally and only this one publicly. Aliased so no call site below
+ * has to claim the app has a Google button.
+ */
+import { signInWithGoogle as signInWithGravatar, signOut, useAuth } from '@spacefast/zero/client';
 
 import { Pantry } from './Pantry';
 import { useSystemTheme } from './hooks/useSystemTheme';
+import { useInvitePreview } from './hooks/usePantryData';
+import type { Theme } from './lib/theme';
 import { getTheme } from './lib/theme';
 import { installAppIcon } from './lib/appIcon';
 import { installFonts } from './lib/fonts';
-import { capturePendingInvite, pendingInvite } from './lib/pendingInvite';
+import { capturePendingInvite, markInviteAccepted, pendingInvite } from './lib/pendingInvite';
+import { clearSignInAttempt, markSignInAttempt, signInAttemptPending } from './lib/signInAttempt';
+import { InviteLanding } from './components/InviteLanding';
+import { MarketingPage } from './components/MarketingPage';
+import { OutsideShell } from './components/OutsideShell';
+import { SignInCard, SignInFailedCard, SigningInCard } from './components/SignInCard';
 
 /*
  * Before anything renders, and before the gate decides who this is.
@@ -36,74 +50,149 @@ function isLoopback(): boolean {
 }
 
 /**
- * The sign-in gate is the entire unauthenticated surface (D2).
+ * `?signedout` — the only way to see the signed-out surface on `sf dev`.
  *
- * Zero hands every visitor a guest identity that could own rows, which would
- * make a try-before-you-sign-in mode possible. We deliberately don't: it would
- * raise the question of what happens to guest-owned rows when that visitor
- * signs in, and every answer is work that serves nobody in a two-person
- * household. Guests get this screen and nothing else.
+ * D14's loopback hole makes every local visitor a signed-in dev guest, so the
+ * marketing page, the sign-in card and the invite landing are unreachable in
+ * the one environment anybody can click them in. This switches the hole off for
+ * one page load.
  *
- * The gate paints itself from the same theme the app uses rather than the
- * platform kit, so the first screen already looks like the product.
+ * It is not a bypass and cannot become one: it only ever **removes** access,
+ * and it is ignored anywhere but loopback, where the hole it disables does not
+ * exist in the first place. Take it out with D14 itself.
  */
-function SignInGate({ dark }: { dark: boolean }) {
-	const theme = getTheme(dark);
+function forcedSignedOut(): boolean {
+	if (typeof location === 'undefined' || ! isLoopback()) return false;
 
-	// Someone arriving from an invite link is being asked to sign in before
-	// they have any idea what the app is. Say why.
-	const invited = Boolean(pendingInvite());
+	return new URLSearchParams(location.search).has('signedout');
+}
 
-	return (
-		<div
-			class="font-sans min-h-screen w-full flex items-center justify-center p-6"
-			style={{ background: theme.pageBg, color: theme.text, colorScheme: dark ? 'dark' : 'light' }}
-		>
-			<div
-				class="w-full max-w-sm rounded-xl p-8 text-center"
-				style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
-			>
-				<h1 class="font-disp text-2xl font-semibold mb-2" style={{ color: theme.textStrong }}>
-					Larder Log
-				</h1>
-				<p class="text-sm mb-6" style={{ color: theme.textMuted }}>
-					{invited
-						? 'You’ve been invited to share a household pantry. Sign in and we’ll take you straight to it.'
-						: 'What’s in the pantry and the freezer, who’s running low, and what to buy where. Sign in to open your household.'}
-				</p>
-
-				<SignInWithGoogle />
-
-				<p class="font-mono text-xs uppercase tracking-widest mt-6" style={{ color: theme.textFaint }}>
-					Sign-in required
-				</p>
-			</div>
-		</div>
-	);
+/**
+ * Whether this is the front door or a bounce.
+ *
+ * **The signed-out surface is two pages, not one.** `/` is a marketing page for
+ * someone who has never heard of Larder Log; any *other* URL hit while signed
+ * out belongs to somebody who was going somewhere, and they get the sign-in
+ * card with an eyebrow saying why. Collapsing the two would make the front door
+ * either a wall for visitors or a sales pitch for someone who only wanted their
+ * pantry.
+ *
+ * In production the bounce is rarer than it sounds — the published space serves
+ * nothing at an unknown path (D28) — but a sign-out or an expired session can
+ * land on one, and `sf dev` answers the SPA shell everywhere.
+ */
+function isFrontDoor(): boolean {
+	return typeof location === 'undefined' || location.pathname === '/' || location.pathname === '';
 }
 
 /** The brief moment before Zero has resolved who the visitor is. */
-function AuthLoading({ dark }: { dark: boolean }) {
-	const theme = getTheme(dark);
-
+function AuthLoading({ dark, theme }: { dark: boolean; theme: Theme }) {
 	return (
 		<div
 			class="font-sans min-h-screen w-full flex items-center justify-center"
 			style={{ background: theme.pageBg, colorScheme: dark ? 'dark' : 'light' }}
 		>
-			<p class="font-mono text-xs uppercase tracking-widest" style={{ color: theme.textFaint }}>
-				Loading&hellip;
-			</p>
+			<p class="text-[13.5px]" style={{ color: theme.textFaint }}>Loading&hellip;</p>
 		</div>
 	);
 }
 
+/**
+ * The `?join=` landing for someone who is not signed in.
+ *
+ * Its own component so the preview subscription only exists on the one screen
+ * that reads it. Rolled into `App`, the hook would have to run for every
+ * signed-in visitor too, since a hook cannot be called conditionally.
+ *
+ * Signing in from here **is** the accept: the code is already in the stash, the
+ * consent is recorded beside it, and `Pantry` redeems on arrival rather than
+ * showing this card a second time.
+ */
+function SignedOutInvite({ code, pending, onSignIn, onDismiss, dark, theme }: {
+	code: string;
+	pending: boolean;
+	onSignIn: () => void;
+	onDismiss: () => void;
+	dark: boolean;
+	theme: Theme;
+}) {
+	const preview = useInvitePreview(code);
+
+	return (
+		<OutsideShell dark={dark} theme={theme}>
+			<InviteLanding
+				preview={preview}
+				signedIn={false}
+				displayName="" email=""
+				onSignIn={onSignIn}
+				onJoin={async () => {}}
+				onDismiss={onDismiss}
+				onSignOut={() => signOut()}
+				pending={pending}
+				theme={theme}
+			/>
+		</OutsideShell>
+	);
+}
 
 export function App() {
 	const auth = useAuth();
 	const dark = useSystemTheme();
+	const theme = getTheme(dark);
 
-	if (auth.isLoading) return <AuthLoading dark={dark} />;
+	/*
+	 * The redirect is in flight. Zero's sign-in tears the page down rather than
+	 * opening a window, so this only lives as long as the config fetch in front
+	 * of `location.assign` — but that is the difference between a control that
+	 * acknowledges a press and one that appears not to work.
+	 */
+	const [pending, setPending] = useState(false);
+
+	/** A code from an invite link. The stash is what survived the sign-in trip. */
+	const [code, setCode] = useState<string | null>(() => pendingInvite());
+
+	const devGuest = auth.isGuest && Boolean(auth.userId) && isLoopback() && ! forcedSignedOut();
+	const signedIn = Boolean(auth.userId) && (! auth.isGuest || devGuest);
+
+	// Whatever brought them here, they arrived. A marker left behind would turn
+	// the next reload of this tab into an error card.
+	useEffect(() => {
+		if (signedIn) clearSignInAttempt();
+	}, [signedIn]);
+
+	function startSignIn(accepting = false) {
+		if (pending) return;
+
+		setPending(true);
+		markSignInAttempt();
+
+		// Consent is recorded *before* the redirect, because the button that
+		// grants it does not survive the navigation.
+		if (accepting) markInviteAccepted();
+
+		/*
+		 * The only failure this call can report is "there is no sign-in on this
+		 * runtime" — which is exactly what `sf dev` is. Everything else ends in
+		 * `location.assign`, and a promise that resolves after the page has been
+		 * torn down settles nothing. So the catch releases the button rather
+		 * than routing anywhere: the redirect never started, and there is no
+		 * abandoned attempt to report.
+		 */
+		void signInWithGravatar().catch(() => {
+			clearSignInAttempt();
+			setPending(false);
+		});
+	}
+
+	if (auth.isLoading) {
+		// Coming back from Gravatar looks exactly like a first paint from the
+		// auth value alone. The attempt marker is the only thing that tells them
+		// apart, and it is why the handoff can say "bringing your household
+		// across" rather than showing a bare spinner.
+		return signInAttemptPending()
+			? <OutsideShell dark={dark} theme={theme}><SigningInCard theme={theme} /></OutsideShell>
+			: <AuthLoading dark={dark} theme={theme} />;
+	}
 
 	/*
 	 * `sf dev` ships no sign-in flow at all — its runtime config reports
@@ -118,16 +207,55 @@ export function App() {
 	 * written. Revisit if Spacefast ever ships a local sign-in stub — see
 	 * .docs/notes.md.
 	 */
-	const devGuest = auth.isGuest && Boolean(auth.userId) && isLoopback();
+	if (signedIn) {
+		return (
+			<Pantry
+				userId={auth.userId as string}
+				displayName={devGuest ? 'Local dev guest' : (auth.displayName || 'Signed in')}
+				email={devGuest ? '' : (auth.email ?? '')}
+				picture={devGuest ? undefined : auth.picture}
+				onSignOut={() => signOut()}
+			/>
+		);
+	}
 
-	if (! auth.userId || (auth.isGuest && ! devGuest)) return <SignInGate dark={dark} />;
+	/*
+	 * Signed out, in the order the visitor's own reason for being here runs: an
+	 * invitation is the most specific, an abandoned sign-in the next, and only
+	 * after both does which page they landed on matter at all.
+	 */
+	if (code) {
+		return (
+			<SignedOutInvite
+				code={code}
+				pending={pending}
+				onSignIn={() => startSignIn(true)}
+				onDismiss={() => setCode(null)}
+				dark={dark}
+				theme={theme}
+			/>
+		);
+	}
+
+	if (signInAttemptPending()) {
+		return (
+			<OutsideShell dark={dark} theme={theme}>
+				<SignInFailedCard
+					pending={pending}
+					onRetry={() => { clearSignInAttempt(); startSignIn(); }}
+					theme={theme}
+				/>
+			</OutsideShell>
+		);
+	}
+
+	if (isFrontDoor()) {
+		return <MarketingPage dark={dark} theme={theme} pending={pending} onSignIn={() => startSignIn()} />;
+	}
 
 	return (
-		<Pantry
-			userId={auth.userId}
-			displayName={devGuest ? 'Local dev guest' : (auth.displayName || 'Signed in')}
-			email={devGuest ? '' : (auth.email ?? '')}
-			onSignOut={() => signOut()}
-		/>
+		<OutsideShell dark={dark} theme={theme}>
+			<SignInCard pending={pending} onSignIn={() => startSignIn()} theme={theme} />
+		</OutsideShell>
 	);
 }

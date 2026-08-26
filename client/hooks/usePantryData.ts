@@ -7,6 +7,7 @@ import type {
 	HouseholdListResult,
 	HouseholdResult,
 	HouseholdSummary,
+	InvitePreviewResult,
 	ItemDraft,
 	PantryData,
 	PantryResult,
@@ -277,4 +278,24 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			(await run(() => rawDeleteHousehold(currentHouseholdId).then(() => true))) === true
 		), [run, rawDeleteHousehold, currentHouseholdId]),
 	};
+}
+
+/**
+ * What an invite link says about itself, live.
+ *
+ * Its own hook rather than a field on `usePantryData`, because the `?join=`
+ * landing is reached **before** any of that exists: a signed-out visitor has no
+ * membership, no household, and nothing for the other three subscriptions to
+ * answer with. This is the only read on that screen.
+ *
+ * `null` while the code is absent or the query has not answered — the same
+ * absent-value signal every other query uses, since Zero reports no failures to
+ * a subscriber (see `isLoading` above).
+ */
+export function useInvitePreview(code: string | null): InvitePreviewResult | null {
+	const result = useQuery<InvitePreviewResult>('invitePreview', code ?? '');
+
+	if (! code) return null;
+
+	return isLoading(result) ? null : result;
 }

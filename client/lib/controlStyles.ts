@@ -102,6 +102,17 @@ export const PAGE_BUTTON =
 export const PAGE_ICON =
 	'transition-colors text-ink-muted hover:text-ink hover:bg-surface-alt rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
+/**
+ * A bordered icon control on the page ground — the mobile header's menu button.
+ *
+ * Its resting fill and border have to be classes rather than an inline style:
+ * an inline `background` beats any `hover:` rule, so the button wore
+ * `PAGE_BUTTON` and still had no hover. States match `PAGE_CHIP`, which is the
+ * page's other bordered-on-surface control.
+ */
+export const PAGE_BUTTON_OUTLINE =
+	'transition-colors bg-surface border border-line text-ink-body hover:bg-surface-alt hover:border-line-strong hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+
 /** A field on the page. The border firms up on focus rather than glowing. */
 export const PAGE_INPUT =
 	'transition-colors bg-surface border border-line text-ink outline-none placeholder:text-ink-faint focus:border-ink-muted focus-visible:border-ink-muted';
@@ -168,3 +179,81 @@ export const DRAWER_TRASH =
  */
 export const DRAWER_GHOST_DANGER =
 	'transition-colors text-drawer-danger hover:bg-drawer-raised active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
+
+/**
+ * The composer field's focus halo, light theme.
+ *
+ * A halo rather than the page's border-firms-up treatment because the field
+ * sits on a recessed panel that already has a hairline — firming that up moves
+ * nothing the eye can see. Crimson at 14% is the only place the brand colour
+ * appears on a control, and it is a glow, not a fill.
+ */
+export const PANEL_FIELD_HALO =
+	'transition-shadow outline-none focus:shadow-[0_0_0_3px_rgba(190,51,70,0.14)]';
+
+/**
+ * The same halo in dark, at the dark crimson and a little more alpha.
+ *
+ * 14% of `#BE3346` on `#2C251B` is invisible; `#D4636B` at 18% lands at the
+ * same apparent strength the light pair has. Also used on the drawer in *both*
+ * themes, which is dark either way.
+ */
+export const PANEL_FIELD_HALO_DARK =
+	'transition-shadow outline-none focus:shadow-[0_0_0_3px_rgba(212,99,107,0.18)]';
+
+/* ---------- the item card, whose controls sit on `surface` ---------- */
+
+/*
+ * A separate family from `PAGE_*` for one reason that matters: these sit on a
+ * **card**, not on the page ground, so the focus ring offsets against `surface`
+ * or it draws its gap in the wrong colour and reads as a halo.
+ *
+ * Every fill here is a class rather than an inline style, and that is the whole
+ * point. An inline `background` outranks `hover:bg-line`, so a control painted
+ * that way is rounded, sized, and completely inert under the pointer. The
+ * card's stepper shipped exactly like that — the same mistake the drawer made
+ * before this file existed.
+ */
+
+/** The stepper's minus: sunk at rest, a step darker under the pointer. */
+export const CARD_STEPPER =
+	'transition-colors bg-surface-alt hover:bg-line active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The stepper's plus.
+ *
+ * Opacity rather than a colour swap, because the fill it lifts off is
+ * `theme.inkBg` — set inline, and the one thing on the card that is genuinely
+ * *pressed* rather than merely clicked.
+ */
+export const CARD_STEPPER_PRIMARY =
+	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * *Edit* — flush with the card at rest, sinking on hover.
+ *
+ * Deliberately the inverse of the stepper's minus: that one starts sunk, this
+ * one starts level with the surface it sits on and its border does the work.
+ */
+export const CARD_ACTION =
+	'transition-colors bg-surface hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * *Remove* — crimson text on nothing.
+ *
+ * It fills on hover rather than deepening its text, which would read as the
+ * button getting more dangerous the longer you looked at it. Crimson is how a
+ * destructive action is **offered**; it never carries the commit (D36).
+ */
+export const CARD_ACTION_GHOST =
+	'transition-colors hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The header row, which is itself the accordion's target.
+ *
+ * Nothing in the row changes on hover except the chevron, which is what `group`
+ * is for — the name and the status badge are information, and they should not
+ * light up because a pointer crossed them.
+ */
+export const CARD_HEADER =
+	'group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';

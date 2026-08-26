@@ -176,6 +176,14 @@ export function chipStyle(tc: ThemedColor, active: boolean, theme: Theme, varian
 }
 
 export type Theme = {
+	/**
+	 * Which of the two tables this is.
+	 *
+	 * Carried on the theme so a component that only needs to pick between two
+	 * static class strings — a focus halo, a shadow — does not have to take a
+	 * second `dark` prop alongside the theme it already has.
+	 */
+	dark: boolean;
 	pageBg: string; surface: string; surfaceAlt: string;
 	border: string; borderStrong: string;
 	text: string; textStrong: string; textMuted: string; textFaint: string;
@@ -183,9 +191,36 @@ export type Theme = {
 	primaryBg: string; primaryText: string;
 	inkBg: string; inkText: string;
 	dangerText: string;
+	/**
+	 * Crimson — the brand mark and the *out* status, and nothing else.
+	 *
+	 * Never a fill you press: D36's rule is that crimson names a consequence
+	 * and the ink/cream primary carries the commit. It is theme-aware because
+	 * the light value is unreadable on the dark ground.
+	 */
+	accent: string;
+	/**
+	 * A primary that is on screen but cannot be pressed — the composer's *Add*
+	 * pill with an empty field, the sign-in button mid-redirect.
+	 *
+	 * A flat fill rather than the ink primary at reduced opacity: opacity would
+	 * let the ground through and make the control look like a rendering
+	 * artefact, and the spec names the light pair outright.
+	 */
+	disabledBg: string;
+	disabledText: string;
 	onInk: string;
 	/** The card lift. Barely visible in light and needs real alpha in dark. */
 	cardShadow: string;
+	/**
+	 * The lift on a card that is alone on the ground.
+	 *
+	 * An order of magnitude past `cardShadow`, and deliberately so: an item card
+	 * is one of twenty in a grid and only needs to separate from its neighbours,
+	 * while a card outside the shell is the only object on the page and has to
+	 * read as sitting *above* it. Every screen before the app uses this one.
+	 */
+	liftShadow: string;
 	/**
 	 * The ground as a flat color.
 	 *
@@ -237,6 +272,7 @@ export function getTheme(dark: boolean): Theme {
 	 */
 	return dark
 		? {
+			dark: true,
 			pageBg: 'radial-gradient(135% 105% at 10% -12%, #241E16 0%, #1F1912 45%, #191410 100%)',
 			surface: '#2C251B', surfaceAlt: '#221C14',
 			border: '#3E3527', borderStrong: '#544737',
@@ -245,8 +281,11 @@ export function getTheme(dark: boolean): Theme {
 			primaryBg: '#EFE3CE', primaryText: '#241E17',
 			inkBg: '#EFE3CE', inkText: '#241E17',
 			dangerText: '#E5878D',
+			accent: '#D4636B',
+			disabledBg: '#3E3527', disabledText: '#7E6E58',
 			onInk: '#241E17',
 			cardShadow: '0 2px 3px rgba(0, 0, 0, 0.28)',
+			liftShadow: '0 24px 60px rgba(0, 0, 0, 0.60)',
 			ground: '#1F1912',
 			drawer: {
 				bg: 'linear-gradient(180deg, #15110B 0%, #0F0C07 100%)',
@@ -255,6 +294,7 @@ export function getTheme(dark: boolean): Theme {
 			},
 		}
 		: {
+			dark: false,
 			pageBg: 'radial-gradient(135% 105% at 10% -12%, #F9F3E9 0%, #F3EADC 45%, #EADFCD 100%)',
 			surface: '#FDFAF4', surfaceAlt: '#F2EADC',
 			border: '#E2D5C0', borderStrong: '#CFBEA3',
@@ -263,8 +303,11 @@ export function getTheme(dark: boolean): Theme {
 			primaryBg: '#241E17', primaryText: '#F2E9DA',
 			inkBg: '#241E17', inkText: '#F2E9DA',
 			dangerText: '#9A2E3B',
+			accent: '#BE3346',
+			disabledBg: '#EBE1D0', disabledText: '#B0A088',
 			onInk: '#FDFAF4',
 			cardShadow: '0 2px 3px rgba(36, 30, 23, 0.03)',
+			liftShadow: '0 24px 60px rgba(36, 30, 23, 0.28)',
 			ground: '#EADFCD',
 			drawer: {
 				bg: 'linear-gradient(180deg, #2B2419 0%, #1F1A13 100%)',
@@ -304,7 +347,10 @@ export function drawerTheme(theme: Theme): Theme {
 		inkBg: d.ink,
 		inkText: '#241E17',
 		dangerText: '#D4636B',
+		accent: '#D4636B',
+		disabledBg: '#332B22', disabledText: '#8A7860',
 		onInk: '#241E17',
 		cardShadow: 'none',
+		liftShadow: 'none',
 	};
 }

@@ -24,6 +24,8 @@ import {
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
+import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
+import { fromInt, toInt } from '../shared/qty';
 
 let fail = 0;
 let total = 0;
@@ -309,6 +311,52 @@ check('the stripped result has no code left', readJoinCode(stripJoinParam(`?${JO
 // The grouped form is for reading aloud; it must survive the round trip back.
 check('codes group in fours', formatCode('ABCDEFGHJK'), 'ABCD EFGH JK');
 check('the grouped form normalizes back', normalizeCode(formatCode(LINK_CODE)), LINK_CODE);
+
+// --- the stepper's one step ---
+//
+// `fromInt(toInt(qty) + step)` is the whole of `adjustQty`, and since the
+// marketing hero's cards became live it is also the first thing a stranger
+// touches. The bottom of the range is the case that matters: the *Out* card
+// starts at 0 and the obvious first press is minus, so a missing clamp would
+// put "-1" on a public page.
+const step = (qty: string, delta: number) => fromInt(toInt(qty) + (delta < 0 ? -1 : 1));
+
+check('minus at zero stays at zero', step('0', -1), '0');
+check('minus at one reaches zero', step('1', -1), '0');
+check('plus at zero reaches one', step('0', 1), '1');
+check('a step is one however big the delta claims', step('4', -999), '3');
+
+// A row written before the column was disciplined, or by a client that lied.
+// It reads as 0 rather than poisoning every comparison downstream with NaN.
+check('an unparseable quantity steps up from zero', step('abc', 1), '1');
+check('a decimal quantity steps up from zero', step('1.5', 1), '1');
+
+// --- the seeds a new household starts with ---
+//
+// A mistyped token is invisible when wrong: `themed()` falls through to the
+// legacy-hex derivation and the term renders in *some* colour, so nothing
+// crashes and nothing looks obviously broken. It also has to hold for every
+// seed, because a household is created once and lived in afterwards.
+const SEEDS = [...SEED_LOCATIONS, ...SEED_TYPES, ...SEED_STORES];
+
+check('every seed carries a defined colour token', SEEDS.filter((t) => ! isColorSlot(t.ink)), []);
+check('every seed carries a usable name', SEEDS.filter((t) => ! isValidName(t.name)), []);
+
+// A household cannot hold an item without a location, and D16 refuses to
+// delete the last one anything references — so an empty seed set is a dead end
+// rather than a blank slate.
+check('locations are seeded', SEED_LOCATIONS.length > 0, true);
+
+// Names are unique *within* a group only. `termKey` is what `createTerm`
+// dedupes on, and two seeds colliding there would leave a household one term
+// short with no error anywhere.
+for (const [label, group] of [
+	['locations', SEED_LOCATIONS],
+	['types', SEED_TYPES],
+	['stores', SEED_STORES],
+] as const) {
+	check(`seeded ${label} have distinct keys`, new Set(group.map((t) => termKey(t.name))).size, group.length);
+}
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

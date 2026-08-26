@@ -14,6 +14,20 @@ export type SortKey = 'default' | 'restock' | 'name-asc' | 'name-desc' | 'qty-as
  * "Needs restocking" sits directly under it: that pair is the priority group,
  * and everything below is a plain ordering.
  */
+/**
+ * The trigger at rest, and open.
+ *
+ * Both states have to be class strings: they were inline styles, and an inline
+ * `background` overrides any `hover:` rule, so the control had no hover at all
+ * while every other button on the page ground did. The hover destination is
+ * `PAGE_BUTTON_OUTLINE`'s, one border step short of it — open keeps
+ * `line-strong` to itself, and the chevron's flip carries the rest.
+ */
+const TRIGGER =
+	'bg-transparent border-transparent text-ink-body hover:bg-surface-alt hover:border-line hover:text-ink';
+const TRIGGER_ON =
+	'bg-surface-alt border-line-strong text-ink';
+
 export const SORT_OPTIONS: { key: SortKey; label: string; short: string; group?: boolean }[] = [
 	{ key: 'default', label: 'Recently added', short: 'Recent' },
 	{ key: 'restock', label: 'Needs restocking', short: 'Restock' },
@@ -67,12 +81,7 @@ export function SortMenu({ open, setOpen, sortBy, setSortBy, theme }: Props) {
 		<div class="relative" ref={ref}>
 			<button
 				onClick={() => setOpen(! open)}
-				class={`inline-flex items-center gap-2 h-10 px-3 rounded-[11px] text-[13.5px] border transition-colors ${PAGE_FOCUS}`}
-				style={
-					open
-						? { background: theme.surfaceAlt, borderColor: theme.borderStrong, color: theme.textStrong }
-						: { background: 'transparent', borderColor: 'transparent', color: theme.text }
-				}
+				class={`inline-flex items-center gap-2 h-10 px-3 rounded-[11px] text-[13.5px] border transition-colors active:translate-y-px ${PAGE_FOCUS} ${open ? TRIGGER_ON : TRIGGER}`}
 				aria-haspopup="menu"
 				aria-expanded={open}
 				aria-label={`Sort: ${current.label}`}

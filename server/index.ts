@@ -12,6 +12,7 @@ import type {
 	HouseholdListResult,
 	HouseholdResult,
 	HouseholdSummary,
+	InvitePreviewResult,
 	PantryResult,
 	TermKind,
 } from '../shared/types';
@@ -349,6 +350,68 @@ export default capsule({
 				types: types.map((t) => ({ id: t.id, name: t.name, ink: t.ink })),
 				stores: stores.map((s) => ({ id: s.id, name: s.name, ink: s.ink })),
 			};
+		}),
+
+		/**
+		 * What an invite link says about itself, to whoever is holding it.
+		 *
+		 * **The one query that answers a guest.** Every other read resolves a
+		 * membership first; this one cannot, because the whole point of the
+		 * `?join=` landing is to tell a signed-out stranger which household they
+		 * have been asked into and by whom. The code is the authorization.
+		 *
+		 * What it will not do is confirm that a code *existed*. Unknown,
+		 * malformed and **revoked** all return the same bare `invalid`, matching
+		 * `redeemInvite`'s refusal to distinguish them — naming the household
+		 * behind a dead link would tell a stranger something about it. Expiry is
+		 * the exception the design asks for: an expired code is one someone was
+		 * genuinely given, and the screen exists to say who to ask for another.
+		 */
+		invitePreview: query(async (ctx, rawCode: string): Promise<InvitePreviewResult> => {
+			const code = normalizeCode(rawCode);
+
+			if (! isCodeShaped(code)) return { state: 'invalid' };
+
+			const invite = await ctx.db.invites
+				.withIndex('by_code', (r) => r.eq('code', code))
+				.first();
+
+			if (! invite || invite.revoked) return { state: 'invalid' };
+
+			const row = await ctx.db.households.get(invite.householdId);
+
+			// The invite outlived its household. Nothing to join and nothing to
+			// explain, so it is the same dead link as a revoked one.
+			if (! row) return { state: 'invalid' };
+
+			const members = await ctx.db.memberships
+				.withIndex('by_household', (r) => r.eq('householdId', invite.householdId))
+				.collect();
+
+			// The tile is drawn in the household's first location colour, which
+			// is what the collapsed rail already uses — so the invite card and
+			// the rail agree the moment you land inside.
+			const locations = await ctx.db.locations
+				.withIndex('by_household', (r) => r.eq('householdId', invite.householdId))
+				.collect();
+
+			const household = { name: row.name, ink: locations[0]?.ink ?? '' };
+
+			// Checked before expiry: someone who is already in is already in, and
+			// telling them a link they cannot use has also run out would be two
+			// pieces of bad news for one non-problem.
+			if (isSignedIn(ctx.auth) && members.some((m) => m.userId === ctx.auth.userId)) {
+				return { state: 'member', household, householdId: invite.householdId };
+			}
+
+			const inviter = members.find((m) => m.userId === invite.createdBy)?.displayName ?? 'an owner';
+			const role = toRole(invite.role);
+
+			if (isExpired(invite.expiresAt, Date.now())) {
+				return { state: 'expired', household, role, inviter };
+			}
+
+			return { state: 'valid', household, role, inviter, expiresAt: invite.expiresAt };
 		}),
 	},
 
@@ -721,7 +784,9 @@ export default capsule({
 
 			await ctx.db.invites.update(invite.id, { revoked: true });
 
-			ctx.invalidate('household');
+			// `invitePreview` too: a stranger may be sitting on the landing card
+			// this link opened, and revoking is meant to reach them.
+			ctx.invalidate('household', 'invitePreview');
 		}),
 
 		redeemInvite: mutation(async (ctx, rawCode: string) => {
@@ -761,7 +826,7 @@ export default capsule({
 				role: toRole(invite.role),
 			});
 
-			ctx.invalidate('households', 'household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry', 'invitePreview');
 
 			return { householdId: invite.householdId };
 		}),
