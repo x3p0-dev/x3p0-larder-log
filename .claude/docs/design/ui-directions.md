@@ -392,7 +392,6 @@ Zero items in a new household · no filter matches · no search results · a loc
 Every store in the sample data has at most one low or out item, so the shopping-list modal is always a single row. Worth widening the sample before judging whether it earns a modal.
 
 ## Open questions
-- Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites.
 - Invite links are cramped at 340px.
 - Each store has ≤1 low/out item in the sample data, so the shopping-list modal is a single row.
 - Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one.

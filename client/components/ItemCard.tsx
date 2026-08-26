@@ -61,8 +61,28 @@ export function ItemCard({
 	const qtyColor = s.key === 'ok' ? theme.textStrong : s.key === 'out' ? s.dot : s.ink;
 
 	return (
+		/*
+		 * Collapsed cards share a height; an expanded one grows on its own.
+		 *
+		 * The obvious route — `align-items: stretch` on the grid — gives true
+		 * per-row equality and cannot be used here. A grid row is sized by its
+		 * tallest item's *content*, and `align-self: start` on that item changes
+		 * only where it sits in the row, not how tall the row is. So an open card
+		 * would drag every sibling in its row down with it, which is exactly what
+		 * the grid's `items-start` exists to prevent.
+		 *
+		 * Equality therefore has to come from a floor on the card itself. 188px is
+		 * the natural height of a card with a one-line name and two rows of chips,
+		 * which covers the ordinary item; `mt-auto` on the quantity row pins it to
+		 * the bottom edge so the padding lands as breathing room under the chips
+		 * rather than as a gap in the middle.
+		 *
+		 * A card with more chips than that still comes out taller. Clamping the
+		 * rows would fix it and is not worth it — the chips are what the card is
+		 * for, and hiding one to square off a grid is the wrong trade.
+		 */
 		<div
-			class="flex flex-col p-5 rounded-[20px]"
+			class="flex flex-col min-h-[188px] p-5 rounded-[20px]"
 			style={{ background: theme.surface, border: `1px solid ${edge}`, boxShadow: theme.cardShadow }}
 		>
 			<button onClick={onToggleOpen} class="w-full text-left flex items-start justify-between gap-3" aria-expanded={open}>
@@ -108,7 +128,7 @@ export function ItemCard({
 			  * controls go. A viewer sees "4 · low at 2" rather than a pair of dead
 			  * buttons on every card in the pantry (D30).
 			  */}
-			<div class="flex items-center justify-between gap-3.5 pt-3.5">
+			<div class="flex items-center justify-between gap-3.5 mt-auto pt-3.5">
 				<div class="flex items-baseline gap-2.5 min-w-0">
 					<span class="font-disp text-qty-sm sm:text-qty font-bold leading-[0.9]" style={{ color: qtyColor }}>
 						{item.qty}

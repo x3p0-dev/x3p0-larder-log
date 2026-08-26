@@ -393,6 +393,88 @@ surfaces, and which non-destructive events earn a plain toast (saved, copied,
 invite sent, term added — a toast on every save would be noise). Neither blocks
 anything.
 
+### The item grid is fluid, and the drawer docks at 1120 — 2026-08-26
+
+The content column was capped at `max-w-[1160px]` and the grid stepped
+`1 → 2 → 3` columns at fixed breakpoints, so past about 1500px every extra pixel
+became margin. Both are gone.
+
+```
+grid:  grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))]
+card:  min-h-[188px], quantity row mt-auto
+```
+
+The tracks always divide the row exactly, so the gutter is 16px at every width
+and there is never a remainder. Two earlier attempts both spent that remainder
+somewhere visible: capping the card inside a `1fr` track pushed it *between* the
+cards (104px between neighbours at 1440, because the track stretched while the
+card did not), and capping the track at 420 held the gutter but left up to a
+full track of dead space at the right edge. Letting the track stretch removes
+the remainder instead of relocating it.
+
+`auto-fit`'s trade is that it collapses empty tracks, so a household holding
+fewer items than columns gets fewer, wider cards. Once there are more items than
+columns — the normal state of a pantry — it is identical to `auto-fill`. Mobile
+keeps an explicit `grid-cols-1`; below 320px of content the floor would overflow
+its own track.
+
+**Collapsed cards share a height; an open one grows alone.** `align-items:
+stretch` is the obvious route and cannot be used: a grid row is sized by its
+tallest item's *content*, and `align-self: start` on that item changes only
+where it sits, not how tall the row is — so an open card would drag its whole
+row down. Equality comes from `min-h-[188px]` on the card instead (a one-line
+name plus two rows of chips), with `mt-auto` on the quantity row so the slack
+lands as breathing room under the chips rather than a gap in the middle. A card
+carrying more chips than that is still taller; clamping the rows would square it
+off at the cost of hiding a term, which is the wrong trade.
+
+**The drawer docks at 1120, and the number is derived from the card floor.**
+Docking spends 340px, so it must not drop the content column below what its
+current column count needs — otherwise widening the window *removes* a card.
+With a 320px floor a track is 336, and the thresholds that survive are narrow:
+
+| Threshold | Below | Docked | |
+|---|---|---|---|
+| `lg` 1024 | 2 cols | 1 col | loses one |
+| **1064–1128** | — | — | **clean** |
+| `xl` 1280 | 3 cols | 2 cols | loses one |
+| 1400–1464 | — | — | clean |
+| `2xl` 1536 | 4 cols | 3 cols | loses one |
+
+No Tailwind breakpoint sits in either surviving band, so it is the arbitrary
+variant `min-[1120px]:` — the middle of the lower band, which keeps the docked
+drawer available on ordinary laptops instead of pushing it out to 1400.
+**Re-derive it if the card floor changes.**
+
+Below 1120 the 68px rail *is* the drawer, whether or not anyone chose to
+collapse it: `CollapsedRail` renders unconditionally and takes an `autoOnly`
+prop that re-hides it above the threshold when the collapse was only the width's
+doing. CSS rather than a `matchMedia` listener, so the two halves cannot
+disagree for a frame on load. The rail's expand control sets `drawerOpen` as
+well as clearing `drawerCollapsed` — below the threshold, un-collapsing alone
+reveals nothing.
+
+| Viewport | Drawer | Content | Cols | Card | Gap |
+|---|---|---|---|---|---|
+| 390 | off-canvas | 354 | 1 | 354 | — |
+| 768 | rail | 632 | 1 | 632 | 16 |
+| 900 | rail | 764 | 2 | 374 | 16 |
+| 1119 | rail | 983 | 2 | 484 | 16 |
+| 1120 | docked | 712 | 2 | 348 | 16 |
+| 1280 | docked | 872 | 2 | 428 | 16 |
+| 1440 | docked | 1032 | 3 | 333 | 16 |
+| 1600 | docked | 1192 | 3 | 387 | 16 |
+| 1920 | docked | 1512 | 4 | 366 | 16 |
+| 2560 | docked | 2152 | 6 | 345 | 16 |
+
+1440 lands on 3 × 333, which is the original mockup's grid to the pixel.
+
+Two things fixed alongside: the error and pending-invite banners were
+`max-w-5xl mx-auto`, centred and capped at 1024px while everything under them
+was left-aligned — they now share the content gutters; and *Nothing here yet.*
+and *Loading more…* were single grid cells, centring inside the first column
+rather than the row. Both take `col-span-full`.
+
 ### Left open at the end of 2026-08-25
 
 - **A `site.webmanifest`.** The icon README specifies one in full, and the

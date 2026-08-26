@@ -131,6 +131,52 @@ idioms that were there before.
 - ***Recently added* sorts on `createdAt`** (D35). It previously applied no sort
   at all, so it rendered oldest-first — the opposite of its label.
 
+**The item grid is fluid and the drawer docks at 1120px, not `md`.** Cards are
+`md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))]` — tracks always divide the
+row exactly, so the gutter is 16px everywhere and there is no remainder. Two
+alternatives were built and reverted: capping the card inside a `1fr` track puts
+the remainder *between* cards (104px at 1440), and capping the track at 420 puts
+it at the right edge. Collapsed cards match via `min-h-[188px]` + `mt-auto` on
+the quantity row, **not** `align-items: stretch` — a grid row is sized by its
+tallest item's content, so an open card would drag its row down.
+
+**Never pair `min-[1120px]:` with a `md:` class on the same property** —
+Tailwind emits arbitrary variants first, so `md:` wins at 1120 and the rule
+silently does nothing. Use a bounded `md:max-[1120px]:` range instead; pairing
+with a base utility is fine. **`min-[1120px]:` is derived from the 320px card
+floor and must be re-derived if that changes.** Docking spends 340px and must
+not cost a column; with a 336px track only 1064–1128 and 1400–1464 survive, and
+no Tailwind breakpoint is in either (`lg`, `xl` and `2xl` each lose one). The
+number lives in **three** places — the class literals in `Drawer` and
+`CollapsedRail`, plus `DOCK_PX` in `Pantry`. Tailwind resolves a class by
+scanning for a static string, so it cannot be interpolated and the duplication
+is unavoidable; keep them equal.
+
+**`drawerOpen` only means anything below the dock, and has to be cleared above
+it.** Two callers set it at any width (the rail's expand control, and the
+blocked-leave dialog's *Open Members*) because below the dock it is the only
+thing that reveals the drawer. Above the dock the set looks like a no-op and is
+not: the flag persists, and narrowing the window turns it into a `fixed`
+slide-over that nothing in the layout accounts for, so only the 68px rail holds
+the column open and the item grid runs underneath it. `DOCK_PX` exists for the
+effect that clears it. Below it the 68px rail *is* the
+drawer regardless of `drawerCollapsed`; `CollapsedRail` renders unconditionally
+and hides itself above the threshold via its `autoOnly` prop.
+
+**Never declare a component inside another component.** `CollapsedRail` had
+`Control` and `Tip` nested in it, which gave them a new function identity per
+render — Preact reads that as a new component *type* and rebuilds the whole
+subtree, so any re-render between a `pointerdown` and its `click` swapped the
+element out and dropped the click. It presented as "the rail needs two clicks,
+sometimes"; the 400ms tooltip timer was what landed in the gap. Both are at
+module scope now and take a `chrome` prop.
+
+**The rail owns flyout dismissal, not `RailFlyout`.** A press anywhere outside
+the open panel closes it — including on the rail itself — so the rail keeps a
+`dismissed` ref recording what the current gesture just closed, and `toggle()`
+compares against that rather than against `menu`, which `pointerdown` has
+already nulled.
+
 `theme.json` gained `focus-dark` and `drawer-danger`. **`theme.json` is strict
 JSON — no comments**, unlike `sf.jsonc`; a `//` line stops `sf dev` from
 starting at all.
@@ -406,14 +452,43 @@ Cheapest first:
 - **Curl the compiled assets** to confirm styling shipped. Zero finds Tailwind
   classes by scanning source for static strings, so "it typechecks" says nothing
   about whether a class exists. Fetch `/zero.css` (see the bootstrap dance
-  above) and grep. The file escapes **both brackets and colons**: `max-h-[80vh]`
-  appears as `max-h-\[80vh\]` and `md:grid-cols-[190px_1fr]` as
-  `.md\:grid-cols-\[190px_1fr\]`. Grepping the half-escaped form returns
-  nothing and looks exactly like a missing class — search for a distinctive
-  substring (`190px`) when in doubt. **Use `grep -F`**: the escaped form
-  contains a literal backslash, so `grep 'z-\[55\]'` reads it as a regex for
-  `z-[55]` and matches nothing, which looks identical to the class being
-  absent. This trap has now caught us twice.
+  above) and grep. The file escapes **brackets, colons, parentheses, commas and
+  `#`**: `max-h-[80vh]` appears as `max-h-\[80vh\]`, `bg-[#4A3E2E]` as
+  `.bg-\[\#4A3E2E\]`,
+  `md:grid-cols-[190px_1fr]` as `.md\:grid-cols-\[190px_1fr\]`, and
+  `md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]` as
+  `.md\:grid-cols-\[repeat\(auto-fill\,minmax\(300px\,1fr\)\)\]`. Grepping a
+  half-escaped form returns nothing and looks exactly like a missing class.
+
+  **The reliable check prints the selector instead of guessing at it:**
+
+  ```bash
+  grep -oE '\.[a-z:\\-]*grid-cols[^ {]*' zero.css | sort -u
+  ```
+
+  Failing that, search for a distinctive *unescaped* substring — `190px`,
+  `auto-fill`. `grep -F` is necessary but **not** sufficient: the escaped form
+  contains literal backslashes, so the pattern has to reproduce every one of
+  them. This has now caught us **four** times — the last two reporting a fluid
+  grid and an avatar's hover colour as missing when both had compiled correctly.
+  Stop hand-writing the escaped form; print it.
+- **An arbitrary `min-[Npx]:` variant cannot override a named breakpoint**, and
+  the failure is invisible to `typecheck` and to a class-presence grep. Tailwind
+  emits arbitrary media variants **before** `sm/md/lg/xl/2xl`, so for
+  `md:flex min-[1120px]:hidden` both queries match at 1120 and `md:flex` wins on
+  source order — the element stays visible. That shipped once: the collapsed
+  rail rendered beside the open drawer.
+
+  **Two rules that overlap cannot be ordered here.** Write one rule that covers
+  exactly its band instead: `md:max-[1120px]:flex` compiles to
+  `@media (width >= 48rem) { @media (width < 1120px) { … } }` and needs no
+  ordering at all. Pairing an arbitrary variant with a *base* utility
+  (`fixed min-[1120px]:sticky`) is fine — base utilities precede every media
+  block. To check, print the line numbers and compare:
+
+  ```bash
+  grep -nF -e '.md\:flex' -e '.min-\[1120px\]\:hidden' zero.css
+  ```
 - **Curl the published space** for anything auth-related; it needs no bootstrap
   token. `https://larderlog.view.fast/api/status` returning `ok` is the cheapest
   proof that a publish's server half landed.

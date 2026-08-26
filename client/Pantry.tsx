@@ -39,6 +39,17 @@ import { termBlock, termUsageCount } from '../shared/term';
 
 const PAGE_SIZE = 20;
 
+/**
+ * The width the drawer docks at.
+ *
+ * **This must stay equal to the `min-[1120px]:` literals in `Drawer` and
+ * `CollapsedRail`.** Tailwind resolves a class name by scanning source for a
+ * static string, so the breakpoint cannot be interpolated from here and the
+ * number necessarily appears twice. The value itself is derived from the card
+ * floor — see the note in `Drawer`.
+ */
+const DOCK_PX = 1120;
+
 /** What "needs restocking" means as an ordering. */
 const RESTOCK_RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
 
@@ -242,6 +253,40 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	/* Desktop only — folded away, with the header's menu button to bring it back. */
 	const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+
+	/**
+	 * `drawerOpen` only means anything below the dock, so it is cleared above it.
+	 *
+	 * Two callers set it at any width — the rail's expand control and the
+	 * blocked-leave dialog's *Open Members* — because below the dock that flag is
+	 * the only thing that reveals the drawer. Above the dock the drawer is
+	 * already on screen and setting it looks like a harmless no-op.
+	 *
+	 * It is not. The flag persists, and narrowing the window past the dock cashes
+	 * it in: the drawer becomes a `fixed` slide-over that nothing in the layout
+	 * accounts for, so only the 68px rail holds the column open and the item grid
+	 * runs underneath it.
+	 *
+	 * The listener covers the other direction — widening while the slide-over is
+	 * open — and the `drawerOpen` dependency covers a caller setting it while
+	 * already docked. Both are needed; either alone leaves one path stale.
+	 */
+	useEffect(() => {
+		// Guarded like `useSystemTheme`: the same absence of a browser would
+		// otherwise throw here rather than degrade.
+		if (! window.matchMedia) return;
+
+		const docked = window.matchMedia(`(min-width: ${DOCK_PX}px)`);
+
+		function sync() {
+			if (docked.matches && drawerOpen) setDrawerOpen(false);
+		}
+
+		sync();
+		docked.addEventListener('change', sync);
+
+		return () => docked.removeEventListener('change', sync);
+	}, [drawerOpen]);
 	const [sortMenuOpen, setSortMenuOpen] = useState(false);
 	const [sortBy, setSortBy] = useState<SortKey>('default');
 
@@ -808,9 +853,16 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			{/*
 			  * Collapsed is a rail, not an absence — it reflows the content column
 			  * rather than covering it, so nothing overlaps the grid.
+			  *
+			  * Rendered unconditionally, because below 1024 the rail *is* the
+			  * drawer whether or not anyone chose to collapse it. `autoOnly` lets
+			  * it hide itself again at `lg` when the collapse was only the width's
+			  * doing. A `matchMedia` listener would do the same thing and be wrong
+			  * for one frame on every load.
 			  */}
-			{drawerCollapsed && (
+			{(
 				<CollapsedRail
+					autoOnly={! drawerCollapsed}
 					locations={locations} stores={stores} types={types}
 					activeLocation={activeLocation} setActiveLocation={setActiveLocation}
 					activeStore={activeStore} setActiveStore={setActiveStore}
@@ -823,7 +875,12 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					accountName={displayName}
 					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
 					dark={dark}
-					onExpand={(tab) => { setDrawerTab(tab); setDrawerCollapsed(false); }}
+					/*
+					 * Both, deliberately. Un-collapsing is what reveals the docked
+					 * drawer at `lg`; `open` is what slides it in below that, where
+					 * un-collapsing alone would do nothing visible.
+					 */
+					onExpand={(tab) => { setDrawerTab(tab); setDrawerCollapsed(false); setDrawerOpen(true); }}
 					onSignOut={onSignOut}
 					theme={theme}
 				/>
@@ -924,7 +981,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			  * handler throws is written to be read by a person.
 			  */}
 			{api.error && (
-				<div class="max-w-5xl mx-auto px-6">
+				<div class="px-[18px] md:px-[34px]">
 					<div
 						role="alert"
 						class="flex items-start justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
@@ -948,7 +1005,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 			  * accepting it switches to what the link opened.
 			  */}
 			{pendingCode && (
-				<div class="max-w-5xl mx-auto px-6">
+				<div class="px-[18px] md:px-[34px]">
 					<div
 						class="flex items-center justify-between gap-3 px-3 py-2 rounded-md text-sm mb-1"
 						style={{ background: theme.surfaceAlt, color: theme.textMuted, border: `1px solid ${theme.border}` }}
@@ -970,7 +1027,12 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				</div>
 			)}
 
-			<div class="max-w-[1160px] px-[18px] md:px-[34px] py-6 md:py-[30px] pb-28 md:pb-[30px]">
+			{/*
+			  * No max width. The column is whatever the drawer leaves it, so the
+			  * grid below can keep adding tracks instead of stranding whitespace
+			  * on a wide screen. Only the gutters are fixed.
+			  */}
+			<div class="px-[18px] md:px-[34px] py-6 md:py-[30px] pb-28 md:pb-[30px]">
 				<main>
 					<div class="flex items-center gap-3.5">
 						<label class={`flex-1 min-w-0 flex items-center gap-[11px] h-[50px] px-[18px] rounded-[15px] focus-within:border-ink-muted ${PAGE_INPUT}`}>
@@ -1080,10 +1142,37 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					  * A grid rather than a stack, per the spec: cards are dense
 					  * enough that eight scan in one pass on a desktop. `items-start`
 					  * keeps an expanded card from stretching its whole row.
+					  *
+					  * `auto-fit` with a 320px floor and a `1fr` ceiling: the tracks
+					  * always divide the row exactly, so the gutter is 16px at every
+					  * width and there is never a ragged remainder at the end.
+					  *
+					  * Both of the earlier attempts spent that remainder somewhere
+					  * visible and both were wrong. Capping the card inside a `1fr`
+					  * track pushed it between the cards — 104px between neighbours
+					  * at 1440, because the track stretched while the card did not.
+					  * Capping the *track* at 420 held the gutter but left up to a
+					  * full track of dead space at the right edge. Letting the track
+					  * stretch is what removes the remainder rather than relocating
+					  * it.
+					  *
+					  * The trade is `auto-fit`'s: it collapses empty tracks, so a
+					  * household holding fewer items than columns gets fewer, wider
+					  * cards rather than a short row of narrow ones. Once there are
+					  * more items than columns — the normal state of a pantry — it
+					  * is identical to `auto-fill`.
+					  *
+					  * Mobile stays an explicit single column: below 320px of content
+					  * the floor would overflow its own track.
 					  */}
-					<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+					<div class="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 items-start">
+						{/*
+						  * Full width, or these read as a message about the first
+						  * card rather than about the list — and the wider the
+						  * screen, the more off-centre they look.
+						  */}
 						{sorted.length === 0 && (
-							<p class="text-sm py-8 text-center" style={{ color: theme.textMuted }}>Nothing here yet.</p>
+							<p class="col-span-full text-sm py-8 text-center" style={{ color: theme.textMuted }}>Nothing here yet.</p>
 						)}
 
 						{visibleItems.map((it) => (
@@ -1108,7 +1197,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						{mayEditItems && sorted.length > 0 && visibleCount >= sorted.length && (
 							<button
 								onClick={openAddForm}
-								class={`hidden md:flex flex-col items-center justify-center gap-2.5 min-h-[152px] p-5 rounded-[20px] font-disp italic text-base ${PAGE_CHIP_ADD}`}
+								class={`hidden md:flex flex-col items-center justify-center gap-2.5 min-h-[188px] p-5 rounded-[20px] font-disp italic text-base ${PAGE_CHIP_ADD}`}
 							>
 								<Plus size={20} strokeWidth={2.2} />
 								Something new on the shelf
@@ -1116,7 +1205,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 						)}
 
 						{visibleCount < sorted.length && (
-							<div ref={sentinelRef} class="py-4 text-center">
+							<div ref={sentinelRef} class="col-span-full py-4 text-center">
 								<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>Loading more…</span>
 							</div>
 						)}
@@ -1180,7 +1269,15 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				positionClass={
 					'fixed z-[55] left-0 right-0 ' +
 					(mayEditItems ? 'bottom-[92px] md:bottom-6 ' : 'bottom-4 md:bottom-6 ') +
-					(drawerCollapsed ? 'md:left-[68px]' : 'md:left-[340px]')
+					/*
+					 * Bounded ranges, not an override. `md:left-[68px]` plus a
+					 * `min-[1120px]:` rule looks equivalent and is not: Tailwind
+					 * emits arbitrary `min-[…]` variants before the named
+					 * breakpoints, so at 1120 the `md` rule wins on source order and
+					 * the toast sits under the docked drawer.
+					 */
+					'md:max-[1120px]:left-[68px] ' +
+					(drawerCollapsed ? 'min-[1120px]:left-[68px]' : 'min-[1120px]:left-[340px]')
 				}
 				dark={dark}
 				theme={theme}

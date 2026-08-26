@@ -132,7 +132,7 @@ export function Drawer({
 			{open && (
 				<button
 					onClick={onClose}
-					class="md:hidden fixed inset-0 z-30"
+					class="min-[1120px]:hidden fixed inset-0 z-30"
 					style={{ background: 'rgba(15, 12, 8, 0.5)' }}
 					aria-label="Close menu"
 				/>
@@ -140,10 +140,29 @@ export function Drawer({
 
 			<aside
 				class={
-					'fixed md:sticky top-0 left-0 z-40 h-screen shrink-0 flex flex-col ' +
-					'w-[328px] md:w-[340px] transition-transform duration-200 ' +
-					(open ? 'translate-x-0' : '-translate-x-full md:translate-x-0') +
-					(collapsed ? ' md:hidden' : '')
+					/*
+					 * Docked from `xl` (1280) up, a slide-over below it. The rail is
+					 * the drawer everywhere below that.
+					 *
+					 * 1120 is derived, not chosen. Docking spends 340px, so it must
+					 * not drop the content column below what its current column count
+					 * needs — otherwise widening the window *removes* a card.
+					 *
+					 * With a 320px card floor a track is 336, and the thresholds that
+					 * survive that test are narrow: 1064–1128, then 1400–1464. No
+					 * Tailwind breakpoint sits in either. `lg` (1024) costs a column
+					 * 2 → 1, `xl` (1280) costs one 3 → 2, `2xl` (1536) costs one
+					 * 4 → 3. 1120 is the middle of the lowest surviving band, which
+					 * keeps the docked drawer available on ordinary laptops rather
+					 * than pushing it out to 1400.
+					 *
+					 * **This number is a function of the card floor.** Change
+					 * `minmax(320px,…)` in `Pantry` and it has to be re-derived.
+					 */
+					'fixed min-[1120px]:sticky top-0 left-0 z-40 h-screen shrink-0 flex flex-col ' +
+					'w-[328px] min-[1120px]:w-[340px] transition-transform duration-200 ' +
+					(open ? 'translate-x-0' : '-translate-x-full min-[1120px]:translate-x-0') +
+					(collapsed ? ' min-[1120px]:hidden' : '')
 				}
 				style={{ background: d.bg }}
 			>

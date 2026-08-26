@@ -2214,3 +2214,47 @@ counts came back right and the refusal sentence came back verbatim.
 
 Still the only way to do this — restating the ask from 2026-08-25: **`sf dev
 invoke <name> [args…]`** would replace the whole dance.
+
+### 🐛 An arbitrary `min-[Npx]:` variant is emitted *before* the named breakpoints, so it cannot override one
+
+Later the same day, laying out the item grid. The collapsed rail is meant to be
+the drawer below 1120px and disappear above it, so it carried
+`hidden md:flex min-[1120px]:hidden`. It rendered beside the open drawer on
+every desktop width.
+
+The compiled `zero.css` says why:
+
+```
+line 2067:  @media (width >= 1120px) { .min-\[1120px\]\:hidden { display: none } }
+line 2108:  @media (width >= 48rem)  { .md\:flex          { display: flex } }
+```
+
+At 1120 both queries match and `md:flex` wins on source order. Tailwind groups
+arbitrary media variants ahead of `sm/md/lg/xl/2xl` rather than sorting all
+media variants together by their computed min-width, so an arbitrary variant can
+never override a named one — only the reverse.
+
+Whether that ordering is intended or not, the part worth fixing is that **there
+is no signal**. The class compiles, appears in the stylesheet with exactly the
+declaration you asked for, and does nothing. Every check short of opening a
+browser passes: `tsc` is clean, the selector greps present, the media query is
+correct in isolation. We had just written a project rule that "grep the compiled
+CSS" is how you confirm a class shipped — and here the class shipped and was
+still dead.
+
+The fix is to stop relying on order at all: `md:max-[1120px]:flex` compiles to a
+nested `@media (width >= 48rem) { @media (width < 1120px) { … } }` that covers
+exactly the intended band, so nothing has to out-rank anything.
+
+**A build-time warning would catch this** — two utilities on the same element
+setting the same property, in media queries that overlap, where the narrower
+one loses. That is statically detectable from the class list. Failing that,
+sorting *all* media variants by computed min-width would make the intuition
+correct. Right now the only way to find it is to notice the pixels are wrong.
+
+Worth noting the asymmetry that makes this easy to miss: pairing an arbitrary
+variant with a **base** utility (`fixed min-[1120px]:sticky`,
+`flex ... min-[1120px]:hidden`) works fine, because base utilities precede every
+media block. Four of our five `min-[1120px]:` usages were that shape and were
+correct. Only the two paired with a `md:` class were broken, which is why it
+looked like an isolated glitch rather than a rule.
