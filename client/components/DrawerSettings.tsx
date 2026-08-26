@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ChevronUp, LogOut, Pencil } from 'lucide-preact';
 
@@ -6,7 +6,7 @@ import { MembersPanel } from './MembersPanel';
 import { InvitesPanel } from './InvitesPanel';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
-import { DRAWER_BUTTON, DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_INPUT } from '../lib/controlStyles';
+import { DRAWER_BUTTON, DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_GHOST_DANGER, DRAWER_ICON, DRAWER_INPUT } from '../lib/controlStyles';
 import type { Invite, Member, ThemeOverride } from '../../shared/types';
 import type { Role } from '../../shared/roles';
 import { can } from '../../shared/roles';
@@ -35,7 +35,22 @@ type Props = {
 	onRevokeInvite: (inviteId: string) => void;
 	onChangeRole: (membershipId: string, role: Role) => void;
 	onRemoveMember: (membershipId: string) => void;
+	/**
+	 * Asks to leave. Which of the three cases you are in — leave, blocked on
+	 * being the last owner, or delete because you are the last member — is
+	 * decided by `Pantry`, which owns the dialog.
+	 */
 	onLeaveHousehold: () => void;
+	/**
+	 * What the row says, so it never promises something softer than it does.
+	 *
+	 * *Delete household* when you are its only member: leaving would destroy it,
+	 * and a row labelled *Leave* that deletes a pantry is the worst kind of lie
+	 * this screen could tell.
+	 */
+	leaveLabel: string;
+	/** Bumped to unfold Members — where a blocked "last owner" dialog sends you. */
+	openMembers: number;
 	theme: Theme;
 };
 
@@ -48,16 +63,29 @@ type Props = {
  * both run long, so those fold.
  */
 function Section({
-	title, theme, collapsible = false, defaultOpen = true, children,
+	title, theme, collapsible = false, defaultOpen = true, openSignal, children,
 }: {
 	title: string;
 	theme: Theme;
 	collapsible?: boolean;
 	defaultOpen?: boolean;
+	/** Bumped to force this section open. A counter, so twice in a row still works. */
+	openSignal?: number;
 	children: ComponentChildren;
 }) {
 	const [open, setOpen] = useState(defaultOpen);
 	const d = theme.drawer;
+
+	// Skips the first run — a section that is already open does not need
+	// unfolding, and `defaultOpen` has had its say by then.
+	const seen = useRef(openSignal);
+
+	useEffect(() => {
+		if (openSignal === seen.current) return;
+
+		seen.current = openSignal;
+		setOpen(true);
+	}, [openSignal]);
 	const shown = ! collapsible || open;
 
 	return (
@@ -99,7 +127,7 @@ export function DrawerSettings({
 	defaultThreshold, setDefaultThreshold,
 	accountName, accountEmail, onSignOut,
 	members, invites, me, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember,
-	onLeaveHousehold, theme,
+	onLeaveHousehold, leaveLabel, openMembers, theme,
 }: Props) {
 	const d = theme.drawer;
 	/* Panels paint from a Theme; hand them one whose surfaces are the drawer's. */
@@ -209,12 +237,27 @@ export function DrawerSettings({
 						)}
 					</div>
 				)}
+
+				{/*
+				  * Leaving lives here, at the foot of Household — not in a block of
+				  * its own after Invites, which would break *Invites last*.
+				  *
+				  * Ghost with crimson text: this is how a destructive action is
+				  * **offered**. Executing it is the dialog's ink/cream primary, and
+				  * crimson is never a button.
+				  */}
+				<button
+					onClick={onLeaveHousehold}
+					class={`self-start flex items-center gap-2 h-[38px] px-[15px] -ml-[15px] rounded-[11px] text-[13.5px] font-medium ${DRAWER_GHOST_DANGER}`}
+				>
+					<LogOut size={15} /> {leaveLabel}
+				</button>
 			</Section>
 
-			<Section title="Members" theme={theme} collapsible>
+			<Section title="Members" theme={theme} collapsible openSignal={openMembers}>
 				<MembersPanel
 					members={members} me={me}
-					onChangeRole={onChangeRole} onRemoveMember={onRemoveMember} onLeave={onLeaveHousehold}
+					onChangeRole={onChangeRole} onRemoveMember={onRemoveMember}
 					theme={inner}
 				/>
 			</Section>

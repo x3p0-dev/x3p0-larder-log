@@ -36,7 +36,9 @@
 				{ "slug": "drawer-card-hover", "name": "Drawer card hover", "color": "light-dark(#332B22, #241E16)" },
 
 				{ "slug": "drawer-press", "name": "Drawer pressed", "color": "#F2E9DA" },
-				{ "slug": "drawer-press-ink", "name": "Drawer pressed text", "color": "#241E17" }
+				{ "slug": "drawer-press-ink", "name": "Drawer pressed text", "color": "#241E17" },
+				{ "slug": "focus-dark", "name": "Focus on dark", "color": "#D4636B" },
+				{ "slug": "drawer-danger", "name": "Danger on dark", "color": "#D4636B" }
 			]
 		},
 		"typography": {

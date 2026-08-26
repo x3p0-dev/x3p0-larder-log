@@ -38,10 +38,24 @@ export type Item = {
 	qty: string;
 	threshold: string;
 	notes: string;
+	/**
+	 * Zero's own insert stamp, ISO 8601 UTC — never written by this app (D35).
+	 *
+	 * Carried on the DTO so *Recently added* can be a real ordering instead of
+	 * whatever order `collect()` happened to return, which was oldest-first and
+	 * therefore the exact opposite of the label. It string-compares correctly,
+	 * which is the only reason sorting on it is safe here (D4).
+	 */
+	createdAt: string;
 };
 
-/** The editable subset of an item, as the add and edit forms hold it. */
-export type ItemDraft = Omit<Item, 'id'>;
+/**
+ * The editable subset of an item, as the add and edit forms hold it.
+ *
+ * `createdAt` is omitted with `id` for the same reason: both are the platform's
+ * to assign, and `insert()` rejects either one outright.
+ */
+export type ItemDraft = Omit<Item, 'id' | 'createdAt'>;
 
 export type Member = {
 	id: string;

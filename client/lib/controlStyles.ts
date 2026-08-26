@@ -105,3 +105,66 @@ export const PAGE_ICON =
 /** A field on the page. The border firms up on focus rather than glowing. */
 export const PAGE_INPUT =
 	'transition-colors bg-surface border border-line text-ink outline-none placeholder:text-ink-faint focus:border-ink-muted focus-visible:border-ink-muted';
+
+/* ---------- destructive actions: the toast and the confirm dialog ---------- */
+
+/**
+ * The toast's Undo pill.
+ *
+ * The drawer's primary, because the toast is the drawer surface in both themes
+ * — this is the one control the component exists for, and a `drawer-raised`
+ * pill disappeared into the fill when it was drawn that way first.
+ *
+ * The focus ring is `focus-dark` rather than `accent`: the ground under a toast
+ * is dark either way, so a ring that follows the theme would be solving a
+ * problem this surface does not have.
+ */
+export const TOAST_UNDO =
+	'transition-colors bg-drawer-press text-drawer-press-ink hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
+
+/** The toast's dismiss `×`. Pressing it commits — it is not a "later". */
+export const TOAST_DISMISS =
+	'transition-colors text-on-dark-faint hover:text-on-dark-muted rounded-[9px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
+
+/**
+ * A dialog's ghost — Cancel, and the only non-committing thing in the footer.
+ *
+ * `PAGE_BUTTON` fills at rest, which would put two filled buttons side by side
+ * and make the pair read as a choice between equals.
+ */
+export const PAGE_BUTTON_GHOST =
+	'transition-colors text-ink-body hover:bg-surface-alt hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * A dialog's primary. The ordinary ink/cream fill — crimson is never a button.
+ *
+ * Distinct from `PAGE_BUTTON_PRIMARY` only in its focus ring, which offsets
+ * against the dialog surface rather than the page ground behind the scrim.
+ */
+export const PAGE_BUTTON_DIALOG =
+	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-100 disabled:pointer-events-none';
+
+/** The typed-confirmation field. Its border is already strong at rest. */
+export const PAGE_INPUT_CONFIRM =
+	'transition-colors bg-surface border border-ink-faint text-ink outline-none placeholder:text-ink-faint focus:border-ink-muted focus-visible:border-ink-muted';
+
+/**
+ * The trash on a term's editing row.
+ *
+ * Neutral, not crimson, and **never disabled** (D36). A disabled control cannot
+ * explain itself — it takes no hover on touch and screen readers skip it — and
+ * the reason is the one thing worth having at that moment, so the press always
+ * lands and the blocked dialog does the explaining.
+ */
+export const DRAWER_TRASH =
+	'transition-colors text-on-dark-faint hover:text-on-dark hover:bg-drawer-raised rounded-[9px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
+
+/**
+ * A ghost row with crimson text — *Leave household*, *Revoke*.
+ *
+ * The way a destructive action is **offered**, never the way it is executed:
+ * pressing one opens a dialog whose own primary is the ordinary ink/cream fill.
+ * Crimson never carries a commit anywhere in this app.
+ */
+export const DRAWER_GHOST_DANGER =
+	'transition-colors text-drawer-danger hover:bg-drawer-raised active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';

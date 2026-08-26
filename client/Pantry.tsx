@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Plus, Search, Menu, ShoppingCart, X } from 'lucide-preact';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { Archive, Link2Off, LogOut, Menu, Plus, Search, ShoppingCart, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
+import type { LucideIcon } from 'lucide-preact';
 
 import { CollapsedRail } from './components/CollapsedRail';
 import { Drawer } from './components/Drawer';
@@ -12,25 +13,31 @@ import { PAGE_BUTTON, PAGE_BUTTON_PRIMARY, PAGE_CHIP_ADD, PAGE_INPUT } from './l
 import { ItemCard } from './components/ItemCard';
 import { JoinBox } from './components/JoinBox';
 import { ShoppingListModal } from './components/ShoppingListModal';
-import { UndoToast } from './components/UndoToast';
+import { ToastStack } from './components/Toast';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import type { ConfirmTone } from './components/ConfirmDialog';
 
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
 import { usePantryData } from './hooks/usePantryData';
+import { useToasts } from './hooks/useToasts';
 
 import { entityColorFor, getTheme, statusFor, termNameFor } from './lib/theme';
 import { clearPendingInvite, pendingInvite } from './lib/pendingInvite';
 import type { TaxonomyActions } from './lib/actions';
 
 import { normalizeCode } from '../shared/invite';
+import { wouldStrandHousehold } from '../shared/membership';
 import type { StatusKey } from '../shared/status';
 import { statusKeyFor } from '../shared/status';
-import type { Item, ItemDraft, ThemeOverride } from '../shared/types';
+import type { Item, ItemDraft, Term, TermKind, ThemeOverride } from '../shared/types';
 import { DEFAULT_ROLE, can } from '../shared/roles';
+import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
+import type { TermBlock } from '../shared/term';
+import { termBlock, termUsageCount } from '../shared/term';
 
 const PAGE_SIZE = 20;
-const UNDO_MS = 6000;
 
 /** What "needs restocking" means as an ordering. */
 const RESTOCK_RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
@@ -58,6 +65,121 @@ function themeKeyFor(userId: string) {
 
 function householdKeyFor(userId: string) {
 	return `larder.v4.${userId}.household`;
+}
+
+/**
+ * A destructive action waiting on an answer, or on being understood.
+ *
+ * Two families in one union, and the difference is whether there is anything to
+ * decide. `*-blocked` states are **preconditions**: they explain and offer a
+ * way to the problem, and their primary is never destructive.
+ */
+type Pending =
+	| { kind: 'revoke-invite'; inviteId: string; role: Role }
+	| { kind: 'remove-member'; membershipId: string; name: string }
+	| { kind: 'leave' }
+	| { kind: 'leave-blocked' }
+	| { kind: 'delete-household' }
+	| { kind: 'term-blocked'; block: TermBlock; termKind: TermKind; termId: string };
+
+type DialogCopy = {
+	tone: ConfirmTone;
+	icon: LucideIcon;
+	title: string;
+	body: string;
+	confirmLabel: string;
+	/** Set only on the typed confirmation. */
+	requireText?: string;
+};
+
+type DialogFacts = {
+	householdName: string;
+	itemCount: number;
+	locationCount: number;
+	storeCount: number;
+	typeCount: number;
+};
+
+/**
+ * What each pending action says.
+ *
+ * Kept out of the component because it is the part worth reading side by side:
+ * every title asks the question or gives the instruction, every body names what
+ * is lost, and every button says the verb — never *Confirm*, *OK* or *Yes*.
+ * That is what carries destructiveness here, since crimson never will.
+ */
+function dialogCopy(pending: Pending, facts: DialogFacts): DialogCopy {
+	const { householdName, itemCount, locationCount, storeCount, typeCount } = facts;
+	const name = householdName || 'this household';
+
+	switch (pending.kind) {
+		case 'revoke-invite':
+			return {
+				tone: 'danger',
+				icon: Link2Off,
+				title: 'Revoke this invite?',
+				body: 'The link stops working immediately. Anyone who hasn’t accepted it yet will need a new one.',
+				confirmLabel: 'Revoke invite',
+			};
+
+		case 'remove-member':
+			return {
+				tone: 'danger',
+				icon: UserMinus,
+				title: `Remove ${pending.name}?`,
+				body: `They lose access to ${name} straight away. You can invite them back with a new link.`,
+				confirmLabel: 'Remove member',
+			};
+
+		case 'leave':
+			return {
+				tone: 'danger',
+				icon: LogOut,
+				title: `Leave ${name}?`,
+				body: `You’ll lose access to its ${plural(itemCount, 'item')}. An owner can invite you back.`,
+				confirmLabel: 'Leave household',
+			};
+
+		// Not a decision — you cannot leave a household that would have no
+		// owner left, so the dialog points at the fix instead of asking.
+		case 'leave-blocked':
+			return {
+				tone: 'blocked',
+				icon: UserCheck,
+				title: 'Make someone else an owner first',
+				body: `You’re the only owner of ${name}. Promote another member, then you can leave.`,
+				confirmLabel: 'Open Members',
+			};
+
+		/*
+		 * The only typed confirmation in the app. It earns the exception by
+		 * being the only action that destroys data belonging to more than one
+		 * screen; anywhere else it would be theatre.
+		 */
+		case 'delete-household':
+			return {
+				tone: 'danger',
+				icon: Trash2,
+				title: `Delete ${name}?`,
+				body: `You’re its only member, so leaving deletes it. ${plural(itemCount, 'item')}, ${plural(locationCount, 'location')}, ${plural(storeCount, 'store')} and ${plural(typeCount, 'type')} go permanently.`,
+				confirmLabel: 'Delete household',
+				requireText: householdName,
+			};
+
+		case 'term-blocked':
+			return {
+				tone: 'blocked',
+				icon: Archive,
+				title: pending.block.title,
+				body: pending.block.body,
+				confirmLabel: pending.block.action,
+			};
+	}
+}
+
+/** `1 item` / `4 locations`. Every count in a dialog body goes through this. */
+function plural(count: number, noun: string): string {
+	return `${count} ${count === 1 ? noun : `${noun}s`}`;
 }
 
 type Props = {
@@ -141,13 +263,45 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	/**
 	 * D17: undo is a client-held tombstone, not a soft delete.
 	 *
-	 * The removed row is kept here for the length of the window and re-inserted
-	 * by re-running `addItem`. That means undo produces a **new row id** and
-	 * does not survive a reload — both accepted, because the alternative is a
-	 * `deletedAt` column every query in the app would have to filter forever.
+	 * The removed row is held by its toast for the length of the window and
+	 * re-inserted by re-running `addItem`. That means undo produces a **new row
+	 * id** and does not survive a reload — both accepted, because the
+	 * alternative is a `deletedAt` column every query in the app would have to
+	 * filter forever.
 	 */
-	const [pendingRemoval, setPendingRemoval] = useState<Item | null>(null);
-	const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const toasts = useToasts();
+
+	/**
+	 * The one dialog on screen, or nothing.
+	 *
+	 * **Undo what comes back, confirm what doesn't** (D36). A record that can be
+	 * restored and affects only you gets a toast; anything irreversible, or that
+	 * reaches someone who is not looking at your screen, gets a modal. Nothing
+	 * gets both, so this and `toasts` never describe the same action.
+	 *
+	 * One at a time by construction: every trigger is a control inside a surface
+	 * the dialog covers, so a second could only come from a live query, and a
+	 * dialog that swapped its own question mid-read would be worse than one that
+	 * waits.
+	 */
+	const [pending, setPending] = useState<Pending | null>(null);
+
+	/*
+	 * The dialog outlives `pending` by the length of its exit fade, and a
+	 * dialog is unmounted by `open` going false — not by losing its copy. Held
+	 * here so the last question stays on screen while it fades instead of
+	 * flicking to whatever the fallback happens to be.
+	 */
+	const shownPending = useRef<Pending | null>(null);
+
+	if (pending) shownPending.current = pending;
+
+	/*
+	 * Counters, not booleans — a signal that has to fire twice in a row for the
+	 * same reason still has to be distinguishable from itself.
+	 */
+	const [closeEditing, setCloseEditing] = useState(0);
+	const [openMembers, setOpenMembers] = useState(0);
 
 	const [shoppingListOpen, setShoppingListOpen] = useState(false);
 
@@ -257,7 +411,21 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		const arr = [...filtered];
 		// Quantity sorts parse first: these are strings, and "10" sorts before
 		// "2". The database can't sort them either, for the same reason (D4).
-		if (sortBy === 'restock') {
+		if (sortBy === 'default') {
+			/*
+			 * *Recently added* used to apply no sort at all, which left the list
+			 * in `collect()` order — oldest first, the exact opposite of what the
+			 * label promised. `createdAt` is Zero's own insert stamp (D35), ISO
+			 * 8601 UTC, so it is the one string in the app that compares
+			 * correctly without parsing.
+			 *
+			 * An undone removal therefore comes back at the *top* rather than in
+			 * its old slot: undo re-inserts through `addItem` (D17), so the row is
+			 * genuinely new and genuinely the most recently added thing here.
+			 */
+			arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		}
+		else if (sortBy === 'restock') {
 			// Out first, then low, then stocked — the order you would walk the
 			// kitchen in. `sort` is stable, so within a status the list keeps
 			// whatever order it already had.
@@ -275,6 +443,19 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 	const locationCounts = useMemo(() => Object.fromEntries(
 		locations.map((loc) => [loc.id, items.filter((i) => i.locationId === loc.id).length])
 	), [items, locations]);
+
+	/**
+	 * How many items reference a term, for every kind.
+	 *
+	 * The same function `requestDeleteTerm` asks before it deletes, so the
+	 * number on the editing row and the number in the blocked dialog cannot
+	 * disagree. `locationCounts` stays for the collapsed rail, which shows only
+	 * locations and wants a map rather than a call per chip.
+	 */
+	const countFor = useCallback(
+		(kind: TermKind, id: string) => termUsageCount(items, kind, id),
+		[items]
+	);
 
 	const anyFilterActive = Boolean(
 		activeLocation || activeType || activeStore || activeStatus || search.trim()
@@ -295,9 +476,6 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		observer.observe(el);
 		return () => observer.disconnect();
 	}, [sorted.length, visibleCount]);
-
-	// Don't leave the undo timer running after unmount.
-	useEffect(() => () => clearTimeout(undoTimeoutRef.current), []);
 
 	/**
 	 * A filter pointing at a term someone else just deleted would silently hide
@@ -348,29 +526,148 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 		// undo offered for a row that never went anywhere produces a duplicate.
 		if (! await api.removeItem(id)) return;
 
-		clearTimeout(undoTimeoutRef.current);
-		setPendingRemoval(item);
-		undoTimeoutRef.current = setTimeout(() => setPendingRemoval(null), UNDO_MS);
+		toasts.push({
+			lead: 'Removed',
+			name: item.name,
+			// Re-insert rather than un-delete. The row comes back with a new id
+			// (D17), which nothing references.
+			onUndo: () => {
+				void api.addItem({
+					name: item.name,
+					locationId: item.locationId,
+					typeIds: item.typeIds,
+					storeIds: item.storeIds,
+					qty: item.qty,
+					threshold: item.threshold,
+					notes: item.notes,
+				});
+			},
+		});
 	}
 
-	async function undoRemove() {
-		if (! pendingRemoval) return;
+	/** The list a kind's terms live in, and the filter currently pointed at it. */
+	function termsOf(kind: TermKind): Term[] {
+		return kind === 'location' ? locations : kind === 'type' ? types : stores;
+	}
 
-		const restore = pendingRemoval;
-		clearTimeout(undoTimeoutRef.current);
-		setPendingRemoval(null);
+	function activeTermOf(kind: TermKind): string | null {
+		return kind === 'location' ? activeLocation : kind === 'type' ? activeType : activeStore;
+	}
 
-		// Re-insert rather than un-delete. The row comes back with a new id
-		// (D17), which nothing references.
-		await api.addItem({
-			name: restore.name,
-			locationId: restore.locationId,
-			typeIds: restore.typeIds,
-			storeIds: restore.storeIds,
-			qty: restore.qty,
-			threshold: restore.threshold,
-			notes: restore.notes,
+	function setActiveTerm(kind: TermKind, id: string | null) {
+		if (kind === 'location') setActiveLocation(id);
+		else if (kind === 'type') setActiveType(id);
+		else setActiveStore(id);
+	}
+
+	/**
+	 * The trash on a term's editing row. Live in every case (D36).
+	 *
+	 * Deleting is refused while anything references the term, so the press
+	 * either explains why — with the count that was already on the row — or goes
+	 * through and hands you an undo. Both outcomes are readable *before* the
+	 * press; neither needs a disabled control that cannot say so.
+	 */
+	async function requestDeleteTerm(kind: TermKind, id: string) {
+		const term = termsOf(kind).find((t) => t.id === id);
+
+		if (! term) return;
+
+		// The same call the server refuses on, so the sentence on screen and the
+		// sentence the mutation would have thrown are one string.
+		const block = termBlock(kind, term.name, termUsageCount(items, kind, id));
+
+		if (block) {
+			setPending({ kind: 'term-blocked', block, termKind: kind, termId: id });
+			return;
+		}
+
+		/*
+		 * Captured before the delete, because the effect that heals a filter
+		 * pointing at a vanished term will have cleared it by the time undo runs.
+		 */
+		const wasActive = activeTermOf(kind) === id;
+
+		if (! await api.deleteTerm(kind, id)) return;
+
+		toasts.push({
+			lead: 'Deleted',
+			name: term.name,
+			onUndo: () => void restoreTerm(kind, term, wasActive),
 		});
+	}
+
+	/**
+	 * Puts a deleted term back, and the filter with it if it was the active one.
+	 *
+	 * Name and colour survive; **position does not**. The term is re-created, so
+	 * it is a new row at the end of its list — the same trade D17 makes for an
+	 * item, for the same reason.
+	 */
+	async function restoreTerm(kind: TermKind, term: Term, wasActive: boolean) {
+		const id = await taxonomy.create(kind, { name: term.name, ink: term.ink });
+
+		if (id && wasActive) setActiveTerm(kind, id);
+	}
+
+	/**
+	 * Leaving, and the two things it turns into.
+	 *
+	 * The last member of a household cannot leave it — that would strand it — so
+	 * the row relabels to *Delete household* and takes the typed confirmation.
+	 * The last *owner* of a household with members left cannot leave either, and
+	 * that one is a precondition rather than a question.
+	 */
+	function requestLeave() {
+		if (members.length <= 1) { setPending({ kind: 'delete-household' }); return; }
+
+		if (wouldStrandHousehold(members, myMembershipId)) { setPending({ kind: 'leave-blocked' }); return; }
+
+		setPending({ kind: 'leave' });
+	}
+
+	/** Runs whatever the open dialog was asking about, then closes it. */
+	async function confirmPending() {
+		const action = pending;
+
+		if (! action) return;
+
+		setPending(null);
+
+		switch (action.kind) {
+			case 'revoke-invite':
+				// Plain: there is nothing to restore, only a new link to issue.
+				if (await api.revokeInvite(action.inviteId)) toasts.push({ lead: 'Invite revoked.' });
+				return;
+
+			case 'remove-member':
+				if (await api.removeMember(action.membershipId)) toasts.push({ lead: 'Member removed.' });
+				return;
+
+			// No toast on either: the household you would announce it in is the
+			// one you just left.
+			case 'leave':
+				await api.leaveHousehold();
+				return;
+
+			case 'delete-household':
+				await api.deleteHousehold();
+				return;
+
+			// Both blocked cases send you where the problem is instead.
+			case 'leave-blocked':
+				setDrawerTab('settings');
+				setDrawerOpen(true);
+				setDrawerCollapsed(false);
+				setOpenMembers((n) => n + 1);
+				return;
+
+			case 'term-blocked':
+				clearAllFilters();
+				setActiveTerm(action.termKind, action.termId);
+				setCloseEditing((n) => n + 1);
+				return;
+		}
 	}
 
 	function emptyDraft(): ItemDraft {
@@ -537,7 +834,7 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				activeLocation={activeLocation} setActiveLocation={setActiveLocation}
 				activeType={activeType} setActiveType={setActiveType}
 				activeStore={activeStore} setActiveStore={setActiveStore}
-				locationCounts={locationCounts} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
+				countFor={countFor} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
 				tab={drawerTab} setTab={setDrawerTab}
 				open={drawerOpen} onClose={() => setDrawerOpen(false)}
 				collapsed={drawerCollapsed}
@@ -557,16 +854,34 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 					members, invites,
 					me: { membershipId: myMembershipId, role: myRole },
 					onCreateInvite: api.createInvite,
-					onRevokeInvite: api.revokeInvite,
+					// Both of these *ask*. Revoking kills a link someone else is
+					// holding and removing reaches a person who is not looking at
+					// this screen, so neither is an undo (D36).
+					onRevokeInvite: (inviteId) => {
+						const invite = invites.find((i) => i.id === inviteId);
+
+						if (invite) setPending({ kind: 'revoke-invite', inviteId, role: invite.role });
+					},
 					onChangeRole: api.changeRole,
-					onRemoveMember: api.removeMember,
-					onLeaveHousehold: api.leaveHousehold,
+					onRemoveMember: (membershipId) => {
+						const member = members.find((m) => m.id === membershipId);
+
+						setPending({
+							kind: 'remove-member',
+							membershipId,
+							name: member?.displayName || 'this member',
+						});
+					},
+					onLeaveHousehold: requestLeave,
+					leaveLabel: members.length <= 1 ? 'Delete household' : 'Leave household',
+					openMembers,
 				}}
 				onCreateTerm={(kind, name, ink) => taxonomy.create(kind, { name, ink })}
 				onRenameTerm={(kind, id, name) => { void taxonomy.update(kind, id, { name }); }}
 				onRecolorTerm={(kind, id, ink) => { void taxonomy.update(kind, id, { ink }); }}
-				onDeleteTerm={(kind, id) => { void taxonomy.remove(kind, id); }}
+				onDeleteTerm={(kind, id) => void requestDeleteTerm(kind, id)}
 				canEditTaxonomy={mayEditTaxonomy}
+				closeEditing={closeEditing}
 				theme={theme}
 			/>
 
@@ -849,7 +1164,42 @@ export function Pantry({ userId, displayName, email, onSignOut }: Props) {
 				dark={dark} theme={theme}
 			/>
 
-			<UndoToast item={pendingRemoval} onUndo={() => void undoRemove()} theme={theme} />
+			{/*
+			  * Bottom-centre of the **content column**, never over the drawer —
+			  * which is why the offset tracks the drawer's own three states
+			  * rather than being a single `left-0`. Each branch is a complete
+			  * literal so Zero's scanner can see it; a computed class emits no
+			  * CSS at all.
+			  *
+			  * Mobile clears the pinned *Add item* bar when there is one.
+			  */}
+			<ToastStack
+				toasts={toasts.toasts}
+				onUndo={toasts.undo}
+				onClose={toasts.close}
+				positionClass={
+					'fixed z-[55] left-0 right-0 ' +
+					(mayEditItems ? 'bottom-[92px] md:bottom-6 ' : 'bottom-4 md:bottom-6 ') +
+					(drawerCollapsed ? 'md:left-[68px]' : 'md:left-[340px]')
+				}
+				dark={dark}
+				theme={theme}
+			/>
+
+			<ConfirmDialog
+				open={pending !== null}
+				{...dialogCopy(shownPending.current ?? { kind: 'leave' }, {
+					householdName,
+					itemCount: items.length,
+					locationCount: locations.length,
+					storeCount: stores.length,
+					typeCount: types.length,
+				})}
+				onConfirm={() => void confirmPending()}
+				onCancel={() => setPending(null)}
+				dark={dark}
+				theme={theme}
+			/>
 
 			<ShoppingListModal
 				open={shoppingListOpen}

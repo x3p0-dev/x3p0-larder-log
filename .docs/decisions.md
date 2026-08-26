@@ -311,6 +311,9 @@ that should express this declaratively. See [notes](notes.md).
 ## D16. Deleting a location is blocked while items reference it
 
 **Decided:** 2026-08-24
+**Widened by [D36](#d36-undo-what-comes-back-confirm-what-doesnt) on 2026-08-26:
+the same refusal now covers types and stores, so the item count on an editing
+row means one thing in every section.**
 
 Zero has no nullable or optional fields — every column holds a value, and the
 type vocabulary is `string()`, `boolean()`, `id(table)`. So "clear the location"
@@ -1206,3 +1209,178 @@ with no flags. The asymmetry decides it — keeping an unread column costs a
 
 **If icons come back**, the natural home is the drawer's filter rows rather than
 the item card, and the glyph vocabulary is in git history at `shared/icons.ts`.
+
+---
+
+## D35. Created and modified dates are the platform's, not ours
+
+**Decided:** 2026-08-26
+
+Items, terms, and households should each carry a creation date and a
+last-modified date — stored only, shown nowhere, so that later features have
+them to work with.
+
+**They already do, on every table, and we cannot add our own.** Zero stamps
+`id`, `createdAt`, and `updatedAt` onto every row, and those three names are
+reserved: `table({ createdAt: string() })` throws
+`Field name "createdAt" is reserved for Lakebed metadata.` before the capsule
+ever compiles. There is nothing to add to the schema in `server/index.ts`, and
+so — per D27 — nothing to check in the artifact and no migration to run.
+
+The semantics were verified against `sf dev` on 2026-08-26 rather than taken on
+faith, because "you get the columns for free" does not say whether `updatedAt`
+ever moves:
+
+- both are stamped at insert, to the same instant
+- `createdAt` is never rewritten by `update()`
+- `updatedAt` is rewritten on **every** `update()`, including `update(id, {})`
+- the encoding is ISO 8601 UTC with milliseconds, so it string-compares
+  correctly — the one date format that does, which is why `invites.expiresAt`
+  already uses it (D4, D24)
+
+**The "additive, backfill old rows to the earliest date" plan is moot** and the
+outcome is strictly better than it: existing rows are not backfilled with a
+fallback, they carry their real insert times, because the platform has been
+stamping them since the tables were created.
+
+Three consequences worth keeping in mind before something reads these:
+
+**An item's `updatedAt` does move when only its tags change.** Types and stores
+live in join tables (`itemTypes`, `itemStores`), so retagging writes join rows
+and not the item row. `updateItem` happens to call `ctx.db.items.update()`
+unconditionally, and an empty patch still bumps the timestamp, so the item's
+last-modified stays honest. That is load-bearing: **do not "optimize" away the
+`items.update()` call when `next` is empty.**
+
+**Deleting a term does not touch the items that referenced it.** The cascade in
+`deleteTerm` removes join rows only, so an item silently loses a tag while its
+`updatedAt` stands still. Left as-is — the item row genuinely did not change —
+but a "recently edited" view built on `updatedAt` will not show it.
+
+**Nothing surfaces them to the client yet.** Queries build DTOs from
+`shared/types.ts`, and none of them carry a timestamp. Whatever feature wants
+these dates adds the field to the DTO it needs; the storage half is already
+done and needs no publish to start working.
+
+**Rejected: a hand-rolled `createdAt` under a different name** (`addedAt`,
+`published`). It would compile, and it would then have to be set correctly in
+sixteen mutations forever, duplicating a column the platform maintains for free
+and drifting from it the first time someone forgets. The only thing it buys is
+a name we like better.
+
+**Not verified on a hosted runtime.** Publishing is blocked, and
+`sf db dump` currently fails with `zero_db_connect_failed` even though the space
+serves `200 ok`, so live rows could not be inspected. The behavior is from the
+runtime's own insert/update path, which is shared, but it is local-only
+evidence.
+
+---
+
+## D36. Undo what comes back, confirm what doesn't
+
+**Decided:** 2026-08-26
+
+Destructive actions had three different idioms: an undo toast for items, an
+inline "Remove Dana? / Remove / Cancel" row inside `MembersPanel`, and a server
+refusal that surfaced as the error banner. The design spec's *Destructive
+actions* section replaces all three with one rule.
+
+**An action gets an undo toast when the record can be restored and you are the
+only person affected. It gets a confirm modal when the effect cannot be
+reversed, or when it reaches someone who is not looking at your screen.**
+Nothing gets both — a confirm followed by a toast promising an undo it cannot
+honour is worse than either alone.
+
+| Action | Treatment |
+|---|---|
+| Remove item | Undo toast |
+| Delete a term — unused | Undo toast |
+| Delete a term — in use | Blocked dialog |
+| Revoke an invite | Confirm modal, then a plain toast |
+| Remove a member | Confirm modal, then a plain toast |
+| Leave household | Confirm modal |
+| Leave — last owner, others remain | Blocked dialog |
+| Leave — last member | Confirm modal **+ typed name** |
+
+**Crimson is never a button.** The confirm's primary is the ordinary ink/cream
+fill; destructiveness is carried by the title asking the question, the body
+naming what is lost, and the button saying the verb — *Revoke invite*, *Leave
+household*, never *Confirm*, *OK* or *Yes*. Crimson appears once per dialog as
+the icon tint. Ghost-plus-crimson-text stays what it already was on the Edit
+sheet: the way a destructive action is **offered**, never the way it is
+**executed**.
+
+### Blocked is a precondition, not a question
+
+A blocked dialog is the same shell with the destructive half removed: icon,
+title, body, and Cancel plus a button that goes where the problem is. Its disc
+takes the **low** tokens rather than the out ones — amber is "hold on", crimson
+is "gone". Both come off the same status ramp as the item badges, so neither
+needs a colour that did not already exist.
+
+### Deleting a term is refused for every kind now, not just locations
+
+D16 guarded `location` alone, and correctly: a location is *required*, Zero has
+no nullable column, and deleting one in use leaves a dangling id that renders as
+a silent box. Types and stores are optional tags, so `deleteTerm` used to drop
+their join rows and carry on.
+
+**That asymmetry is what changed, and the count is why.** The editing row now
+carries an item count beside a trash that is live in every case. The count
+exists to make the outcome predictable *before* the press — and a count that
+means "this will be blocked" on the Location rows and "these tags are about to
+vanish without telling you" on the Type rows teaches nothing. So every kind
+blocks while anything references it.
+
+The rule and the sentence explaining it are one function, `termBlock` in
+`shared/term.ts`. The server throws its `body` and the client draws the dialog
+from the same call, so the refusal and the explanation cannot drift. Counting
+goes through the `by_type` / `by_store` indexes rather than scanning items —
+locations have no join table, so that one still scans. **Verified against
+`sf dev`** on 2026-08-26 with a throwaway endpoint: two items on one type
+counted 2 through the index, an unused location returned `null`, and the
+blocked sentence came back verbatim.
+
+**Rejected: keeping types and stores deletable with an undo that re-tags.** It
+works — the client knows which items carried the tag — but it makes undo the
+only thing standing between a stray press and silently untagging a dozen items,
+and it costs one `updateItem` per item to unwind. The cheaper honesty is to
+refuse.
+
+**The trash is never disabled.** A disabled control cannot explain itself: it
+takes no hover on touch, screen readers skip it by default, and the reason is
+the one thing worth having at that moment. It is also neutral rather than
+crimson, matching the boards — the row's count already says what will happen.
+
+### What the toast can and cannot restore
+
+Undo re-inserts rather than un-deletes (D17), so a restored item is a **new
+row**. Two consequences the spec asked about:
+
+- **Position is not restored, and no longer needs to be.** The spec justified
+  restoring it with "there are no timestamps". That premise is false as of D35
+  — every row carries `createdAt` — and *Recently added* now sorts on it,
+  newest first. It previously applied **no sort at all**, leaving the list in
+  `collect()` order, which is oldest-first and the exact opposite of the label.
+  An undone item comes back at the top, which is where a row that was just
+  re-added belongs.
+- **A restored term appends.** Name and colour survive, and the filter it was
+  driving is re-pointed at the new id, but it lands at the end of its chip list.
+  Same trade as D17, and not worth a client-held ordering to paper over.
+
+**Removing a member is a confirm, not an undo**, even though re-inviting is
+possible: it reaches a person who is not looking at your screen, which is the
+half of the rule that decides it.
+
+### Leaving moved out of Members
+
+It sits at the foot of the **Household** section as a ghost row with crimson
+text — leaving is something you do to your own membership, not to the member
+list, and a new block after Invites would have broken *Invites last*. When you
+are the household's only member the row relabels to **Delete household**, so it
+never promises something softer than it does, and takes the app's **only** typed
+confirmation. That earns its exception by being the only action that destroys
+data belonging to more than one screen; anywhere else it would be theatre.
+
+`deleteHousehold` had shipped server-side since Phase 2 and had no client
+caller until now.

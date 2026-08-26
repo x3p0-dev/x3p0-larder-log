@@ -2,7 +2,12 @@
 
 Every table below lives in the app's Zero database. Zero adds `id`, `createdAt`,
 and `updatedAt` (all strings) to every row automatically — they are never
-declared.
+declared. The names are **reserved**: declaring one throws at schema-definition
+time, so there is no way to hand-roll a created or modified date. Verified
+2026-08-26: both are stamped at insert, `createdAt` is never rewritten, and
+`updatedAt` is bumped by every `update()` — including an empty one. They are
+ISO 8601 UTC with milliseconds, so they string-compare correctly. See
+[D35](decisions.md#d35-created-and-modified-dates-are-the-platforms-not-ours).
 
 Field types available: `string()`, `boolean()`, `id(table)`, each with an
 optional `.default(value)`. That's the whole vocabulary. No numbers, no arrays,

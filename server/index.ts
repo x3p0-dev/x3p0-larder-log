@@ -6,7 +6,7 @@ import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCap
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
-import { normalizeInk, normalizeName, normalizeNotes, termKey, isValidName } from '../shared/term';
+import { normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
 import { CODE_BYTES, codeFromBytes, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
 import type {
 	HouseholdListResult,
@@ -341,6 +341,9 @@ export default capsule({
 					notes: item.notes,
 					typeIds: typesByItem.get(item.id) ?? [],
 					storeIds: storesByItem.get(item.id) ?? [],
+					// Zero's own stamp (D35). Nothing writes it; the client sorts
+					// *Recently added* on it, which `collect()` order could not do.
+					createdAt: item.createdAt,
 				})),
 				locations: locations.map((l) => ({ id: l.id, name: l.name, ink: l.ink })),
 				types: types.map((t) => ({ id: t.id, name: t.name, ink: t.ink })),
@@ -640,39 +643,39 @@ export default capsule({
 				termLabel(kind)
 			);
 
-			if (kind === 'location') {
-				// D16: refuse while items live here. Zero has no nullable fields,
-				// so there is no "no location" to fall back to — and since `id()`
-				// is not a foreign key, this check is the only thing between a
-				// delete and a dangling reference that renders as a silent box.
-				const items = await ctx.db.items
+			/*
+			 * A term is deletable only once nothing references it — every kind,
+			 * not just `location`.
+			 *
+			 * D16 guarded locations because they are *required*: Zero has no
+			 * nullable column, so deleting one in use leaves a dangling id that
+			 * renders as a silent box. Types and stores are optional tags, and
+			 * this handler used to delete their join rows and carry on.
+			 *
+			 * That asymmetry is what changed. The editing row now shows an item
+			 * count beside a trash that is live in every case, and the count is
+			 * there to make the outcome predictable *before* the press. A count
+			 * that means "blocked" on the Location rows and "these tags are
+			 * about to vanish" on the Type rows teaches nothing.
+			 *
+			 * Counted off the join indexes rather than by scanning items, which
+			 * is what `by_type` and `by_store` are for. Locations have no join
+			 * table — the id is a column on the item — so that one still scans.
+			 */
+			const used = kind === 'location'
+				? (await ctx.db.items
 					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-					.collect();
+					.collect()
+				).filter((i) => i.locationId === termId).length
+				: kind === 'type'
+					? (await ctx.db.itemTypes.withIndex('by_type', (r) => r.eq('typeId', termId)).collect()).length
+					: (await ctx.db.itemStores.withIndex('by_store', (r) => r.eq('storeId', termId)).collect()).length;
 
-				const stranded = items.filter((i) => i.locationId === termId).length;
+			// The client draws its blocked dialog from this same call, so the
+			// refusal and the explanation can never disagree.
+			const blocked = termBlock(kind, term.name, used);
 
-				if (stranded > 0) {
-					throw new AccessError(
-						`${stranded} ${stranded === 1 ? 'item is' : 'items are'} stored in "${term.name}". Move them somewhere else first.`
-					);
-				}
-			}
-
-			if (kind === 'type') {
-				const joins = await ctx.db.itemTypes
-					.withIndex('by_type', (r) => r.eq('typeId', termId))
-					.collect();
-
-				for (const join of joins) await ctx.db.itemTypes.delete(join.id);
-			}
-
-			if (kind === 'store') {
-				const joins = await ctx.db.itemStores
-					.withIndex('by_store', (r) => r.eq('storeId', termId))
-					.collect();
-
-				for (const join of joins) await ctx.db.itemStores.delete(join.id);
-			}
+			if (blocked) throw new AccessError(blocked.body);
 
 			await ctx.db[tableName].delete(term.id);
 

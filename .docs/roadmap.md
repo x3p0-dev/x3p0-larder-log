@@ -354,6 +354,45 @@ data gives each store one row. Empty states are not designed.
 **Not in the spec but now in the data:** the sample dataset names a "Meat
 Freezer" location and an "Aldi" store that `shared/seed.ts` does not seed.
 
+### Phase 4.6 — Destructive actions ✅ (2026-08-26)
+
+The spec's *Destructive actions* section, built. One rule decides which
+treatment an action gets — **undo what comes back, confirm what doesn't**
+([D36](decisions.md#d36-undo-what-comes-back-confirm-what-doesnt)) — and the
+three idioms that were in the code before it (an undo toast, an inline confirm
+row inside `MembersPanel`, and a bare error banner) are down to two components.
+
+- **`Toast.tsx` + `useToasts.ts`.** Actionable (6s, name, Undo pill, dismiss)
+  and plain (3.5s, a finished sentence, no controls). The drawer surface in both
+  themes, a draining timer bar that pauses on hover and focus, stacking capped
+  at 3 with the oldest committing, and Cmd/Ctrl+Z from anywhere. Replaces the
+  pre-Cellar `UndoToast`, which is deleted.
+- **`ConfirmDialog.tsx`.** One shell, three shapes: confirm, blocked, and the
+  typed confirmation. Focus trapped, initial focus on Cancel (the field on the
+  typed variant), Escape and scrim and Cancel identical and all non-destructive,
+  `role="alertdialog"`.
+- **Every kind of term now blocks while in use**, widening D16 from locations
+  alone. The editing row gained the item count and a trash that is live in every
+  case; `termBlock` in `shared/term.ts` is the one rule the server refuses on and
+  the client draws its dialog from.
+- **Leave household moved** to the foot of the Household section, relabels to
+  *Delete household* when you are the last member, and wired `deleteHousehold`
+  — a mutation that had shipped in Phase 2 with no client caller.
+- ***Recently added* is a real sort now**, on `createdAt` (D35). It had been
+  applying no sort at all, which left the list oldest-first.
+
+**Not verified in a browser** — no browser in the agent environment. What was
+verified: the capsule compiles and reloads under `sf dev`; every new utility
+class and both new `theme.json` tokens appear in the compiled `/zero.css`; the
+term-usage counts and the refusal sentence were exercised through a throwaway
+endpoint; the artifact still carries nine tables, sixteen mutations and **zero
+migrations**. Justin has to click the rest.
+
+**Deferred, and named in the spec as open:** the Viewer variant of these
+surfaces, and which non-destructive events earn a plain toast (saved, copied,
+invite sent, term added — a toast on every save would be noise). Neither blocks
+anything.
+
 ### Left open at the end of 2026-08-25
 
 - **A `site.webmanifest`.** The icon README specifies one in full, and the

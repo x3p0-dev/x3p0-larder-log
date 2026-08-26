@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — Destructive Actions</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Karla:wght@400;600;700&display=swap">
+<style>
+
+  :root { color-scheme: light; }
+  html { box-sizing: border-box; }
+  body { margin: 0; background: #EFE9DE; color: #241E17;
+         font-family: Karla, 'Helvetica Neue', Arial, sans-serif; }
+  .page { max-width: 1360px; margin: 0 auto; padding: 56px 28px 96px; }
+  .page-kicker { margin: 0; font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em;
+                 text-transform: uppercase; color: #9B8B75; }
+  .page-title { margin: 12px 0 0; font: 600 40px/1.05 'Playfair Display', Georgia, serif;
+                color: #241E17; letter-spacing: -.01em; }
+  .page-lede { margin: 14px 0 0; max-width: 68ch; font: 400 16px/1.55 Karla, sans-serif; color: #4C4237; }
+  .page-lede a { color: #BE3346; text-decoration: none; border-bottom: 1px solid #E2D5C0; }
+  .page-lede a:hover { color: #241E17; }
+  .rule { height: 1px; background: #DCCDB4; border: 0; margin: 40px 0 0; }
+  figure { margin: 40px 0 0; }
+  figcaption { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px;
+               font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em;
+               text-transform: uppercase; color: #6F6049; }
+  figcaption span { font: 400 12px/1 Karla, sans-serif; letter-spacing: 0;
+                    text-transform: none; color: #9B8B75; }
+  .frame { overflow-x: auto; padding-bottom: 4px; }
+  .frame .board { border: 1px solid #DCCDB4; border-radius: 6px; }
+  .t-light, .t-dark { width: fit-content; -webkit-font-smoothing: antialiased;
+                      font-family: Karla, 'Helvetica Neue', Arial, sans-serif; }
+  .t-light *, .t-dark *, .t-light, .t-dark { box-sizing: border-box; }
+
+/* ---------- light artboards ---------- */
+.t-light *, .t-light *::before, .t-light *::after { box-sizing: border-box; }
+.t-light a { color: #BE3346; text-decoration: none; }
+.t-light a:hover { color: #241E17; }
+.t-light .board { position: relative; width: 100%; min-height: 100%; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9 0%, #F3EADC 55%, #EADFCD 100%); overflow: hidden; }
+.t-light .grain { position: absolute; inset: 0; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+             background-size: 140px 140px; mix-blend-mode: multiply; opacity: .04; }
+.t-light .inner { position: relative; height: 100%; }
+.t-light .micro { font: 700 10.5px/1 Karla, 'Helvetica Neue', Arial, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+.t-light .head-kicker { font: 700 10.5px/1 Karla, 'Helvetica Neue', Arial, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #9B8B75; }
+.t-light .head-title { margin: 10px 0 0; font: 600 27px/1.1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #241E17; }
+.t-light .head-sub { margin: 8px 0 0; font: 400 15px/1.45 Karla, 'Helvetica Neue', Arial, sans-serif; color: #6F6049; max-width: 60ch; }
+.t-light .toast { position: relative; display: flex; align-items: center; gap: 12px; height: 52px;
+             padding: 0 14px 0 18px; border-radius: 15px; background: linear-gradient(180deg,#2B2419 0%,#1F1A13 100%);
+             border: 1px solid #3B3126; box-shadow: 0 16px 40px rgba(36,30,23,.30); overflow: hidden; }
+.t-light .toast-msg { flex: 1; min-width: 0; font: 400 15px/1.3 Karla, 'Helvetica Neue', Arial, sans-serif; color: #F2E9DA;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-light .toast-msg strong { font-weight: 600; }
+.t-light .toast-undo { height: 34px; padding: 0 14px; border: 0; border-radius: 11px;
+                  background: #F2E9DA; color: #241E17; font: 600 14px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-light .toast-x { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 0;
+               border-radius: 9px; background: transparent; color: #9E8C74; cursor: pointer; }
+.t-light .toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: #3B3126; }
+.t-light .toast-timer > span { display: block; height: 100%; background: #9E8C74; }
+.t-light .stack { display: flex; flex-direction: column; gap: 8px; }
+.t-light .tile { position: relative; border-radius: 20px; border: 1px solid #CFBEA3;
+            overflow: hidden; display: grid; place-items: center; }
+.t-light .tile-bg { position: absolute; inset: 0; background: #F3EADC; }
+.t-light .tile-scrim { position: absolute; inset: 0; background: rgba(36,30,23,.44); }
+.t-light .dialog { position: relative; width: 420px; padding: 22px; border-radius: 18px;
+              background: #FDFAF4; border: 1px solid #E2D5C0; box-shadow: 0 24px 60px rgba(36,30,23,.28); }
+.t-light .disc { width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; }
+.t-light .disc--out { background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; }
+.t-light .disc--low { background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F; }
+.t-light .dialog h3 { margin: 14px 0 0; font: 600 21px/1.25 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #241E17; }
+.t-light .dialog p { margin: 8px 0 0; font: 400 15px/1.5 Karla, 'Helvetica Neue', Arial, sans-serif; color: #4C4237; }
+.t-light .dialog-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.t-light .btn { height: 40px; padding: 0 18px; border-radius: 13px; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif;
+           border: 1px solid transparent; cursor: pointer; white-space: nowrap; }
+.t-light .btn-ghost { background: transparent; color: #4C4237; }
+.t-light .btn-primary { background: #241E17; color: #F2E9DA; }
+.t-light .btn-dis { background: #EBE1D0; color: #B0A088; cursor: not-allowed; }
+.t-light .fieldlab { margin: 18px 0 6px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #6F6049; }
+.t-light .field { height: 40px; border-radius: 11px; background: #FDFAF4; border: 1px solid #9B8B75;
+             padding: 0 12px; display: flex; align-items: center; font: 400 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #241E17; }
+.t-light .field--empty { color: #9B8B75; }
+.t-light .caret { display: inline-block; width: 1.5px; height: 18px; background: #241E17;
+             margin-left: 1px; vertical-align: -3px; }
+.t-light .drawer { width: 340px; height: 100%; background: linear-gradient(180deg,#2B2419 0%,#1F1A13 100%); padding: 22px 16px; position: relative; }
+.t-light .wordmark { font: 700 27px/1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #F2E9DA; }
+.t-light .wordmark em { font: italic 600 27px/1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #BE3346; }
+.t-light .switch { display: flex; align-items: center; gap: 11px; width: 100%; height: 56px; padding: 0 12px;
+              border-radius: 13px; background: #332B22; border: 0; cursor: pointer; text-align: left; }
+.t-light .switch-tile { width: 30px; height: 30px; flex: none; border-radius: 9px; display: grid;
+                   place-items: center; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #FDFAF4; }
+.t-light .switch-name { font: 600 15px/1.2 Karla, 'Helvetica Neue', Arial, sans-serif; color: #F2E9DA; }
+.t-light .switch-meta { margin-top: 2px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #9E8C74; }
+.t-light .tabs { display: flex; gap: 6px; padding: 4px; border-radius: 13px; background: #191510; }
+.t-light .tab { flex: 1; height: 32px; border: 0; border-radius: 9px; background: transparent;
+           color: #9E8C74; font: 600 14px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-light .tab[aria-selected="true"] { background: #F2E9DA; color: #241E17; }
+.t-light .panel { border-radius: 14px; background: #191510; border: 1px solid #3B3126; padding: 14px; }
+.t-light .panel-head { display: flex; align-items: center; justify-content: space-between; height: 28px; }
+.t-light .pill { height: 28px; padding: 0 12px; border: 0; border-radius: 9px; background: #F2E9DA;
+            color: #241E17; font: 600 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-light .trow { display: flex; align-items: center; gap: 10px; }
+.t-light .swatch { width: 26px; height: 26px; flex: none; border-radius: 999px;
+              box-shadow: inset 0 0 0 1px rgba(0,0,0,.22); }
+.t-light .tfield { flex: 1; min-width: 0; height: 40px; border-radius: 11px; background: #FDFAF4;
+              border: 1px solid #9B8B75; padding: 0 12px; display: flex; align-items: center;
+              font: 400 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #241E17; }
+.t-light .tcount { flex: none; min-width: 20px; text-align: right; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #9E8C74; }
+.t-light .tdel { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 0;
+            border-radius: 9px; background: transparent; color: #9E8C74; cursor: pointer; }
+.t-light .sechead { display: flex; align-items: center; height: 36px; }
+.t-light .sechead .micro { flex: 1; color: #9E8C74; }
+.t-light .secbtn { width: 30px; height: 30px; display: grid; place-items: center; border: 0;
+              border-radius: 9px; background: transparent; color: #9E8C74; cursor: pointer; }
+.t-light .clearall { height: 40px; display: flex; align-items: center; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif;
+                color: #9E8C74; cursor: pointer; }
+.t-light .addrow { height: 40px; border-radius: 11px; border: 1px dashed #4A4031; display: flex;
+              align-items: center; gap: 8px; padding: 0 12px; font: 400 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #9E8C74; }
+.t-light .phone { position: relative; height: 100%; display: flex; flex-direction: column;
+             padding: 47px 16px 0; }
+.t-light .topbar { display: flex; align-items: center; justify-content: space-between; height: 44px; }
+.t-light .iconbtn { width: 44px; height: 44px; display: grid; place-items: center; border: 0;
+               border-radius: 13px; background: transparent; color: #4C4237; cursor: pointer; }
+.t-light .sortbtn { height: 44px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: 0;
+               border-radius: 13px; background: transparent; color: #4C4237; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-light .cards { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.t-light .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 16px; }
+.t-light .card-top { display: flex; align-items: center; gap: 10px; }
+.t-light .card-name { flex: 1; margin: 0; font: 600 18.5px/1.2 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #241E17; }
+.t-light .badge { height: 22px; padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center;
+             font: 700 10.5px/1 Karla, 'Helvetica Neue', Arial, sans-serif; letter-spacing: .15em; }
+.t-light .badge--out { background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; }
+.t-light .badge--low { background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F; }
+.t-light .chev { color: #9B8B75; display: grid; place-items: center; }
+.t-light .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.t-light .tag { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
+           border-radius: 999px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; }
+.t-light .tag i { width: 7px; height: 7px; border-radius: 999px; display: block; }
+.t-light .card-bottom { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 14px; }
+.t-light .qty { font: 700 28px/1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #241E17; }
+.t-light .lowat { margin-top: 5px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #6F6049; }
+.t-light .stepper { display: flex; gap: 8px; }
+.t-light .step { width: 44px; height: 44px; border-radius: 13px; background: #F2EADC; border: 1px solid #E2D5C0;
+            color: #241E17; display: grid; place-items: center; cursor: pointer; }
+.t-light .phone-scrim { position: absolute; inset: 0; background: rgba(36,30,23,.44); }
+/* ---------- dark artboards ---------- */
+.t-dark *, .t-dark *::before, .t-dark *::after { box-sizing: border-box; }
+.t-dark a { color: #D4636B; text-decoration: none; }
+.t-dark a:hover { color: #F2E9DA; }
+.t-dark .board { position: relative; width: 100%; min-height: 100%; background: radial-gradient(135% 105% at 10% -12%, #241E16 0%, #1F1912 55%, #191410 100%); overflow: hidden; }
+.t-dark .grain { position: absolute; inset: 0; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+             background-size: 140px 140px; mix-blend-mode: overlay; opacity: .05; }
+.t-dark .inner { position: relative; height: 100%; }
+.t-dark .micro { font: 700 10.5px/1 Karla, 'Helvetica Neue', Arial, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #A5937A; }
+.t-dark .head-kicker { font: 700 10.5px/1 Karla, 'Helvetica Neue', Arial, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #7E6E58; }
+.t-dark .head-title { margin: 10px 0 0; font: 600 27px/1.1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #F2E9DA; }
+.t-dark .head-sub { margin: 8px 0 0; font: 400 15px/1.45 Karla, 'Helvetica Neue', Arial, sans-serif; color: #A5937A; max-width: 60ch; }
+.t-dark .toast { position: relative; display: flex; align-items: center; gap: 12px; height: 52px;
+             padding: 0 14px 0 18px; border-radius: 15px; background: linear-gradient(180deg,#15110B 0%,#0F0C07 100%);
+             border: 1px solid #6E5F4B; box-shadow: 0 16px 40px rgba(0,0,0,.55), inset 0 1px 0 rgba(242,233,218,.07); overflow: hidden; }
+.t-dark .toast-msg { flex: 1; min-width: 0; font: 400 15px/1.3 Karla, 'Helvetica Neue', Arial, sans-serif; color: #F2E9DA;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-dark .toast-msg strong { font-weight: 600; }
+.t-dark .toast-undo { height: 34px; padding: 0 14px; border: 0; border-radius: 11px;
+                  background: #EFE3CE; color: #241E17; font: 600 14px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-dark .toast-x { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 0;
+               border-radius: 9px; background: transparent; color: #9E8C74; cursor: pointer; }
+.t-dark .toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: #2C2419; }
+.t-dark .toast-timer > span { display: block; height: 100%; background: #7E6E58; }
+.t-dark .stack { display: flex; flex-direction: column; gap: 8px; }
+.t-dark .tile { position: relative; border-radius: 20px; border: 1px solid #544737;
+            overflow: hidden; display: grid; place-items: center; }
+.t-dark .tile-bg { position: absolute; inset: 0; background: #1F1912; }
+.t-dark .tile-scrim { position: absolute; inset: 0; background: rgba(10,8,5,.64); }
+.t-dark .dialog { position: relative; width: 420px; padding: 22px; border-radius: 18px;
+              background: #2C251B; border: 1px solid #544737; box-shadow: 0 24px 60px rgba(0,0,0,.60); }
+.t-dark .disc { width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; }
+.t-dark .disc--out { background: #31201E; border: 1px solid #4E2E2C; color: #E5878D; }
+.t-dark .disc--low { background: #2E2614; border: 1px solid #4B3E1E; color: #E2B85E; }
+.t-dark .dialog h3 { margin: 14px 0 0; font: 600 21px/1.25 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #F2E9DA; }
+.t-dark .dialog p { margin: 8px 0 0; font: 400 15px/1.5 Karla, 'Helvetica Neue', Arial, sans-serif; color: #DCD0BA; }
+.t-dark .dialog-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.t-dark .btn { height: 40px; padding: 0 18px; border-radius: 13px; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif;
+           border: 1px solid transparent; cursor: pointer; white-space: nowrap; }
+.t-dark .btn-ghost { background: transparent; color: #DCD0BA; }
+.t-dark .btn-primary { background: #EFE3CE; color: #241E17; }
+.t-dark .btn-dis { background: #3E3527; color: #7E6E58; cursor: not-allowed; }
+.t-dark .fieldlab { margin: 18px 0 6px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #A5937A; }
+.t-dark .field { height: 40px; border-radius: 11px; background: #2C251B; border: 1px solid #6E5F4B;
+             padding: 0 12px; display: flex; align-items: center; font: 400 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #F2E9DA; }
+.t-dark .field--empty { color: #7E6E58; }
+.t-dark .caret { display: inline-block; width: 1.5px; height: 18px; background: #F2E9DA;
+             margin-left: 1px; vertical-align: -3px; }
+.t-dark .drawer { width: 340px; height: 100%; background: linear-gradient(180deg,#15110B 0%,#0F0C07 100%); padding: 22px 16px; position: relative; }
+.t-dark .wordmark { font: 700 27px/1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #F2E9DA; }
+.t-dark .wordmark em { font: italic 600 27px/1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #D4636B; }
+.t-dark .switch { display: flex; align-items: center; gap: 11px; width: 100%; height: 56px; padding: 0 12px;
+              border-radius: 13px; background: #231D15; border: 0; cursor: pointer; text-align: left; }
+.t-dark .switch-tile { width: 30px; height: 30px; flex: none; border-radius: 9px; display: grid;
+                   place-items: center; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #FDFAF4; }
+.t-dark .switch-name { font: 600 15px/1.2 Karla, 'Helvetica Neue', Arial, sans-serif; color: #F2E9DA; }
+.t-dark .switch-meta { margin-top: 2px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #9E8C74; }
+.t-dark .tabs { display: flex; gap: 6px; padding: 4px; border-radius: 13px; background: #0A0805; }
+.t-dark .tab { flex: 1; height: 32px; border: 0; border-radius: 9px; background: transparent;
+           color: #9E8C74; font: 600 14px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-dark .tab[aria-selected="true"] { background: #EFE3CE; color: #241E17; }
+.t-dark .panel { border-radius: 14px; background: #0A0805; border: 1px solid #2C2419; padding: 14px; }
+.t-dark .panel-head { display: flex; align-items: center; justify-content: space-between; height: 28px; }
+.t-dark .pill { height: 28px; padding: 0 12px; border: 0; border-radius: 9px; background: #EFE3CE;
+            color: #241E17; font: 600 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-dark .trow { display: flex; align-items: center; gap: 10px; }
+.t-dark .swatch { width: 26px; height: 26px; flex: none; border-radius: 999px;
+              box-shadow: inset 0 0 0 1px rgba(0,0,0,.22); }
+.t-dark .tfield { flex: 1; min-width: 0; height: 40px; border-radius: 11px; background: #2C251B;
+              border: 1px solid #6E5F4B; padding: 0 12px; display: flex; align-items: center;
+              font: 400 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #F2E9DA; }
+.t-dark .tcount { flex: none; min-width: 20px; text-align: right; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #9E8C74; }
+.t-dark .tdel { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 0;
+            border-radius: 9px; background: transparent; color: #9E8C74; cursor: pointer; }
+.t-dark .sechead { display: flex; align-items: center; height: 36px; }
+.t-dark .sechead .micro { flex: 1; color: #9E8C74; }
+.t-dark .secbtn { width: 30px; height: 30px; display: grid; place-items: center; border: 0;
+              border-radius: 9px; background: transparent; color: #9E8C74; cursor: pointer; }
+.t-dark .clearall { height: 40px; display: flex; align-items: center; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif;
+                color: #9E8C74; cursor: pointer; }
+.t-dark .addrow { height: 40px; border-radius: 11px; border: 1px dashed #3A3025; display: flex;
+              align-items: center; gap: 8px; padding: 0 12px; font: 400 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #9E8C74; }
+.t-dark .phone { position: relative; height: 100%; display: flex; flex-direction: column;
+             padding: 47px 16px 0; }
+.t-dark .topbar { display: flex; align-items: center; justify-content: space-between; height: 44px; }
+.t-dark .iconbtn { width: 44px; height: 44px; display: grid; place-items: center; border: 0;
+               border-radius: 13px; background: transparent; color: #DCD0BA; cursor: pointer; }
+.t-dark .sortbtn { height: 44px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: 0;
+               border-radius: 13px; background: transparent; color: #DCD0BA; font: 600 15px/1 Karla, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; }
+.t-dark .cards { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.t-dark .card { background: #2C251B; border: 1px solid #3E3527; border-radius: 18px; padding: 16px; }
+.t-dark .card-top { display: flex; align-items: center; gap: 10px; }
+.t-dark .card-name { flex: 1; margin: 0; font: 600 18.5px/1.2 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #F2E9DA; }
+.t-dark .badge { height: 22px; padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center;
+             font: 700 10.5px/1 Karla, 'Helvetica Neue', Arial, sans-serif; letter-spacing: .15em; }
+.t-dark .badge--out { background: #31201E; border: 1px solid #4E2E2C; color: #E5878D; }
+.t-dark .badge--low { background: #2E2614; border: 1px solid #4B3E1E; color: #E2B85E; }
+.t-dark .chev { color: #7E6E58; display: grid; place-items: center; }
+.t-dark .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.t-dark .tag { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
+           border-radius: 999px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; }
+.t-dark .tag i { width: 7px; height: 7px; border-radius: 999px; display: block; }
+.t-dark .card-bottom { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 14px; }
+.t-dark .qty { font: 700 28px/1 'Playfair Display', 'Iowan Old Style', Georgia, serif; color: #F2E9DA; }
+.t-dark .lowat { margin-top: 5px; font: 400 13px/1 Karla, 'Helvetica Neue', Arial, sans-serif; color: #A5937A; }
+.t-dark .stepper { display: flex; gap: 8px; }
+.t-dark .step { width: 44px; height: 44px; border-radius: 13px; background: #221C14; border: 1px solid #3E3527;
+            color: #F2E9DA; display: grid; place-items: center; cursor: pointer; }
+.t-dark .phone-scrim { position: absolute; inset: 0; background: rgba(10,8,5,.64); }
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="page-kicker">Larder Log · interface</p>
+  <h1 class="page-title">Destructive actions</h1>
+  <p class="page-lede">Undo what comes back, confirm what doesn’t. Fourteen boards: the toast in
+  both variants, the confirm and blocked dialogs, the typed confirm, the term editing row, and
+  the two mobile placements — each in light and dark. Every value is lifted from the token tables
+  in <em>ui-designs.md</em>; nothing here is approximated. Editable version:
+  <a href="https://claude.ai/code/artifact/90919b0d-9995-4153-b096-ee9bbb10cd40">the design canvas</a>.</p>
+  <hr class="rule">
+<figure>
+  <figcaption>Toast · Light<span>620 × 680</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 620px; height: 680px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:38px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Toast — light</h2><p class="head-sub">Actionable holds six seconds and can be undone. Plain holds three and a half and states a fact.</p></div>
+  <div><p class="micro" style="margin:0 0 11px">Actionable · 6s · remove item</p><div class="toast" style="width:420px"><span class="toast-msg">Removed <strong>Ground Beef</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:62%"></span></span></div></div>
+  <div><p class="micro" style="margin:0 0 11px">Plain · 3.5s · no action, no dismiss</p><div class="toast" style="width:300px"><span class="toast-msg">Invite revoked.</span><span class="toast-timer"><span style="width:41%"></span></span></div></div>
+  <div><p class="micro" style="margin:0 0 11px">Stack · max 3 · newest at the bottom</p><div class="stack"><div class="toast" style="width:420px"><span class="toast-msg">Removed <strong>Butter</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:14%"></span></span></div><div class="toast" style="width:420px"><span class="toast-msg">Deleted <strong>Condiment</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:53%"></span></span></div><div class="toast" style="width:420px"><span class="toast-msg">Removed <strong>Black Beans</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:91%"></span></span></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Toast · Dark<span>620 × 680</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 620px; height: 680px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:38px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Toast — dark</h2><p class="head-sub">Actionable holds six seconds and can be undone. Plain holds three and a half and states a fact.</p></div>
+  <div><p class="micro" style="margin:0 0 11px">Actionable · 6s · remove item</p><div class="toast" style="width:420px"><span class="toast-msg">Removed <strong>Ground Beef</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:62%"></span></span></div></div>
+  <div><p class="micro" style="margin:0 0 11px">Plain · 3.5s · no action, no dismiss</p><div class="toast" style="width:300px"><span class="toast-msg">Invite revoked.</span><span class="toast-timer"><span style="width:41%"></span></span></div></div>
+  <div><p class="micro" style="margin:0 0 11px">Stack · max 3 · newest at the bottom</p><div class="stack"><div class="toast" style="width:420px"><span class="toast-msg">Removed <strong>Butter</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:14%"></span></span></div><div class="toast" style="width:420px"><span class="toast-msg">Deleted <strong>Condiment</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:53%"></span></span></div><div class="toast" style="width:420px"><span class="toast-msg">Removed <strong>Black Beans</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:91%"></span></span></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Confirm · Light<span>1200 × 640</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 1200px; height: 640px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:26px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Confirm — light</h2><p class="head-sub">Reversible for nobody, so it asks first. The action button names the verb; crimson stays off it.</p></div>
+  <div style="display:flex; gap:56px"><div><p class="micro" style="margin:0 0 11px">Revoke an invite</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M10 17l-1 1a3.5 3.5 0 0 1-5-5l1-1"/><path d="M4.5 4.5l15 15"/></svg></div><h3>Revoke this invite?</h3><p>The link stops working immediately. Anyone who hasn’t accepted it yet will need a new one.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Revoke invite</button></div></div></div></div><div><p class="micro" style="margin:0 0 11px">Leave household · others can still own it</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M15 8l4 4-4 4"/><path d="M9 12h10"/></svg></div><h3>Leave Calfee Household?</h3><p>You’ll lose access to its 47 items. An owner can invite you back.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Leave household</button></div></div></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Confirm · Dark<span>1200 × 640</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 1200px; height: 640px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:26px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Confirm — dark</h2><p class="head-sub">Reversible for nobody, so it asks first. The action button names the verb; crimson stays off it.</p></div>
+  <div style="display:flex; gap:56px"><div><p class="micro" style="margin:0 0 11px">Revoke an invite</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M10 17l-1 1a3.5 3.5 0 0 1-5-5l1-1"/><path d="M4.5 4.5l15 15"/></svg></div><h3>Revoke this invite?</h3><p>The link stops working immediately. Anyone who hasn’t accepted it yet will need a new one.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Revoke invite</button></div></div></div></div><div><p class="micro" style="margin:0 0 11px">Leave household · others can still own it</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M15 8l4 4-4 4"/><path d="M9 12h10"/></svg></div><h3>Leave Calfee Household?</h3><p>You’ll lose access to its 47 items. An owner can invite you back.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Leave household</button></div></div></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Blocked · Light<span>1200 × 640</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 1200px; height: 640px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:26px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Blocked — light</h2><p class="head-sub">Not a decision — a precondition. No destructive action, and the second button goes where the problem is.</p></div>
+  <div style="display:flex; gap:56px"><div><p class="micro" style="margin:0 0 11px">Delete a term · in use</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--low"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4.4" rx="1.2"/><path d="M5 8.4V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.4"/><path d="M10 12.4h4"/></svg></div><h3>Move these 3 items first</h3><p>Pantry holds 3 items. A location can only be deleted once nothing is stored there.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Show the 3 items</button></div></div></div></div><div><p class="micro" style="margin:0 0 11px">Leave household · last owner</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--low"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 20v-1.4a4 4 0 0 0-4-4H6.6a4 4 0 0 0-4 4V20"/><circle cx="8.3" cy="7.2" r="3.4"/><path d="M15.6 11.6l2.1 2.1 4-4"/></svg></div><h3>Make someone else an owner first</h3><p>You’re the only owner of Calfee Household. Promote another member, then you can leave.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Open Members</button></div></div></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Blocked · Dark<span>1200 × 640</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 1200px; height: 640px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:26px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Blocked — dark</h2><p class="head-sub">Not a decision — a precondition. No destructive action, and the second button goes where the problem is.</p></div>
+  <div style="display:flex; gap:56px"><div><p class="micro" style="margin:0 0 11px">Delete a term · in use</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--low"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4.4" rx="1.2"/><path d="M5 8.4V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.4"/><path d="M10 12.4h4"/></svg></div><h3>Move these 3 items first</h3><p>Pantry holds 3 items. A location can only be deleted once nothing is stored there.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Show the 3 items</button></div></div></div></div><div><p class="micro" style="margin:0 0 11px">Leave household · last owner</p><div class="tile" style="width:520px;height:380px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--low"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 20v-1.4a4 4 0 0 0-4-4H6.6a4 4 0 0 0-4 4V20"/><circle cx="8.3" cy="7.2" r="3.4"/><path d="M15.6 11.6l2.1 2.1 4-4"/></svg></div><h3>Make someone else an owner first</h3><p>You’re the only owner of Calfee Household. Promote another member, then you can leave.</p><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Open Members</button></div></div></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Typed confirm · Light<span>1200 × 668</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 1200px; height: 668px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:26px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Typed confirm — light</h2><p class="head-sub">The only typed confirmation in the app. The row in Settings relabels to Delete household so it never promises something softer than it does.</p></div>
+  <div style="display:flex; gap:56px"><div><p class="micro" style="margin:0 0 11px">Field empty · action disabled</p><div class="tile" style="width:520px;height:448px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/><path d="M10.2 11v6"/><path d="M13.8 11v6"/></svg></div><h3>Delete Calfee Household?</h3><p>You’re its only member, so leaving deletes it. 47 items, 4 locations, 3 stores and 6 types go permanently.</p><p class="fieldlab">Type Calfee Household to confirm</p><div class="field field--empty">Type here</div><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-dis" disabled>Delete household</button></div></div></div></div><div><p class="micro" style="margin:0 0 11px">Name matches · action enabled</p><div class="tile" style="width:520px;height:448px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/><path d="M10.2 11v6"/><path d="M13.8 11v6"/></svg></div><h3>Delete Calfee Household?</h3><p>You’re its only member, so leaving deletes it. 47 items, 4 locations, 3 stores and 6 types go permanently.</p><p class="fieldlab">Type Calfee Household to confirm</p><div class="field">Calfee Household<span class="caret"></span></div><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Delete household</button></div></div></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Typed confirm · Dark<span>1200 × 668</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 1200px; height: 668px">
+      <div class="grain"></div>
+      <div class="inner"><div style="padding:44px 48px; display:flex; flex-direction:column; gap:26px">
+  <div><p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Typed confirm — dark</h2><p class="head-sub">The only typed confirmation in the app. The row in Settings relabels to Delete household so it never promises something softer than it does.</p></div>
+  <div style="display:flex; gap:56px"><div><p class="micro" style="margin:0 0 11px">Field empty · action disabled</p><div class="tile" style="width:520px;height:448px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/><path d="M10.2 11v6"/><path d="M13.8 11v6"/></svg></div><h3>Delete Calfee Household?</h3><p>You’re its only member, so leaving deletes it. 47 items, 4 locations, 3 stores and 6 types go permanently.</p><p class="fieldlab">Type Calfee Household to confirm</p><div class="field field--empty">Type here</div><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-dis" disabled>Delete household</button></div></div></div></div><div><p class="micro" style="margin:0 0 11px">Name matches · action enabled</p><div class="tile" style="width:520px;height:448px"><div class="tile-bg"></div><div class="tile-scrim"></div><div class="dialog" style="width:420px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/><path d="M10.2 11v6"/><path d="M13.8 11v6"/></svg></div><h3>Delete Calfee Household?</h3><p>You’re its only member, so leaving deletes it. 47 items, 4 locations, 3 stores and 6 types go permanently.</p><p class="fieldlab">Type Calfee Household to confirm</p><div class="field">Calfee Household<span class="caret"></span></div><div class="dialog-foot"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Delete household</button></div></div></div></div></div>
+</div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Term row · Light<span>660 × 724</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 660px; height: 724px">
+      <div class="grain"></div>
+      <div class="inner"><div style="display:flex; height:100%"><div class="drawer">
+  <div class="wordmark">Larder <em>Log</em></div>
+  <div style="height:16px"></div>
+  <button class="switch">
+    <span class="switch-tile" style="background:#A85E33">C</span>
+    <span style="flex:1">
+      <span class="switch-name" style="display:block">Calfee Household</span>
+      <span class="switch-meta" style="display:block">Owner · 47 items</span>
+    </span>
+    <span style="color:#9E8C74;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+  </button>
+  <div style="height:16px"></div>
+  <div class="tabs"><button class="tab" aria-selected="true">Filter</button>
+    <button class="tab" aria-selected="false">Settings</button></div>
+  <div style="height:20px"></div>
+  <div class="panel">
+    <div class="panel-head"><span class="micro" style="color:#9E8C74">Location · Editing</span>
+      <button class="pill">Done</button></div>
+    <div style="height:2px"></div>
+    <div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#5F7542"></span><span class="tfield">Pantry</span><span class="tcount">12</span><button class="tdel" aria-label="Delete Pantry"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div><div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#A85E33"></span><span class="tfield">Meat Freezer</span><span class="tcount">8</span><button class="tdel" aria-label="Delete Meat Freezer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div><div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#456B80"></span><span class="tfield">Upright Freezer</span><span class="tcount">5</span><button class="tdel" aria-label="Delete Upright Freezer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div><div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#3E6D68"></span><span class="tfield">Chest Freezer</span><span class="tcount">0</span><button class="tdel" aria-label="Delete Chest Freezer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div>
+    <div style="margin-top:10px" class="addrow">+ Add location</div>
+  </div>
+  <div style="height:8px"></div>
+  <div class="sechead"><span class="micro">Store</span>
+    <button class="secbtn" aria-label="Edit stores"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 5.6l3.8 3.8"/><path d="M4 20l1-4.2L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.2 19 4 20z"/></svg></button>
+    <button class="secbtn" aria-label="Collapse"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button></div>
+  <div class="sechead"><span class="micro">Type</span>
+    <button class="secbtn" aria-label="Edit types"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 5.6l3.8 3.8"/><path d="M4 20l1-4.2L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.2 19 4 20z"/></svg></button>
+    <button class="secbtn" aria-label="Collapse"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button></div>
+  <div style="height:6px"></div>
+  <div class="clearall">Clear all filters</div>
+</div><div style="flex:1; padding:44px 32px 44px 28px">
+  <p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Term row — light</h2><p class="head-sub">The trash is live on every row. The count is what makes the outcome predictable: press it on Pantry and the blocked dialog explains; press it on Chest Freezer and the term goes, with an undo toast holding it.</p>
+</div></div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Term row · Dark<span>660 × 724</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 660px; height: 724px">
+      <div class="grain"></div>
+      <div class="inner"><div style="display:flex; height:100%"><div class="drawer">
+  <div class="wordmark">Larder <em>Log</em></div>
+  <div style="height:16px"></div>
+  <button class="switch">
+    <span class="switch-tile" style="background:#A85E33">C</span>
+    <span style="flex:1">
+      <span class="switch-name" style="display:block">Calfee Household</span>
+      <span class="switch-meta" style="display:block">Owner · 47 items</span>
+    </span>
+    <span style="color:#9E8C74;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+  </button>
+  <div style="height:16px"></div>
+  <div class="tabs"><button class="tab" aria-selected="true">Filter</button>
+    <button class="tab" aria-selected="false">Settings</button></div>
+  <div style="height:20px"></div>
+  <div class="panel">
+    <div class="panel-head"><span class="micro" style="color:#9E8C74">Location · Editing</span>
+      <button class="pill">Done</button></div>
+    <div style="height:2px"></div>
+    <div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#5F7542"></span><span class="tfield">Pantry</span><span class="tcount">12</span><button class="tdel" aria-label="Delete Pantry"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div><div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#A85E33"></span><span class="tfield">Meat Freezer</span><span class="tcount">8</span><button class="tdel" aria-label="Delete Meat Freezer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div><div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#456B80"></span><span class="tfield">Upright Freezer</span><span class="tcount">5</span><button class="tdel" aria-label="Delete Upright Freezer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div><div style="margin-top:10px"><div class="trow"><span class="swatch" style="background:#3E6D68"></span><span class="tfield">Chest Freezer</span><span class="tcount">0</span><button class="tdel" aria-label="Delete Chest Freezer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7"/><path d="M6.2 7l.9 12.1A2 2 0 0 0 9.1 21h5.8a2 2 0 0 0 2-1.9L17.8 7"/></svg></button></div></div>
+    <div style="margin-top:10px" class="addrow">+ Add location</div>
+  </div>
+  <div style="height:8px"></div>
+  <div class="sechead"><span class="micro">Store</span>
+    <button class="secbtn" aria-label="Edit stores"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 5.6l3.8 3.8"/><path d="M4 20l1-4.2L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.2 19 4 20z"/></svg></button>
+    <button class="secbtn" aria-label="Collapse"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button></div>
+  <div class="sechead"><span class="micro">Type</span>
+    <button class="secbtn" aria-label="Edit types"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.6 5.6l3.8 3.8"/><path d="M4 20l1-4.2L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.2 19 4 20z"/></svg></button>
+    <button class="secbtn" aria-label="Collapse"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button></div>
+  <div style="height:6px"></div>
+  <div class="clearall">Clear all filters</div>
+</div><div style="flex:1; padding:44px 32px 44px 28px">
+  <p class="head-kicker" style="margin:0">Larder log · destructive actions</p><h2 class="head-title">Term row — dark</h2><p class="head-sub">The trash is live on every row. The count is what makes the outcome predictable: press it on Pantry and the blocked dialog explains; press it on Chest Freezer and the term goes, with an undo toast holding it.</p>
+</div></div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Mobile toast · Light<span>390 × 844</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 390px; height: 844px">
+      <div class="grain"></div>
+      <div class="inner"><div class="phone">
+  <div class="topbar">
+    <button class="iconbtn" aria-label="Menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
+    <button class="sortbtn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16"/><path d="M4 7l3-3 3 3"/><path d="M17 20V4"/><path d="M14 17l3 3 3-3"/></svg><span>Recent</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button>
+  </div>
+  <div class="cards"><div class="card">
+  <div class="card-top"><h3 class="card-name">Butter</h3><span class="badge badge--low">LOW</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#E8EDEF;border:1px solid #D0DADF;color:#456B80"><i style="background:#456B80"></i>Upright Freezer</span><span class="tag" style="background:#ECEFE9;border:1px solid #D8DED1;color:#5B703F"><i style="background:#5F7542"></i>Costco</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">2</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Black Beans</h3><span class="badge badge--out">OUT</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#ECEFE9;border:1px solid #D8DED1;color:#5B703F"><i style="background:#5F7542"></i>Pantry</span><span class="tag" style="background:#E8EDEF;border:1px solid #D0DADF;color:#456B80"><i style="background:#456B80"></i>Publix</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">0</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Jasmine Rice</h3><span style="width:9px;height:9px;border-radius:999px;background:#5F7546;display:block"></span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#ECEFE9;border:1px solid #D8DED1;color:#5B703F"><i style="background:#5F7542"></i>Pantry</span><span class="tag" style="background:#EEEAEE;border:1px solid #DCD3DB;color:#6D4A69"><i style="background:#6D4A69"></i>Grain</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">3</div><div class="lowat">low at 2</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div></div>
+</div><div style="position:absolute;left:16px;right:16px;bottom:50px"><div class="toast" style="width:358px"><span class="toast-msg">Removed <strong>Ground Beef</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:62%"></span></span></div></div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Mobile toast · Dark<span>390 × 844</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 390px; height: 844px">
+      <div class="grain"></div>
+      <div class="inner"><div class="phone">
+  <div class="topbar">
+    <button class="iconbtn" aria-label="Menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
+    <button class="sortbtn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16"/><path d="M4 7l3-3 3 3"/><path d="M17 20V4"/><path d="M14 17l3 3 3-3"/></svg><span>Recent</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button>
+  </div>
+  <div class="cards"><div class="card">
+  <div class="card-top"><h3 class="card-name">Butter</h3><span class="badge badge--low">LOW</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#30302B;border:1px solid #364041;color:#7CA0B4"><i style="background:#6A92A7"></i>Upright Freezer</span><span class="tag" style="background:#343221;border:1px solid #3F432A;color:#8AA467"><i style="background:#7A935A"></i>Costco</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">2</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Black Beans</h3><span class="badge badge--out">OUT</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#343221;border:1px solid #3F432A;color:#8AA467"><i style="background:#7A935A"></i>Pantry</span><span class="tag" style="background:#30302B;border:1px solid #364041;color:#7CA0B4"><i style="background:#6A92A7"></i>Publix</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">0</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Jasmine Rice</h3><span style="width:9px;height:9px;border-radius:999px;background:#8FAE6D;display:block"></span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#343221;border:1px solid #3F432A;color:#8AA467"><i style="background:#7A935A"></i>Pantry</span><span class="tag" style="background:#362B27;border:1px solid #453339;color:#AD8CAA"><i style="background:#A37F9F"></i>Grain</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">3</div><div class="lowat">low at 2</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div></div>
+</div><div style="position:absolute;left:16px;right:16px;bottom:50px"><div class="toast" style="width:358px"><span class="toast-msg">Removed <strong>Ground Beef</strong>.</span><button class="toast-undo">Undo</button><button class="toast-x" aria-label="Dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="toast-timer"><span style="width:62%"></span></span></div></div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Mobile confirm · Light<span>390 × 844</span></figcaption>
+  <div class="frame"><div class="t-light">
+    <div class="board" style="width: 390px; height: 844px">
+      <div class="grain"></div>
+      <div class="inner"><div class="phone">
+  <div class="topbar">
+    <button class="iconbtn" aria-label="Menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
+    <button class="sortbtn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16"/><path d="M4 7l3-3 3 3"/><path d="M17 20V4"/><path d="M14 17l3 3 3-3"/></svg><span>Recent</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button>
+  </div>
+  <div class="cards"><div class="card">
+  <div class="card-top"><h3 class="card-name">Butter</h3><span class="badge badge--low">LOW</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#E8EDEF;border:1px solid #D0DADF;color:#456B80"><i style="background:#456B80"></i>Upright Freezer</span><span class="tag" style="background:#ECEFE9;border:1px solid #D8DED1;color:#5B703F"><i style="background:#5F7542"></i>Costco</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">2</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Black Beans</h3><span class="badge badge--out">OUT</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#ECEFE9;border:1px solid #D8DED1;color:#5B703F"><i style="background:#5F7542"></i>Pantry</span><span class="tag" style="background:#E8EDEF;border:1px solid #D0DADF;color:#456B80"><i style="background:#456B80"></i>Publix</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">0</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Jasmine Rice</h3><span style="width:9px;height:9px;border-radius:999px;background:#5F7546;display:block"></span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#ECEFE9;border:1px solid #D8DED1;color:#5B703F"><i style="background:#5F7542"></i>Pantry</span><span class="tag" style="background:#EEEAEE;border:1px solid #DCD3DB;color:#6D4A69"><i style="background:#6D4A69"></i>Grain</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">3</div><div class="lowat">low at 2</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div></div>
+</div><div class="phone-scrim"></div><div style="position:absolute;inset:0;display:grid;place-items:center"><div class="dialog" style="width:358px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M15 8l4 4-4 4"/><path d="M9 12h10"/></svg></div><h3>Leave Calfee Household?</h3><p>You’ll lose access to its 47 items. An owner can invite you back.</p><div class="dialog-foot"><button class="btn btn-ghost" style="height:44px">Cancel</button><button class="btn btn-primary" style="height:44px">Leave household</button></div></div></div></div>
+    </div>
+  </div></div>
+</figure>
+<figure>
+  <figcaption>Mobile confirm · Dark<span>390 × 844</span></figcaption>
+  <div class="frame"><div class="t-dark">
+    <div class="board" style="width: 390px; height: 844px">
+      <div class="grain"></div>
+      <div class="inner"><div class="phone">
+  <div class="topbar">
+    <button class="iconbtn" aria-label="Menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
+    <button class="sortbtn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16"/><path d="M4 7l3-3 3 3"/><path d="M17 20V4"/><path d="M14 17l3 3 3-3"/></svg><span>Recent</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button>
+  </div>
+  <div class="cards"><div class="card">
+  <div class="card-top"><h3 class="card-name">Butter</h3><span class="badge badge--low">LOW</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#30302B;border:1px solid #364041;color:#7CA0B4"><i style="background:#6A92A7"></i>Upright Freezer</span><span class="tag" style="background:#343221;border:1px solid #3F432A;color:#8AA467"><i style="background:#7A935A"></i>Costco</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">2</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Black Beans</h3><span class="badge badge--out">OUT</span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#343221;border:1px solid #3F432A;color:#8AA467"><i style="background:#7A935A"></i>Pantry</span><span class="tag" style="background:#30302B;border:1px solid #364041;color:#7CA0B4"><i style="background:#6A92A7"></i>Publix</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">0</div><div class="lowat">low at 4</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div><div class="card">
+  <div class="card-top"><h3 class="card-name">Jasmine Rice</h3><span style="width:9px;height:9px;border-radius:999px;background:#8FAE6D;display:block"></span>
+    <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+  <div class="tags"><span class="tag" style="background:#343221;border:1px solid #3F432A;color:#8AA467"><i style="background:#7A935A"></i>Pantry</span><span class="tag" style="background:#362B27;border:1px solid #453339;color:#AD8CAA"><i style="background:#A37F9F"></i>Grain</span></div>
+  <div class="card-bottom">
+    <div><div class="qty">3</div><div class="lowat">low at 2</div></div>
+    <div class="stepper"><button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button class="step"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div>
+  </div>
+</div></div>
+</div><div class="phone-scrim"></div><div style="position:absolute;inset:0;display:grid;place-items:center"><div class="dialog" style="width:358px"><div class="disc disc--out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M15 8l4 4-4 4"/><path d="M9 12h10"/></svg></div><h3>Leave Calfee Household?</h3><p>You’ll lose access to its 47 items. An owner can invite you back.</p><div class="dialog-foot"><button class="btn btn-ghost" style="height:44px">Cancel</button><button class="btn btn-primary" style="height:44px">Leave household</button></div></div></div></div>
+    </div>
+  </div></div>
+</figure>
+</div>
+</body>
+</html>

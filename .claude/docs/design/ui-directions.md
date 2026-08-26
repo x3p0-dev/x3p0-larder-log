@@ -60,6 +60,8 @@ Three rules hold in both themes:
 2. **Cards sit one step above the ground.**
 3. **Near-black ink is the only thing you press** — in dark mode the primary button flips to cream `#EFE3CE` with ink text, still the single lightest control on screen. **Crimson is brand-and-out, never a button.**
 
+The general form of rule 3, which the drawer and the toast both need: **the primary control is the lightest thing on a dark surface and the darkest thing on a light one.** So the drawer's *Done* / *Add* pill and the toast's *Undo* are cream-filled with ink labels in **both** themes — the drawer is dark in both, and an ink-filled pill on it would vanish. It is the rail's Open / active treatment, one step up.
+
 Type, spacing, radii and layout are identical across themes; only the tokens below change. The dark artboards were generated from the light ones by a hex-for-hex map, so any visual difference is a token difference.
 
 Ground is a gradient in both: `radial-gradient(135% 105% at 10% -12%, …)`.
@@ -142,7 +144,7 @@ Same 480px sheet as Add, prefilled. Differences:
 - Header carries the **item's name** rather than "Add an item" — the only place it is set in Playfair at that size, so there is no doubt which row you opened.
 - **No timestamps on items.** Nothing in the UI shows when an item was added, changed or last counted. *Recently added* sorts on insertion order, not on a date anyone sees; if that ordering should go too, the sort's default moves to *Needs restocking*.
 - **Remove item** sits far left in the footer: ghost, crimson text, never a crimson fill. Always reachable without scrolling, and the width of the footer away from Save.
-- **Removal is undoable, not confirmed.** The sheet closes, the item goes, a toast holds it for a few seconds. A confirm modal on every edit is the worse trade in a shared list.
+- **Removal is undoable, not confirmed.** The sheet closes, the item goes, and a toast holds it for six seconds — see *Destructive actions*. A confirm modal on every edit is the worse trade in a shared list.
 - Save changes is the only filled control; Cancel and Remove are both ghost.
 
 ### The inline composer
@@ -165,6 +167,145 @@ Creating a term from a sheet uses **the Filter tab's editing panel, re-skinned f
 | Add pill | ink / cream — `#EBE1D0` / `#B0A088` while the field is empty | cream / ink |
 
 The earlier design had this as a floating pill-shaped capsule with a popover — a shape that existed nowhere else in the app. It is gone.
+
+## Destructive actions
+Specced here and drawn — canvas link under *Boards* at the end of the section. Scope is Owner and Editor; the Viewer variant is still open and does not block this.
+
+**The rule: undo what comes back, confirm what doesn't.**
+
+An action gets an **undo toast** when the record can be restored and you are the only person affected. It gets a **confirm modal** when the effect can't be reversed, or when it reaches someone who isn't looking at your screen. Nothing gets both, and nothing gets a confirm *and* a toast that claims an undo it can't honour.
+
+| Action | Treatment | Why |
+|---|---|---|
+| Remove item | Undo toast | Restorable, and a shared list is edited constantly |
+| Delete a term — unused | Undo toast | Restorable, and only reachable when nothing references it |
+| Delete a term — in use | Blocked dialog | Not a decision, a precondition |
+| Revoke an invite | Confirm modal | The link dies for someone else the moment you press it |
+| Leave household | Confirm modal | You lose access and can't put yourself back |
+| Leave — last owner, others remain | Blocked dialog | Would orphan the household |
+| Leave — last member | Confirm modal + typed name | This isn't leaving, it destroys the household |
+
+Removing a member inherits the invite pattern. Undo pressed on something another member has since changed is a concurrency problem, not a destructive-action one — it stays in the failure states.
+
+**Crimson is still never a button.** The confirm's primary control is the ordinary ink/cream primary. Destructiveness is carried by three things that cost nothing: the title asks the question, the body names what is lost, and the button says the verb — *Revoke invite*, *Leave household* — never *Confirm*, *OK* or *Yes*. Crimson appears once per dialog as the icon tint, which is the tag treatment applied to a glyph and comes free from the out tokens. Ghost + crimson text stays what it already is on the Edit sheet: the way a destructive action is **offered**, never the way it is **executed**.
+
+### Toast — one component, two variants
+
+**Actionable** (`Removed Ground Beef` · *Undo*) holds for **6s**. **Plain** (`Invite revoked.`) holds for **3.5s**, carries no action and no dismiss — there is nothing to decide.
+
+The toast is the **drawer surface**, in both themes. It is transient chrome, and borrowing the app's darkest layer keeps rule 1 intact, separates it hard from the cream ground, and comes free from the theme map. It is dark in dark mode too, sitting below the ground exactly as the drawer does; the shadow and a heavier hairline do the separating.
+
+- **Placement.** Bottom-centre of the **content column** on desktop, 24px up — the column reflows when the drawer expands, so the toast can never sit over the drawer. Bottom-centre on mobile, 16px above the safe area.
+- **Size.** Height 52 desktop / 56 mobile, min-width 280, max-width 460, padding `14px 14px 14px 18px`, radius **15**. Controls radius, not card radius: a toast is a transient bar, not a surface you are meant to settle on.
+- **Message.** Karla 400 15px, the object's name at 600 so the row is identifiable at a glance. One line; the name truncates, the sentence does not.
+- **Undo pill.** 34px, radius 11, padding `0 14`, Karla 600 14px. It is the drawer's primary — cream fill, ink label — because the toast is dark in both themes. A `#332B22` pill was the first draft and it disappeared into the toast: the one control the component exists for cannot be the quietest thing on it.
+- **Dismiss `×`.** 30px ghost icon, the composer's abandon glyph. Pressing it **commits** the removal and clears the toast — the only way to get it off screen early.
+- **Timer.** 2px bar along the bottom edge, draining left → right. It answers "how long do I have" without asking anyone to guess. Pauses on hover and on focus within.
+- **Stacking.** Max 3, newest at the bottom, 8px gaps, older ones shift up. A fourth removal commits the oldest immediately.
+- **Motion.** In 180ms — 12px rise + fade, ease-out. Out 140ms fade. Stack reflow 160ms. Under `prefers-reduced-motion`, transitions become fades; the timer bar stays, because it is information rather than decoration.
+- **Keyboard and SR.** `role="status"`, `aria-live="polite"`, `aria-atomic="true"`. Focus is never stolen. The toast enters the tab order at the end of the document; Escape while focus is inside it commits and closes. **Cmd/Ctrl+Z undoes the newest live toast** from anywhere, which is the path most people will actually use.
+
+| Toast part | Light | Dark |
+|---|---|---|
+| Fill (grad) | `#2B2419 → #1F1A13` | `#15110B → #0F0C07` |
+| Hairline | `#3B3126` | `#6E5F4B` |
+| Shadow | `0 16px 40px rgba(36,30,23,.30)` | `0 16px 40px rgba(0,0,0,.55)` |
+| Dark-only top highlight | — | inset `0 1px 0 rgba(242,233,218,.07)` |
+| Message / name | `#F2E9DA` | `#F2E9DA` |
+| Dismiss rest / hover | `#9E8C74` / `#D8CBB6` | `#9E8C74` / `#D8CBB6` |
+| Undo pill fill / label | `#F2E9DA` · `#241E17` | `#EFE3CE` · `#241E17` |
+| Undo hover / pressed | `#FDFAF4` / `#E2D5C0` | `#FDFAF4` / `#DCCFB6` |
+| Timer track / fill | `#3B3126` / `#9E8C74` | `#2C2419` / `#7E6E58` |
+| Focus-visible | 2px `#D4636B`, 2px offset in the toast fill | same |
+
+The focus ring uses the **dark-mode** crimson in both themes, for the same reason the rail does — the surface underneath it is dark either way.
+
+> **The dark hairline is heavier than any other hairline in the app, on purpose.** In light mode the toast fill separates from the ground at 14.5:1 and the shadow is a nicety. In dark mode the same fill separates at **1.18:1** and the shadow does nothing — black on near-black. `#6E5F4B` is the strongest border already in the dark palette (the composer's field takes it) and gets the edge to 2.67:1 against the ground; the 1px top highlight covers the rest. Nothing lighter exists in the system, and inventing one for a 52px bar isn't worth breaking the palette. Docked chrome doesn't need this — the drawer's own hairline stays `#2C2419`, because a full-height panel is separated by the layout.
+
+### Confirm modal
+
+- **Shell.** 420px desktop, `100% − 32px` mobile, centred in both. Radius 18 — this one *is* a card. Padding 22. Not a bottom sheet on mobile: a confirm is a question, and centring keeps it out of the thumb zone the Add sheet owns.
+- **Order.** 40px icon disc → title → body → footer. Title Playfair 600 21px, the same size item names take. Body Karla 400 15px, two lines at most.
+- **Footer.** Right-aligned pair, Cancel then the action. Buttons 40px desktop / 44px mobile, radius 13. The action is the ink/cream primary; Cancel is ghost. Side by side at 390 — two 44px buttons fit.
+- **Dismissal.** Escape, scrim click and Cancel are identical and all non-destructive.
+- **Focus.** Trapped. Initial focus on **Cancel** — on the typed variant it goes to the field instead, since the disabled button is already the guard. Focus returns to the trigger on close.
+- **SR.** `role="alertdialog"`, `aria-labelledby` the title, `aria-describedby` the body.
+- **Motion.** Scrim 160ms fade; dialog 180ms `scale(.96) → 1` + fade. Out 120ms fade, no scale. Reduced motion → fade only.
+
+| Modal part | Light | Dark |
+|---|---|---|
+| Scrim | `rgba(36,30,23,.44)` | `rgba(10,8,5,.64)` |
+| Surface / border | `#FDFAF4` on `#E2D5C0` | `#2C251B` on `#544737` |
+| Shadow | `0 24px 60px rgba(36,30,23,.28)` | `0 24px 60px rgba(0,0,0,.60)` |
+| Icon disc fill / ring / glyph | `#F6E2DD` / `#EBCFC5` / `#9A2E3B` | `#31201E` / `#4E2E2C` / `#E5878D` |
+| Title | `#241E17` | `#F2E9DA` |
+| Body | `#4C4237` | `#DCD0BA` |
+| Primary fill / label | `#241E17` · `#F2E9DA` | `#EFE3CE` · `#241E17` |
+| Primary disabled | `#EBE1D0` · `#B0A088` | `#3E3527` · `#7E6E58` |
+| Ghost label / hover | `#4C4237` / `#F2EADC` | `#DCD0BA` / `#221C14` |
+| Typed-confirm field | `#FDFAF4` on `#9B8B75` | `#2C251B` on `#6E5F4B` |
+| Focus-visible | 2px `#BE3346`, 2px offset in the surface | 2px `#D4636B` |
+
+> **In dark mode the scrim can't lift the modal — the border has to.** Scrimming the ground from `#1F1912` toward black moves the card's separation from **1.27:1 to 1.30:1** across every opacity from .64 to .86, because both sides are already near-black. Deepening the scrim is wasted effort; it stays at `.64` for the dimming, and `#544737` (line strong) carries the edge instead of the `#3E3527` a card would normally take. Light mode has the opposite situation — the scrim alone gets it to 3.03:1 and the border is trim.
+
+**Blocked dialog** is the same shell with the destructive half removed: icon, title, body, and a single pair — Cancel plus a button that goes where the problem is. It never has a destructive action, because there is nothing to decide. Its icon disc takes the **low** tokens rather than the out ones (`#F7EEDA / #E9DAB9 / #855A0F`, dark `#2E2614 / #4B3E1E / #E2B85E`): amber is "hold on", crimson is "gone", and a blocked dialog is the first. It comes off the same status ramp as the item badges, so it needs no new colour.
+
+### Per action
+
+**Remove item.** Fires from the Edit sheet footer (sheet closes first) and from the expanded card's Remove. Same toast either way: *Removed **Ground Beef**.* · Undo.
+
+> **Undo has to restore position, not just the record.** There are no timestamps, so *Recently added* sorts on insertion order. An undo that appends puts the item back in the wrong place and silently reorders the list — which is worse than not undoing, because nobody will notice.
+
+**Delete a term.** Unused → deletes on press, toast *Deleted **Condiment**.* · Undo, restoring name, colour and position in the chip list. If that term was an active filter, deleting clears the filter and undo restores it too.
+
+In use → blocked dialog.
+- Title: **Move these 3 items first**
+- Body: *Pantry holds 3 items. A location can only be deleted once nothing is stored there.*
+- Footer: Cancel · **Show the 3 items** — applies that term as the only active filter and drops the section out of editing.
+
+> **Delta from what's drawn:** the trash on a term row is **enabled in every case**. A disabled control cannot explain itself — it takes no hover on touch, screen readers skip it by default, and the reason is the one thing you want at that moment. The row also gains the item count in meta text between the field and the trash, so the outcome is predictable before you reach for it.
+
+**Revoke an invite.** Trigger is the small ghost crimson-text button already on the invite row.
+- Title: **Revoke this invite?**
+- Body: *The link stops working immediately. Anyone who hasn't accepted it yet will need a new one.*
+- Footer: Cancel · **Revoke invite**
+- After: the row leaves, plain toast *Invite revoked.* No undo — there is nothing to restore, only a new link to issue.
+
+**Leave household.** Lives as a ghost row with crimson text at the foot of the **Household** section — not a new block after Invites, which would break *Invites last*. Three cases.
+
+*Others can still own it:*
+- Title: **Leave Calfee Household?**
+- Body: *You'll lose access to its 47 items. An owner can invite you back.*
+- Footer: Cancel · **Leave household**
+- After: switch to the next household in the switcher, or to first run if it was your only one.
+
+*You're the only owner and members remain* — blocked:
+- Title: **Make someone else an owner first**
+- Body: *You're the only owner of Calfee Household. Promote another member, then you can leave.*
+- Footer: Cancel · **Open Members**
+
+*You're the only member* — the row itself relabels to **Delete household**, so it never promises something softer than it does.
+- Title: **Delete Calfee Household?**
+- Body: *You're its only member, so leaving deletes it. 47 items, 4 locations, 3 stores and 6 types go permanently.*
+- A 40px field at radius 11 — the composer's field: *Type Calfee Household to confirm.*
+- Footer: Cancel · **Delete household**, disabled until the name matches exactly.
+- No undo, no toast.
+
+This is the **only** typed confirmation in the app, and it earns the exception by being the only action that destroys data belonging to more than one screen. Anywhere else it would be theatre.
+
+### Boards
+Drawn on their own canvas — five desktop, two mobile, each with its dark counterpart, 14 total:
+https://claude.ai/code/artifact/90919b0d-9995-4153-b096-ee9bbb10cd40
+
+1. Toast — actionable, plain, and a 3-high stack
+2. Confirm — Revoke invite and Leave household side by side
+3. Blocked — term in use and last owner side by side
+4. Typed confirm — Delete household, empty field and matched field
+5. Filter tab editing row with the item count and the enabled trash
+6. Mobile 390 — toast above the safe area
+7. Mobile 390 — confirm at `100% − 32px`
+
+Kept separate from the 27-board app canvas because these are component states, not screens; the two mobile boards are the only ones that show them in place.
 
 ## Sort menu
 The trigger names the active sort — `⇅ Sort  Recently added ⌄` — so the menu is only opened to change it. Ghost at rest; `#FDFAF4` + `#E2D5C0` on hover; `#F2EADC` + `#CFBEA3` when open; crimson focus ring.
@@ -227,14 +368,12 @@ The L is a converted outline, not `<text>` — icons render without webfont acce
 ## Gaps — not yet designed
 
 ### Changes existing screens (decide before building more)
-- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now.
-- **Destructive confirms + undo.** Remove item now resolves to an undo toast, but that toast is not drawn — and delete a term, revoke an invite and leave a household still have no confirm or undo path.
+- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only.
 
 ### States an SPA hits constantly
 - Loading / skeleton on first paint; optimistic feedback on a stepper tap.
-- Failure: save failed, offline, and the concurrent-edit case — two household members changing one item.
-- Toasts for saved / copied / removed.
-- Location delete blocked because items are stored there — the trash is drawn disabled, the explanation is not.
+- Failure: save failed, offline, and the concurrent-edit case — two household members changing one item, including Undo pressed on a removal someone else has since acted on.
+- Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise.
 
 ### Flows outside the app shell
 - Sign-in, and the invite-accept landing page the `?join=` link opens.
@@ -256,3 +395,4 @@ Every store in the sample data has at most one low or out item, so the shopping-
 - Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites.
 - Invite links are cramped at 340px.
 - Each store has ≤1 low/out item in the sample data, so the shopping-list modal is a single row.
+- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one.

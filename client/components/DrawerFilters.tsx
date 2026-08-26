@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { ChevronUp, Pencil, Plus } from 'lucide-preact';
 
 import { TermPanel, TermRow } from './TermPanel';
@@ -21,6 +21,15 @@ type SectionProps = {
 	onDelete: (id: string) => void;
 	/** `taxonomy:write`. A viewer filters by terms but cannot mint or edit them. */
 	canEdit: boolean;
+	/**
+	 * Bumped to fold every editing panel shut.
+	 *
+	 * A blocked dialog's *Show the 3 items* applies the term as the only filter
+	 * and leaves editing — you asked to go look at the items, and staying in a
+	 * panel of text fields on top of them is not that. The signal is a counter
+	 * rather than a boolean so consecutive closes are distinguishable.
+	 */
+	closeEditing?: number;
 	theme: Theme;
 };
 
@@ -39,7 +48,7 @@ type SectionProps = {
  */
 export function FilterSection({
 	title, entities, active, onSelect, countFor, leadingAll,
-	onCreate, onRename, onRecolor, onDelete, canEdit, theme,
+	onCreate, onRename, onRecolor, onDelete, canEdit, closeEditing, theme,
 }: SectionProps) {
 	const [open, setOpen] = useState(true);
 	const [editing, setEditing] = useState(false);
@@ -49,6 +58,18 @@ export function FilterSection({
 	const d = theme.drawer;
 
 	const proposed = draftColor ?? proposeColor(entities.map((e) => e.ink));
+
+	// Skips the first run: `closeEditing` starts defined, and folding a panel
+	// nobody opened is invisible but still a wasted render.
+	const seen = useRef(closeEditing);
+
+	useEffect(() => {
+		if (closeEditing === seen.current) return;
+
+		seen.current = closeEditing;
+		setEditing(false);
+		setComposing(false);
+	}, [closeEditing]);
 
 	function startComposing() {
 		setDraft('');
@@ -153,6 +174,7 @@ export function FilterSection({
 								<TermRow
 									key={e.id}
 									name={e.name} ink={e.ink}
+									count={countFor?.(e.id) ?? 0}
 									onName={(next) => { if (next.trim()) onRename(e.id, next.trim()); }}
 									onColor={(token) => onRecolor(e.id, token)}
 									onAction={() => onDelete(e.id)} action="delete"

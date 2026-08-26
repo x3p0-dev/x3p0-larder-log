@@ -4,6 +4,7 @@ import { Trash2, X } from 'lucide-preact';
 import { ColorPicker } from './ColorPicker';
 import type { Theme } from '../lib/theme';
 import { drawerDot, termColorFor } from '../lib/theme';
+import { DRAWER_TRASH } from '../lib/controlStyles';
 
 type Skin = {
 	panel: string;
@@ -13,6 +14,8 @@ type Skin = {
 	fieldLine: string;
 	ink: string;
 	ghost: string;
+	/** The item count beside the trash — quiet, and the same on both grounds. */
+	count: string;
 	doneBg: string;
 	doneInk: string;
 	/** The picker sits on a further-recessed sub-panel inside the panel. */
@@ -31,13 +34,13 @@ export function panelSkin(theme: Theme, onDark: boolean): Skin {
 		? {
 			panel: '#262019', hairline: theme.drawer.line, label: '#C3B49C',
 			field: theme.drawer.well, fieldLine: theme.drawer.line, ink: theme.drawer.ink,
-			ghost: '#6E5F4B', doneBg: theme.drawer.ink, doneInk: '#241E17',
+			ghost: '#6E5F4B', count: '#9E8C74', doneBg: theme.drawer.ink, doneInk: '#241E17',
 			well: theme.drawer.bg,
 		}
 		: {
 			panel: theme.surfaceAlt, hairline: theme.border, label: theme.textMuted,
 			field: theme.surface, fieldLine: theme.border, ink: theme.textStrong,
-			ghost: theme.textMuted, doneBg: theme.inkBg, doneInk: theme.inkText,
+			ghost: theme.textMuted, count: theme.textFaint, doneBg: theme.inkBg, doneInk: theme.inkText,
 			well: theme.ground,
 		};
 }
@@ -91,12 +94,21 @@ export function TermPanel({
  * pushes the panel taller — nothing floats over the surface behind it.
  */
 export function TermRow({
-	name, ink, placeholder, autoFocus, onName, onColor, onAction, action, onDark = false, theme,
+	name, ink, placeholder, autoFocus, count, onName, onColor, onAction, action, onDark = false, theme,
 }: {
 	name: string;
 	ink: string;
 	placeholder?: string;
 	autoFocus?: boolean;
+	/**
+	 * How many items reference this term, shown between the field and the trash.
+	 *
+	 * The trash is live on every row (D36), so this is what makes the outcome
+	 * predictable *before* the press: a non-zero count means the blocked dialog,
+	 * a zero means the term goes with an undo toast holding it. Absent on a row
+	 * being composed, which references nothing yet.
+	 */
+	count?: number;
 	onName: (next: string) => void;
 	onColor: (token: string) => void;
 	onAction: () => void;
@@ -138,12 +150,28 @@ export function TermRow({
 					aria-label={placeholder ?? 'Term name'}
 				/>
 
+				{count !== undefined && (
+					<span class="shrink-0 min-w-[20px] text-right text-[13px] tabular-nums" style={{ color: s.count }}>
+						{count}
+					</span>
+				)}
+
+				{/*
+				  * Neutral, not crimson, and never disabled — see D36. Crimson is
+				  * how a destructive action is *offered* elsewhere, but this row
+				  * already carries the count that says what will happen, and a
+				  * disabled trash could not explain itself to anyone on touch or
+				  * a screen reader.
+				  */}
 				<button
 					type="button"
 					onClick={onAction}
-					class="shrink-0 flex items-center justify-center w-[30px] h-[30px] rounded-[9px] transition-colors hover:opacity-80"
-					style={{ color: action === 'delete' ? '#C4746E' : s.ghost }}
-					aria-label={action === 'delete' ? 'Delete' : 'Cancel'}
+					class={
+						'shrink-0 flex items-center justify-center w-[30px] h-[30px] ' +
+						(action === 'delete' ? DRAWER_TRASH : 'rounded-[9px] transition-colors hover:opacity-80')
+					}
+					style={action === 'delete' ? undefined : { color: s.ghost }}
+					aria-label={action === 'delete' ? `Delete ${name || 'term'}` : 'Cancel'}
 				>
 					<Action size={15} />
 				</button>

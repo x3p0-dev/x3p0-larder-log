@@ -19,7 +19,7 @@ import {
 } from '../shared/invite';
 import {
 	normalizeName, normalizeNotes, termKey, normalizeInk, DEFAULT_INK, isInk,
-	isValidName, MAX_NAME,
+	isValidName, MAX_NAME, termBlock, termUsageCount,
 } from '../shared/term';
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
@@ -155,6 +155,53 @@ check('truncates', normalizeName('x'.repeat(200)).length, MAX_NAME);
 check('non-string is empty', normalizeName(null), '');
 check('empty name invalid', isValidName('   '), false);
 check('dupe key is case-insensitive', termKey('Deep  FREEZER'), termKey('deep freezer'));
+
+// --- deleting a term: the precondition, and the sentence explaining it ---
+//
+// The server refuses on `termBlock` and the client draws its blocked dialog
+// from the same call, so these assertions cover both at once. The rule now
+// applies to every kind: D16 guarded locations alone, which left a trash that
+// blocked on one row and silently dropped tags on the next.
+const shelf = { locationId: 'loc1', typeIds: ['t1', 't2'], storeIds: ['s1'] };
+const tin = { locationId: 'loc2', typeIds: ['t1'], storeIds: [] };
+const pantryItems = [shelf, tin];
+
+check('counts a location', termUsageCount(pantryItems, 'location', 'loc1'), 1);
+check('counts a type across items', termUsageCount(pantryItems, 'type', 't1'), 2);
+check('counts a store', termUsageCount(pantryItems, 'store', 's1'), 1);
+check('an unreferenced term counts zero', termUsageCount(pantryItems, 'type', 'nope'), 0);
+
+check('an unused term is deletable', termBlock('location', 'Pantry', 0), null);
+check('a negative count is deletable', termBlock('type', 'Condiment', -1), null);
+
+// Every kind blocks now — the whole point of the change.
+check('a used location blocks', termBlock('location', 'Pantry', 3)?.title, 'Move these 3 items first');
+check('a used type blocks', termBlock('type', 'Condiment', 6)?.title, 'Untag these 6 items first');
+check('a used store blocks', termBlock('store', 'Costco', 4)?.title, 'Untag these 4 items first');
+
+// A location holds items; a tag is on them. One verb for both would describe
+// something the screen does not do.
+check(
+	'a location says stored',
+	termBlock('location', 'Pantry', 3)?.body,
+	'Pantry holds 3 items. A location can only be deleted once nothing is stored there.'
+);
+check(
+	'a type says used',
+	termBlock('type', 'Condiment', 6)?.body,
+	'Condiment is on 6 items. A type can only be deleted once nothing uses it.'
+);
+check(
+	'a store names its own kind',
+	termBlock('store', 'Costco', 2)?.body,
+	'Costco is on 2 items. A store can only be deleted once nothing uses it.'
+);
+
+// One item is the case that reads wrong if nobody checks it.
+check('one item is singular in the title', termBlock('location', 'Pantry', 1)?.title, 'Move this item first');
+check('one item is singular in the body', termBlock('type', 'Condiment', 1)?.body, 'Condiment is on 1 item. A type can only be deleted once nothing uses it.');
+check('one item drops the count from the action', termBlock('store', 'Costco', 1)?.action, 'Show the item');
+check('several items keep it', termBlock('store', 'Costco', 4)?.action, 'Show the 4 items');
 
 // --- color tokens ---
 //

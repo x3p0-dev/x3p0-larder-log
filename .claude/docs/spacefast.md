@@ -2022,3 +2022,195 @@ would cost nothing.
 Two dev servers on different ports coexist cleanly otherwise, with separate
 in-memory state and separate capability tokens. That is genuinely useful and
 nowhere documented.
+
+---
+
+## 2026-08-26 — Built-in row timestamps: what they actually guarantee
+
+Context: a feature request to store a created and a last-modified date on
+items, terms, and households. The answer turned out to be "Zero already does
+this", but the docs state it in one clause and never say what the semantics
+are, so we verified them against a running `sf dev` before relying on them.
+
+### 👍 `createdAt` / `updatedAt` exist on every row, and the reservation is enforced early
+
+`sf init`'s own `AGENTS.md` says every row "gets `id`, `createdAt`, and
+`updatedAt` for free (those names are reserved)". Both halves hold, and the
+reservation is enforced at three separate layers rather than silently:
+
+- `table()` throws `Field name "createdAt" is reserved for Lakebed metadata.`
+- `insert()`'s parameter type is `Omit<Row, "createdAt" | "id" | "updatedAt">`,
+  so a stray write is a typecheck error, not a runtime surprise.
+- The dev runtime throws `Zero manages households.createdAt; app code cannot
+  set it directly.` if you get past both.
+
+Failing at schema-definition time is the right call — this is exactly the class
+of mistake that would otherwise ship as a column that silently never updates.
+
+### ❓ …but the update semantics are documented nowhere, and they are the whole feature
+
+"Gets them for free" does not say whether `updatedAt` is stamped once at insert
+or bumped on every write — and a *created* date and a *modified* date that are
+permanently equal is a common enough platform wart that we could not assume.
+Neither `/docs/zero.md` nor the scaffolded `AGENTS.md` answers it.
+
+Verified by hand, via a throwaway endpoint that inserted a row, spun 25 ms, and
+patched it (endpoints are still the only way to exercise a handler without a
+browser — see the 2026-08-25 entry):
+
+```
+before  createdAt 2026-08-26T13:52:23.457Z   updatedAt 2026-08-26T13:52:23.457Z
+after   createdAt 2026-08-26T13:52:23.457Z   updatedAt 2026-08-26T13:52:23.482Z
+```
+
+So: both stamped at insert, `createdAt` immutable across `update()`, `updatedAt`
+bumped by exactly the elapsed time. ISO 8601 UTC with millisecond precision, so
+it string-compares correctly — the same encoding `invites.expiresAt` already
+leans on (D24).
+
+**One sentence in the limits list would remove the need for any of this:**
+"`createdAt` is stamped at insert; `updatedAt` is rewritten on every `update()`."
+
+### 👍 An empty patch still bumps `updatedAt`
+
+`update(id, {})` rewrites `updatedAt` rather than short-circuiting. That is
+load-bearing for us and not obviously intended, so it is worth stating in the
+docs either way: our `updateItem` always calls `items.update()` even when the
+edit only touched join-table rows, which means an item's "last modified" moves
+when you retag it. Had the empty patch been a no-op, that would have been a
+silent hole.
+
+Both local state adapters agree, for what it's worth — the in-memory store sets
+`updatedAt: nowIso()` unconditionally, and the SQL-backed one folds `updatedAt`
+into the entry list before its `if (entries.length === 0)` early return, so the
+early return is unreachable whenever the column exists.
+
+**Not verified on a hosted runtime**, because publishing is still blocked (see
+the 2026-08-25 entries). Local only.
+
+### 🐛 `sf db dump` fails with `zero_db_connect_failed` while the space itself is healthy
+
+Tried to confirm the timestamps on real rows in the live v2 space. Every dump
+fails:
+
+```
+$ npx sf db dump --table items
+Zero database dump failed.
+```
+
+`--json` gives the useful part, which the human-readable output withholds
+entirely:
+
+```json
+"details": {
+  "runtimeDetails": { "table": "items", "zero_db_code": "zero_db_connect_failed" },
+  "runtimeCode": "zero_db_dump_failed",
+  "status": 500, "attempts": 1
+}
+```
+
+- space `spc_7770744a870a43f5927213fa397c780e`, version
+  `ver_ee0c717d360d428692c066e6ffd7e340`
+- requestId `b4503d08-4ba1-4fcb-9bfc-64bcecf2453f`
+- HTTP 500, marked `retryable: true`; retries do not help
+- **`https://larderlog.view.fast/api/status` returns `200 ok` throughout**, so
+  the runtime is serving fine and only the admin dump path cannot reach the
+  database
+
+Two things worth fixing: the bare message should carry `zero_db_connect_failed`
+without needing `--json`, and `retryable: true` on a persistent connect failure
+sends you into a retry loop that cannot succeed. The recovery hint (`sf doctor`)
+does not mention that the space may be perfectly healthy while this fails.
+
+---
+
+## 2026-08-26 — Building the destructive-actions pass: three sharp edges, all self-inflicted but all avoidable
+
+Context: implementing undo toasts, confirm modals and a typed confirmation.
+Touched `theme.json`, `server/index.ts`, and a dozen client components. Nothing
+here blocked us for long, but each cost a full dev-server restart cycle to
+diagnose because the failure surfaces nowhere near the cause.
+
+### 👎 `theme.json` is strict JSON while `sf.jsonc` is JSONC, and nothing says so
+
+Added two palette entries with a `//` comment above them explaining why they are
+theme-independent — the same commenting style `sf.jsonc` uses two files away.
+`sf dev` refuses to start:
+
+```
+theme.json is not valid JSON: Unexpected token '/', ..."" },
+
+				// The foc"... is not valid JSON
+```
+
+The message is clear once you see it, and it fails fast, which is right. But the
+asymmetry is not documented anywhere: `sf.jsonc` announces its dialect in its
+own extension, and `theme.json` looks like the same class of hand-edited config
+file. **Either accept comments in `theme.json` too, or say "strict JSON, no
+comments" in the styling docs.** A design token is exactly the kind of value
+that wants a note explaining why it exists.
+
+### 🐛 The `location:` scanner false positive fires on an *object key*, again
+
+Known from 2026-08-24 and still worth reporting, because it caught us a second
+time in a file that already carries a comment warning about it. A throwaway
+endpoint returned a plain object:
+
+```js
+const out = { location: await countLoc(loc.id), type: ..., store: ... };
+```
+
+`sf dev` refused to reload:
+
+```
+Zero dev reload failed: Zero source server/index.ts references unsupported
+server global location.
+```
+
+`const loc = ...` was fine; the bare `location:` **object key** was not.
+Quoting it (`'location':`) is the entire fix. The scanner is doing a text match
+rather than resolving identifiers, so any property, method or shorthand named
+`location`, `document` or `window` trips it.
+
+Two things would fix this without a real parser: **say which line it found**, and
+**say that quoting resolves it**. Right now the error names the file and the
+global and nothing else, and the natural reading — "you referenced the browser
+`location`" — is false, which sends you looking in the wrong place. This is a
+pantry app; `location` is one of its three core nouns, so it will keep happening.
+
+### 👍 A reload failure leaves the previous runtime serving, and says so every poll
+
+Worth calling out as a good decision. When the reload failed, `sf dev` kept the
+last good runtime up and repeated the error once per watch interval. So `GET /`
+still worked, the client kept running, and the log made it obvious the source
+was not live. Compare with the failure mode it avoids: an endpoint that returns
+the SPA shell for an unrecognized path (see 2026-08-25) looks *identical* to an
+endpoint whose file failed to compile. The repeated log line is the only thing
+that distinguishes them — **keep it**.
+
+### 😕 A `--dry-run` artifact hides the schema one level down, and an empty read looks like D27's disaster
+
+Checked the artifact after editing `server/index.ts`, per our own rule that a
+table can vanish while typechecking perfectly. Read `artifact.json` looking for
+a top-level `schema`, got nothing, and briefly believed the capsule had shipped
+empty again — the exact failure that cost us a publish on 2026-08-24.
+
+It had not: the schema is under `server.schema`, and all nine tables were there.
+But **"no tables" and "I looked in the wrong place" produce the same output**,
+and the consequence of the first is severe enough that the tooling should make
+them distinguishable. `sf publish --dry-run` prints a six-line summary — folder,
+files, bytes, mode, SPA, target — and **none of it mentions the capsule**. One
+more line, `Schema 9 tables · 3 queries · 16 mutations · 1 endpoint`, would make
+the check we are told to do unnecessary, and would have caught the original bug
+at the moment it happened.
+
+### 👍 Endpoints remain the way to prove a handler rule, and the in-memory backend makes it cheap
+
+Verified the new "a term is deletable only once nothing references it" rule by
+inserting a household, two items, a type and a store, counting through the
+`by_type` / `by_store` indexes, and deleting it all again in one request. In
+memory, so nothing survived the restart and no cleanup could be forgotten. The
+counts came back right and the refusal sentence came back verbatim.
+
+Still the only way to do this — restating the ask from 2026-08-25: **`sf dev
+invoke <name> [args…]`** would replace the whole dance.

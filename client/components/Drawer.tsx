@@ -7,7 +7,7 @@ import { DrawerSettings } from './DrawerSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import type { Theme } from '../lib/theme';
 import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
-import type { HouseholdSummary, Item, Term } from '../../shared/types';
+import type { HouseholdSummary, Item, Term, TermKind } from '../../shared/types';
 
 export type DrawerTab = 'filter' | 'settings';
 
@@ -22,7 +22,14 @@ type Props = {
 	setActiveType: (id: string | null) => void;
 	activeStore: string | null;
 	setActiveStore: (id: string | null) => void;
-	locationCounts: Record<string, number>;
+	/**
+	 * How many items reference a term, for the chips and the editing rows.
+	 *
+	 * One function rather than three maps: the count means the same thing in
+	 * every section now that the trash is live on all of them (D36), and three
+	 * maps invited exactly the drift where only Location had one.
+	 */
+	countFor: (kind: TermKind, id: string) => number;
 	anyFilterActive: boolean;
 	onClearAll: () => void;
 
@@ -57,6 +64,8 @@ type Props = {
 	onDeleteTerm: (kind: 'location' | 'type' | 'store', id: string) => void;
 	/** `taxonomy:write`. Gates the pencil and the dashed add chip (D30). */
 	canEditTaxonomy: boolean;
+	/** Bumped to fold every editing panel — see `FilterSection`. */
+	closeEditing: number;
 
 	theme: Theme;
 };
@@ -77,12 +86,12 @@ type Props = {
 export function Drawer({
 	items, locations, types, stores,
 	activeLocation, setActiveLocation, activeType, setActiveType, activeStore, setActiveStore,
-	locationCounts, anyFilterActive, onClearAll,
+	countFor, anyFilterActive, onClearAll,
 	tab, setTab, open, onClose, collapsed, onDismiss,
 	householdName, households, currentHouseholdId,
 	onSelectHousehold, onCreateHousehold, onJoinHousehold,
 	accountName, settings,
-	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, canEditTaxonomy,
+	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, canEditTaxonomy, closeEditing,
 	theme,
 }: Props) {
 	const d = theme.drawer;
@@ -218,30 +227,32 @@ export function Drawer({
 								title="Location" entities={locations}
 								active={activeLocation} onSelect={setActiveLocation}
 								leadingAll={{ label: 'All items', count: items.length }}
-								countFor={(id) => locationCounts[id] || 0}
+								countFor={(id) => countFor('location', id)}
 								onCreate={(n, ink) => onCreateTerm('location', n, ink)}
 								onRename={(id, n) => onRenameTerm('location', id, n)}
 								onRecolor={(id, t) => onRecolorTerm('location', id, t)}
 								onDelete={(id) => onDeleteTerm('location', id)}
-								canEdit={canEditTaxonomy} theme={theme}
+								canEdit={canEditTaxonomy} closeEditing={closeEditing} theme={theme}
 							/>
 							<FilterSection
 								title="Store" entities={stores}
 								active={activeStore} onSelect={setActiveStore}
+								countFor={(id) => countFor('store', id)}
 								onCreate={(n, ink) => onCreateTerm('store', n, ink)}
 								onRename={(id, n) => onRenameTerm('store', id, n)}
 								onRecolor={(id, t) => onRecolorTerm('store', id, t)}
 								onDelete={(id) => onDeleteTerm('store', id)}
-								canEdit={canEditTaxonomy} theme={theme}
+								canEdit={canEditTaxonomy} closeEditing={closeEditing} theme={theme}
 							/>
 							<FilterSection
 								title="Type" entities={types}
 								active={activeType} onSelect={setActiveType}
+								countFor={(id) => countFor('type', id)}
 								onCreate={(n, ink) => onCreateTerm('type', n, ink)}
 								onRename={(id, n) => onRenameTerm('type', id, n)}
 								onRecolor={(id, t) => onRecolorTerm('type', id, t)}
 								onDelete={(id) => onDeleteTerm('type', id)}
-								canEdit={canEditTaxonomy} theme={theme}
+								canEdit={canEditTaxonomy} closeEditing={closeEditing} theme={theme}
 							/>
 
 							{anyFilterActive && (

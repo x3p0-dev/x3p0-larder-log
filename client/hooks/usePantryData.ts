@@ -75,17 +75,33 @@ export type PantryApi = {
 
 	createTerm: (kind: TermKind, draft: { name: string; ink: string }) => Promise<string | null>;
 	updateTerm: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
-	deleteTerm: (kind: TermKind, id: string) => Promise<void>;
+	/**
+	 * True when the term is really gone — the undo toast is armed on this.
+	 *
+	 * Same reason `removeItem` reports one. Undo re-creates the term, so an undo
+	 * offered for a delete the server refused would mint a duplicate.
+	 */
+	deleteTerm: (kind: TermKind, id: string) => Promise<boolean>;
 
 	/** Resolves to the new code, or null when the server refused. */
 	createInvite: (role: Role) => Promise<{ code: string; expiresAt: string } | null>;
-	revokeInvite: (inviteId: string) => Promise<void>;
+	/** True when the code is dead. The plain toast only says so if it is. */
+	revokeInvite: (inviteId: string) => Promise<boolean>;
 	/** The joined household's id, or null when the server refused. */
 	redeemInvite: (code: string) => Promise<string | null>;
 
 	changeRole: (membershipId: string, role: Role) => Promise<void>;
-	removeMember: (membershipId: string) => Promise<void>;
-	leaveHousehold: () => Promise<void>;
+	/** True when they are out. */
+	removeMember: (membershipId: string) => Promise<boolean>;
+	leaveHousehold: () => Promise<boolean>;
+	/**
+	 * Owner only, and only ever reached from the typed confirmation.
+	 *
+	 * Leaving a household you are the last member of would strand it, so the
+	 * server refuses (D22) and this is what that case does instead — the row
+	 * relabels to *Delete household* and takes this path.
+	 */
+	deleteHousehold: () => Promise<boolean>;
 };
 
 export function usePantryData(selectedHouseholdId: string | null): PantryApi {
@@ -123,6 +139,7 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	const rawChangeRole = useMutation<[string, string, string], void>('changeRole');
 	const rawRemoveMember = useMutation<[string, string], void>('removeMember');
 	const rawLeaveHousehold = useMutation<[string], void>('leaveHousehold');
+	const rawDeleteHousehold = useMutation<[string], void>('deleteHousehold');
 
 	/**
 	 * Runs a mutation and surfaces its failure.
@@ -222,17 +239,17 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			await run(() => rawUpdateTerm(currentHouseholdId, kind, id, patch));
 		}, [run, rawUpdateTerm, currentHouseholdId]),
 
-		deleteTerm: useCallback(async (kind, id) => {
-			await run(() => rawDeleteTerm(currentHouseholdId, kind, id));
-		}, [run, rawDeleteTerm, currentHouseholdId]),
+		deleteTerm: useCallback(async (kind, id) => (
+			(await run(() => rawDeleteTerm(currentHouseholdId, kind, id).then(() => true))) === true
+		), [run, rawDeleteTerm, currentHouseholdId]),
 
 		createInvite: useCallback(async (role) => (
 			run(() => rawCreateInvite(currentHouseholdId, role))
 		), [run, rawCreateInvite, currentHouseholdId]),
 
-		revokeInvite: useCallback(async (inviteId) => {
-			await run(() => rawRevokeInvite(currentHouseholdId, inviteId));
-		}, [run, rawRevokeInvite, currentHouseholdId]),
+		revokeInvite: useCallback(async (inviteId) => (
+			(await run(() => rawRevokeInvite(currentHouseholdId, inviteId).then(() => true))) === true
+		), [run, rawRevokeInvite, currentHouseholdId]),
 
 		// The returned id matters twice: the caller clears the stashed code on
 		// success and keeps it on failure, and the household it names is the one
@@ -248,12 +265,16 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			await run(() => rawChangeRole(currentHouseholdId, membershipId, role));
 		}, [run, rawChangeRole, currentHouseholdId]),
 
-		removeMember: useCallback(async (membershipId) => {
-			await run(() => rawRemoveMember(currentHouseholdId, membershipId));
-		}, [run, rawRemoveMember, currentHouseholdId]),
+		removeMember: useCallback(async (membershipId) => (
+			(await run(() => rawRemoveMember(currentHouseholdId, membershipId).then(() => true))) === true
+		), [run, rawRemoveMember, currentHouseholdId]),
 
-		leaveHousehold: useCallback(async () => {
-			await run(() => rawLeaveHousehold(currentHouseholdId));
-		}, [run, rawLeaveHousehold, currentHouseholdId]),
+		leaveHousehold: useCallback(async () => (
+			(await run(() => rawLeaveHousehold(currentHouseholdId).then(() => true))) === true
+		), [run, rawLeaveHousehold, currentHouseholdId]),
+
+		deleteHousehold: useCallback(async () => (
+			(await run(() => rawDeleteHousehold(currentHouseholdId).then(() => true))) === true
+		), [run, rawDeleteHousehold, currentHouseholdId]),
 	};
 }

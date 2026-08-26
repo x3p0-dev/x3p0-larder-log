@@ -105,6 +105,42 @@ the decision it was waiting on. What landed on 2026-08-25:
 blocker below. Ten `font-mono` sites remain, on the surfaces not yet redrawn:
 the sign-in gate, `JoinBox`, `ShoppingListModal`, and two loading strings.
 
+### Destructive actions (Phase 4.6) are built — 2026-08-26
+
+The spec's *Destructive actions* section, governed by
+[D36](../.docs/decisions.md#d36-undo-what-comes-back-confirm-what-doesnt):
+**undo what comes back, confirm what doesn't**. Two components replace the three
+idioms that were there before.
+
+- **`Toast.tsx` / `useToasts.ts`** — actionable (6s, Undo, dismiss) and plain
+  (3.5s, no controls); the drawer surface in both themes; a timer bar that
+  pauses on hover and focus; max 3 stacked; Cmd/Ctrl+Z from anywhere. Each row
+  owns its own countdown, so hovering one pauses only that one. `UndoToast` is
+  deleted.
+- **`ConfirmDialog.tsx`** — one shell for confirm, blocked, and the app's only
+  typed confirmation. **Crimson is never a button**: the primary is the ordinary
+  ink/cream fill, and crimson appears once as the icon tint.
+- **Every term kind now blocks while in use**, widening D16 from locations
+  alone. `termBlock` in `shared/term.ts` is one rule the server throws and the
+  client renders — do not write that sentence twice. The trash on an editing row
+  is **live in every case and neutral, never disabled** (a disabled control
+  cannot explain itself), with the item count beside it.
+- **Leave household** moved to the foot of the Household section and relabels to
+  *Delete household* for the last member. `deleteHousehold` finally has a client
+  caller.
+- ***Recently added* sorts on `createdAt`** (D35). It previously applied no sort
+  at all, so it rendered oldest-first — the opposite of its label.
+
+`theme.json` gained `focus-dark` and `drawer-danger`. **`theme.json` is strict
+JSON — no comments**, unlike `sf.jsonc`; a `//` line stops `sf dev` from
+starting at all.
+
+**Verified without a browser** (there isn't one): the capsule compiles and
+reloads, every new utility class and both tokens are in `/zero.css`, the term
+counts and refusal sentence were exercised through a throwaway endpoint, and the
+artifact still shows nine tables, sixteen mutations, **zero migrations**.
+**Nobody has clicked any of it.**
+
 Phase 4's typography question is also closed, in the opposite direction from
 the one the notes predicted. Zero has no webfont mechanism — `theme.json`'s
 `fontFace` is discarded silently — but the `--font-disp` / `--font-sans` /
@@ -248,7 +284,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D32, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors** |
+| `.docs/decisions.md` | D1–D36, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 governs row timestamps**; **D36 governs destructive actions** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -333,7 +369,7 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 111 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 129 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -374,7 +410,10 @@ Cheapest first:
   appears as `max-h-\[80vh\]` and `md:grid-cols-[190px_1fr]` as
   `.md\:grid-cols-\[190px_1fr\]`. Grepping the half-escaped form returns
   nothing and looks exactly like a missing class — search for a distinctive
-  substring (`190px`) when in doubt.
+  substring (`190px`) when in doubt. **Use `grep -F`**: the escaped form
+  contains a literal backslash, so `grep 'z-\[55\]'` reads it as a regex for
+  `z-[55]` and matches nothing, which looks identical to the class being
+  absent. This trap has now caught us twice.
 - **Curl the published space** for anything auth-related; it needs no bootstrap
   token. `https://larderlog.view.fast/api/status` returning `ok` is the cheapest
   proof that a publish's server half landed.

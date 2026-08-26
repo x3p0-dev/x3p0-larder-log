@@ -13,6 +13,7 @@ export type TaxonomyActions = {
 	/** Resolves to the new term's id, or null if the server refused. */
 	create: (kind: TermKind, draft: { name: string; ink: string }) => Promise<string | null>;
 	update: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
-	remove: (kind: TermKind, id: string) => Promise<void>;
+	/** True when the term is really gone — what arms its undo toast. */
+	remove: (kind: TermKind, id: string) => Promise<boolean>;
 };
 
