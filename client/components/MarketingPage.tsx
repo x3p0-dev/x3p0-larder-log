@@ -1,13 +1,13 @@
 import { useState } from 'preact/hooks';
-import { MapPin, Store, Tag } from 'lucide-preact';
+import { LogIn, MapPin, Store, Tag } from 'lucide-preact';
 
 import type { Item, Term } from '../../shared/types';
 import { fromInt, toInt } from '../../shared/qty';
 import type { Theme } from '../lib/theme';
 import { entityColorFor } from '../lib/theme';
 import { ItemCard } from './ItemCard';
-import { AppTile, GravatarMark, Wordmark } from './Brand';
-import { GravatarButton } from './OutsideShell';
+import { AppTile, Wordmark } from './Brand';
+import { SignInButton } from './OutsideShell';
 import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
 
 /**
@@ -279,8 +279,8 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 						color: pending ? theme.disabledText : theme.inkText,
 					}}
 				>
-					<GravatarMark size={18} color={pending ? theme.disabledText : theme.inkText} />
-					Sign in with Gravatar
+					<LogIn size={18} strokeWidth={2} color={pending ? theme.disabledText : theme.inkText} />
+					Sign in
 				</button>
 			</Column>
 
@@ -300,8 +300,8 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 					</p>
 
 					<div class="mt-[26px] md:mt-8">
-						<GravatarButton
-							label="Sign in with Gravatar"
+						<SignInButton
+							label="Sign in"
 							pending={pending}
 							onPress={onSignIn}
 							theme={theme}
@@ -415,8 +415,8 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 				  * all. It shipped once with the label flush against both edges.
 				  */}
 				<div class="w-full sm:w-auto pt-1.5">
-					<GravatarButton
-						label="Sign in with Gravatar"
+					<SignInButton
+						label="Sign in"
 						pending={pending}
 						onPress={onSignIn}
 						theme={theme}

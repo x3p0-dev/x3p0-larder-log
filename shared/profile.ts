@@ -1,9 +1,10 @@
 /**
  * The account's own name.
  *
- * Gravatar is the identity provider, but a lot of accounts arrive through the
- * my.spacefast.com signup carrying no profile name at all — and the ones that
- * do carry a name did not choose it here. So Larder Log collects its own
+ * The identity is a Spacefast account, and its sign-in screen takes a
+ * WordPress.com account, an emailed code, or a password. Only the first of
+ * those has a profile behind it, so a lot of accounts arrive carrying no name
+ * at all — and the ones that do carry a name did not choose it here. So Larder Log collects its own
  * **display name**, once, and stores it on the account rather than on a
  * household: it is the single thing the rest of a household sees, and asking
  * for it again per pantry would be asking the same question twice.
@@ -48,9 +49,9 @@ export function isValidDisplayName(value: unknown): boolean {
  * same order and for the same reason:
  *
  * - the **profile** row, which is the answer whenever it exists;
- * - a **membership**, whose `displayName` is a snapshot of the Gravatar name the
- *   account joined under — the only thing an account predating this table has,
- *   and why those accounts are never sent through the first-run screen;
+ * - a **membership**, whose `displayName` is a snapshot of the identity name
+ *   the account joined under — the only thing an account predating this table
+ *   has, and why those accounts are never sent through the first-run screen;
  * - the **identity**, which is what a brand-new account has and nothing else.
  *
  * Returns `''` when every link is empty, which is a real state: an account can

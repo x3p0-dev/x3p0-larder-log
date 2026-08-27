@@ -341,8 +341,8 @@ type Props = {
 	/**
 	 * The **identity's** name, which is a suggestion rather than an answer.
 	 *
-	 * It is whatever Gravatar or the Spacefast signup carried, and it is often
-	 * nothing at all — which is the whole reason the account keeps its own
+	 * It is whatever the Spacefast account carried, and it is often nothing at
+	 * all — which is the whole reason the account keeps its own
 	 * display name (D46). Everything below reads `accountName`, resolved from
 	 * the profile with this as the last fallback; the one place this is used
 	 * directly is prefilling the field that sets the profile.
@@ -618,8 +618,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	/**
 	 * A code the visitor already said yes to, on the way in.
 	 *
-	 * **Signing in is the accept** — someone who pressed *Sign in with Gravatar
-	 * to join* while signed out has consented, and showing them the same card
+	 * **Signing in is the accept** — someone who pressed *Sign in to join* while
+	 * signed out has consented, and showing them the same card
 	 * again on the way back would make that press look like it did nothing. So
 	 * this redeems on arrival instead. A link followed while *already* signed in
 	 * carries no consent and gets the card with its two buttons.
@@ -636,7 +636,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		/*
 		 * And not before the name is settled. The membership this is about to
 		 * create carries a copy of the account's name, so redeeming ahead of the
-		 * first-run screen would stamp the row with whatever Gravatar supplied —
+		 * first-run screen would stamp the row with whatever the account supplied —
 		 * possibly nothing — and announce that to the household. `setDisplayName`
 		 * writes back through every membership, so the end state is the same
 		 * either way; waiting is what keeps the other members from seeing the
@@ -1514,7 +1514,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 						</div>
 					)}
 					<DisplayNameCard
-						suggestion={displayName}
 						email={email}
 						picture={picture}
 						onSubmit={profile.setDisplayName}

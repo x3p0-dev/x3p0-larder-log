@@ -230,7 +230,7 @@ export type InvitePreviewResult = InvitePreview;
  * the most ordinary case this query has.
  *
  * `needsName` is the gate, and it is narrower than "has no profile row". An
- * account that predates the `profiles` table has a Gravatar name recorded on
+ * account that predates the `profiles` table has an identity name recorded on
  * every membership it holds, which is a name it effectively already answered
  * with — so it is grandfathered and `displayName` carries that name instead.
  * Only an account with no name anywhere is stopped.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Theme } from '../lib/theme';
 import { Avatar } from './FirstRun';
@@ -20,13 +20,7 @@ import { MAX_DISPLAY_NAME, normalizeDisplayName } from '../../shared/profile';
  * screen is *about* the account, so who you are is context for the question
  * rather than a footnote under the answer.
  */
-export function DisplayNameCard({ suggestion, email, picture, onSubmit, onSignOut, theme }: {
-	/**
-	 * The identity's own name, which is a **suggestion and not an answer** — it
-	 * is whatever Gravatar or the Spacefast signup happened to carry, and half
-	 * the reason this screen exists is that it is often nothing at all.
-	 */
-	suggestion: string;
+export function DisplayNameCard({ email, picture, onSubmit, onSignOut, theme }: {
 	email: string;
 	/** The Gravatar avatar, when the identity carries one. */
 	picture?: string;
@@ -35,7 +29,15 @@ export function DisplayNameCard({ suggestion, email, picture, onSubmit, onSignOu
 	onSignOut: () => void;
 	theme: Theme;
 }) {
-	const [name, setName] = useState(() => normalizeDisplayName(suggestion));
+	/*
+	 * Empty, and **not** seeded from the identity. The account's own name is a
+	 * suggestion at best — an account made with an emailed code or a password
+	 * has no profile behind it, and one made through WordPress.com carries a
+	 * name chosen somewhere else for something else. A prefilled field asks a
+	 * question it has already answered, so most people press Continue and the
+	 * screen collects nothing. Typing it is the point.
+	 */
+	const [name, setName] = useState('');
 	const [saving, setSaving] = useState(false);
 	/*
 	 * Tracked rather than left to CSS because the focused border is a colour,
@@ -46,23 +48,11 @@ export function DisplayNameCard({ suggestion, email, picture, onSubmit, onSignOu
 	const field = useRef<HTMLInputElement | null>(null);
 
 	/*
-	 * Whether *Gravatar* had a name, fixed at mount. The hint below the field
-	 * explains where the value came from, so it must not change into "Gravatar
-	 * didn't have a name for you" the moment somebody clears the field to type
-	 * their own.
-	 */
-	const inherited = useMemo(() => normalizeDisplayName(suggestion) !== '', [suggestion]);
-
-	/*
-	 * Focus *and select*, once — the same rule as `FirstRun`. A prefilled field
-	 * with the caret parked at the end asks you to delete a name you did not
-	 * choose; selecting it makes typing over it the default gesture. Selecting
-	 * on every focus would instead wipe the field the first time someone clicked
-	 * back in to fix a typo.
+	 * Focus, once. There is nothing to select any more — the field is empty and
+	 * the caret is already where anyone would put it.
 	 */
 	useEffect(() => {
 		field.current?.focus();
-		field.current?.select();
 	}, []);
 
 	const blocked = saving || ! normalizeDisplayName(name);
@@ -94,7 +84,7 @@ export function DisplayNameCard({ suggestion, email, picture, onSubmit, onSignOu
 						<span class="text-[13px] truncate" style={{ color: theme.textMuted }}>{email}</span>
 					)}
 					<span class="text-[12.5px] truncate" style={{ color: theme.textFaint }}>
-						Signed in with Gravatar
+						Signed in
 					</span>
 				</span>
 
@@ -134,9 +124,11 @@ export function DisplayNameCard({ suggestion, email, picture, onSubmit, onSignOu
 			</label>
 
 			{/*
-			  * No placeholder, even empty. A greyed name in the field is a name
-			  * somebody has to notice is not theirs before they can disagree with
-			  * it, and the hint underneath already says what to do.
+			  * No placeholder. The label names the field and the paragraph above
+			  * says what the name is for; a grey word inside an empty box would
+			  * only be a third statement of the same thing, and the one thing a
+			  * placeholder must never be here is an example name — this screen
+			  * exists because a name nobody typed is not an answer.
 			  */}
 			<input
 				id="display-name"
@@ -159,12 +151,6 @@ export function DisplayNameCard({ suggestion, email, picture, onSubmit, onSignOu
 					color: theme.textStrong,
 				}}
 			/>
-
-			<p class="text-[12.5px] leading-[1.5] mt-[9px]" style={{ color: theme.textMuted }}>
-				{inherited
-					? 'From your Gravatar profile. Change it if you’d rather be called something else.'
-					: 'Gravatar didn’t have a name for you. Pick one — it’s the only thing the rest of your household will see.'}
-			</p>
 
 			<button
 				type="button"

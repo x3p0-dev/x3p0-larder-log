@@ -28,12 +28,14 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 	theme: Theme;
 }) {
 	/*
-	 * Prefilled from the Gravatar name and selected on arrival, so Enter alone
-	 * finishes the screen. Named at creation rather than defaulted and renamed
-	 * later: the schema has always been multi-household (D3), and a name is the
-	 * only thing that will tell two pantries apart in the switcher.
+	 * Empty, and **not** seeded from the account's name. *Justin's Household* is
+	 * a name nobody chose, and a field that arrives already filled is one most
+	 * people will accept — which is how a switcher ends up listing two pantries
+	 * that differ only by an apostrophe. Named at creation rather than defaulted
+	 * and renamed later: the schema has always been multi-household (D3), and a
+	 * name is the only thing that will tell two of them apart.
 	 */
-	const [name, setName] = useState(() => `${displayName.trim() || 'My'}’s Household`);
+	const [name, setName] = useState('');
 	/*
 	 * Pre-picked, so nobody has to decide something they have no opinion about
 	 * (D42). Nothing is taken yet on this screen — it is reachable only with no
@@ -44,15 +46,11 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 	const field = useRef<HTMLDivElement | null>(null);
 
 	/*
-	 * Focus *and select*, once. `autoFocus` alone would leave the caret at the
-	 * end of a name nobody chose, and selecting on every focus would wipe the
-	 * field the first time someone clicked back into it to fix a typo.
+	 * Focus, once. There is nothing to select any more — the field is empty, and
+	 * `HouseholdIdentity`'s own placeholder says what belongs in it.
 	 */
 	useEffect(() => {
-		const input = field.current?.querySelector('input');
-
-		input?.focus();
-		input?.select();
+		field.current?.querySelector('input')?.focus();
 	}, []);
 
 	const blocked = creating || ! name.trim();
@@ -104,7 +102,6 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 			</div>
 
 			<p class="text-[12.5px] leading-[1.5] mt-[9px]" style={{ color: theme.textMuted }}>
-				Taken from your Gravatar name — change it to whatever you call the place.
 				The colour is how you will tell it apart later.
 			</p>
 

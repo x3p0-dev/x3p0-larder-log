@@ -193,7 +193,7 @@ summarized here.
   throwaway-endpoint pattern. Undocumented — written up in
   `.claude/docs/spacefast.md`.
 - **Zero's sign-in is a full-page redirect, and it reports no failures.**
-  `signInWithGravatar` ends in `location.assign`, so its promise never settles
+  `hostedSignIn` ends in `location.assign`, so its promise never settles
   observably and the app is torn down. On the way back nothing on `useAuth()`
   separates "abandoned a sign-in ten seconds ago" from "never pressed
   anything" — both are `isGuest: true`. The *didn't come back* state is
@@ -201,10 +201,13 @@ summarized here.
   `client/lib/signInAttempt.ts`. The **one** auth failure an app can catch is
   the public wrapper throwing *"Gravatar sign-in is unavailable for this
   Spacefast runtime"*, which is every `sf dev`.
-- **`@spacefast/zero/client` does not export `signInWithGravatar`.** The
-  `exports` map resolves `./client` to `dist/public-client.d.ts`, which
-  re-exports only the Lakebed-compatible `signInWithGoogle` — the same function,
-  Gravatar end to end. Aliased at the import in `client/index.tsx`.
+- **`@spacefast/zero/client` exports the sign-in function under one name, and
+  it is the wrong one.** The `exports` map resolves `./client` to
+  `dist/public-client.d.ts`, which re-exports only the Lakebed-compatible
+  `signInWithGoogle`. It goes nowhere near Google: the redirect lands on the
+  Spacefast account screen. Aliased to `hostedSignIn` at the import in
+  `client/index.tsx` (D47) — **not** `startSignIn`, which is already the app's
+  own handler in the same file.
 - **A query can answer a guest.** Nothing at the framework level gates a query
   on authentication; `isSignedIn` is our own check, applied per handler.
   `invitePreview` is the first read in the app that deliberately does not apply

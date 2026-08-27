@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'preact/hooks';
 /*
- * `signInWithGoogle` **is** the Gravatar flow. The name is Lakebed source
- * compatibility — `@spacefast/zero/client` exports the same function under both
- * names internally and only this one publicly. Aliased so no call site below
- * has to claim the app has a Google button.
+ * `signInWithGoogle` **is** the hosted sign-in flow, and it goes nowhere near
+ * Google: the redirect lands on the Spacefast account screen, which offers
+ * WordPress.com, an emailed code, or a password. The name is Lakebed source
+ * compatibility — `@spacefast/zero/client` exports the same function under
+ * several names internally and only this one publicly. Aliased to what it is
+ * — the platform's own handoff — so no call site below names a provider that
+ * isn't there, and so it cannot be mistaken for `startSignIn` below, which is
+ * this app's handler around it.
  */
-import { signInWithGoogle as signInWithGravatar, signOut, useAuth } from '@spacefast/zero/client';
+import { signInWithGoogle as hostedSignIn, signOut, useAuth } from '@spacefast/zero/client';
 
 import { Pantry } from './Pantry';
 import { useSystemTheme } from './hooks/useSystemTheme';
@@ -178,15 +182,15 @@ export function App() {
 		 * than routing anywhere: the redirect never started, and there is no
 		 * abandoned attempt to report.
 		 */
-		void signInWithGravatar().catch(() => {
+		void hostedSignIn().catch(() => {
 			clearSignInAttempt();
 			setPending(false);
 		});
 	}
 
 	if (auth.isLoading) {
-		// Coming back from Gravatar looks exactly like a first paint from the
-		// auth value alone. The attempt marker is the only thing that tells them
+		// Coming back from the sign-in screen looks exactly like a first paint
+		// from the auth value alone. The attempt marker is the only thing that tells them
 		// apart, and it is why the handoff can say "bringing your household
 		// across" rather than showing a bare spinner.
 		return signInAttemptPending()
@@ -216,7 +220,7 @@ export function App() {
 				 * any more**. That fallback made the name look present when it was
 				 * absent, which is precisely the case D46's first-run screen
 				 * exists to catch: it would have prefilled the field with
-				 * "Signed in" and told the visitor Gravatar had a name for them.
+				 * "Signed in" and told the visitor their account had a name for them.
 				 * `Pantry` resolves the account's real name and falls back for
 				 * display there instead.
 				 */

@@ -1,7 +1,8 @@
 /**
- * A note that this tab sent someone to Gravatar and is waiting for them back.
+ * A note that this tab sent someone to the sign-in screen and is waiting for
+ * them back.
  *
- * Zero's sign-in is a **full-page redirect**, not a popup: `signInWithGravatar`
+ * Zero's sign-in is a **full-page redirect**, not a popup: `hostedSignIn`
  * calls `location.assign` and the app is torn down. So there is no promise to
  * await and no error to catch — the only two things that can happen are that
  * the page comes back signed in, or that it comes back a guest, and nothing in
@@ -21,7 +22,7 @@ const KEY = 'larder.signInAttempt';
  *
  * Without a window, a tab left open through an abandoned attempt would greet
  * its next reload with the failure card instead of the marketing page. Fifteen
- * minutes is longer than any real Gravatar round trip and shorter than anyone's
+ * minutes is longer than any real sign-in round trip and shorter than anyone's
  * patience with a screen they didn't ask for.
  */
 const MAX_AGE_MS = 15 * 60 * 1000;

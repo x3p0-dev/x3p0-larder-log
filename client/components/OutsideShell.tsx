@@ -1,7 +1,7 @@
+import { LogIn } from 'lucide-preact';
 import type { ComponentChildren } from 'preact';
 
 import type { Theme } from '../lib/theme';
-import { GravatarMark } from './Brand';
 import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
 
 /**
@@ -74,8 +74,13 @@ export function Eyebrow({ theme, children }: { theme: Theme; children: Component
  * the same fill as *Add item*. Its three states are the handoff's: at rest it
  * invites, pressed it takes the disabled tokens and says where you are going,
  * and it is never the thing that reports a failure.
+ *
+ * **It names no provider.** The hosted sign-in is a Spacefast account, and that
+ * screen offers WordPress.com, an emailed code, or a password — so a button
+ * naming any one of them is wrong for most of the people who press it. The
+ * label is the act, and the lanes are the next screen's business.
  */
-export function GravatarButton({ label, pending, mark = true, onPress, theme, width, height }: {
+export function SignInButton({ label, pending, mark = true, onPress, theme, width, height }: {
 	label: string;
 	/** Redirecting. The mark becomes a spinner and the fill goes flat. */
 	pending?: boolean;
@@ -111,8 +116,8 @@ export function GravatarButton({ label, pending, mark = true, onPress, theme, wi
 		>
 			{pending
 				? <Spinner size={20} color={ink} />
-				: mark && <GravatarMark size={20} color={ink} />}
-			{pending ? 'Opening Gravatar…' : label}
+				: mark && <LogIn size={20} strokeWidth={2} color={ink} />}
+			{pending ? 'Signing in…' : label}
 		</button>
 	);
 }
@@ -120,11 +125,10 @@ export function GravatarButton({ label, pending, mark = true, onPress, theme, wi
 /**
  * A ring with one quarter drawn, turning.
  *
- * Deliberately the same silhouette as the Gravatar mark, so the button's
- * pressed state reads as that mark spinning rather than as a different glyph
- * swapped in. That is why the radius and stroke track the mark's: it moved from
- * 8.4 to 10 when the real Gravatar drawing replaced the placeholder, and a
- * spinner left behind would have shrunk the glyph on press.
+ * Drawn on lucide's 24px grid at stroke 2 so it swaps in beside `LogIn` at the
+ * same weight and optical size — a spinner off that grid shrinks or thickens
+ * the glyph the moment the button is pressed, which reads as the button
+ * changing rather than the same button working.
  */
 export function Spinner({ size, color }: { size: number; color: string }) {
 	return (

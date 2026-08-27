@@ -1,8 +1,8 @@
 import type { Theme } from '../lib/theme';
 
 /**
- * The marks every surface outside the app shell repeats: the Oat tile, the
- * wordmark, and the Gravatar glyph on a sign-in button.
+ * The marks every surface outside the app shell repeats: the Oat tile and the
+ * wordmark.
  *
  * They existed inline in three places before this file — the drawer, the mobile
  * header, and the old sign-in gate — and the flows outside the shell add six
@@ -60,33 +60,5 @@ export function Wordmark({ size, theme }: { size: string; theme: Theme }) {
 		>
 			Larder <span class="italic" style={{ color: theme.accent }}>Log</span>
 		</span>
-	);
-}
-
-/**
- * Gravatar's mark: a ring broken at the top, with a spoke to the centre.
- *
- * Drawn on lucide's 24px grid at stroke 2 with round caps, so it sits beside
- * the lucide icons the rest of the app uses without looking like a different
- * set. `color` drives `currentColor` rather than each path, which is what lets
- * a caller tint it from the button's own text colour.
- */
-export function GravatarMark({ size, color }: { size: number; color: string }) {
-	return (
-		<svg
-			width={size}
-			height={size}
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			style={{ color }}
-			aria-hidden="true"
-		>
-			<path d="M12 2v10" />
-			<path d="M12 2a10 10 0 1 1-7.07 2.93" />
-		</svg>
 	);
 }

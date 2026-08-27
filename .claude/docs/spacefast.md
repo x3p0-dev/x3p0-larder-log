@@ -3027,3 +3027,96 @@ the command whose whole job is "show me what a publish would do" says nothing
 about the part of a publish that is irreversible without a flag. One line —
 `Schema  10 tables, 0 pending migrations` — would put the most consequential
 diff in front of the person about to ship it.
+
+
+## 2026-08-27 — What "Gravatar sign-in" actually is
+
+Context: surveying whether a Zero app can offer its users any sign-in path
+other than the one `SignInWithGravatar` renders. Read only — nothing published.
+
+### ❓ `/docs/zero` says "hosted sign-in uses Gravatar"; the flow says otherwise
+
+Following the button's own redirect chain on the live space:
+
+```
+GET  https://larderlog.view.fast/__spacefast/zero/auth/gravatar/start
+302  https://api.spacefast.com/v1/access/acquire/<id>?host=…&return=%2F
+303  https://my.spacefast.com/sign-in?returnTo=/access/v1.<token>
+```
+
+It is **Spacefast account sign-in**, not a Gravatar-branded OAuth screen. And
+`GET /v1/auth/capabilities` — documented, unauthenticated — reports what that
+screen offers:
+
+```json
+{"providers":{"wpcom":true,"google":false,"github":false},
+ "emailOtp":true,"password":true,"captcha":null,"googleOneTapClientId":null}
+```
+
+So a visitor already has **three** lanes: WordPress.com, an emailed one-time
+code, and a password. The Zero docs name none of them, `SignInWithGravatar` is
+the only exported component, and its label is the one word that describes the
+*avatar service* rather than any of the three. An author reading `/docs/zero`
+reasonably concludes their users must have Gravatar accounts, turns the app
+down for that, and never learns otherwise. One sentence in the Authentication
+section — "hosted sign-in is a Spacefast account: WordPress.com, an email code,
+or a password" — would fix it, and `/v1/auth/capabilities` deserves a mention
+there since it is the only way to know which lanes a deployment has on.
+
+This also explains, retroactively, why real signups arrive with no profile name
+(the reason `profiles` and D46 exist): an email-OTP account has no Gravatar
+profile to inherit a name from. That is the majority path, not an edge case.
+
+### 👍 The identity contract already admits more than one issuer
+
+`principalForAuthority` in `@spacefast/common` maps `person:` and `external:`
+authorities to an identity, alongside `account:`, and
+`visitorIdentityFromClaims` turns any of the three into an authenticated
+`ctx.auth` with `userId` set to the principal. So a team-owned OIDC connection
+(`sf share identity create --type oidc`) really does reach a Zero handler as a
+signed-in user — the runtime is not hard-wired to one issuer.
+
+Two things stop that being an app-level answer, and neither is a defect so much
+as an undocumented boundary worth stating: external subjects are admitted one
+at a time by an operator (`sf share identity grant --subject …`), so there is no
+self-serve signup; and the whole mechanism gates the *space*, which puts a
+public marketing page behind the access page. `/docs/share` is written for
+private-document sharing and never says how any of it interacts with a Zero
+app's own `ctx.auth`. That intersection is the missing page.
+
+### 👎 `AuthContext.provider` is typed `"guest" | "gravatar"`
+
+An `external:` principal is authenticated, carries a subject from someone
+else's IdP, and still normalizes to `provider: "gravatar"` — the client's
+`normalizeAuthValue` computes it as `isGuest ? "guest" : "gravatar"` outright.
+The field cannot answer the question its name asks. Either widen it to the
+authority class the token actually carried, or drop it.
+
+### 👍 `ctx.email` makes app-owned auth viable without a third-party key
+
+Worth recording as a strength: `/docs/services` documents `ctx.email.send()` as
+brokered, credential-free, and transactional inside a mutation, with
+`ctx.spam.check({ type: "signup" })` beside it. That is the whole supply side of
+an email one-time-code flow, with no Resend key to hold. Two caveats found
+while reading, both invisible from the docs:
+
+- **`/docs/zero` documents none of the three services.** They exist only on
+  `/docs/services`, which the Zero page never links from its Authentication or
+  capsule sections. The capsule reference and the service reference are
+  different pages with no path between them.
+- **A query and a mutation cannot see request headers** — only `endpoint` gets
+  an `EndpointRequest`. So an app-owned session cannot live in a cookie the way
+  a web developer would expect; the token has to be an explicit argument on
+  every query and mutation. That is a real design constraint and it is stated
+  nowhere; it belongs next to the handler-capability table on `/docs/services`,
+  which already teaches this shape of "what each handler kind gets".
+
+### 🤔 Unverified, and the reason it stays unverified
+
+Whether `ctx.email` exists on the hosted `quickjs-rust` runtime is untested
+here. That would be an idle worry on most platforms, but `crypto` is present
+under `sf dev` and `undefined` in production (see the 2026-08-27 runtime-
+divergence entry), so "the type exists and `sf dev` runs it" has already been
+established as no evidence at all. A published list of which globals and
+services the hosted runtime actually provides would retire a whole class of
+these.

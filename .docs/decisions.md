@@ -2333,6 +2333,11 @@ exposes one — or a generated label nobody recognises. It is one field, once.
 The rejected alternative is optional-with-a-fallback to the email local-part,
 and it is one line to change if the friction proves worse than the ambiguity.
 
+**Amended by [D48](#d48-a-name-nobody-typed-is-not-an-answer)**: the field
+described below as prefilled from the identity now starts **empty**, and so does
+the household name. The reasoning here is unchanged — it is the same argument
+carried one step further.
+
 ### Two departures from the boards
 
 - **The account row carries a *Sign out*.** The boards draw the row without one.
@@ -2352,3 +2357,175 @@ Editing the name from the drawer. Settings' Account section is specified for it
 (*Editing the display name*), and a new sidebar drawer is in flight — the
 mutation is already the right shape for it, since `setDisplayName` is an upsert
 and the write-through is what a rename needs.
+
+---
+
+## D47. The sign-in button names no provider
+
+**Decided:** 2026-08-27
+
+**Hosted sign-in is a Spacefast account, not a Gravatar one, and the button
+says the act rather than a brand.** *Sign in*, on a lucide `LogIn` glyph.
+
+### The button had been wrong since Phase 4.7
+
+`SignInWithGravatar` does not go to Gravatar. Following its own redirects on the
+published space:
+
+```
+GET /__spacefast/zero/auth/gravatar/start
+302 api.spacefast.com/v1/access/acquire/<id>?host=…&return=%2F
+303 my.spacefast.com/sign-in?returnTo=/access/v1.<token>
+```
+
+It is **Spacefast account sign-in**, and `GET /v1/auth/capabilities` — public,
+unauthenticated — says what that screen offers:
+
+```json
+{"providers":{"wpcom":true,"google":false,"github":false},
+ "emailOtp":true,"password":true,"captcha":null}
+```
+
+Three lanes: **WordPress.com, an emailed one-time code, or a password.** So
+*Sign in with Gravatar* was telling most of the people who pressed it to go and
+get an account they do not need — and telling everyone who did not press it
+that the app was closed to them. Gravatar's own ring mark, drawn on the button
+beside it, was the logo of a service the destination never mentions.
+
+This also settles, retroactively, why D46 exists at all. An account made with an
+emailed code has no profile behind it and therefore no name, which is why real
+signups arrive nameless. That is the **majority** path, not an edge case.
+
+### Why not name Spacefast, and why not name the lanes
+
+*Sign in with Spacefast* is accurate and was rejected anyway: it trades one
+brand the visitor has no relationship with for another, and the account is an
+implementation detail of the host, not a thing Larder Log is asking anyone to
+join. The existing footnote — *New here? Signing in creates your account* —
+already does the only job the brand was doing.
+
+Naming the lanes in supporting copy (*"an email code, a password, or your
+WordPress.com account"*) was rejected for a harder reason: **it is copy that can
+go stale silently.** Those three are deployment flags — `google` and `github`
+are present and `false` today — and nothing on our side would tell us if
+Spacefast turned one on or dropped one. The lanes are visible on the very next
+screen, where they cannot be wrong.
+
+The avatar is a separate question and keeps its name. `auth.picture` really is a
+`gravatar.com/avatar/…` URL, so every *"the Gravatar avatar"* comment in the
+client is still true. What changed is the **sign-in**, not the **picture**.
+
+### What moved
+
+`GravatarButton` is `SignInButton` and `GravatarMark` is deleted; the lucide
+`LogIn` glyph replaces it on the card, the marketing hero, the marketing nav,
+and the invite landing. `Spinner` keeps its shape but not its reason — it was
+tuned to Gravatar's ring so a press read as that mark spinning, and it now
+tracks lucide's 24px grid so it swaps in beside `LogIn` at the same weight.
+
+The labels: *Sign in*, *Sign in to join*, and *Signing in…* while the redirect
+is in flight, replacing *Opening Gravatar…*. `SignInFailedCard` says *the
+sign-in page* closed. `DisplayNameCard`'s account row says *Signed in*, and its
+two hint branches name the account rather than Gravatar — which is also more
+honest, since the identity name arrives through the platform and we cannot tell
+which lane produced it.
+
+`signInWithGoogle` is now aliased to `hostedSignIn` in `client/index.tsx` rather
+than `signInWithGravatar`. The old alias claimed a provider; the obvious
+replacement, `startSignIn`, **collides with the app's own handler of that name**
+one screen down, and TypeScript caught the recursion.
+
+### Rejected
+
+- **Restricting the app to email and password.** The platform does not permit
+  it: `zeroRuntimePublicAuthConfigSchema` pins `provider` to the single literal
+  `"gravatar"`, `signInPath` and `signInUrl` are served to the client by the
+  runtime rather than declared in `sf.jsonc`, and the client appends only
+  `returnTo` before handing off. We get whatever lanes that screen shows.
+- **Building email and password inside the capsule.** Possible, and the worst
+  variant this runtime could be asked for. A password needs a slow KDF; there is
+  no `crypto` (D43), so that means iterating `shared/sha256.ts` by hand. Measured
+  on Node with JIT: 206k hashes/sec, so OWASP's 600k PBKDF2 iterations cost 5.8
+  seconds *there*. The hosted engine is an interpreter, which puts it minutes
+  away, per sign-in, inside a request. Lowering the iteration count is not a
+  compromise, it is the absence of the feature — and `sf db export` exists.
+- **Email one-time codes of our own.** Genuinely viable, and the file to reach
+  for if identity ever has to stop depending on a Spacefast account:
+  `ctx.email.send()` is brokered and transactional inside a mutation, `ctx.spam`
+  takes a `signup` type, and D43's mixer already mints unguessable codes without
+  randomness. Not built, because the platform's own sign-in already covers it
+  and the cost is structural: **a query and a mutation cannot see request
+  headers** — only an `endpoint` gets an `EndpointRequest` — so a session token
+  would become an explicit argument on all five queries and all seventeen
+  mutations, and `ctx.auth` would become decorative.
+
+---
+
+## D48. A name nobody typed is not an answer
+
+*2026-08-27, amending D46*
+
+**Neither the display name nor the household name arrives prefilled.** Both
+fields start empty and their primary stays disabled until something is typed.
+
+D46 built the display-name screen precisely because `ctx.auth.displayName` is a
+suggestion rather than an answer — and then seeded the field with it anyway. The
+household screen did the same thing one step further removed, composing
+`` `${displayName}’s Household` `` out of a name that was itself a suggestion.
+
+**A prefilled field asks a question it has already answered.** The default path
+through both screens was Enter, and Enter accepted a value the person never
+chose: a WordPress.com profile name picked years ago for something else, or
+*Justin's Household* for a pantry nobody calls that. The screens then reported
+success while having collected nothing. That is worse than not asking, because
+the app now holds a name it will show to other people as though it were chosen.
+
+The household name has a second failure the display name does not: it is the
+**only** thing that tells two pantries apart in the switcher (D3, D33). Two
+accounts prefilling from the same first name produce two entries differing by an
+apostrophe.
+
+### What the fields say now
+
+The prefill was load-bearing for copy, and removing it removed the copy with it:
+
+- **The display-name hint is gone entirely.** Both of its branches — *from your
+  account* and *your account didn't come with a name* — existed only to explain
+  where the value in the field came from. With nothing in the field there is
+  nothing to explain, and the paragraph above already says what the name is for.
+- **The household hint keeps its second sentence and loses its first.** *Taken
+  from your own name* described the prefill; *the colour is how you will tell it
+  apart later* describes the control beside the field and is still true.
+- **`DisplayNameCard` no longer takes a `suggestion`.** The prop, its
+  `inherited` memo, and the `useMemo` behind it are deleted rather than left
+  unread.
+- **Neither field selects on mount any more, only focuses.** Select-on-mount
+  existed so typing would replace a name you did not choose; there is nothing to
+  replace.
+
+**No placeholder on the display name, and that is now a stronger rule than it
+was.** `HouseholdIdentity` keeps its own *Household name*, which names a
+category. A placeholder on this field would have to be an example *person's*
+name, and a greyed-out example is a prefill that cannot be submitted by
+accident — the same suggestion, one step quieter.
+
+### What did not change
+
+`needsName` still grandfathers an account carrying a name on any membership, so
+the people this would newly inconvenience — everyone who was using the app
+yesterday — never reach either screen. The identity's name is still passed to
+`Pantry` raw and still renders in `SignedInRow` and the avatar; what stopped is
+its use as a *starting value for someone else's answer*.
+
+### Rejected
+
+- **Prefill but require an edit.** A field that refuses the value it came with
+  is a puzzle, and it would still have anchored the answer.
+- **Keeping the household prefill only.** It is the weaker of the two: at least
+  a display name is a name the account really does carry somewhere, while
+  *X's Household* was assembled here out of a suggestion.
+
+This is the **fourth** knowing departure from the design documents, after D42's
+missing tile preview and removed collision caption and D47's provider-free
+button. The display-name boards draw two states, *had a name* and *didn't*, and
+the build now has one.

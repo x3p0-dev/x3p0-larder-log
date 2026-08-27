@@ -541,10 +541,10 @@ mutations**; it applies on the next publish with no flag.
   have prefilled the field with *Signed in*.
 - **Two deliberate departures from the boards.** The account row carries a
   *Sign out*: the screen is required, so without one an account signed in by
-  mistake has no exit that is not clearing cookies. And the hint's branch —
-  *from your Gravatar profile* vs *Gravatar didn't have a name for you* — is
-  **fixed at mount**, so clearing the field does not rewrite where the value
-  came from.
+  mistake has no exit that is not clearing cookies. And the field's hint is
+  **gone** — both of its branches explained where a prefilled value came from,
+  and [D48](../.docs/decisions.md#d48-a-name-nobody-typed-is-not-an-answer)
+  removed the prefill.
 
 **Editing the name in the drawer is deliberately not in this round** — Settings'
 Account section is specified for it and a new sidebar drawer is in flight.
@@ -560,6 +560,82 @@ shows `profiles` with `by_user` plus `profile` and `setDisplayName`, every new
 utility is in the live `/zero.css` (selectors printed and unescaped, exact
 match), and the **real handlers** were driven over `POST /__spacefast/zero/run`
 on a second `sf dev` at `--port 4199`. **Nobody has clicked it.**
+
+### The sign-in button names no provider — 2026-08-27
+
+[D47](../.docs/decisions.md#d47-the-sign-in-button-names-no-provider). Copy
+only: no schema change, no new utility classes, nothing server-side moved.
+
+**`SignInWithGravatar` does not go to Gravatar.** It redirects to
+`api.spacefast.com/v1/access/acquire/…`, which redirects to
+`my.spacefast.com/sign-in`. That is **Spacefast account sign-in**, and
+`GET /v1/auth/capabilities` — public, unauthenticated, and the only way to know
+— reports what it offers: `wpcom` **and an emailed one-time code and a
+password**, with `google` and `github` present but `false`. So the old label
+was sending most of the people who pressed it after an account they do not
+need. This is also why real signups arrive nameless (D46): an email-code
+account has no profile behind it.
+
+- **The labels are the act.** *Sign in*, *Sign in to join*, and *Signing in…*
+  while the redirect is in flight. `GravatarButton` is **`SignInButton`**,
+  `GravatarMark` is **deleted**, and lucide's `LogIn` replaces it on the card,
+  the marketing hero and nav, and the invite landing.
+- **The lanes are deliberately not named in copy.** They are deployment flags
+  that can change without telling us, and the next screen shows them anyway.
+- **The avatar is a different question and keeps its name.** `auth.picture` is
+  a real `gravatar.com/avatar/…` URL, so every *"the Gravatar avatar"* comment
+  in the client is still true.
+- **The alias is `hostedSignIn`, not `startSignIn`** — the obvious name
+  collides with the app's own handler one screen down in `client/index.tsx`,
+  and the collision compiles into a recursive call. `typecheck` caught it.
+- **The boards still say Gravatar** on the sign-in, invite and display-name
+  screens. That is the third knowing departure from the design documents, after
+  D42's missing tile preview and its removed collision caption.
+
+**Not built, and written up in D47's rejected list:** restricting the app to
+email and password (the platform pins `provider` to one literal), and building
+either credential ourselves. Passwords are the one thing this runtime is worst
+at — no `crypto`, so a KDF means iterating `shared/sha256.ts`, which measures
+5.8s for OWASP's 600k rounds *on Node with a JIT* and is an interpreter away
+from that in production.
+
+Verified: typecheck clean, 235 assertions, `sf dev` on `--port 4199` compiles,
+and the served `/client.js` carries every new string with **no `Gravatar` left
+in the bundle**. **Nobody has clicked it.**
+
+### Neither name arrives prefilled — 2026-08-27
+
+[D48](../.docs/decisions.md#d48-a-name-nobody-typed-is-not-an-answer), amending
+D46. Client only: no schema change, no new utility classes, nothing server-side
+moved.
+
+**The display name and the household name both start empty**, and each screen's
+primary stays disabled until something is typed. D46 exists because
+`ctx.auth.displayName` is a suggestion rather than an answer — and then seeded
+the field with it. `FirstRun` went further and composed
+`` `${displayName}’s Household` ``, a name assembled here out of a suggestion.
+The default path through both screens was Enter, which accepted a value nobody
+chose and reported success having collected nothing.
+
+- **`DisplayNameCard` no longer takes a `suggestion`.** The prop, the
+  `inherited` memo and the `useMemo` import are deleted. `Pantry` stops passing
+  it; `displayName` still reaches `FirstRun` for `SignedInRow` and the avatar.
+- **The display-name hint is gone entirely** — both branches only ever explained
+  where the prefilled value came from, and the paragraph above the field already
+  says what the name is for. **The household hint keeps its colour sentence**
+  and loses *Taken from your own name*.
+- **Focus but do not select**, on both. Select-on-mount existed so typing would
+  replace a name you did not choose.
+- **Still no placeholder on the display name**, and the rule is firmer now: a
+  placeholder there would have to be an example *person's* name, which is a
+  prefill that merely cannot be submitted by accident. `HouseholdIdentity`'s own
+  *Household name* is a category, not an example, and stays.
+- **`needsName` is untouched**, so everyone it grandfathers still never reaches
+  either screen. What stopped is the identity name's use as a starting value.
+
+Verified: typecheck clean, 235 assertions, and the running `sf dev` recompiled
+and served a `/client.js` with none of the removed strings and the kept one
+intact. **Nobody has clicked it.**
 
 ### Empty results — 2026-08-26
 
@@ -586,10 +662,13 @@ bearer token **and** the bootstrap cookie; the cookie alone answers
 `{"error":"unauthorized"}`. All five `invitePreview` branches were checked this
 way. Undocumented; written up in `.claude/docs/spacefast.md`.
 
-**`signInWithGravatar` is not exported publicly.** `@spacefast/zero/client`
-resolves to `dist/public-client.d.ts`, which exports only `signInWithGoogle` —
-the same function, Lakebed compatibility. `client/index.tsx` aliases it on
-import. Do not "fix" the name back.
+**The sign-in function is exported under one name and it is the wrong one.**
+`@spacefast/zero/client` resolves to `dist/public-client.d.ts`, which exports
+only `signInWithGoogle` — Lakebed compatibility, and it goes nowhere near
+Google. `client/index.tsx` aliases it to `hostedSignIn` on import (D47). Do not
+"fix" the name back, and do not rename the alias to `startSignIn`: that is
+already the app's own handler in the same file, and the collision compiles into
+a recursive call.
 
 **The item grid is fluid and the drawer docks at 1120px, not `md`.** Cards are
 `md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))]` — tracks always divide the
@@ -923,7 +1002,7 @@ See `.docs/roadmap.md` for the phases.
 
 The app will be published on [Spacefast Zero](https://spacefast.com/docs/zero):
 a Preact client plus a typed server "capsule" holding the database schema and
-handlers, with Gravatar sign-in and live queries built in. One `sf publish`
+handlers, with hosted sign-in and live queries built in. One `sf publish`
 compiles the capsule, migrates the database, and activates the version.
 
 ### Constraints that must never be forgotten
@@ -977,14 +1056,14 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D46, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name** |
+| `.docs/decisions.md` | D1–D48, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
 | `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
 | `.claude/docs/design/larderloghouseholdcolourboards.html` | **The 8 boards for the household colour** — four screens, light and dark |
 | `.claude/docs/design/appliedfilterbar.html` | **The applied filter bar** — a live page rather than boards: desktop, 390, and the state strip, in both themes |
-| `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes |
+| `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes. **The build has one state now** — D48 removed the prefill, so neither board's hint exists |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |

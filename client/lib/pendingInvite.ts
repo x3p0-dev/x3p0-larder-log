@@ -82,7 +82,7 @@ export function clearPendingInvite(): void {
 	}
 }
 
-/** Records that the visitor pressed *Sign in with Gravatar to join*. */
+/** Records that the visitor pressed *Sign in to join*. */
 export function markInviteAccepted(): void {
 	try {
 		sessionStorage.setItem(ACCEPTED_KEY, '1');

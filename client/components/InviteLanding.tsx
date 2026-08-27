@@ -6,7 +6,7 @@ import type { Role } from '../../shared/roles';
 import type { Theme } from '../lib/theme';
 import { statusColor } from '../lib/theme';
 import { HouseholdTile } from './HouseholdTile';
-import { Eyebrow, GravatarButton, IconDisc, OutsideCard, Spinner } from './OutsideShell';
+import { Eyebrow, IconDisc, OutsideCard, SignInButton, Spinner } from './OutsideShell';
 import { SignedInRow } from './FirstRun';
 import { PAGE_BUTTON_DIALOG, PAGE_BUTTON_GHOST } from '../lib/controlStyles';
 
@@ -186,8 +186,8 @@ export function InviteLanding({
 						Open Larder Log
 					</button>
 				) : (
-					<GravatarButton
-						label="Sign in with Gravatar"
+					<SignInButton
+						label="Sign in"
 						pending={pending}
 						onPress={onSignIn}
 						theme={theme}
@@ -273,8 +273,8 @@ export function InviteLanding({
 				</>
 			) : (
 				<div class="mt-6">
-					<GravatarButton
-						label="Sign in with Gravatar to join"
+					<SignInButton
+						label="Sign in to join"
 						pending={pending}
 						onPress={onSignIn}
 						theme={theme}

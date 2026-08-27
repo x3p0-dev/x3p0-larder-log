@@ -267,7 +267,7 @@ export default capsule({
 		 * collected before the path forks (D46).
 		 *
 		 * **`needsName` is not "has no profile row".** An account that predates
-		 * this table carries the Gravatar name it joined under on every
+		 * this table carries the identity name it joined under on every
 		 * membership it holds; sending it through a screen it has effectively
 		 * already answered would be a wall in front of people who were using the
 		 * app yesterday. So an inherited name grandfathers the account, and only
