@@ -177,11 +177,23 @@ export function ItemCard({
 			  * buttons on every card in the pantry (D30).
 			  */}
 			<div class="flex items-center justify-between gap-3.5 mt-auto pt-3.5">
+				{/*
+				  * Baseline-aligned, then lifted a quarter of its own em.
+				  *
+				  * Centring was tried and is wrong here: Playfair's figures sit
+				  * low in their box, so a threshold centred on the numeral's box
+				  * reads as floating above the digits it describes. The baseline
+				  * is the honest anchor — it just puts the two on the same rule,
+				  * which for 12.5px against 42px reads as the small text having
+				  * fallen to the bottom. The lift is `em`, so it tracks the
+				  * threshold at either of the numeral's sizes without a
+				  * breakpoint.
+				  */}
 				<div class="flex items-baseline gap-2.5 min-w-0">
 					<span class="font-disp text-qty-sm sm:text-qty font-bold leading-[0.9]" style={{ color: qtyColor }}>
 						{item.qty}
 					</span>
-					<span class="text-[12.5px] truncate" style={{ color: theme.textFaint }}>low at {item.threshold}</span>
+					<span class="relative bottom-[0.25em] text-[12.5px] truncate" style={{ color: theme.textFaint }}>low at {item.threshold}</span>
 				</div>
 
 				{canEdit && (
