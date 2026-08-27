@@ -211,7 +211,15 @@ export function ItemCard({
 					</p>
 
 					{canEdit && (
-						<div class="flex items-center gap-2 pt-3.5">
+						/*
+						  * Remove sits a card's width away from Edit, the same
+						  * separation the item sheet's footer gives it. Two buttons a
+						  * gap apart is a slip away from the destructive one, and the
+						  * gap is the only thing that stops it — a card is a small
+						  * target on a phone. `gap-2` survives as the floor for a
+						  * narrow card.
+						  */
+						<div class="flex items-center justify-between gap-2 pt-3.5">
 							<button
 								onClick={onStartEdit}
 								class={`flex items-center gap-[7px] h-9 px-3.5 rounded-[11px] text-[13.5px] font-medium border border-line text-ink-body hover:text-ink ${CARD_ACTION}`}
