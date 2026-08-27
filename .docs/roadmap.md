@@ -799,6 +799,78 @@ ten tables, five queries, seventeen mutations, exactly as Phase 4.11 left them.
 touched files was checked against the live `/zero.css` by unescaping the sheet's
 selectors and diffing — printed, not hand-written. **Nobody has clicked it.**
 
+### The seeded types cover a supermarket — 2026-08-27
+
+[D50](decisions.md#d50-the-seeded-types-are-a-supermarket-and-the-other-two-taxonomies-are-not),
+amending D40. `shared/seed.ts` only — no schema change, no handler moved.
+
+D40 seeded all three taxonomies on one rule, *generic so a household renames
+rather than deletes*, and it was only right for two of them. A type is not a
+shelf you name or a shop you choose; it is a kind of food, and those are the
+same in every kitchen. **Nine became fourteen**, seeded for coverage rather
+than as a vocabulary to make your own: Produce · Dairy · Meat · Baked Goods ·
+Grains · Canned Goods · Condiments · Oils & Vinegars · Spices · Baking ·
+Breakfast · Snacks · Beverages · Frozen Meals.
+
+- Each earned its place against *would a household hold two or more things that
+  fit here and nowhere else?*, which keeps *Oils & Vinegars* and drops *Sweets*,
+  *Soups*, *Deli* and *Pet*. Non-food types were rejected rather than
+  forgotten — the data model's own words are "what kind of *food* it is".
+- **The names stay short.** Only **Protein → Meat** is a real rename; the rest
+  of the nine merely pluralised. A first pass widened six into pairs
+  (*Dairy & Eggs*, *Bread & Bakery*, …) and was reverted the same day.
+- **Two colour tokens are left unspent** — `color-11` and `color-16` — because
+  `proposeColor()` falls back to `color-1` once a group has taken them all, so
+  seeding sixteen would make a household's own first type arrive wearing
+  Produce's olive.
+- **New households only.** Nothing backfills, and a backfill would have to
+  reason about terms already renamed, recoloured or deleted on purpose.
+
+**Verified**: typecheck clean, 239 assertions — two new, on the palette headroom
+and on no two seeds in a group sharing a colour — and `createHousehold` driven
+over `POST /__spacefast/zero/run` on a second `sf dev`, coming back with the
+fourteen A–Z, stamped, distinctly coloured, and `color-11` / `color-16` free.
+
+### The app opens where you left it — 2026-08-27
+
+[D51](decisions.md#d51-the-app-opens-where-you-left-it-and-where-you-left-it-is-a-property-of-the-device).
+**Client only** — no schema change, no handler moved, no new utility class.
+
+`client/hooks/useViewState.ts` and a **fourth `localStorage` key**,
+`larder.v4.<userId>.view`, after the theme (D25), the household (D33) and the
+trip (D41). It restores **`drawerCollapsed`**, **`drawerTab`**, **all three
+term-filter groups** and **the status pill**. The shopping-list mode was already
+restored — D41 put it in the trip record beside the ticks, where it expires 24
+hours after the last tick and clears on a household switch.
+
+- **The prune effect's new `ready` guard is the load-bearing line.** The term
+  lists are `[]` while `pantry` is in flight, so without it the effect runs once
+  against nothing and drops every restored filter before the household it
+  belongs to has arrived. With it, the effect that already handled a term
+  someone else deleted also handles ids from a household this device has left —
+  a row id belongs to exactly one household, so it is one rule, not two.
+- **Restoring a filter is only safe because D45 shipped first.** An app that
+  reopens three filters deep with no way to see them is one hiding most of your
+  pantry for no stated reason.
+- **The restore is render-time, not an effect** — `readViewState()` feeds the
+  `useState` initialisers, so the first painted grid is already the restored
+  one. It costs nothing, since the shell does not render until `api.status` is
+  `ready`.
+- **`drawerOpen` is deliberately not restored** — it is the mobile slide-over,
+  and it is the flag the dock effect exists to clear. Neither is the search
+  text, which is also what keeps the write cheap: the app's one high-frequency
+  field never triggers a `setItem`.
+
+**Verified**: typecheck clean, 239 assertions, `sf dev` recompiled, and the
+served `/client.js` carries the `.view` key and both drawer fields. **Nobody has
+clicked it** — and it is the change most worth clicking, since all of it is
+about what the *second* load looks like.
+
+**What else the view might remember is written up in
+[notes.md](notes.md#product-questions)** — the sort, an in-progress add, how far
+down you had scrolled, per-household filters, whether a filter should expire,
+and which of it belongs to the account rather than the device.
+
 ### The app is installable — 2026-08-27
 
 `site.webmanifest` at the project root, linked from `installAppIcon()`. **No

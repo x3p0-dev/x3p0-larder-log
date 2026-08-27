@@ -647,8 +647,9 @@ export default capsule({
 			//
 			// These go in through `insert` rather than `createTerm`, so they are
 			// the one path that could leave a term unstamped. `stamps` is the
-			// same object for all fifteen: they arrive together, and staggering
-			// them by a millisecond each would imply an order that isn't real.
+			// same object for every one of them: they arrive together, and
+			// staggering them by a millisecond each would imply an order that
+			// isn't real.
 			const stamps = { addedAt: stampFrom(now), changedAt: stampFrom(now) };
 
 			for (const seed of SEED_LOCATIONS) {

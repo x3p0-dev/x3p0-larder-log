@@ -244,6 +244,8 @@ Ground is a gradient in both: `radial-gradient(135% 105% at 10% -12%, …)`.
 ## Term colours
 Sixteen, assignable per location / store / type. Contrast-checked in both themes: every light `L text` on `L tint` and every dark `D text` on `D tint` clears 4.6:1. Assignments: Pantry olive · Meat Freezer terracotta · Upright Freezer slate · Chest Freezer teal · Calfee Cattle brick · Costco olive · Publix slate · Aldi clay · Produce olive · Dairy slate · Condiment plum · Beverage teal · Grain ochre · Snack clay · Baking terracotta · Spice mulberry · Protein brick.
 
+> **These are the boards' sample data.** What a new household is *seeded* with diverged from it under D40 for locations and stores, and under D50 for types — see *What gets seeded* under **First run**.
+
 ## Chips and tags — two components, one rule
 
 A term appears in the UI in exactly two forms. They look different on purpose, because one is a label and the other is a switch.
@@ -715,9 +717,11 @@ Creating drops straight into the app, seeds already in the drawer, no items.
 |---|---|
 | Locations | Pantry olive · Refrigerator slate · Freezer teal |
 | Stores | Grocery denim · Warehouse mustard · Market clay |
-| Types | Produce olive · Dairy slate · Protein brick · Grain ochre · Condiment plum · Beverage teal · Snack clay · Baking terracotta · Spice mulberry |
+| Types | Produce olive · Dairy slate · Meat brick · Baked Goods cocoa · Grains ochre · Canned Goods denim · Condiments plum · Oils & Vinegars mustard · Spices mulberry · Baking terracotta · Breakfast indigo · Snacks clay · Beverages teal · Frozen Meals aqua |
 
-Types are the existing assignments from *Term colours*, unchanged. Locations and stores are new and generic on purpose — the sample data's Meat Freezer, Calfee Cattle and Publix are one household's vocabulary, not a default.
+Locations and stores are generic on purpose — the sample data's Meat Freezer, Calfee Cattle and Publix are one household's vocabulary, not a default.
+
+> **Types are no longer the *Term colours* assignments, and no longer aim to be generic** ([D50](../../../.docs/decisions.md#d50-the-seeded-types-are-a-supermarket-and-the-other-two-taxonomies-are-not)). The nine that table names had no home for bread, canned goods, cereal, cooking oil or a frozen pizza. A kind of food is the same in every kitchen, so these are seeded for **coverage** rather than as a vocabulary to make your own: fourteen, so the first twenty items need no new type. Two tokens — fern and stone — are left unspent so a household's own first two types still arrive in a colour nothing else is wearing. The *Term colours* table and the sample dataset below are unchanged: they are the boards' data, not the seed.
 
 - **Empty state**, centred in the content column: Playfair **italic 500 27px** *Nothing in the larder yet.* + meta *Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like.* No button.
 - **At zero items the sort trigger is hidden and the empty state carries no primary.** Sorting nothing is a control that can only disappoint. **Row 1 does not change** — search and *Add item* are permanent and the same in every mode — so the empty state says what to do and lets row 1's primary be the button it points at. Two *Add item* buttons on one screen is one too many, and the one that goes is the one that isn't always there. Row 2 is down to `Showing 0 of 0`. The applied-filter row cannot appear here either — with no items there is nothing to have filtered.

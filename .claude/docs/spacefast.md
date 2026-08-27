@@ -3203,3 +3203,23 @@ Cannot be answered without publishing, for the reasons above. Chrome is lenient
 about the manifest MIME type in practice, and `.svg` and `.json` both map
 correctly, so the expectation is that it is fine — but it is a post-publish
 curl, not something the build can tell us.
+
+## 2026-08-27 — `mutation.run` and `query.run` return different envelopes — unclear
+
+Driving the seeded-types change through `POST /__spacefast/zero/run` on a
+second `sf dev` (`--port 4199`), the two ops answer with different shapes and
+nothing says so:
+
+- `mutation.run` → `{op: "mutation.result", ok, result, changedTables, changedQueries}`
+- `query.run` → `{op: "query.result", ok, name, args, data}`
+
+So a script that reads `.result` off a mutation and reuses the same accessor on
+the query gets `KeyError: 'result'` — the query's payload is under `data`. Both
+are sensible on their own; the asymmetry is only a problem because the endpoint
+is undocumented and there is nothing to read. `changedTables` /
+`changedQueries` on the mutation are genuinely useful, though — they confirmed
+the seeding touched `locations`, `types` and `stores` in one go.
+
+Good, separately: `sf dev --port 4199` alongside an already-running instance
+worked with no flag or state collision, which is what makes this check cheap
+enough to do at all.

@@ -438,7 +438,17 @@ for (const [label, group] of [
 	['stores', SEED_STORES],
 ] as const) {
 	check(`seeded ${label} have distinct keys`, new Set(group.map((t) => termKey(t.name))).size, group.length);
+
+	// Two seeds sharing a colour inside one group renders as two chips a person
+	// has to read to tell apart, in the one place they are drawn side by side.
+	check(`seeded ${label} have distinct colours`, new Set(group.map((t) => t.ink)).size, group.length);
 }
+
+// D50: the seeded types are meant to cover a supermarket, but not to spend the
+// whole palette doing it — `proposeColor()` hands out the first unused token and
+// falls back to `color-1` once every one is taken, so a household that added a
+// type would get a colour already on screen.
+check('seeded types leave colours for a household to claim', SEED_TYPES.length < COLOR_SLOT_COUNT, true);
 
 // --- the shopping list, which is a view of the items rather than a table ---
 //

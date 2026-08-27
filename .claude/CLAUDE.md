@@ -44,12 +44,13 @@ declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
 
-Data lives in the database. **Three** `localStorage` call sites remain, all
+Data lives in the database. **Four** `localStorage` call sites remain, all
 correct: the per-device theme override (D25), which household this device is
-pointed at (D33), and the shopping trip's ticks (D41). Same reasoning for the
-first two — a dark-mode choice on a phone should not follow you to a desktop,
-and neither should which pantry you were last looking at; the third is a record
-of what is in *this* person's cart right now.
+pointed at (D33), the shopping trip's ticks and list mode (D41), and where the
+view was left — drawer, tab and filters (D51). Same reasoning throughout — a
+dark-mode choice on a phone should not follow you to a desktop, neither should
+which pantry you were last looking at, and neither should which shelf you had
+filtered to; the trip is a record of what is in *this* person's cart right now.
 
 **A user may belong to several households** as of 2026-08-25
 ([D33](../.docs/decisions.md#d33-a-user-may-belong-to-several-households),
@@ -189,6 +190,8 @@ the app shell.
   matches nothing is a different screen and keeps its one quiet sentence.
 - **Seeds are generic now** — Pantry · Refrigerator · Freezer and Grocery ·
   Warehouse · Market ([D40](../.docs/decisions.md#d40-seeded-terms-are-generic-and-there-are-still-three-stores)).
+  **Types are the exception and were rewritten on 2026-08-27** — see *The
+  seeded types cover a supermarket* below.
 - **`Theme` gained `dark`, `accent`, `disabledBg` and `disabledText`**;
   `theme.json` gained `wordmark-md`, `wordmark-lg`, `headline-sm` and
   `headline`. `accent` exists because the page wordmark was hard-coding the
@@ -636,6 +639,110 @@ chose and reported success having collected nothing.
 Verified: typecheck clean, 235 assertions, and the running `sf dev` recompiled
 and served a `/client.js` with none of the removed strings and the kept one
 intact. **Nobody has clicked it.**
+
+### The app opens where you left it — 2026-08-27
+
+[D51](../.docs/decisions.md#d51-the-app-opens-where-you-left-it-and-where-you-left-it-is-a-property-of-the-device).
+Client only: no schema change, no handler moved, no new utility class.
+
+`client/hooks/useViewState.ts` and a **fourth `localStorage` key**,
+`larder.v4.<userId>.view`, after the theme (D25), the household (D33) and the
+trip (D41). It restores **`drawerCollapsed`**, **`drawerTab`**, **all three
+term-filter groups**, and **the status pill**.
+
+- **The shopping-list mode was already restored** and did not change — D41 put
+  it in the trip record beside the ticks, where it expires 24 hours after the
+  last tick and clears on a household switch. The mode and the cart are one
+  answer to one question; two keys would let the app come back into list mode
+  with an empty cart it had been told about.
+- **The prune effect's new `ready` guard is the load-bearing line in the whole
+  change.** The three term lists are `[]` while `pantry` is in flight, so
+  without it the effect runs once against nothing and drops every restored
+  filter before the household it belongs to has arrived. With it, the effect
+  that already handled "someone deleted the term you were filtering by" also
+  handles "these ids are from a household this device has left" — a row id
+  belongs to exactly one household, so both are the same rule.
+- **Restoring a filter is only safe because D45 shipped first.** An app that
+  reopens three filters deep with no way to see them is an app hiding most of
+  your pantry for no stated reason. Row 3 is what makes the state legible on
+  arrival.
+- **The restore is render-time, not an effect** — `readViewState()` feeds the
+  `useState` initialisers, because an effect runs after paint and the grid would
+  flash unfiltered. It costs nothing: the shell does not render until
+  `api.status` is `ready`.
+- **`drawerOpen` is deliberately not restored.** It is the mobile slide-over —
+  a panel over the thing you opened the app to see — and it is the flag the dock
+  effect exists to clear. Seeding it true hands that effect a slide-over the
+  layout does not account for.
+- **Search is not restored and is not in the record at all**, which is also what
+  keeps the write cheap: the one high-frequency field never triggers a
+  `setItem`. Sort is not restored either — one line in the same record if it
+  should be.
+- **Nothing read back is trusted.** A non-array where `locations` belongs would
+  throw inside `.includes` on the first render, which is a blank screen rather
+  than a lost filter.
+
+Verified: typecheck clean, 239 assertions, `sf dev` recompiled, and the served
+`/client.js` carries the `.view` key and both drawer fields. **Nobody has
+clicked it** — this is the change most worth clicking, since every part of it is
+about what the second load looks like.
+
+**More of the view is likely to be stored, and the candidates are written up in
+`.docs/notes.md` under *Product questions*** — the sort, an add or edit in
+progress, how far down you had scrolled, per-household filters, whether a
+restored filter should expire, and which of it belongs to the account rather
+than the device. **The fork to notice there:** another per-device field costs a
+line in the same record, while anything that should follow a person across their
+phone and desktop is a schema change and therefore D27. That note also records
+the one thing the storage keys cannot do — a field whose *meaning* changes has
+no migration but bumping the `larder.v4.` prefix, which discards the theme, the
+household, the trip and the view on every device at once.
+
+### The seeded types cover a supermarket — 2026-08-27
+
+[D50](../.docs/decisions.md#d50-the-seeded-types-are-a-supermarket-and-the-other-two-taxonomies-are-not),
+amending D40. `shared/seed.ts` only: no schema change, no handler moved, no new
+class.
+
+D40 seeded all three taxonomies on one rule — *generic, so a household renames
+rather than deletes* — and it was only ever right for two of them. **A type is
+not a shelf you name or a shop you choose; it is a kind of food, and those are
+the same in every kitchen.** So types are seeded for **coverage** instead: the
+nine inherited from the design's sample data had no home for bread, canned
+tomatoes, cereal, cooking oil or a frozen pizza, which is five detours through
+the composer in a normal week.
+
+**Fourteen now** — Produce · Dairy · Meat · Baked Goods · Grains · Canned Goods
+· Condiments · Oils & Vinegars · Spices · Baking · Breakfast · Snacks ·
+Beverages · Frozen Meals — each earning its place against *would a household
+hold two or more things that fit here and nowhere else?*, which keeps *Oils &
+Vinegars* and drops *Sweets*, *Soups*, *Deli* and *Pet*.
+
+**The names stay short.** Only **Protein → Meat** is a real rename; the rest
+of the nine merely pluralised. A first pass widened six into pairs (*Dairy &
+Eggs*, *Meat & Seafood*, *Bread & Bakery*, …) and was **reverted the same
+day** — nobody wonders where eggs go, and a chip is read at a glance. The
+two-word names left are each one idea with no one-word name.
+
+- **Two colour tokens are left unspent on purpose** — `color-11` and
+  `color-16`. `proposeColor()` hands out the first token a group has not taken
+  and falls back to `color-1` once they are all gone, so seeding sixteen would
+  make a household's own first type arrive wearing Produce's olive. `npm test`
+  asserts the headroom, and that no two seeds in a group share a colour.
+- **`Frozen Meals` is not a repeat of the Freezer location.** Meat, frozen
+  vegetables and ice cream all live in a freezer and all belong elsewhere on
+  the list; pizza and burritos have nowhere else to go.
+- **Non-food types were rejected, not forgotten** — *Household*, *Cleaning*,
+  *Pet*. Real things on real pantry shelves, but `.docs/overview.md` defines a
+  type as "what kind of *food* it is", so adding them is a decision about what
+  the app is for and wants that file changed in the same breath.
+- **This reaches new households only.** `createHousehold` seeds once and
+  nothing backfills; a backfill would have to reason about terms a household
+  has already renamed, recoloured or deleted deliberately. **The published
+  household still holds the old nine** and gains the missing five by hand, once.
+
+`npm test` is at **239 assertions**. Typecheck clean. Nothing to click — the
+change is a list of strings the server reads at household creation.
 
 ### The sidebar drawer redesign (Phase 4.12) is built — 2026-08-27
 
@@ -1180,7 +1287,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D48, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus** |
+| `.docs/decisions.md` | D1–D51, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |

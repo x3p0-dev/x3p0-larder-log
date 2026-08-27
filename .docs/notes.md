@@ -360,6 +360,64 @@ later:
   everywhere — cream, in both themes — which is the half that was already
   settled by the shopping list's tokens note.
 
+One was opened by restoring the view (D51), and it is really a list:
+
+- **What else should the app remember about where you were?** D51 restores the
+  drawer's collapsed state, its tab, the term filters and the status pill; the
+  shopping mode and its ticks were already in the trip record (D41). Everything
+  below was left out on purpose, and none of it is settled. **Anything on this
+  list that stays per-device is a field in the same record and costs a line;
+  anything that should follow the account is a schema change**, which is the
+  real fork.
+
+  1. **The sort.** The cheapest one here — not household-scoped, not sensitive,
+     one field. It was left out only because it was not asked for. The argument
+     for it is that a sort is a way of reading the pantry, exactly like a
+     filter. The argument against is that *Recently added* is the default
+     precisely because it is the one most likely to be right after a gap.
+  2. **An add or edit in progress.** The strongest case and the hardest, and it
+     is the same argument that put the ticks in `localStorage`: a phone in a
+     shop is killed in the background, and losing a half-typed item is worse
+     than losing a filter. But a draft is *nearly* data. Restoring one means
+     deciding what arrival looks like — the sheet reopens over the grid by
+     itself, or something offers it back — and a draft for an item somebody else
+     has since added is a duplicate waiting to be saved. Wants a decision, not
+     a field.
+  3. **How far down you were.** `visibleCount` resets to one page and the grid
+     returns to the top, which only matters once a pantry is big enough to
+     scroll. True scroll restoration is hard here — the grid is fluid, a card
+     changes height when it expands, and the infinite scroll means the position
+     cannot be restored until the pages are. The cheap half is to restore
+     `visibleCount` alone, so the items are at least *there* to scroll back to.
+     `openId`, the expanded card, is trivial to store and probably not worth it:
+     an accordion left open is not a place you were.
+  4. **Filters per household, rather than one set.** Today the record holds one,
+     so switching away and back gives you an unfiltered pantry. The trip record
+     deliberately does not do this (D41), for a reason that does not transfer —
+     a cart is a moment, a filter is a habit, and *Freezer* is plausibly where
+     you always are in one household. The cost is a map that grows without
+     bound and hands back a filter for a household last opened in April.
+  5. **Should a restored filter expire?** The ticks lapse after 24 hours because
+     a stale state misleads. A filter set three weeks ago is arguably the same
+     problem — the answer D51 leaned on is that row 3 makes it *visible*, which
+     the ticks never were. Open question: is visible enough, or does a filter
+     older than some window deserve to lapse anyway?
+  6. **Is any of it account-level rather than device-level?** D51 says all of it
+     is a property of the device, and that is clearly right for the drawer and
+     the filters. It is less obviously right for the sort. Anything that should
+     follow a person across their phone and their desktop needs a `preferences`
+     table or columns on `profiles` — a schema change, and therefore D27 — which
+     is the main reason nothing is there today.
+
+- **The storage keys have no migration story, and the validator hides that.**
+  `readViewState()` checks every field independently, so *adding* one is free
+  and a field that disappears is ignored — both directions degrade to the
+  default. What is not covered is a field whose **meaning** changes while its
+  name and type stay put. The only tool for that is bumping the `larder.v4.`
+  prefix, which silently discards the theme, the household, the trip and the
+  view on every device at once. Worth knowing before changing what a field
+  means rather than after.
+
 Four were opened by the applied filter bar (D45) and **three were settled the
 same day** — see D45 for what was built. One is left:
 

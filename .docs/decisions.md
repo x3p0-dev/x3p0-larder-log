@@ -1526,7 +1526,8 @@ everybody's default.
 Locations and stores are now generic — **Pantry · Refrigerator · Freezer** and
 **Grocery · Warehouse · Market**. Types were already generic and keep their
 assignments from the spec's *Term colours* table; only the order changed, to the
-spec's. The aim is that a new household recognises its own shelves and renames
+spec's. (**D50 later rewrote the types** — nine became fourteen, and this
+decision's reasoning turned out not to apply to them at all.) The aim is that a new household recognises its own shelves and renames
 them, rather than deleting three that belong to someone else.
 
 **Stores are the weak third.** Locations and types are near-universal; where
@@ -2738,3 +2739,177 @@ its box and its own dismissal.
   what the card is made of, so they had to move to the hairline fill to have any
   edge at all. **The tabs converge through the micro-label header and the
   editing panel, not through the box.**
+
+---
+
+## D50. The seeded types are a supermarket, and the other two taxonomies are not
+
+**Decided:** 2026-08-27
+
+**Amends [D40](#d40-seeded-terms-are-generic-and-there-are-still-three-stores)**,
+which treated all three seeded taxonomies as one problem. They are not.
+
+D40's rule was *generic, so a household renames rather than deletes*, and for
+locations and stores it holds: a shelf is one you name yourself, and where you
+shop is yours. It quietly carried types along with it — nine, kept from the
+design's sample data because they were "already generic". Generic they were;
+complete they were not. **Produce · Dairy · Protein · Grain · Condiment ·
+Beverage · Snack · Baking · Spice** has no home for bread, canned tomatoes,
+cereal, cooking oil, or a frozen pizza — five of them in a normal week's
+shopping.
+
+**A type is not like the other two.** It is a kind of food, and kinds of food
+are the same in every kitchen. Nobody needs to *personalise* the fact that
+tinned beans are canned goods. So the seeding aim for types is the opposite of
+D40's: not a starting vocabulary to make your own, but **coverage** — enough
+that the first twenty items go in without ever opening the composer.
+
+**Fourteen**, and each earned its place against one question: *would a real
+household hold two or more things that fit here and fit nowhere else?*
+
+| | | |
+|---|---|---|
+| Produce | Dairy | Meat |
+| Baked Goods | Grains | Canned Goods |
+| Condiments | Oils & Vinegars | Spices |
+| Baking | Breakfast | Snacks |
+| Beverages | Frozen Meals | |
+
+**The names stay short.** Every one of the nine survives its own wording, and
+only **Protein → Meat** is a real rename: *Protein* read as an ingredient label
+rather than as something you buy. The others merely pluralised — *Condiment*,
+*Grain*, *Snack*, *Spice*, *Beverage* — since a type names a shelf's worth of
+things rather than one of them.
+
+A first pass widened six of them into pairs (*Dairy & Eggs*, *Meat & Seafood*,
+*Bread & Bakery*, *Grains & Pasta*, *Condiments & Sauces*, *Herbs & Spices*) on
+the reasoning that a vague edge is what sends someone to the composer. **Reverted
+the same day.** The pairs bought nothing: nobody wonders where eggs go, and the
+chip is read at a glance in a filter row and a sheet, where the shorter word
+wins. The two-word names that remain — *Baked Goods*, *Canned Goods*, *Frozen
+Meals*, *Oils & Vinegars* — are each one idea that has no one-word name, not a
+pair of ideas joined.
+
+**Two colour tokens are left unused on purpose** — `color-11` and `color-16`.
+`proposeColor()` hands out the first token a group has not taken and falls back
+to `color-1` when they are all spoken for, so a fifteenth type would arrive
+wearing Produce's olive. Fourteen keeps two in reserve, and `color-16` is the
+palette's neutral fallback anyway, which is the wrong thing for a term somebody
+chose.
+
+**This only reaches new households.** `createHousehold` seeds once; there is no
+backfill and adding one would mean re-inserting terms into households that have
+since renamed and recoloured them. Existing pantries keep the nine they were
+built with, and adding the missing five by hand is five composer trips, once.
+
+### Rejected
+
+- **Non-food types — Household, Cleaning, Paper Goods, Pet.** Real things on
+  real pantry shelves, and out of scope for now: the data model's own
+  vocabulary says a type is "what kind of *food* it is"
+  ([overview](overview.md#concepts)). Adding them is a product decision about
+  what the app is for, not a seeding decision, and it would want
+  `.docs/overview.md` changed in the same breath. Cheap to revisit — one line
+  each.
+- **Sweets, Soups, Deli, Baby.** Each fails the two-or-more-and-nowhere-else
+  test: cookies and candy are snacks, tinned soup is canned goods, and the
+  other two are not what this app tracks.
+- **A separate `Seafood`.** Fish and shrimp sit under **Meat** with everything
+  else you thaw. Two chips where one does, and a household that buys enough
+  seafood to want the split can make it in one composer trip.
+- **Seeding all sixteen colours' worth.** The palette headroom above, and a
+  chip row long enough to scroll in the item sheet is its own tax on the add
+  flow the coverage was meant to speed up.
+- **A backfill mutation for existing households.** It would have to reason
+  about terms a household has already renamed, recoloured, or deleted on
+  purpose, and "your pantry grew five categories overnight" is a worse surprise
+  than a gap you can fill yourself.
+
+---
+
+## D51. The app opens where you left it, and where you left it is a property of the device
+
+**Decided:** 2026-08-27
+
+Closing the app and coming back put you at the top of an unfiltered pantry with
+the drawer in its default state, every time. That is wrong in one place more
+than the rest: **someone standing in a shop who backgrounds the app and comes
+back to a phone that has forgotten they were shopping.**
+
+So the view is restored. **A fourth `localStorage` key**, `larder.v4.<userId>.view`,
+after the theme (D25), the household (D33) and the trip's ticks (D41), and it is
+there for the reason all three are: this is a property of *this device*, not of
+the account. Two people in one household filter to different shelves, and the
+phone in the kitchen is not looking at what the desktop was.
+
+**What is restored:**
+
+| | |
+|---|---|
+| `drawerCollapsed` | Desktop: the drawer folded to the 68px rail. |
+| `drawerTab` | Filter or Settings. |
+| The term filters | All three groups, as ids. |
+| The status pill | `ok` / `low` / `out`, or none. |
+
+**The shopping-list mode was already restored and did not change.** D41 put it
+in the trip record beside the ticks, where it inherits both of that record's
+rules — it expires 24 hours after the last tick, and a household switch clears
+it. It belongs there rather than here: the mode and the ticks are one answer to
+one question, and splitting them across two keys would let the app come back
+into list mode with an empty cart it had been told about.
+
+**Restoring a filter is only safe because [D45](#d45-the-applied-filters-are-a-row-of-the-top-bar-not-a-badge-on-the-drawer) shipped first.** Before the
+applied-filter bar, an app that reopened three filters deep would have been an
+app that hides most of your pantry and does not say why — a filter you cannot
+see is a filter you cannot remove, and one you did not just set is worse than
+one you did. Row 3 is what makes the state legible on arrival, so this decision
+is downstream of that one rather than independent of it.
+
+**The prune effect is what validates the restored ids, and its `ready` guard is
+the load-bearing line.** A stored id can name a term someone else has since
+deleted, or a household this device is no longer pointed at. `Pantry` already
+had an effect for the first case — live queries make a deleted term a real race
+— and it answers the second identically, since a row id belongs to exactly one
+household. What it could not survive is *timing*: the three term lists are `[]`
+while the pantry query is in flight, so without `if (! ready) return` the effect
+runs once against nothing and prunes every restored filter before the household
+it belongs to has arrived. **One rule for stale ids, and it already existed.**
+
+**The restore happens during render, not in an effect.** `readViewState()` is a
+plain function feeding the `useState` initialisers, because an effect runs after
+paint: the grid would show unfiltered for a frame and then snap. It costs
+nothing here — the shell does not render until `api.status` is `ready`, so the
+first painted grid is already the restored one.
+
+**Nothing read back is trusted.** It is a string a person can edit and a shape
+from a version of the app that no longer exists. A non-array where `locations`
+belongs would throw inside `.includes` on the first render, which is a blank
+screen rather than a lost filter.
+
+### Rejected
+
+- **Restoring `drawerOpen`, the mobile slide-over.** Every other flag in the
+  record describes a layout you come back to; that one describes a panel
+  covering the thing you opened the app to see. It is also the flag whose
+  persistence `Pantry`'s dock effect exists to undo — it means nothing above the
+  dock and everything below it, and seeding it true hands that effect a
+  slide-over the layout does not account for.
+- **Restoring the search text.** *Clear filters* does not take it either (D45):
+  search has its own `×` and you can watch it work. A field that refills itself
+  on load reads as a bug rather than as a filter.
+- **Restoring the sort.** Not asked for. One line in the same record when it is.
+- **Storing the household id beside the filters,** the way the trip record does.
+  The trip needs it because a tick means *in my cart right now* and must not
+  come back on a switch away and back. Filter ids need no such rule: they are
+  already self-invalidating, since an id from another household names no term in
+  this one and the prune drops it. A second rule to keep in sync, for a case the
+  first one already covers.
+- **Writing on `beforeunload` or `visibilitychange` instead of on change.** A
+  backgrounded phone tab is killed without firing either, and being in a shop is
+  exactly when that happens. Writing on change costs one `setItem` per filter
+  press, which is why the search text — the one high-frequency field — is
+  excluded from the record entirely rather than merely from the restore.
+- **Putting any of it in the database.** It is not data. Two members of one
+  household would fight over one row, and one person's phone and desktop would
+  fight over it with themselves.
+

@@ -28,6 +28,7 @@ import type { ConfirmTone } from './components/ConfirmDialog';
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { setThemeColor } from './lib/appIcon';
 import { usePersistentState } from './hooks/usePersistentState';
+import { readViewState, usePersistedView } from './hooks/useViewState';
 import { usePantryData, useInvitePreview, useProfile } from './hooks/usePantryData';
 import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
 import { addedAtOf, changedAtOf } from '../shared/stamp';
@@ -103,14 +104,15 @@ const STATUS_CHIPS: { key: StatusKey; label: string; short: string }[] = [
 ];
 
 /**
- * The three things still in localStorage, and all for the same reason: they are
- * properties of *this device*, not of the account (D25, D33, D41).
+ * The four things in localStorage, and all for the same reason: they are
+ * properties of *this device*, not of the account (D25, D33, D41, D51).
  *
  * A dark-mode choice made on a phone should not follow you to a desktop, and
  * neither should which household you were last looking at — the phone in the
  * kitchen is pointed at the kitchen. Nor should what is in your cart: two people
  * at two different stores would collide on the same rows, and a tick that means
- * "in *my* cart" cannot be read by someone else without saying whose.
+ * "in *my* cart" cannot be read by someone else without saying whose. Nor which
+ * shelf you had filtered to, or whether the drawer was folded away.
  * Everything that is actually data lives in the database.
  *
  * Namespaced per identity so signing in as someone else picks up their choice.
@@ -125,6 +127,10 @@ function householdKeyFor(userId: string) {
 
 function tripKeyFor(userId: string) {
 	return `larder.v4.${userId}.trip`;
+}
+
+function viewKeyFor(userId: string) {
+	return `larder.v4.${userId}.view`;
 }
 
 /**
@@ -467,21 +473,62 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	}, [api.households, api.currentHouseholdId, selectedHousehold, setSelectedHousehold]);
 
 	// Filters and view state are all client-side; none of it is data.
+
+	/**
+	 * Where this device left off (D51) — read once, before the state it seeds.
+	 *
+	 * It is read rather than subscribed to: these are *initial values*, and a
+	 * second tab writing its own view is not an instruction to this one to move.
+	 *
+	 * Seeding state from it once is safe in a way it would not be for the theme
+	 * or the household, whose hooks re-read on a key change: `Pantry` renders
+	 * only while signed in, so `userId` cannot change underneath it — signing
+	 * out unmounts the whole component and the next account mounts a new one.
+	 */
+	const viewKey = useMemo(() => viewKeyFor(userId), [userId]);
+	const restored = useMemo(() => readViewState(viewKey), [viewKey]);
+
 	/*
 	 * Each group holds a **list** of term ids, not one: OR inside a group, AND
 	 * across groups (D45). Empty means the group filters nothing.
+	 *
+	 * Restored ids are **not** verified here, because there is nothing to verify
+	 * them against yet — the pantry has not loaded. The prune effect below is
+	 * what settles them, and it is the same one that already handles a term
+	 * someone else deleted while you were looking at it.
 	 */
-	const [activeLocations, setActiveLocations] = useState<string[]>([]);
-	const [activeTypes, setActiveTypes] = useState<string[]>([]);
-	const [activeStores, setActiveStores] = useState<string[]>([]);
-	const [activeStatus, setActiveStatus] = useState<StatusKey | null>(null);
+	const [activeLocations, setActiveLocations] = useState<string[]>(() => [...restored.filters.locations]);
+	const [activeTypes, setActiveTypes] = useState<string[]>(() => [...restored.filters.types]);
+	const [activeStores, setActiveStores] = useState<string[]>(() => [...restored.filters.stores]);
+	const [activeStatus, setActiveStatus] = useState<StatusKey | null>(restored.status);
+	/* Not restored: a field that refills itself on load reads as a bug. */
 	const [search, setSearch] = useState('');
 
-	const [drawerTab, setDrawerTab] = useState<DrawerTab>('filter');
-	/* Mobile only — the drawer is docked and always present from `md` up. */
+	const [drawerTab, setDrawerTab] = useState<DrawerTab>(restored.drawerTab);
+	/*
+	 * Mobile only — the drawer is docked and always present from `md` up.
+	 *
+	 * **Deliberately not restored.** Every other flag in the record describes a
+	 * layout you come back to; this one describes a panel over the thing you
+	 * opened the app to look at. It is also the flag the dock effect below
+	 * exists to clear, and seeding it true would hand that effect a slide-over
+	 * on a screen that has no room for one.
+	 */
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	/* Desktop only — folded away, with the header's menu button to bring it back. */
-	const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+	const [drawerCollapsed, setDrawerCollapsed] = useState(restored.drawerCollapsed);
+
+	/*
+	 * The other half of `restored`. Written on every change rather than on
+	 * unload: a phone tab is killed in the background without ever firing one,
+	 * and being in a shop is exactly when that happens.
+	 */
+	usePersistedView(viewKey, {
+		drawerCollapsed,
+		drawerTab,
+		status: activeStatus,
+		filters: { locations: activeLocations, types: activeTypes, stores: activeStores },
+	});
 
 	/**
 	 * `drawerOpen` only means anything below the dock, so it is cleared above it.
@@ -985,10 +1032,20 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	}, [sorted.length, visibleCount]);
 
 	/**
-	 * A filter pointing at a term someone else just deleted would silently hide
-	 * every item. Live queries make that a real race, not a hypothetical.
+	 * A filter pointing at a term that isn't there would silently hide every
+	 * item. Live queries make a term someone else just deleted a real race
+	 * rather than a hypothetical, and D51 added a second source: ids restored
+	 * from the last session, which may name a household this device is no
+	 * longer pointed at.
+	 *
+	 * **The `ready` guard is what makes the restore survive at all.** The three
+	 * term lists are `[]` while the pantry loads, so without it this runs once
+	 * against nothing and prunes every restored filter before the household it
+	 * belongs to has arrived.
 	 */
 	useEffect(() => {
+		if (! ready) return;
+
 		const prune = (
 			ids: string[],
 			list: Term[],
@@ -1004,7 +1061,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		prune(activeLocations, locations, setActiveLocations);
 		prune(activeTypes, types, setActiveTypes);
 		prune(activeStores, stores, setActiveStores);
-	}, [locations, types, stores, activeLocations, activeTypes, activeStores]);
+	}, [ready, locations, types, stores, activeLocations, activeTypes, activeStores]);
 
 	/*
 	 * The shopping list is a **view of the filtered items**, not a thing anyone

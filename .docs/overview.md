@@ -34,7 +34,7 @@ out. Everything else exists to serve that loop.
 | **Member**   | A signed-in person with access to a household.                        |
 | **Item**     | A thing you have some quantity of. "Ground Beef (1lb pkgs)", qty 6.   |
 | **Location** | Where the item physically is. "Chest Freezer", "Pantry". One per item.|
-| **Type**     | What kind of food it is. "Protein", "Grain". Many per item.           |
+| **Type**     | What kind of food it is. "Meat", "Baking". Many per item.             |
 | **Store**    | Where you buy it. "Costco", "Publix". Many per item.                  |
 | **Status**   | Derived, never stored: `out` (qty 0), `low` (qty ≤ threshold), `ok`.  |
 

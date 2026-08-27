@@ -4,11 +4,17 @@ import { useEffect, useState } from 'preact/hooks';
  * useState that mirrors its value into localStorage, so a page reload picks up
  * where the last one left off.
  *
- * Phase 2 moved every other call site to `useQuery` / `useMutation`. **The
- * theme override is the only thing left here, and that is deliberate** — a
- * dark-mode choice made on a phone should not follow you to a desktop, so it is
- * per-device rather than per-user (D25). If a second call site ever appears,
- * check that it really is a device preference and not data.
+ * Phase 2 moved every other call site to `useQuery` / `useMutation`, and what
+ * is left here is deliberate: the theme override (D25), which household this
+ * device is pointed at (D33) and the shopping trip (D41). Each is a property of
+ * *this device* rather than of the account — a dark-mode choice made on a phone
+ * should not follow you to a desktop. **Check any new call site against that
+ * before adding it**, and check that it is not data.
+ *
+ * D51's view state is the one thing that deliberately does not use this hook.
+ * It has to seed `useState` initialisers rather than own the state itself, so
+ * that a restored filter is applied by the first render instead of a frame
+ * later — see `useViewState.ts`.
  */
 export function usePersistentState<T>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
 	const [value, setValue] = useState<T>(() => read(key, initial));
