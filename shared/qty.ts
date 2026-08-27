@@ -57,3 +57,21 @@ export function normalizeQty(value: unknown): string {
 export function isQty(value: unknown): value is string {
 	return typeof value === 'string' && /^\d+$/.test(value.trim());
 }
+
+/**
+ * The longest a quantity field may get. Fifteen digits is the widest run that
+ * is always a safe integer, so a field capped here can never hold a number
+ * `toInt` gives up on and reads as 0.
+ */
+export const MAX_QTY_DIGITS = 15;
+
+/**
+ * Strips a value down to the characters a quantity is made of. The form fields
+ * filter keystrokes through this, so it has to agree with `isQty` above —
+ * anything this leaves behind must be something that function accepts.
+ */
+export function digitsOnly(value: unknown): string {
+	if (typeof value !== 'string') return '';
+
+	return value.replace(/[^0-9]/g, '');
+}

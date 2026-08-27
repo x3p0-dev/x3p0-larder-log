@@ -3,7 +3,7 @@ import { Trash2, X } from 'lucide-preact';
 
 import { ColorPicker } from './ColorPicker';
 import type { Theme } from '../lib/theme';
-import { termColorFor } from '../lib/theme';
+import { themed } from '../lib/theme';
 import { DRAWER_TRASH, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK } from '../lib/controlStyles';
 
 type Skin = {
@@ -124,10 +124,24 @@ export function TermRow({
 }) {
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const s = panelSkin(theme, onDark);
-	const c = termColorFor(ink);
-	/* The swatch is the picker's selected dot, so it takes the picker's rule:
-	 * the palette, following the theme rather than the surface (D42). */
-	const swatch = ! c ? 'transparent' : theme.dark ? c.darkDot : c.base;
+	/*
+	 * `themed()`, **not** `termColorFor()`.
+	 *
+	 * A term's ink is a colour token *or* a legacy `#rrggbb` — `normalizeInk`
+	 * deliberately stores both (D32) — and `termColorFor` resolves only the
+	 * token half. On a household seeded before D32 it returned `undefined` and
+	 * this swatch fell back to `transparent`, which is invisible three times
+	 * over: no fill, an inset ring already painted in the panel's own colour,
+	 * and an outer ring in the colour that had just gone transparent. It read
+	 * as **blank space that grows a light ring when pressed**, because the open
+	 * state's ring is the only one with a colour of its own.
+	 *
+	 * `themed()` is the function with the legacy branch — the same one
+	 * `entityColorFor` calls, which is why every chip on the page rendered
+	 * these terms correctly the whole time. It still follows the theme rather
+	 * than the surface (D42).
+	 */
+	const swatch = themed(ink, theme.dark).dot;
 	const Action = action === 'delete' ? Trash2 : X;
 
 	return (

@@ -26,7 +26,7 @@ import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
-import { fromInt, toInt } from '../shared/qty';
+import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
 import { sha256, sha256Hex } from '../shared/sha256';
@@ -389,6 +389,25 @@ check('a step is one however big the delta claims', step('4', -999), '3');
 // It reads as 0 rather than poisoning every comparison downstream with NaN.
 check('an unparseable quantity steps up from zero', step('abc', 1), '1');
 check('a decimal quantity steps up from zero', step('1.5', 1), '1');
+
+// `digitsOnly` is what the quantity fields filter every keystroke through, so
+// what it leaves behind has to be something `isQty` accepts — otherwise a field
+// could refuse a character and still end up holding a value the app rejects.
+check('digits pass through', digitsOnly('120'), '120');
+check('a decimal point is dropped', digitsOnly('1.5'), '15');
+check('a minus sign is dropped', digitsOnly('-3'), '3');
+check('the number field\'s own escapes are dropped', digitsOnly('1e5'), '15');
+check('letters and spaces are dropped', digitsOnly(' 12 apples '), '12');
+check('non-ASCII digits are not digits', digitsOnly('١٢'), '');
+check('a value with nothing left is empty', digitsOnly('abc'), '');
+check('a non-string filters to empty', digitsOnly(null), '');
+
+check('what survives the filter is a quantity', isQty(digitsOnly('1.5kg')), true);
+check(
+	'a field filled to the cap is still a safe integer',
+	Number.isSafeInteger(Number('9'.repeat(MAX_QTY_DIGITS))),
+	true
+);
 
 // --- the seeds a new household starts with ---
 //

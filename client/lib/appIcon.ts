@@ -84,6 +84,32 @@ export function installAppIcon(): void {
 	themeColor.content = THEME_COLOR;
 	nodes.push(themeColor);
 
+	/*
+	 * **The page has to say it handles both schemes, at the document level.**
+	 *
+	 * Android Chrome's *Auto dark theme for web contents* rewrites colours on
+	 * any page that has not opted in — and it is enabled per device, by a
+	 * setting and by field trials, which is why two phones on the same Chrome
+	 * build render this app differently. What it rewrites is `background-color`;
+	 * what it leaves alone is `box-shadow`. That is exactly the shape of the
+	 * colour-picker bug: sixteen swatches that occupy space, take a press and
+	 * show their selection ring, with no fill.
+	 *
+	 * The app sets `color-scheme` on its own containers already, which is what
+	 * resolves `light-dark()` in `theme.json`. That is **not** the same thing —
+	 * the opt-out is read from the document, so an inline style on a `<div>`
+	 * three levels down does not switch auto-darkening off. `light dark` here
+	 * rather than the active theme: this declares which schemes the page
+	 * *supports*, and the containers still decide which one is showing.
+	 *
+	 * Belongs with the icons because it is the same wall — Zero's shell has no
+	 * head hook (D31), so anything in `<head>` is appended at boot or absent.
+	 */
+	const colorScheme = document.createElement('meta');
+	colorScheme.name = 'color-scheme';
+	colorScheme.content = 'light dark';
+	nodes.push(colorScheme);
+
 	for (const n of nodes) {
 		n.setAttribute(`data-${MARK}`, '');
 		document.head.appendChild(n);

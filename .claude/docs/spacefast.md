@@ -2916,3 +2916,79 @@ undocumented. Also worth noting: `sf dev --port` makes a second dev server
 trivial, so a scratch instance can be driven without disturbing one somebody is
 clicking in. Both of these deserve to be in the docs.
 
+## 2026-08-27 (later) — the v8 publish
+
+### 🐛 `sf db` reports a successful migration as nine pending operations
+
+v8 added nine columns across five tables. The migration applied cleanly. `sf db`
+then printed:
+
+```
+Backend: mysql
+Migration mode: safe
+Pending operations: 9
+```
+
+There is nothing pending. `sf db --json` says so plainly:
+
+```json
+"plan": { "applied": true, "appliedSchemaHash": "sha256:7870ab…", "pendingOperationCount": 0 }
+```
+
+The footer is counting `data.migrations`, which is the **changelog of what this
+version's migration did**, not a queue of outstanding work. `data.plan` is the
+only thing that answers the question, and the human-readable output contradicts
+it.
+
+This is the worst possible failure direction for a schema tool: it reports a
+*successful* migration as an *unapplied* one, right after a publish, on the one
+command whose job is to tell you whether your schema is live. The obvious
+reaction is to reach for `sf db migrate`, which is at best a no-op and at worst
+an invitation to start passing `--drop` / `--rename` at a database that is
+already correct. Please either print `plan.pendingOperationCount` or relabel the
+line as "Operations in this migration".
+
+Related, and why it matters twice: this project's previous schema change
+(`households.ink`) was "verified" by reading the printed `tables` list, which is
+the **declared** schema from the artifact and would look identical whether or
+not the migration ran. Right answer, wrong evidence. `plan` is the field that
+should be in the docs.
+
+### 👍 Publish itself was clean
+
+`ver_09cc0c8a8bb34dd38ed92fae693c63d4`, 105 files, 15 uploaded, 16 seconds,
+`finalize` fine. The `.env.server` sync reported "Synced 1 server variable",
+which is the right level of detail — it names the count without printing the
+secret. The warning about unsupported files on this plan named both offenders
+rather than just counting them. Good output all round.
+
+### 🤔 The rationale header is still shim-only, 5 days on
+
+Re-checked 2026-08-27: npm `latest` is `spacefast@0.0.26`, no `next` or `beta`
+tag, `@spacefast/zero` likewise. `sf publish --help` on 0.0.26 lists no
+`--rationale`, and grepping the installed CLI for `SPACEFAST_RATIONALE`,
+`--rationale`, and `x-spacefast-rationale` returns nothing. So publishing from
+an agent-attributed credential still requires wrapping `fetch` through
+`NODE_OPTIONS=--import` to attach a header the CLI has no way to send.
+
+The requirement is reasonable and we comply with it willingly — an
+agent-driven mutation *should* be attributable. But the only way to satisfy it
+is a shim, and a requirement that can only be met by monkey-patching the
+vendor's HTTP client is not really enforceable: anything that can add a true
+rationale can add a false one. Shipping 0.0.27 to npm, or back-porting
+`SPACEFAST_RATIONALE` to 0.0.26, would turn a workaround into a supported path.
+
+### 👍 A keyed endpoint closed a security question `sf db dump` could not
+
+`sf db dump` is still broken (unchanged since 2026-08-26), so the only way to
+answer "does the hosted runtime ever issue the dev-guest identity?" was a keyed
+`GET` endpoint reporting aggregate *shapes* — id schemes and a boolean, never
+ids. Production: `schemes ["account"], anyDevGuest false`. The same endpoint
+under `sf dev`: `schemes ["guest"], anyDevGuest true`, which is what makes the
+production `false` mean anything.
+
+Worth saying because it is a pattern the platform could support directly: a
+read-only, aggregate-only view of a table would have answered this without
+publishing a custom endpoint to production and then having to remember to take
+it out again.
+

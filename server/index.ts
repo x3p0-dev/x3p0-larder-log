@@ -1,4 +1,4 @@
-import { capsule, query, mutation, endpoint, json, text, table, string, boolean, id } from '@spacefast/zero/server';
+import { capsule, query, mutation, endpoint, text, table, string, boolean, id } from '@spacefast/zero/server';
 
 import type { LogContext } from '@spacefast/zero/server';
 import type { WriteDb } from './schema';
@@ -1058,50 +1058,8 @@ export default capsule({
 
 	endpoints: {
 		status: endpoint({ method: 'GET', path: '/api/status' }, () => text('ok')),
-
-		// TEMPORARY (2026-08-27). The runtime questions it was built for are
-		// answered — no `crypto`, sequential integer row ids, working inserts and
-		// transactions, `ctx.log` reaching `sf logs runtime`. It now answers the
-		// last one: whether the published runtime ever issues `sf dev`'s
-		// `guest:local` identity, which is the server half of D14 and the app's
-		// only unverified authentication hole. `sf db dump` would normally answer
-		// this, and is broken.
-		//
-		// Reports the **scheme** of each user id and never the id itself, so it
-		// cannot be used to enumerate who is in a household. REMOVE once read.
-		probe: endpoint({ method: 'GET', path: '/api/probe' }, async (ctx, req) => {
-			if (req.query.get('key') !== PROBE_KEY) return text('not found', { status: 404 });
-
-			// An endpoint gets the untyped `ServerContext`, unlike a mutation, so
-			// the row shape has to be asserted here.
-			const rows = (await ctx.db.memberships.withIndex('by_household').collect()) as unknown as Array<{
-				userId: string;
-				householdId: string;
-				role: string;
-			}>;
-
-			const scheme = (userId: string) => {
-				const at = userId.indexOf(':');
-
-				return at === -1 ? '(no scheme)' : userId.slice(0, at);
-			};
-
-			return json({
-				memberships: rows.length,
-				distinctUsers: new Set(rows.map((r) => r.userId)).size,
-				distinctHouseholds: new Set(rows.map((r) => r.householdId)).size,
-				schemes: [...new Set(rows.map((r) => scheme(r.userId)))].sort(),
-				roles: [...new Set(rows.map((r) => r.role))].sort(),
-				// The finding. True here would mean every anonymous visitor shares
-				// one identity, and D14's server half would have to come out today.
-				anyDevGuest: rows.some((r) => r.userId === 'guest:local'),
-			});
-		}),
 	},
 });
-
-// TEMPORARY (2026-08-27), paired with the `/api/probe` endpoint above.
-const PROBE_KEY = 'k7Qv2ZmR9xLpT4Hd';
 
 // --- helpers ---
 

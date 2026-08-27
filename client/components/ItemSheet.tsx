@@ -4,6 +4,7 @@ import { Check, Minus, Plus, Trash2, X } from 'lucide-preact';
 import type { Theme } from '../lib/theme';
 import { entityColorFor, proposeColor } from '../lib/theme';
 import { TermPanel, TermRow } from './TermPanel';
+import { digitField } from '../lib/numericField';
 import type { ItemDraft, Term } from '../../shared/types';
 import type { TaxonomyActions } from '../lib/actions';
 import {
@@ -273,8 +274,7 @@ export function ItemSheet({
 								</button>
 								<input
 									value={value.qty}
-									onInput={(e) => onChange({ ...value, qty: e.currentTarget.value })}
-									inputMode="decimal"
+									{...digitField((qty) => onChange({ ...value, qty }))}
 									class={`flex-1 min-w-0 h-12 rounded-[13px] text-center font-disp text-[22px] font-bold ${PAGE_INPUT}`}
 									aria-label="Quantity on hand"
 								/>
@@ -295,8 +295,7 @@ export function ItemSheet({
 							<div class={`flex items-center justify-between h-12 px-4 rounded-[13px] ${PAGE_INPUT} focus-within:border-ink-muted`}>
 								<input
 									value={value.threshold}
-									onInput={(e) => onChange({ ...value, threshold: e.currentTarget.value })}
-									inputMode="decimal"
+									{...digitField((threshold) => onChange({ ...value, threshold }))}
 									class="min-w-0 flex-1 bg-transparent font-disp text-[22px] font-bold outline-none"
 									style={{ color: theme.textStrong }}
 									aria-label="Low-stock threshold"

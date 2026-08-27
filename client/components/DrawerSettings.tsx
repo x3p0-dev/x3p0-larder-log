@@ -14,6 +14,7 @@ import type { Invite, Member, ThemeOverride } from '../../shared/types';
 import type { Role } from '../../shared/roles';
 import { can } from '../../shared/roles';
 import { isQty } from '../../shared/qty';
+import { digitField } from '../lib/numericField';
 
 const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
 	{ key: 'system', label: 'Auto' },
@@ -312,10 +313,9 @@ export function DrawerSettings({
 				{mayEditSettings ? (
 					<input
 						value={thresholdDraft}
-						onInput={(e) => setThresholdDraft(e.currentTarget.value)}
+						{...digitField(setThresholdDraft)}
 						onBlur={commitThreshold}
 						onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-						inputMode="decimal"
 						class={`h-10 px-3 rounded-[10px] text-[15px] w-24 ${DRAWER_INPUT}`}
 						aria-label="Default low-stock threshold"
 					/>

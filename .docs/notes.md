@@ -5,6 +5,12 @@ gets answered.
 
 ## Blocked: we cannot publish (2026-08-25) — *half resolved 2026-08-26*
 
+> **Still true 2026-08-27**, after the v8 publish. npm `latest` is
+> `spacefast@0.0.26` with no `next`/`beta`; `sf publish --help` on it lists no
+> `--rationale`; grepping the installed CLI for `SPACEFAST_RATIONALE`,
+> `--rationale` and `x-spacefast-rationale` returns nothing. The shim was
+> rebuilt from scratch for that publish, as it will have to be for the next one.
+
 > **Update, 2026-08-26.** `sf publish` completed: **v4**, 71 files, 18 seconds.
 > Problem 4 below — the broken `finalize` — **is fixed on Spacefast's side**, and
 > nothing here changed to cause that. Problems 1–3 stand: npm's `latest` is

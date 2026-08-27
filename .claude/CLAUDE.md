@@ -20,11 +20,17 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phases 3 and 4 are built and are now published** — v4 went live on
-2026-08-26, ending a three-day publish blockade. Publishing still needs a
-rationale-header shim. **There is unpublished work in the tree**: v4 predates
-D44's nine stamp columns, the A–Z term order, and the 2026-08-27 device fixes,
-so the next publish carries a schema change (additive, no flag).
+**Phases 3 and 4 are built and published.** **v10 is live** as of 2026-08-27
+(`ver_0026484fd67c495b8d3b7d52b9215d67`) — the legacy-hex swatch fix. v9 added a
+document-level `color-scheme` meta and removed `/api/probe`, which is **gone
+from the artifact and 404s in production even with its key**. v8 is what carried
+the schema:
+
+**v8** (`ver_09cc0c8a8bb34dd38ed92fae693c63d4`, 105 files, 16 seconds) carried
+everything through D44 — the nine stamp columns, the A–Z term order, and the
+device fixes. The v4 publish on 2026-08-26 ended a three-day blockade; v5–v7
+were the probe rounds that found the hosted-runtime divergences. Publishing
+still needs a rationale-header shim, re-checked against npm on 2026-08-27.
 
 **The hosted runtime is a different JS engine from the one `sf dev` runs**,
 which broke `createInvite` in production while it worked locally — read *The
@@ -541,10 +547,21 @@ seconds. The platform's `finalize` / `runtime_api_not_found` failure — which
 killed v3 on 2026-08-25 and wedged three spaces on 2026-08-24 — **is fixed on
 their side**. Nothing here changed to cause that.
 
-Verified on v4: `GET /` 200, `/api/status` → `ok`, `/client.js` and `/zero.css`
-serve, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md` all 403), and
-**D42's `households.ink` migrated additively with no flag** — `sf db` lists nine
-tables with `ink` present. `invitePreview` answers an unauthenticated caller
+Verified on v8: `GET /` 200, `/api/status` → `ok`, `/client.js`, `/zero.css`
+and `/icons/*` serve, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md`,
+`/.env.server`, `/.spacefast/state.json` all 403), every new utility class is in
+the **live** `/zero.css`, and D44's nine columns migrated additively with no
+flag.
+
+**Read `plan`, not the footer, to confirm a migration applied.** `sf db` prints
+`Pending operations: 9` after a successful nine-column migration — it is
+counting the version's `migrations` array, which is the changelog of what this
+migration *did*, not a queue of what is outstanding. The real answer is
+`--json` → `data.plan`: `applied: true`, `pendingOperationCount: 0`, and
+`appliedSchemaHash` equal to `schemaHash`. **The human-readable output says the
+opposite of the truth here**, and the same trap sank the D42 check, which read
+the declared `tables` list and concluded `ink` had migrated — right answer,
+wrong evidence. `invitePreview` answers an unauthenticated caller
 over `POST /__spacefast/zero/run`, which **exists in production too**, not just
 under `sf dev`.
 
@@ -568,6 +585,41 @@ Two things to know before publishing again:
 
 The full write-up is in [`.claude/docs/spacefast.md`](docs/spacefast.md).
 
+### A term's ink is a token **or** a legacy hex, and both must render — 2026-08-27
+
+**The bug that looked like a device bug.** The term composer's 26px swatch — the
+button beside the name field that opens the picker — rendered as blank space on
+one phone and correctly on another. It was never the phone. The two were signed
+in to **different households**, and the one that failed was seeded before D32.
+
+`normalizeInk` deliberately stores **either** a colour token **or** a legacy
+`#rrggbb`. `termColorFor()` resolves only the token half and returns
+`undefined` for a hex; `TermRow` fell back to `'transparent'`, which is
+invisible three times over — no fill, an inset ring already painted in the
+panel's own colour, and an outer ring in the colour that had just gone
+transparent. Pressing it showed a ring because the *open* state's ring is the
+only one with a colour of its own. Fixed by using `themed()`, which has the
+legacy branch, and is why every chip on the page rendered those terms correctly
+the whole time.
+
+**The rule: anything that turns a stored `ink` into a colour must handle both
+forms.** `termColorFor()` is a **token lookup, not an ink resolver** — reach for
+`themed()` or `entityColorFor()` unless you are iterating the palette itself.
+Audited on 2026-08-27: `chipDot()` already falls through to the raw hex,
+`ColorPicker` only ever maps `DEFAULT_PALETTE` so its lookups always resolve,
+and `HouseholdTile` / `HouseholdIdentity` are safe for a different reason —
+`toHouseholdInk` **refuses** a hex, so a household's ink is always a token or
+`''` resolved upstream by `householdInk()`.
+
+**Two wrong guesses came first, and both shipped.** `h-dvh` (the picker was
+supposedly below the mobile fold — it was on screen and pressable) and a
+document-level `color-scheme` meta (Android auto-dark — it does not make things
+transparent). Both are correct changes on their own merits and were kept. **The
+lesson is the one this file already gives:** the reporter's own words held the
+answer — *"the colour swatches themselves work correctly, it's just the button
+next to the input"* — and two publishes were spent before that detail was asked
+for. **Ask what still works before theorising about what does not.**
+
 ### The hosted runtime is not the engine `sf dev` runs — 2026-08-27
 
 **This is the trap that cost three days, and it will happen again.** The
@@ -587,7 +639,9 @@ just a 500. `ctx.log` *is* the way out and it does work in production; nothing
 writes there unless you call it. Instrument deliberately.
 
 **How that was established, and how to do it again:** a keyed `endpoint` that
-**returns** its findings rather than logging them. An endpoint gets a full
+**returns** its findings rather than logging them. (`/api/probe` itself was
+**removed in v9** once both its questions were answered — it is not there to
+reuse; write a fresh one and remove it again.) An endpoint gets a full
 `ServerContext` — `db`, `transaction`, `log`, `env` — and needs no auth, so it
 is the only way to interrogate the hosted runtime. Give it a `?key=` and a
 `404` without it. Two guesses were burned before this (`crypto`, then the one
@@ -644,17 +698,21 @@ another route**.
 2. **The server** (`shared/identity.ts`) accepts the exact identity `sf dev`
    issues — `guest:local` / `Local` / `guest` / not authenticated, all four
    matched. That value comes from `zeroGuestAuth()` in the `spacefast` CLI, so
-   it should never appear on a hosted runtime. **This one is still NOT
-   verified** — v2 shipped on 2026-08-24 and the check needs a real sign-in,
-   which nobody has done yet. Until then, treat it as the weaker hole. If a
-   published space ever issued `guest:local`, every anonymous visitor would
-   share one household. **How to close it:** read the `userId` on a real membership row. `sf db dump`
-   is the documented route and is **broken**, so the keyed `/api/probe`
-   endpoint does it instead — it reports each id's *scheme* and an
-   `anyDevGuest` flag, never the ids themselves. It has a known-positive
-   control: run it under `sf dev` and `anyDevGuest` is `true`, which is what
-   makes a `false` in production mean something. A Gravatar scheme clears it;
-   `guest` is an emergency.
+   it should never appear on a hosted runtime. **Verified inert in production
+   on 2026-08-27**, on v8, after two real people had signed in — which is what
+   the check needed and why it sat open from 2026-08-24. The keyed
+   `/api/probe` endpoint reported:
+
+   ```
+   production:  schemes ["account"]  anyDevGuest false   (4 memberships, 2 users)
+   sf dev:      schemes ["guest"]    anyDevGuest true    (1 membership,  1 user)
+   ```
+
+   **The second line is the point.** A `false` from a probe that cannot detect
+   the condition would mean nothing, so the same probe was run against `sf dev`
+   — where the hole is known to be open — and it came back `true`. The test
+   discriminates. Production issues only `account:` identities. (`sf db dump`
+   is the documented route for this and is still broken.)
 
 Don't widen either one, and take both out if Spacefast ships a local sign-in
 stub.

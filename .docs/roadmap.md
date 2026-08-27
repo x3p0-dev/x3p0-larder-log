@@ -638,6 +638,52 @@ real session on a phone and with a second person, which found six things
 compiling and curling could not — see *Real-device testing* below. Treat the
 "nobody has clicked" line above as the state at the time of writing, not now.
 
+### Published: v8, v9, v10 — 2026-08-27
+
+**v10** (`ver_0026484fd67c495b8d3b7d52b9215d67`) is live: the term composer's
+swatch resolves a **legacy hex ink**. It had rendered `transparent` for any term
+seeded before colour tokens (D32), which looked like a device bug — one phone
+blank, another correct — because the two phones were signed in to different
+households. `termColorFor()` is a token lookup; `themed()` is the ink resolver.
+
+**v9** (`ver_61c3c5883290440d9e1234314788e14c`): a document-level
+`<meta name="color-scheme" content="light dark">`, and the removal of the
+temporary `/api/probe` endpoint — confirmed gone from the artifact and 404ing
+in production even with its key. **v8** is the one that carried the schema:
+
+### Published: v8 — 2026-08-27
+
+`ver_09cc0c8a8bb34dd38ed92fae693c63d4`, 105 files, 16 seconds. Carries
+everything below: D44's nine stamp columns, A-Z term ordering, and the device
+fixes. The rationale-header shim was needed again — npm's `latest` is still
+`spacefast@0.0.26`, which has no `--rationale` and reads no
+`SPACEFAST_RATIONALE`.
+
+Verified on the live space: `GET /` 200, `/api/status` -> `ok`, `/client.js`,
+`/zero.css` and `/icons/*` serve, every new utility class present in the **live**
+CSS, D29's 403s hold on `.claude/`, `.docs/`, `.env.server` and `.spacefast/`,
+and `invitePreview` answers an unauthenticated caller correctly.
+
+**The nine columns migrated additively, no flag** — but `sf db` prints
+`Pending operations: 9` after doing it, because that line counts the migration's
+own changelog rather than the queue. `sf db --json` -> `data.plan` is the field
+that answers: `applied: true`, `pendingOperationCount: 0`, `appliedSchemaHash`
+matching `schemaHash`. **Check `plan`, not the footer**, and note that the D42
+check read the declared `tables` list instead, which would look the same either
+way.
+
+**D14's second hole is closed** — the one open since 2026-08-24. `shared/identity.ts`
+accepts the identity `sf dev` issues, and whether a hosted runtime ever issues it
+could not be tested until real people had signed in. Two have. The keyed
+`/api/probe` reports `schemes ["account"], anyDevGuest false` in production and
+`schemes ["guest"], anyDevGuest true` under `sf dev` — the second half is what
+makes the first mean anything. The client-side half (D14 proper) was already
+confirmed inert.
+
+**`/api/probe` was removed in v9**, right after the reading above. Both
+questions it was built for are answered and its own comment said *REMOVE once
+read*.
+
 ### Real-device testing, and what it found — 2026-08-27
 
 The first round of use on a phone and by a second person. Everything here is a
