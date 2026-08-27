@@ -799,6 +799,61 @@ ten tables, five queries, seventeen mutations, exactly as Phase 4.11 left them.
 touched files was checked against the live `/zero.css` by unescaping the sheet's
 selectors and diffing — printed, not hand-written. **Nobody has clicked it.**
 
+### The app is installable — 2026-08-27
+
+`site.webmanifest` at the project root, linked from `installAppIcon()`. **No
+new artwork**: the three PNGs the icon README staged in August are correct as
+they stand, and the maskable one was measured rather than assumed — its glyph
+sits in a 181 × 226 box centred in the 512, so the furthest ink is 145px from
+the centre against the 205px the 80% safe zone allows. Android can mask it to a
+circle, a squircle or a teardrop and lose nothing.
+
+- **The manifest is a real file, not a data URI**, which is the one place this
+  breaks from how the icons and the webfonts get past Zero's missing head hook
+  (D31). `start_url` and `scope` resolve against the **manifest's own URL**, and
+  a `data:` URL is no base to resolve `/` from — both would fall back to
+  whatever page the app was installed from, which for this app is often
+  `/?join=<code>`. An expiring invite as the app's front door.
+- **`purpose` is split across two icons, never combined.** `icon-192` and
+  `icon-512` are `any` and keep their 22% rounding; `icon-maskable-512` is
+  `maskable` and is full-bleed oat. Writing `"any maskable"` on one file is the
+  usual mistake and would put the rounded corners inside Android's mask, which
+  crops them again.
+- **`background_color` is `#F3EADC`** — `canvas` in light, so the splash screen
+  is the page it is about to become — and **`theme_color` is `#E2D5C0`**, the
+  same oat the `theme-color` meta carries in light. A manifest colour cannot
+  vary by scheme, so these two are the light values and the meta does the rest.
+- **The `theme-color` meta is a pair now, and it follows the *app's* theme.**
+  Dark is `#1F1912`, `canvas` exactly; light stays on the oat `#E2D5C0`, a
+  deliberate half-step darker than the page. It cannot be a `media` attribute:
+  the app's theme is not the OS's the moment a device overrides it (D25), and
+  an installed app has no tab strip to absorb the difference — the status bar
+  sits directly on the page. So `appIcon` exports `setThemeColor`, the boot
+  value reads `prefers-color-scheme`, and **exactly one owner sets it after**:
+  `Pantry` while signed in, the entry's `App` only while signed out. Effects
+  run child-first, so an unguarded `App` would overwrite the override with the
+  system value a tick later.
+- **`short_name` is `Larder Log`**, not the `Larder` the icon README's own
+  manifest block suggests. Ten characters fits an Android home-screen label
+  without truncating, so there is nothing to shorten for, and the full name is
+  what the app is called everywhere else.
+
+**Two platform rules turned up on the way, both undocumented and both written up
+in `.claude/docs/spacefast.md`:** `sf publish` mirrors the project root
+**selectively** (`LICENSE.md` ships, `README.md` does not; `package-lock.json`
+ships, `package.json` does not), and **being in the payload does not mean it
+serves** — `theme.json` and `sf.jsonc` are staged in
+`.spacefast/zero/public/` and 404 in production, because the edge hides the
+platform's own config on top of D29's dot-prefix rule.
+
+**Verified as far as it can be**: typecheck clean, 235 assertions, the compiled
+`client.js` in the payload carries `link("manifest", MANIFEST)`, and
+`site.webmanifest` is staged in `.spacefast/zero/public/`. **A manifest has no
+local proxy at all** — `sf dev` serves no static files, so `/site.webmanifest`
+comes back as the SPA shell and Chrome logs a parse error on every local load.
+Whether it serves, with what content type, and whether a Pixel offers to install
+it are **post-publish checks**. Nobody has installed it.
+
 ### Published: v8, v9, v10 — 2026-08-27
 
 **v10** (`ver_0026484fd67c495b8d3b7d52b9215d67`) is live: the term composer's
@@ -1025,9 +1080,9 @@ rather than the row. Both take `col-span-full`.
 
 ### Left open at the end of 2026-08-25
 
-- **A `site.webmanifest`.** The icon README specifies one in full, and the
-  192/512/maskable PNGs are staged for it. Not built: it makes the app
-  installable, which is a product decision rather than an icon swap.
+- ~~**A `site.webmanifest`.**~~ **Built 2026-08-27** — see *The app is
+  installable* below. The 192/512/maskable PNGs it was staged for needed no
+  changes.
 - **Five icon files the README's markup wants are missing** — `favicon.ico`,
   `favicon-48.png`, and the three source SVGs. The `.ico` is the one that
   matters; the sized-PNG pair is the substitute for it.

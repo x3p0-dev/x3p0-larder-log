@@ -1,5 +1,6 @@
 /**
- * The app's identity in the browser chrome: title, icon, theme colour.
+ * The app's identity in the browser chrome: title, icons, theme colour, and the
+ * PWA manifest that makes it installable.
  *
  * Zero generates `index.html` from a fixed template that carries a title and
  * nothing else — no head hook, the same wall the webfonts hit (D31). So the
@@ -46,12 +47,68 @@ const FAVICON_32 =
 const APPLE_TOUCH =
 	'data:image/png;base64,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';
 
-/** The oat ground the icon sits on — what a browser tints its chrome with. */
-const THEME_COLOR = '#E2D5C0';
+/**
+ * The PWA manifest — a real file at the project root, not a data URI like the
+ * icons above.
+ *
+ * A browser resolves `start_url` and `scope` **against the manifest's own URL**,
+ * and a `data:` URL is no base to resolve a path from: both would fall back to
+ * whatever page the app happened to be installed from — `/?join=<code>` for
+ * anyone who arrived by invite, which would pin a dead invite as the app's front
+ * door. So the trick the icons use is not available here.
+ *
+ * The cost is that **it does not resolve under `sf dev`**, which answers every
+ * path it does not recognise with the SPA shell: the console reports a manifest
+ * syntax error locally, and the app is installable only from the published
+ * space. A dry run stages it into `.spacefast/zero/public/`, which is the
+ * closest thing to a local check — the project root is mirrored into the payload,
+ * but selectively: `README.md` and `package.json` are dropped. **Being in the
+ * payload is not proof that it serves**, either. `theme.json` and `sf.jsonc` are
+ * staged and still 404 in production, because the edge hides the platform's own
+ * config files on top of D29's dot-prefix rule. So the manifest, and the
+ * content type it comes back with, are a post-publish curl.
+ */
+const MANIFEST = '/site.webmanifest';
+
+/**
+ * What a browser tints its chrome with: the status bar on an installed app, the
+ * tab strip on desktop.
+ *
+ * Light is the oat the icon sits on rather than `canvas`, a deliberate
+ * half-step darker than the page. Dark is `canvas` exactly — at that end there
+ * is no oat to echo, and a band that is not the page ground reads as a seam
+ * above it.
+ */
+const THEME_COLOR = { light: '#E2D5C0', dark: '#1F1912' } as const;
 
 const TITLE = 'Larder Log';
 
 const MARK = 'larder-log-icons';
+
+/** Held so `setThemeColor` can steer it once the app resolves its theme. */
+let themeColorMeta: HTMLMetaElement | null = null;
+
+function prefersDark(): boolean {
+	return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+}
+
+/**
+ * Point the theme colour at the theme the app has actually resolved.
+ *
+ * The boot value reads `prefers-color-scheme`, which is right for the default
+ * and wrong for a device that has overridden it (D25). A phone forced to dark
+ * under a light OS would otherwise wear an oat status bar above a dark app —
+ * which is precisely the seam an installed PWA has no chrome left to hide.
+ *
+ * So whoever owns the resolved `dark` calls this: `Pantry` while signed in,
+ * and the entry's `App` on the signed-out surface, which has no override to
+ * honour. **Only one of them at a time** — App defers while Pantry is mounted,
+ * because a parent's effect runs after its child's and would win the tie with
+ * the value that ignores the override.
+ */
+export function setThemeColor(dark: boolean): void {
+	if (themeColorMeta) themeColorMeta.content = THEME_COLOR[dark ? 'dark' : 'light'];
+}
 
 function link(rel: string, href: string, extra?: Record<string, string>): HTMLLinkElement {
 	const el = document.createElement('link');
@@ -62,7 +119,8 @@ function link(rel: string, href: string, extra?: Record<string, string>): HTMLLi
 }
 
 /**
- * Install the title, icon links, and theme colour. Call once, before render.
+ * Install the title, icon and manifest links, and the two metas. Call once,
+ * before render.
  *
  * Idempotent by marker, so a hot reload does not stack a second set.
  */
@@ -71,17 +129,24 @@ export function installAppIcon(): void {
 
 	document.title = TITLE;
 
-	if (document.querySelector(`[data-${MARK}]`)) return;
+	if (document.querySelector(`[data-${MARK}]`)) {
+		// Re-acquire rather than just bail: a hot reload would otherwise leave
+		// `setThemeColor` holding nothing and silently doing nothing.
+		themeColorMeta = document.querySelector(`meta[name="theme-color"][data-${MARK}]`);
+		return;
+	}
 
 	const nodes: HTMLElement[] = [
 		link('icon', FAVICON_16, { sizes: '16x16', type: 'image/png' }),
 		link('icon', FAVICON_32, { sizes: '32x32', type: 'image/png' }),
 		link('apple-touch-icon', APPLE_TOUCH),
+		link('manifest', MANIFEST),
 	];
 
 	const themeColor = document.createElement('meta');
 	themeColor.name = 'theme-color';
-	themeColor.content = THEME_COLOR;
+	themeColor.content = THEME_COLOR[prefersDark() ? 'dark' : 'light'];
+	themeColorMeta = themeColor;
 	nodes.push(themeColor);
 
 	/*

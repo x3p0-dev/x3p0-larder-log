@@ -26,6 +26,7 @@ import { NewHouseholdDialog } from './components/NewHouseholdDialog';
 import type { ConfirmTone } from './components/ConfirmDialog';
 
 import { useSystemTheme } from './hooks/useSystemTheme';
+import { setThemeColor } from './lib/appIcon';
 import { usePersistentState } from './hooks/usePersistentState';
 import { usePantryData, useInvitePreview, useProfile } from './hooks/usePantryData';
 import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
@@ -361,6 +362,16 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 	const dark = themeOverride === 'system' ? systemDark : themeOverride === 'dark';
 	const theme = getTheme(dark);
+
+	/*
+	 * The browser chrome follows the *app's* theme, not the OS's. The two part
+	 * company the moment this device overrides it (D25), and an installed app
+	 * has no tab strip to absorb the difference — the status bar sits directly
+	 * on the page.
+	 */
+	useEffect(() => {
+		setThemeColor(dark);
+	}, [dark]);
 
 	/*
 	 * The household this device is pointed at. A *request*, not an authority:

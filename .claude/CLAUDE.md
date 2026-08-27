@@ -822,6 +822,57 @@ invisible locally and appears only after a publish. **Confirmed rendering under
 `sf dev` on 2026-08-25** — the whole reason for choosing a remote URL was that
 this check is possible at all.
 
+### The app is installable — 2026-08-27
+
+`site.webmanifest` at the project root, linked from `installAppIcon()` — the
+**fourth** thing appended to `document.head` at boot, after the webfont
+stylesheet, the icons and the two metas. **No new artwork**: the 192, 512 and
+maskable-512 PNGs staged with the icon set in August are correct. The maskable
+one was measured, not assumed — the glyph is a 181 × 226 box centred in the 512,
+so the furthest ink is 145px from centre against the 205px the 80% safe zone
+allows.
+
+**The manifest cannot be a data URI, and that is the one place it departs from
+how the icons get past the missing head hook.** `start_url` and `scope` resolve
+against the **manifest's own URL**; a `data:` URL is no base to resolve `/`
+from, so both would fall back to the page the app was installed from — often
+`/?join=<code>` here, pinning an expiring invite as the front door.
+`purpose` is split across two files and **never combined into `"any maskable"`**:
+the `any` pair keeps its 22% rounding, the maskable is full bleed, and one file
+claiming both would put those rounded corners inside Android's mask to be
+cropped a second time.
+
+**The `theme-color` meta became a pair and follows the *app's* theme.** Dark is
+`#1F1912` — `canvas` exactly; light stays on the oat `#E2D5C0`, a deliberate
+half-step darker than the page. **It is not a `media` attribute**, because the
+app's theme stops being the OS's the moment a device overrides it (D25), and an
+installed app has no tab strip to absorb the difference — the status bar sits
+directly on the page. `appIcon` exports `setThemeColor`; the boot value reads
+`prefers-color-scheme` so there is no flash, and **exactly one owner sets it
+after**: `Pantry` while signed in, the entry's `App` only while signed out.
+Effects run child-first, so an unguarded `App` would overwrite the override with
+the system value a tick later. The **manifest's** `theme_color` and
+`background_color` cannot vary by scheme at all, so they are the light values
+and the cold-launch splash is light for everyone.
+
+**Two undocumented platform rules turned up, both in `.claude/docs/spacefast.md`:**
+
+1. **`sf publish` mirrors the project root selectively.** `LICENSE.md` ships and
+   `README.md` does not; `package-lock.json` ships and `package.json` does not.
+   There is no stated rule — run a dry run and list
+   `.spacefast/zero/public/`.
+2. **Being in the payload does not mean it serves.** `theme.json` and
+   `sf.jsonc` are staged and **404 in production**, because the edge hides the
+   platform's own config on top of D29's dot-prefix 403. So `--dry-run` is
+   necessary evidence and not sufficient.
+
+**A manifest has no local proxy at all.** `sf dev` serves no static files, so
+`/site.webmanifest` comes back as the SPA shell and Chrome logs a manifest parse
+error on every local load — harmless, and unavoidable without a dev-only branch
+that would make the thing untestable everywhere. Whether it serves, with what
+content type, and whether a Pixel offers to install it are **post-publish
+checks**. Nobody has installed it.
+
 ### Every ordered row carries its own stamps (D44) — 2026-08-27
 
 **The rule: a timestamp this app sorts by is a timestamp this app writes.** The

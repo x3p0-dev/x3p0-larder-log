@@ -3120,3 +3120,86 @@ divergence entry), so "the type exists and `sf dev` runs it" has already been
 established as no evidence at all. A published list of which globals and
 services the hosted runtime actually provides would retire a whole class of
 these.
+
+## 2026-08-27 (later) — Making the app installable: the payload is not the site
+
+Context: adding a PWA manifest so an installed icon is masked properly on
+Android. No schema change, no new handler — this is entirely about static files
+and `<head>`, and it turned up two undocumented rules.
+
+### 😕 The manifest is the third thing that has to be injected at boot
+
+Same wall as the webfonts (D31) and the icons: `zeroHostedAppShell()` emits a
+title and nothing else, so `<link rel="manifest">` joins them in
+`document.head` at boot. This is the exact gap the 2026-08-25 entry filed a
+suggestion for — `sf.jsonc#meta` carrying `icon`, `themeColor` and `manifest` —
+and it has now cost a third injection site.
+
+It is worse for a manifest than for an icon, because the data-URI escape hatch
+the icons use is not available. `start_url` and `scope` resolve **against the
+manifest's own URL**, and a `data:` URL is no base to resolve `/` from, so both
+would fall back to whatever page the app was installed from. For this app that
+is frequently `/?join=<code>` — an invite link, which expires. A manifest has
+to be a real URL.
+
+### 😕 `sf publish` mirrors the project root, but selectively, and the rule is nowhere
+
+`.spacefast/zero/public/` after a dry run, against the actual root:
+
+| Kept | Dropped |
+|---|---|
+| `LICENSE.md`, `package-lock.json`, `sf.jsonc`, `theme.json`, `tsconfig.json`, `tsconfig.test.json`, `icons/`, and the new `site.webmanifest` | `README.md`, `package.json`, `client/`, `server/`, `shared/`, `tests/` |
+
+`README.md` is dropped and `LICENSE.md` is kept. `package.json` is dropped and
+`package-lock.json` is kept. Whatever the rule is, it is not "documentation" or
+"npm metadata", and `sf publish --help` does not mention one. The practical
+consequence is that **you cannot reason about whether a file ships** — you have
+to run a dry run and list the directory.
+
+### 🐛 …and being in the payload does not mean it serves
+
+The more surprising half. Both of these are staged in
+`.spacefast/zero/public/` and both **404 on the published space**:
+
+```
+/sf.jsonc            404 text/html
+/theme.json          404 text/html
+/tsconfig.test.json  200 application/json     <- staged too, and serves
+/LICENSE.md          200 text/markdown
+/icons/*.png         200 image/png
+```
+
+So the edge carries a second denylist on top of the dot-prefixed-path 403 this
+project relies on for D29 — one that hides the platform's own config files by
+name. That is a sensible thing to do and we are glad it does it. What is not
+sensible is that `--dry-run` reports those two files as part of the payload
+with no indication they will be unreachable, so the one local check available
+gives an answer the live site contradicts.
+
+**Suggestion:** have `--dry-run` mark files the edge will refuse, or drop them
+from the plan entirely. `Files 112` should be a count of what will exist.
+
+### 👎 A manifest cannot be verified locally at all
+
+`sf dev` serves no project static files, so `GET /site.webmanifest` returns the
+SPA shell — `200 text/html` — and Chrome logs a manifest syntax error on every
+local page load. This is the inverse of D28's routing asymmetry yet again: the
+local answer is the misleading one, and it is misleading in the direction that
+produces a false alarm rather than a false pass, which is at least the safer
+way round.
+
+Combined with the previous point, there is **no way to know a manifest works
+before publishing it**. Everything else in this app has some local proxy —
+`POST /__spacefast/zero/run` for handlers, `/zero.css` for classes, the
+artifact for schema. Static serving has none.
+
+**Suggestion:** let `sf dev` serve `.spacefast/zero/public/` for paths it does
+not otherwise recognise, instead of falling through to the SPA shell. It
+already builds that directory.
+
+### ❓ Unverified: the content type for `.webmanifest`
+
+Cannot be answered without publishing, for the reasons above. Chrome is lenient
+about the manifest MIME type in practice, and `.svg` and `.json` both map
+correctly, so the expectation is that it is fine — but it is a post-publish
+curl, not something the build can tell us.

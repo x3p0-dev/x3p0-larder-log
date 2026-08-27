@@ -16,7 +16,7 @@ import { useSystemTheme } from './hooks/useSystemTheme';
 import { useInvitePreview } from './hooks/usePantryData';
 import type { Theme } from './lib/theme';
 import { getTheme } from './lib/theme';
-import { installAppIcon } from './lib/appIcon';
+import { installAppIcon, setThemeColor } from './lib/appIcon';
 import { installFonts } from './lib/fonts';
 import { capturePendingInvite, markInviteAccepted, pendingInvite } from './lib/pendingInvite';
 import { clearSignInAttempt, markSignInAttempt, signInAttemptPending } from './lib/signInAttempt';
@@ -157,6 +157,17 @@ export function App() {
 
 	const devGuest = auth.isGuest && Boolean(auth.userId) && isLoopback() && ! forcedSignedOut();
 	const signedIn = Boolean(auth.userId) && (! auth.isGuest || devGuest);
+
+	/*
+	 * The signed-out surface has no per-device override to honour, so the OS
+	 * preference is the whole answer here. Guarded on `signedIn` because
+	 * `Pantry` owns the meta once it mounts and knows better: effects run
+	 * child-first, so an unguarded set here would run *after* Pantry's and
+	 * overwrite the override with the system value.
+	 */
+	useEffect(() => {
+		if (! signedIn) setThemeColor(dark);
+	}, [signedIn, dark]);
 
 	// Whatever brought them here, they arrived. A marker left behind would turn
 	// the next reload of this tab into an error card.
