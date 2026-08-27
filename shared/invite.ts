@@ -10,6 +10,8 @@
  * a string comparison is all we have — see D4 and D24.
  */
 
+import { sha256 } from './sha256';
+
 /** How long a freshly minted code stays valid. */
 export const INVITE_TTL_DAYS = 14;
 
@@ -82,6 +84,33 @@ export function codeFromBytes(bytes: Uint8Array): string {
 
 /** Bytes needed by `codeFromBytes`. */
 export const CODE_BYTES = CODE_LENGTH;
+
+/**
+ * The `code` an invite row carries between its insert and its real code.
+ *
+ * Deliberately **not** code-shaped. `redeemInvite` rejects anything
+ * `isCodeShaped` refuses before it ever reaches the `by_code` index, so a row
+ * caught mid-mint cannot be redeemed by anybody — including by someone who
+ * guesses the placeholder, because there is nothing to guess.
+ */
+export const PENDING_CODE = '';
+
+/**
+ * A code derived by mixing everything unpredictable the caller can reach.
+ *
+ * The hosted runtime has no `crypto` and its row ids are **sequential
+ * integers** — both confirmed in production on 2026-08-27 — so there is no
+ * entropy to draw on directly and the id is worth nothing on its own. Mixing
+ * through SHA-256 means the code cannot be walked back to its inputs, and a
+ * server-side secret among those inputs is what makes it unguessable even to
+ * someone who knows the row id and roughly when it was minted.
+ *
+ * Parts are joined with NUL so that `['ab', 'c']` and `['a', 'bc']` cannot
+ * collide.
+ */
+export function codeFromSeed(parts: readonly string[]): string {
+	return codeFromBytes(sha256(parts.join('\u0000')).slice(0, CODE_BYTES));
+}
 
 /** True when a string could be one of our codes. Cheap reject before a DB read. */
 export function isCodeShaped(value: unknown): value is string {

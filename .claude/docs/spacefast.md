@@ -2584,3 +2584,289 @@ rather than erroring on arity. Combined with `query.run`, the undocumented
 runtime for verifying work in an environment with no browser: four handlers were
 exercised end to end — a mutation with the argument, the same mutation without
 it, a patch, and the guest-facing query reading the result back.
+
+## 2026-08-26 (evening) — the publish went through: `finalize` is fixed 🎉
+
+Third day of trying, and the platform half of the blocker is **gone**. v4 is
+live at <https://larderlog.view.fast/>, `ver_d80a395f07144ce6863ba75b212a1486`,
+71 files uploaded, 18 seconds end to end.
+
+```
+✓ Updating space    larderlog (spc_7770744a870a43f5927213fa397c780e)
+✓ Creating version  ver_d80a395f07144ce6863ba75b212a1486
+✓ Uploading files   71 files
+✓ Finalizing version  v4
+```
+
+`runtime_api_not_found` at `finalize` — the failure on 2026-08-24 and again on
+2026-08-25 — did not recur. Nothing on our side changed to cause that, so this
+was fixed on the platform. Thank you.
+
+**What has *not* changed: the `x-spacefast-rationale` requirement.** A plain
+`npx sf publish` still dies at `Creating version` with the same message, and npm
+is *still* on `spacefast@0.0.26` (checked again today: `dist-tags` → `{ latest:
+'0.0.26' }`, no `next`/`beta`; `@spacefast/zero` also 0.0.26). The binary
+channel is still on 0.0.27, published 2026-08-25T01:24Z, and still cannot
+compile a Zero capsule. So the publish only completed because the header was
+attached out-of-band, with a truthful rationale, from a `fetch` wrapper loaded
+via `NODE_OPTIONS=--import`.
+
+That is a silly thing to have to do to ship a space you own, and it remains the
+single highest-value fix on this list:
+
+- **Publish 0.0.27 to npm**, or
+- **give 0.0.26 a `--rationale` flag / `SPACEFAST_RATIONALE` env var.**
+
+We also confirmed the classification is not environmental, at least on 0.0.26:
+the bundle reads no `CLAUDECODE`/`AI_AGENT`/`CLAUDE_CODE` variable — greps for
+all three come back empty across `dist/`. (The 17 hits noted on 2026-08-25 were
+in the 0.0.27 *binary*.) `process.env` in 0.0.26 exposes `SPACEFAST_CLIENT`,
+which feeds `x-spacefast-client`, but pointing that somewhere else would be
+misrepresenting the caller rather than complying, so it was not tried.
+
+### 👍 Things that verified clean on v4
+
+- `GET /` 200, `GET /api/status` → `ok`, `/client.js` 262 KB, `/zero.css` 69 KB.
+- **D29 holds in production**: `/.claude/CLAUDE.md`, `/.docs/decisions.md` and
+  `/.claude/docs/spacefast.md` all return **403**. Dot-prefixed paths are
+  refused exactly as documented, so the project's own docs ship in the payload
+  and stay unreadable.
+- **The D42 migration applied additively with no flag.** `sf db` lists nine
+  tables with `households.ink:string` present. Publish-time additive migration
+  did what the docs promise.
+- The capsule answers a guest: `POST /__spacefast/zero/run` with
+  `{"op":"query.run","name":"invitePreview","args":["AAAAAAAAAA"]}` returns
+  `{"state":"invalid"}` over plain HTTPS, unauthenticated. **The `run` endpoint
+  exists in production too**, not just under `sf dev` — worth knowing, and worth
+  documenting.
+- `sf publish` skipped two files with a clear warning: *"ignored 2 unsupported
+  file(s) on this plan"*, naming both. Good message.
+
+### 🐛 `sf db dump` fails against a healthy space
+
+`sf db dump --table households` returns:
+
+```
+Zero database dump failed.
+Learn more: https://spacefast.com/docs/errors/zero_db_dump_failed
+```
+
+The access log shows the edge answering **500** for
+`GET /__spacefast/api.php?route=/spaces/{id}/versions/{id}/zero/db/dump&table=households&limit=25`.
+It is not the rationale policy — it fails identically with the header attached,
+and it is a read. `sf db` (the schema/plan listing) works fine against the same
+space in the same second, so the space and credentials are good; only `dump` is
+broken. That matters because `db dump` is the documented way to verify a publish
+and is what CLAUDE.md tells us to use to close out the D14 auth check.
+
+### 🐛 A mutation that works on `sf dev` 500s on the hosted runtime
+
+Reported from the live app: creating an invite raises *"Zero mutation.run request
+failed."* The access log shows `500 POST /__spacefast/zero/run`. The same
+mutation, driven through the same `run` envelope against `sf dev`, **succeeds**
+and returns a code.
+
+`sf logs runtime` says *"Nothing logged yet"* even though four requests 500'd, so
+an uncaught handler exception produces no runtime log line and no error detail
+anywhere the developer can reach. **That is the real friction here**: a 500 with
+no message, no stack, and no runtime log leaves nothing to debug from.
+
+Prime suspect is a **local/hosted runtime divergence**. The artifact reports
+`serverRuntime: "quickjs-rust"`, and `crypto.getRandomValues` — used in exactly
+one place in the whole capsule, `createInvite` — is the one global that a bare
+QuickJS embedding would not have. `sf dev` evidently runs something else, since
+the identical code path works there. Unconfirmed as of tonight.
+
+Two asks:
+
+1. **Log uncaught handler exceptions to `sf logs runtime`**, with the message and
+   ideally a stack. Right now a 500 is silent.
+2. **Document the hosted runtime's globals** — is `crypto` present? `fetch`?
+   `setTimeout`? `TextEncoder`? Neither `zero.md` nor `zero-agent-rules.md`
+   mentions QuickJS at all, so there is no way to know which standard-library
+   surface a capsule may rely on. And `sf dev` running a *different* engine means
+   the local server cannot warn you either.
+
+`ctx` exposes no randomness helper (`auth`, `db`, `env`, `gravatar`, `log`,
+`spam`), so if `crypto` is genuinely absent there is no documented way for a
+handler to generate a bearer credential.
+
+## 2026-08-27 — the capsule compiler has a global denylist, and it is the best thing in the toolchain
+
+Chasing the `createInvite` 500 from yesterday, `sf dev` refused to start:
+
+```
+Zero source server/index.ts references unsupported server global globalThis.
+```
+
+That is a **great** error — it named the file, the identifier, and the rule, and
+it fired in under a second. The check is in
+`@spacefast/zero-compile/dist/analyze.js`, and there are two patterns:
+
+```js
+const UNSAFE_GLOBAL_PATTERN = /\b(Bun|Deno|Function|__dirname|__filename|eval|process)\b/g;
+const ZERO_SERVER_UNSAFE_GLOBAL_PATTERN = /\b(BroadcastChannel|SharedWorker|WebSocket|Worker|
+  XMLHttpRequest|document|global|globalThis|localStorage|location|navigator|sessionStorage|window)\b/g;
+```
+
+Alongside them are equally sharp rules against dynamic `import()`, `require()`,
+`shared/` importing from `client/` or `server/`, and server source importing
+client source. Collectively this is the most useful static checking in the
+product and **none of it is documented** — not in `zero.md`, not in
+`zero-agent-rules.md`. It deserves a page. Knowing the list up front changes how
+you write a capsule.
+
+Two notes for whoever writes that page:
+
+- It is a **denylist of the inappropriate**, not an allowlist of the available.
+  `crypto` is absent from both patterns, so the compiler happily admits
+  `crypto.getRandomValues` — see below for what happens next.
+- It matches **transpiled code, not raw source**, so the word `location` in a
+  comment is fine while `location` as an identifier is not. That is the right
+  behaviour and worth stating, because the error text alone implies otherwise.
+
+### 🐛 The compiler admits `crypto`; the runtime does not provide it
+
+This is the sharp edge, and it is the cause of yesterday's silent 500.
+
+`crypto.getRandomValues` was the **only** non-core global in the entire capsule
+— one call site, in `createInvite`. It:
+
+- typechecks, because `lib.dom` types `crypto` as always present;
+- passes the compiler's global check, because `crypto` is on neither denylist;
+- **works under `sf dev`**, which runs an engine that has it;
+- **throws on the hosted `quickjs-rust` runtime**, which does not.
+
+So every local signal says yes and the only failing signal is a 500 in
+production with an empty `sf logs runtime`. That combination — permitted by the
+compiler, present locally, absent in production, silent when it fails — is about
+as expensive as a bug can be to find.
+
+Three fixes, any one of which would have saved the day:
+
+1. **Add the missing runtime globals to the denylist.** If `quickjs-rust` has no
+   `crypto`, the compiler should say so at build time, exactly as it does for
+   `globalThis`. The machinery already exists; it is one array entry.
+2. **Make `sf dev` run the same engine as production**, or say loudly that it
+   does not. A dev server whose JS engine differs from the deployed one cannot
+   catch this class of bug, and nothing warns you.
+3. **Document the hosted runtime's standard library.** `zero.md` never mentions
+   QuickJS. There is no way to learn which globals a capsule may rely on short
+   of publishing and watching what breaks.
+
+### 😕 …and `ctx` offers no randomness, so there is no supported way to mint a credential
+
+With `crypto` gone, a handler that needs unguessable bytes has nowhere to get
+them. `ctx` is `auth`, `db`, `env`, `gravatar`, `log`, `spam` — no `randomUUID`,
+no `random`, nothing. `Math.random()` exists but is not a credential source.
+
+**Our workaround**: insert the row first and derive the code from the id the
+runtime generated for it. Row ids are v4 UUIDs, so there are 122 random bits
+sitting right there; we drop the fixed version and variant nibbles and refuse
+anything not shaped like a v4, so that a future switch to sequential ids fails
+closed instead of minting guessable invite codes. It costs a second write, which
+`ctx.transaction` makes atomic.
+
+That works, but it depends on an implementation detail of id generation that
+nothing promises. **Please expose `ctx.crypto.getRandomValues` or
+`ctx.randomUUID`.** Any app with invites, share links, password resets or API
+tokens hits this wall, and every one of them will end up guessing at the same
+workaround.
+
+### 👍 `ctx.log` does reach `sf logs runtime`
+
+Yesterday's report that `sf logs runtime` says *"Nothing logged yet"* while
+requests 500 was **half wrong, and the half matters**. Nothing had ever called
+`ctx.log`; the runtime log only carries what the handler writes. A `ctx.log.warn`
+shows up fine.
+
+The other half stands: **an uncaught handler exception still logs nothing at
+all**. A 500 with no message, no stack and no entry is the single worst
+debugging experience in the product, and it is what made this a two-day bug
+rather than a two-minute one. Please log uncaught handler exceptions.
+
+## 2026-08-27 (later) — the invite bug, solved: no `crypto`, and sequential row ids
+
+Resolution of the entry above, and the answer was **not** what three days of
+inference predicted. A keyed diagnostic endpoint driven against the published
+space returned:
+
+```json
+{"crypto":"undefined","getRandomValues":"unavailable",
+ "stringInsert":"ok","rowIdShape":"4",
+ "booleanInsert":"ok","booleanOmitted":"ok","transaction":"ok"}
+```
+
+Two findings, and it is the second that stings:
+
+1. **`crypto` is genuinely `undefined`** on `quickjs-rust`. Confirmed, not
+   inferred.
+2. **Row ids on the hosted runtime are sequential integers** — `"4"`, then
+   `"6"`. `sf dev` mints v4 UUIDs. Nothing documents this, and the two are not
+   the same shape, the same type, or the same order of unpredictability.
+
+That second one is worth a doc line of its own, entirely apart from this bug:
+**an application that assumes its row ids are unguessable will be wrong in
+production and right locally.** We assumed exactly that, as an intermediate fix,
+and only avoided shipping guessable invite codes because the code refused an id
+that was not shaped like a v4. Had it been slightly less paranoid, every invite
+code in the space would have been a hash of a small integer.
+
+### 😕 The workaround, and the ask
+
+`ctx` exposes no randomness — `auth`, `db`, `env`, `gravatar`, `log`, `spam` —
+so an app needing an unguessable value has to supply its own. Ours is now a
+hand-written SHA-256 (`shared/sha256.ts`, checked against FIPS 180-4) mixing a
+secret from `.env.server` with the row id, the clock and `Math.random()`.
+
+That is a lot of machinery to mint an invite code. **Please expose
+`ctx.crypto.getRandomValues` or `ctx.randomUUID`.** Invites, share links,
+password resets, API tokens, idempotency keys — every one of them needs this,
+and every developer who hits it will invent the same workaround, most of them
+less carefully.
+
+Failing that: **say in the docs that row ids are sequential**, and that `crypto`
+is absent. Either sentence would have saved three days.
+
+### 👍 `.env.server` handling is exactly right
+
+Credit where it is due. Adding `INVITE_SECRET` to `.env.server` and publishing:
+
+- the artifact records `env: {"file":".env.server","names":["INVITE_SECRET"]}` —
+  **names only, no values**;
+- `.env.server` is **not** among the uploaded payload files, so the secret is
+  not sitting in a 403'd path;
+- the value never appears anywhere in `artifact.json`;
+- `ctx.env.INVITE_SECRET` is populated at runtime, confirmed in production.
+
+That is the correct design and it worked first time with no documentation
+needed. Thank you.
+
+### 👍 `ctx.log` does reach `sf logs runtime` in production
+
+Correcting our own 2026-08-26 entry: the runtime log was empty because **nothing
+had ever called `ctx.log`**, not because logging was broken. A `ctx.log.warn`
+from a handler shows up correctly:
+
+```
+2026-08-27T14:12:00.000Z warn  probe: ctx.log.warn reached the runtime log  GET /api/probe
+```
+
+The real gap stands and is worth restating on its own: **an uncaught handler
+exception logs nothing at all.** No message, no stack, no entry — only a 500 in
+the access log. That single omission is what turned a one-line bug into a
+three-day investigation, across three wrong hypotheses and four publishes. It is
+the highest-value fix on this entire list.
+
+### 🐛 `sf db dump` is still broken
+
+Unchanged since 2026-08-26. `zero_db_dump_failed`, a 500 from the edge, against
+a healthy space, while `sf db` works in the same second. It matters more now:
+`db dump` is the documented way to inspect real rows, and with it broken the
+only route to the data is an endpoint you write, publish, and then have to
+remember to remove.
+
+### 🎉 And it works
+
+An invite minted on the published space was redeemed by **a second person**, who
+joined the household. First real multi-user use of the app.

@@ -20,8 +20,12 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phase 3 is built. Phase 4 is largely built too. Neither can be published
-right now — see the blocker below.** A real Spacefast Zero project: `sf.jsonc`,
+**Phases 3 and 4 are built and are now published** — v4 went live on
+2026-08-26, ending a three-day publish blockade. Publishing still needs a
+rationale-header shim. **The hosted runtime is a different JS engine from the
+one `sf dev` runs**, which broke `createInvite` in production while it worked
+locally — read *The hosted runtime is not the engine `sf dev` runs* before
+writing any handler. A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
 `.docs/data-model.md`, four live queries, and sixteen mutations. The schema is
@@ -59,9 +63,12 @@ The project's own docs are no longer in the publish payload: `docs/` is `.docs/`
 and this file is `.claude/CLAUDE.md`, both behind the serving layer's 403 on
 dot-prefixed paths
 ([D29](../.docs/decisions.md#d29-the-projects-own-documentation-is-kept-out-of-the-publish-payload)).
-**None of Phase 3 has been exercised by a second person** — that needs the
-published space. The same is now true of D33: one identity in two households is
-verified server-side, but two *people* sharing one household is not.
+**Phase 3 is exercised end to end as of 2026-08-27**: an invite was minted on
+the published space and **a second person redeemed it and joined the
+household**. Invites, membership and roles have now been through a real two-user
+round trip rather than one identity in two tabs. D33's other half is closed
+too: one identity in two households was already verified server-side, and two
+*people* sharing one household now is.
 
 Phase 4's read-only pass landed on 2026-08-25: every write affordance is gated
 on `can()` and is **absent rather than disabled**, with one "View only" chip
@@ -103,8 +110,7 @@ the decision it was waiting on. What landed on 2026-08-25:
   `shared/icons.ts` and `client/lib/icons.ts` are gone. Do not "clean up" the
   column: dropping it needs `sf db migrate --drop`, refilling it is additive.
 
-**Nothing here has been seen by a second person, or published** — see the
-blocker below. Two `font-mono` sites remain: the switcher's invite-code field,
+**Published as of 2026-08-26 (v4) and seen by a second person on 2026-08-27.** Two `font-mono` sites remain: the switcher's invite-code field,
 which is arguably a real monospace use, and one loading string in `Pantry`.
 
 ### Destructive actions (Phase 4.6) are built — 2026-08-26
@@ -438,38 +444,101 @@ invisible locally and appears only after a publish. **Confirmed rendering under
 `sf dev` on 2026-08-25** — the whole reason for choosing a remote URL was that
 this check is possible at all.
 
-### Publishing is blocked, and it is not our bug
+### Publishing works again as of 2026-08-26 — v4 is live
 
-**Do not attempt a publish before re-reading this.** As of 2026-08-25, and
-**re-checked on 2026-08-26 — nothing has changed**; npm's `latest` is still
-`spacefast@0.0.26` (no `next`/`beta` tag, and `@spacefast/zero` tops out there
-too), so there is nothing to update and a plain `npx sf publish` dies at
-*Creating version* on the missing header, before it ever reaches `finalize`:
+**Phases 3 through 4.9 are published.** `sf publish` completed for the first
+time since v2: **v4**, `ver_d80a395f07144ce6863ba75b212a1486`, 71 files, 18
+seconds. The platform's `finalize` / `runtime_api_not_found` failure — which
+killed v3 on 2026-08-25 and wedged three spaces on 2026-08-24 — **is fixed on
+their side**. Nothing here changed to cause that.
 
-1. The API now rejects publishes from agent-attributed credentials unless they
-   carry an `x-spacefast-rationale` header. **npm's `spacefast@0.0.26` cannot
-   send it** — no flag, no env var.
-2. The CLI that can is **0.0.27, released to the binary channel only**
-   (`install.sh` / GitHub releases). npm is still on 0.0.26.
-3. That standalone 0.0.27 binary **cannot compile a Zero capsule**: it resolves
-   esbuild's native helper and `@spacefast/zero/client` relative to its own Bun
-   virtual filesystem. `ESBUILD_BINARY_PATH` gets past the first, nothing gets
-   past the second.
-4. The one run that reached the platform (0.0.26 with the header injected)
-   created a version, uploaded, then **failed at `finalize` with
-   `runtime_api_not_found`** — the same stage that broke on 2026-08-24.
+Verified on v4: `GET /` 200, `/api/status` → `ok`, `/client.js` and `/zero.css`
+serve, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md` all 403), and
+**D42's `households.ink` migrated additively with no flag** — `sf db` lists nine
+tables with `ink` present. `invitePreview` answers an unauthenticated caller
+over `POST /__spacefast/zero/run`, which **exists in production too**, not just
+under `sf dev`.
 
-Net: **v2 is still live**, v3 is recorded `status=failed`, and the space is
-healthy (`Status: active`). The way out is npm shipping 0.0.27, or Spacefast
-fixing finalize. The full write-up, with exact errors and version ids, is in
-[`.claude/docs/spacefast.md`](docs/spacefast.md) — Justin intends to send it.
+**The `x-spacefast-rationale` blocker is NOT gone.** A plain `npx sf publish`
+still dies at *Creating version*. Re-checked 2026-08-26: npm's `latest` is still
+`spacefast@0.0.26` (no `next`/`beta`; `@spacefast/zero` tops out there too), the
+binary channel is still 0.0.27, and that binary still cannot compile a Zero
+capsule. The publish only completed because the header was attached out-of-band:
+a `fetch` wrapper loaded with `NODE_OPTIONS=--import`, adding a **truthful**
+rationale to `*.spacefast.com` requests. The shim is not in the repo — it lives
+in the session scratchpad and has to be rewritten each time.
 
-**Phase 2 is live at <https://larderlog.view.fast/>** as v2 (space slug
-`larderlog`, team `justin-team-2`), published 2026-08-24. The first real
-migration ran with it: all nine tables exist and are empty. Verify a publish
-with `GET /api/status` and `sf db dump --table <name>`; ignore `sf db`'s
-"Pending operations" count, which shows the artifact's full plan rather than a
-diff against live state.
+Two things to know before publishing again:
+
+1. **You will need the shim**, until npm ships 0.0.27 or 0.0.26 gains
+   `--rationale` / `SPACEFAST_RATIONALE`. Check npm first — it may have landed.
+2. **The rationale must be true.** It exists so an agent-driven mutation is
+   attributable. Do not misrepresent the caller to dodge it — `SPACEFAST_CLIENT`
+   feeds `x-spacefast-client` and would do exactly that. Supplying the metadata
+   is compliance; hiding it is not.
+
+The full write-up is in [`.claude/docs/spacefast.md`](docs/spacefast.md).
+
+### The hosted runtime is not the engine `sf dev` runs — 2026-08-27
+
+**This is the trap that cost three days, and it will happen again.** The
+artifact reports `serverRuntime: "quickjs-rust"`. `sf dev` runs something else.
+A capsule can typecheck, pass the compiler, work perfectly under `sf dev`, and
+still throw in production. Three divergences are **confirmed against the
+published space**, not inferred:
+
+| | `sf dev` | hosted |
+|---|---|---|
+| `crypto` | present | **`undefined`** |
+| row ids | v4 UUIDs | **sequential integers** (`"4"`, `"6"`) |
+| `ctx.log` | prints to console | reaches `sf logs runtime` |
+
+**An uncaught handler exception still logs nothing** — no message, no stack,
+just a 500. `ctx.log` *is* the way out and it does work in production; nothing
+writes there unless you call it. Instrument deliberately.
+
+**How that was established, and how to do it again:** a keyed `endpoint` that
+**returns** its findings rather than logging them. An endpoint gets a full
+`ServerContext` — `db`, `transaction`, `log`, `env` — and needs no auth, so it
+is the only way to interrogate the hosted runtime. Give it a `?key=` and a
+`404` without it. Two guesses were burned before this (`crypto`, then the one
+`boolean` column) at a publish apiece; the probe answered everything at once.
+**Reach for it third-guess-first.**
+
+**The capsule compiler enforces a global denylist**, in
+`@spacefast/zero-compile/dist/analyze.js`, undocumented anywhere:
+
+```js
+UNSAFE_GLOBAL_PATTERN            = Bun|Deno|Function|__dirname|__filename|eval|process
+ZERO_SERVER_UNSAFE_GLOBAL_PATTERN = BroadcastChannel|SharedWorker|WebSocket|Worker|
+  XMLHttpRequest|document|global|globalThis|localStorage|location|navigator|
+  sessionStorage|window
+```
+
+It is a **denylist of the inappropriate, not an allowlist of the available** —
+`crypto` is on neither list, so the compiler admits it and the runtime still
+lacks it. It matches **transpiled code, not comments**. Never write `globalThis`
+in `server/`; use a bare identifier behind `typeof x !== 'undefined'`, which is
+also the only form that survives a missing binding without a `ReferenceError`.
+The same rules ban dynamic `import()`, `require()`, and `shared/` importing from
+`client/` or `server/`.
+
+**Invite codes are the one thing this all landed on — see
+[D43](../.docs/decisions.md#d43-an-invite-code-is-a-secret-mixed-with-the-row-because-the-runtime-has-no-randomness).**
+`INVITE_SECRET` lives in `.env.server` (gitignored; the artifact records only
+`env: {file, names}` and the file is **not** among the uploaded payload files).
+`shared/sha256.ts` is hand-written because there is no host primitive, and is
+checked against the FIPS 180-4 vectors. `crypto` is still preferred when
+present, so **`sf dev` never exercises the path production uses** — if you touch
+`inviteCode`, force `crypto` off locally *and* keep the unit tests green.
+
+### `sf db dump` is broken — open, 2026-08-26
+
+`zero_db_dump_failed`, a 500 from the edge, with or without the rationale
+header, against a healthy space. `sf db` works in the same second and still
+prints the live table list. This is the command that CLAUDE.md used to name for
+verifying a publish and for closing out the D14 auth check, so **both now need
+another route**.
 
 ### Two auth bypasses, and they are not equally safe
 
@@ -490,9 +559,13 @@ diff against live state.
    verified** — v2 shipped on 2026-08-24 and the check needs a real sign-in,
    which nobody has done yet. Until then, treat it as the weaker hole. If a
    published space ever issued `guest:local`, every anonymous visitor would
-   share one household. **How to close it:** sign in on the published space,
-   create the household, then `npx sf db dump --table memberships` and read the
-   `userId`. A Gravatar identity clears it; `guest:local` is an emergency.
+   share one household. **How to close it:** read the `userId` on a real membership row. `sf db dump`
+   is the documented route and is **broken**, so the keyed `/api/probe`
+   endpoint does it instead — it reports each id's *scheme* and an
+   `anyDevGuest` flag, never the ids themselves. It has a known-positive
+   control: run it under `sf dev` and `anyDevGuest` is `true`, which is what
+   makes a `false` in production mean something. A Gravatar scheme clears it;
+   `guest` is an emergency.
 
 Don't widen either one, and take both out if Spacefast ships a local sign-in
 stub.
@@ -500,7 +573,8 @@ stub.
 **`sf dev` issues one fixed identity**, so a second local tab is the same user.
 That is enough to watch a mutation propagate; it is not enough to test two
 members of a household. Anything touching sign-in, invites, or roles has to be
-checked against the published space.
+checked against the published space — which, as of 2026-08-27, two real people
+have now done.
 
 See `.docs/roadmap.md` for the phases.
 
@@ -650,7 +724,7 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 129 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 181 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's

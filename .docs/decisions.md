@@ -1811,3 +1811,73 @@ because that query only ever resolves to one of the caller's memberships.
 - `TermColor` gained `name`, and every dot in every picker is now labelled with
   it. The names were a trailing comment nothing read.
 - The switcher's generic house glyph is gone; each row is its household's tile.
+
+## D43: An invite code is a secret mixed with the row, because the runtime has no randomness
+
+*2026-08-27*
+
+**`INVITE_SECRET` from the server environment, hashed together with the row id,
+the clock and two `Math.random()` draws, is what makes an invite code
+unguessable.** Not `crypto` — the hosted runtime does not have it.
+
+This was found the expensive way. `createInvite` worked under `sf dev` and
+returned a bare 500 in production for three days. Three facts, all confirmed by
+driving a keyed diagnostic endpoint against the published space on 2026-08-27,
+and **none of them true locally**:
+
+1. **`crypto` is `undefined`.** `serverRuntime` is `quickjs-rust`. It was the
+   capsule's only non-core global, at one call site.
+2. **Row ids are sequential integers** — `"4"`, `"6"` — not the v4 UUIDs
+   `sf dev` mints.
+3. **`ctx` offers nothing random**: `auth`, `db`, `env`, `gravatar`, `log`,
+   `spam`.
+
+So the only unpredictable thing available to a handler is a value we put there
+ourselves.
+
+### Why a hash, and not the row id
+
+An earlier fix derived the code from the row id, on the reasoning that the
+runtime generates ids so the runtime must have entropy. That reasoning was
+sound and the premise was false. It shipped safely only because
+`bytesFromUuid()` **refused an id that was not shaped like a v4** rather than
+using it — which is exactly what happened in production, and is why the symptom
+stayed a 500 instead of becoming guessable codes derived from `1, 2, 3, 4`.
+
+Keep that instinct: a credential derived from an unverified source should fail
+closed. The refusal was worth more than the fix.
+
+SHA-256 makes the mix non-invertible, so observing codes never reveals the
+secret or the counter. It is hand-written in `shared/sha256.ts` because there is
+no host primitive, and it is checked against the published FIPS 180-4 vectors —
+including two-byte and surrogate-pair UTF-8, since `utf8Bytes` is hand-rolled
+too.
+
+### The secret is load-bearing; the other inputs are not
+
+`Math.random()` and `Date.now()` are mixed in, but **neither is relied on**.
+QuickJS seeds its PRNG per context and nothing documents how, so an attacker who
+knows ids are sequential and can guess the minute of minting must still not be
+able to produce a code — and without the secret they cannot. If `INVITE_SECRET`
+is unset the handler still mints, and logs a warning to `sf logs runtime`,
+because breaking invites entirely is worse than a weaker code on a private
+space.
+
+`crypto` is still preferred when present, so `sf dev` takes it and production
+takes the mixer. **That asymmetry is the original bug's shape**, so the mixer is
+covered two ways: `codeFromSeed` is unit tested, and the handler was driven
+locally with `crypto` forced off.
+
+### Rejected
+
+- **`Math.random()` alone.** Fine against the arithmetic — 31¹⁰ ≈ 8.2 × 10¹⁴, so
+  network-bound guessing is hopeless — but not against a PRNG seeded from a
+  clock, where a day's seeds are enumerable.
+- **A random id column filled by the client.** The client is not trusted to
+  choose a credential, and D3's rule is that ids come from the server.
+- **Waiting for the platform.** `ctx.crypto` may well arrive; the workaround is
+  small, tested, and easy to delete when it does.
+
+Verified: five distinct codes over the mixer with `crypto` forced off, one
+redeemed through `invitePreview`, and — on 2026-08-27 — **a second person
+actually joined a household from a real invite link.**

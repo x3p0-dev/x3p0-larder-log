@@ -1,5 +1,6 @@
-import { capsule, query, mutation, endpoint, text, table, string, boolean, id } from '@spacefast/zero/server';
+import { capsule, query, mutation, endpoint, json, text, table, string, boolean, id } from '@spacefast/zero/server';
 
+import type { LogContext } from '@spacefast/zero/server';
 import type { WriteDb } from './schema';
 import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCapability, requireMembership } from './auth';
 
@@ -7,7 +8,7 @@ import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
 import { normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
-import { CODE_BYTES, codeFromBytes, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
+import { CODE_BYTES, PENDING_CODE, codeFromBytes, codeFromSeed, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
 import type {
 	HouseholdListResult,
 	HouseholdResult,
@@ -774,18 +775,32 @@ export default capsule({
 				throw new AccessError(`You cannot invite someone as ${granted}.`);
 			}
 
-			const invite = await ctx.db.invites.insert({
-				householdId: membership.householdId,
-				code: codeFromBytes(crypto.getRandomValues(new Uint8Array(CODE_BYTES))),
-				role: granted,
-				expiresAt: expiryFrom(Date.now()),
-				createdBy: membership.userId,
-				revoked: false,
+			// Two writes, because the fallback entropy source *is* the row id and
+			// so cannot be known before the insert. The transaction means a
+			// caller never observes the placeholder.
+			const minted = await ctx.transaction(async () => {
+				const invite = await ctx.db.invites.insert({
+					householdId: membership.householdId,
+					code: PENDING_CODE,
+					role: granted,
+					expiresAt: expiryFrom(Date.now()),
+					createdBy: membership.userId,
+					// `revoked` is deliberately omitted rather than written as `false`.
+					// It is the schema's only boolean column and this is its only
+					// insert, which makes it the prime suspect for the hosted runtime's
+					// 500; `.default(false)` produces the identical row either way.
+				});
+
+				const code = inviteCode(ctx.log, ctx.env, invite.id);
+
+				await ctx.db.invites.update(invite.id, { code });
+
+				return { code, expiresAt: invite.expiresAt };
 			});
 
 			ctx.invalidate('household');
 
-			return { code: invite.code, expiresAt: invite.expiresAt };
+			return minted;
 		}),
 
 		revokeInvite: mutation(async (ctx, householdId: string, inviteId: string) => {
@@ -951,10 +966,99 @@ export default capsule({
 
 	endpoints: {
 		status: endpoint({ method: 'GET', path: '/api/status' }, () => text('ok')),
+
+		// TEMPORARY (2026-08-27). The runtime questions it was built for are
+		// answered — no `crypto`, sequential integer row ids, working inserts and
+		// transactions, `ctx.log` reaching `sf logs runtime`. It now answers the
+		// last one: whether the published runtime ever issues `sf dev`'s
+		// `guest:local` identity, which is the server half of D14 and the app's
+		// only unverified authentication hole. `sf db dump` would normally answer
+		// this, and is broken.
+		//
+		// Reports the **scheme** of each user id and never the id itself, so it
+		// cannot be used to enumerate who is in a household. REMOVE once read.
+		probe: endpoint({ method: 'GET', path: '/api/probe' }, async (ctx, req) => {
+			if (req.query.get('key') !== PROBE_KEY) return text('not found', { status: 404 });
+
+			// An endpoint gets the untyped `ServerContext`, unlike a mutation, so
+			// the row shape has to be asserted here.
+			const rows = (await ctx.db.memberships.withIndex('by_household').collect()) as unknown as Array<{
+				userId: string;
+				householdId: string;
+				role: string;
+			}>;
+
+			const scheme = (userId: string) => {
+				const at = userId.indexOf(':');
+
+				return at === -1 ? '(no scheme)' : userId.slice(0, at);
+			};
+
+			return json({
+				memberships: rows.length,
+				distinctUsers: new Set(rows.map((r) => r.userId)).size,
+				distinctHouseholds: new Set(rows.map((r) => r.householdId)).size,
+				schemes: [...new Set(rows.map((r) => scheme(r.userId)))].sort(),
+				roles: [...new Set(rows.map((r) => r.role))].sort(),
+				// The finding. True here would mean every anonymous visitor shares
+				// one identity, and D14's server half would have to come out today.
+				anyDevGuest: rows.some((r) => r.userId === 'guest:local'),
+			});
+		}),
 	},
 });
 
+// TEMPORARY (2026-08-27), paired with the `/api/probe` endpoint above.
+const PROBE_KEY = 'k7Qv2ZmR9xLpT4Hd';
+
 // --- helpers ---
+
+/**
+ * An invite code, from the best entropy this runtime offers.
+ *
+ * Three things about the hosted runtime, all confirmed in production on
+ * 2026-08-27 and none of them true under `sf dev`:
+ *
+ * 1. `crypto` is `undefined`, so there is no random source to call.
+ * 2. Row ids are **sequential integers** (`"4"`), not the UUIDs `sf dev` mints,
+ *    so the id carries no entropy on its own.
+ * 3. `ctx` offers nothing random either — `auth`, `db`, `env`, `gravatar`,
+ *    `log`, `spam`.
+ *
+ * So the code is a SHA-256 over everything that varies, and the part that makes
+ * it genuinely unguessable is `INVITE_SECRET` from the server environment: an
+ * attacker who knows the row id is sequential and can guess the minute it was
+ * minted still cannot produce the code without it. `Math.random()` and the
+ * clock are mixed in as well, but neither is load-bearing on its own — QuickJS
+ * seeds its PRNG per context and nothing documents how.
+ *
+ * The `typeof` guard on `crypto` is load-bearing twice over: `lib.dom` types it
+ * as always present when the runtime does not define it at all, and a bare
+ * reference to a missing binding throws `ReferenceError` rather than yielding
+ * `undefined`. It cannot be written as a property of the global object either:
+ * the capsule compiler's denylist rejects that identifier outright.
+ */
+function inviteCode(log: LogContext, env: Record<string, string | undefined>, rowId: string): string {
+	if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+		return codeFromBytes(crypto.getRandomValues(new Uint8Array(CODE_BYTES)));
+	}
+
+	const secret = env.INVITE_SECRET ?? '';
+
+	// Loud, because without it the codes rest on `Math.random()` and a clock,
+	// and `sf logs runtime` is the only place this can be read.
+	if (! secret) {
+		log.warn('INVITE_SECRET is not set: invite codes are falling back to Math.random and the clock');
+	}
+
+	return codeFromSeed([
+		secret,
+		rowId,
+		String(Date.now()),
+		String(Math.random()),
+		String(Math.random()),
+	]);
+}
 
 /**
  * Reconciles an item's type and store join rows to exactly the given ids.

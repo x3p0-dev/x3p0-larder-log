@@ -15,7 +15,7 @@ import { can, invitableRoles, canInviteRole, toRole, isRole, ROLES, DEFAULT_ROLE
 import { findMembership, selectMembership, wouldStrandHousehold } from '../shared/membership';
 import {
 	expiryFrom, isExpired, daysUntilExpiry, codeFromBytes, isCodeShaped,
-	normalizeCode, NEVER_EXPIRES, CODE_BYTES,
+	normalizeCode, NEVER_EXPIRES, CODE_BYTES, PENDING_CODE, codeFromSeed,
 } from '../shared/invite';
 import {
 	normalizeName, normalizeNotes, termKey, normalizeInk, DEFAULT_INK, isInk,
@@ -28,6 +28,7 @@ import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } fr
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { fromInt, toInt } from '../shared/qty';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
+import { sha256, sha256Hex } from '../shared/sha256';
 import type { Item, Term } from '../shared/types';
 
 let fail = 0;
@@ -153,6 +154,60 @@ check('rejects wrong length', isCodeShaped('ABC'), false);
 check('rejects lowercase', isCodeShaped('abcdefghjk'), false);
 check('rejects ambiguous char', isCodeShaped('ABCDEFGHJ0'), false);
 check('normalize strips spaces and dashes', normalizeCode(' abcd-efgh jk '), 'ABCDEFGHJK');
+
+// --- SHA-256, against the FIPS 180-4 vectors ---
+//
+// Hand-written because the hosted runtime exposes no `crypto`, so it is checked
+// against the published vectors rather than trusted.
+
+check('sha256 of the empty string', sha256Hex(''),
+	'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+check('sha256 of "abc"', sha256Hex('abc'),
+	'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+// 56 bytes: the length that pads into a second block.
+check('sha256 of the 448-bit vector',
+	sha256Hex('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq'),
+	'248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1');
+check('sha256 of the 896-bit vector',
+	sha256Hex('abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu'),
+	'cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1');
+// `utf8Bytes` is hand-rolled too, and a surrogate pair is the easy thing to
+// get wrong.
+check('sha256 of a two-byte character', sha256Hex('\u00e9'),
+	'4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c');
+check('sha256 of a surrogate pair', sha256Hex('\u{1F9C0}'),
+	'82c8ceb21a7dc528fdf93bdded189c38aad7010e989ca8f55bf2244de9367b59');
+check('digest is 32 bytes', sha256('anything').length, 32);
+
+// --- deriving a code by mixing, for the runtime with no `crypto` ---
+//
+// Production has no `crypto` and hands out sequential integer row ids, so the
+// code is a SHA-256 over a server secret plus whatever else varies. None of
+// this runs under `sf dev`, where `crypto` exists and is used instead.
+
+const SEED = ['secret', '4', '1787838900000', '0.5', '0.25'];
+const seeded = codeFromSeed(SEED);
+
+check('a seeded code is code-shaped', isCodeShaped(seeded), true);
+check('seeding is deterministic', codeFromSeed(SEED), seeded);
+check('a different row id gives a different code',
+	codeFromSeed(['secret', '5', '1787838900000', '0.5', '0.25']) === seeded, false);
+// The whole point of the secret: same row id, same clock, different secret.
+check('the secret changes the code',
+	codeFromSeed(['other', '4', '1787838900000', '0.5', '0.25']) === seeded, false);
+check('an empty seed still yields a shaped code', isCodeShaped(codeFromSeed([''])), true);
+// Joined with NUL so regrouping the same characters cannot collide.
+check('parts cannot be regrouped into the same seed',
+	codeFromSeed(['ab', 'c']) === codeFromSeed(['a', 'bc']), false);
+
+// A sequential id must not produce a walkable sequence of codes once mixed.
+const walk = ['1', '2', '3', '4', '5'].map((id) => codeFromSeed(['s', id, '0', '0', '0']));
+check('consecutive ids give distinct codes', new Set(walk).size, 5);
+check('all of them are code-shaped', walk.every(isCodeShaped), true);
+
+// The placeholder a row carries between insert and real code must be
+// unredeemable — `redeemInvite` rejects anything `isCodeShaped` refuses.
+check('the pending placeholder is not code-shaped', isCodeShaped(PENDING_CODE), false);
 
 // --- term validation ---
 check('collapses whitespace', normalizeName('  Deep   Freezer '), 'Deep Freezer');
