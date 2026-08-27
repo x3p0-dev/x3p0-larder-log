@@ -4,7 +4,11 @@ Canvas: https://claude.ai/code/artifact/9921008e-ee6c-4075-9379-6bf265cc1683
 Pages: **Light** (14 artboards) · **Dark** (13 generated counterparts). 27 boards total. The early exploration boards have been removed.
 Stack: Tailwind, SPA, one layout that flexes mobile ↔ desktop.
 
-> **Merge note, 27 Aug.** This document briefly forked: one branch added *Settings tab* and *First run — the display name*, the other added *Household colour*, *Shopping list*, the twenty-item dataset and *Applied filters*, and each was written from a base that predated the other. This is the union of both. Where they disagreed the later decision won — the household row carries **name and colour**, the top bar has **no title**, and the sample set is **twenty items**. The lesson under *Gaps* about anything undrawn drifting silently now has a sibling: **anything rewritten wholesale can drop a section without anyone noticing.** Edit sections, not the file.
+> **Merge note, 27 Aug — three branches, one day.** This document forked twice. The first fork: one branch added *Settings tab* and *First run — the display name*, the other added *Household colour*, *Shopping list*, the twenty-item dataset and *Applied filters*. The second: a branch carrying the build-observed *As built — 27 Aug* findings, the multi-select rule and two settled open questions, taken from a base that predated the reconciliation pass. This is the union of all three.
+>
+> Where they disagreed the later decision won — the household row carries **name and colour**, the top bar has **no title**, the sample set is **twenty items**, the marketing page's third benefit describes the shopping list **as it now is**, and the zero-items rule follows the **real** top bar rather than an imagined one.
+>
+> Three lessons now, not one. **Anything not drawn on a canvas drifts out of this document silently.** **Anything rewritten wholesale can drop a section without anyone noticing** — edit sections, not the file. And: **a union merge leaves the branches contradicting each other**, in exactly the places two branches happened to describe the same screen.
 
 ## Structure — one left drawer, two tabs
 340px, dark, **always on the left** — docked and collapsible on desktop, a 328px slide-over with a scrim on mobile. Mobile's menu button is **top-left**, the same side the drawer comes from.
@@ -31,7 +35,7 @@ Rows 1 and 2 are recorded here from the build, because the document never descri
 
 **Row 3 is the applied filters** — `Clear filters`, then one chip per active term. It exists only while a term filter is on, so most of the time the bar is still two rows. Full spec under *Applied filters*.
 
-> **There is no title in the right pane, and there never was.** The zero-items rule under *Flows outside the shell* used to say the top bar "keeps the title and the count", which described a component that does not exist — the count lives in `Showing X of Y` on row 2. Corrected in both places, twice now.
+> **There is no title in the right pane, and there never was.** The zero-items rule under *Flows outside the shell* used to say the top bar "keeps the title and the count", which described a component that does not exist — the count lives in `Showing X of Y` on row 2. Corrected in both places, twice now, and the board that still drew a title has since been re-rendered.
 
 ## Collapsed rail
 68px. Eight controls in three groups, `aria-label` on every one and a tooltip to the right after ~400 ms.
@@ -597,7 +601,7 @@ Sign-in and the display name come first; there is no anonymous mode. A signed-in
 
 **The card.** 440px, the same width as every other card outside the shell. Left-aligned. Eyebrow `NEW HOUSEHOLD` → title Playfair 600 26 *Name your household* → body → `HOUSEHOLD NAME AND COLOUR` micro-label → the identity row (swatch + field) → hint → *Create household* → the signed-in row.
 
-- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the display name plus *'s Household*, selected, so Enter alone finishes the screen. The swatch beside it arrives pre-picked with the first colour unused across your households — see *Household colour*.
+- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the display name plus *'s Household*, selected, so Enter alone finishes the screen. The swatch beside it arrives pre-picked with the first colour unused across your households — see *Household colour*. For a first household that is **slate**, the first of the sixteen.
 - **Hint**, meta 12.5: *Built from your display name — change it to whatever you call the place.*
 - **Signed-in row** under a hairline: avatar, name, email in meta, ghost *Sign out*. It answers "which account am I attaching this to" before the household exists rather than after.
 
@@ -616,8 +620,10 @@ Creating drops straight into the app, seeds already in the drawer, no items.
 
 Types are the existing assignments from *Term colours*, unchanged. Locations and stores are new and generic on purpose — the sample data's Meat Freezer, Calfee Cattle and Publix are one household's vocabulary, not a default.
 
-- **Empty state**, centred in the content column: Playfair **italic 500 27px** *Nothing in the larder yet.* + meta *Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like.* + a single *Add item* primary.
-- **At zero items the top bar carries neither the sort trigger nor an Add item button.** Sorting nothing is a control that can only disappoint, and two *Add item* buttons on one screen is one too many. The top bar keeps search and the `Showing X of Y` count; the empty state owns the screen's only primary. Both come back with the first item. The applied-filter row cannot appear here either — with no items there is nothing to have filtered.
+- **Empty state**, centred in the content column: Playfair **italic 500 27px** *Nothing in the larder yet.* + meta *Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like.* No button.
+- **At zero items the sort trigger is hidden and the empty state carries no primary.** Sorting nothing is a control that can only disappoint. **Row 1 does not change** — search and *Add item* are permanent and the same in every mode — so the empty state says what to do and lets row 1's primary be the button it points at. Two *Add item* buttons on one screen is one too many, and the one that goes is the one that isn't always there. Row 2 is down to `Showing 0 of 0`. The applied-filter row cannot appear here either — with no items there is nothing to have filtered.
+
+> **This bullet used to say the top bar carried no *Add item* at zero, which contradicted row 1 being the same in every mode.** Both halves came out of the 27 Aug fork — one branch described a top bar it had imagined, the other recorded the real one. The real one wins. The duplicate primary was always the actual problem, and it is solved in the direction of the build rather than against it.
 
 ### Invite accept — the `?join=` landing
 Four cases, all on the 440px card, all left-aligned. The header is shared: eyebrow `INVITATION` → 44px household tile (the initial on the household's term colour, exactly as the collapsed rail draws it) → *Join Calfee Household* → the role sentence.
@@ -647,6 +653,7 @@ No layout adaptations beyond that. Every card outside the shell is now short eno
 - **A dark focus halo for the composer field** — `rgba(212,99,107,.18)`, the light halo's alpha in the dark crimson. The token table gave light only; it is now in the composer table above.
 - **The wordmark scales to 38px** on the sign-in card and 32px on mobile — the first time it leaves 27px.
 - **A marketing headline scale**, Playfair 600 at 56px desktop / 34px mobile, above anything the type ramp currently carries. Public page only.
+- **The household tile is drawn from the household's colour**, not from a constant — Playfair 700 at 42% of the side, radius 30%, per *Household colour*. The first-run boards use slate; the invite and Settings boards use Calfee's terracotta.
 - The **Gravatar mark is a placeholder** on every board: a ring with an inner dot. Swap the official asset in before build.
 
 ## The marketing page
@@ -655,9 +662,11 @@ Public, at `/`. One offer, one call to action, repeated three times — nav, her
 **Anatomy.** Nav (icon + wordmark left, *Sign in with Gravatar* right) → hero → three benefit cards → the *Three ways to slice it* band → closing CTA → footer. Content column 1120 inside 160px margins at 1440; 22px gutters at 390. Same ground gradient, same cards, same tokens as the app — this is an extension of the system, not a separate brand.
 
 - **Hero.** Headline *Know what's in the freezer before you get to the store.* over the sub-paragraph, CTA at 268 × 52, then *Signing in creates your account. There's no separate sign-up.* On the right, a real mock: three item cards from the sample data, one stocked, one low, one out. The status ramp doing its job **is** the product demo, so the hero image is the app rather than a picture of a pantry.
-- **Benefits**, three cards, each answering a doubt rather than naming a feature: *A count, not a hunch.* / *The whole household, one list.* / *The shopping list is a filter, not a chore.*
+- **Benefits**, three cards, each answering a doubt rather than naming a feature: *A count, not a hunch.* / *The whole household, one list.* / *Nothing to write down before you go.*
 - **The band** explains the data model — Location, Store, Type — one column each with a live chip row under it, and *Sixteen colours, yours to name and assign* on a hairline below. Someone deciding whether to sign up needs to understand the model, and three chip rows do it faster than a paragraph.
 - **Footer.** Icon, wordmark, `© 2026 Larder Log`. Nothing else — no legal links, no nav, no second column. A footer on a one-page site whose only action is at the top of the page has no work to do.
+
+> **The third benefit used to sell the shopping list as a store filter — the design *Shopping list* replaced.** It read *The shopping list is a filter, not a chore*, and its body told visitors to "pick a store". It now describes the mode: everything under its number, already grouped by the shop you buy it at, ticked off as you go. The band's Store column made the same promise and was corrected with it. This was the one place the 27 Aug fork contradicted itself in **user-facing copy** rather than in spec, which is the worst place for it — a spec disagreement costs a conversation, a marketing page that describes a feature you don't have costs a signup.
 
 **No proof section.** No testimonials, no logos, no counts. There is nothing real to put there yet, and invented quotes on a public page are worse than a shorter page. The slot sits between the benefits and the band for whenever there is something true to fill it with.
 
@@ -683,7 +692,7 @@ https://claude.ai/code/artifact/5c742401-cc59-44bc-9f49-2c9c1af8ee93
 
 Board 10 is the Settings tab rather than a signed-out flow, and sits here because Account is where the display name ends up. Its other five sections are drawn from the text already in *Structure* — a rendering of what was written, not a fresh design, so they are the ones to argue with.
 
-> **Board 6 predates *Household colour*.** It shows a bare `HOUSEHOLD NAME` field with no swatch. The current design is the identity row; re-render it with the boards listed under *Household colour*.
+> **Boards 6 and 7 were re-rendered on 27 Aug to catch up with the merge.** Board 6 now carries the identity row — `HOUSEHOLD NAME AND COLOUR`, the 26px swatch pre-picked at slate — instead of a bare name field. Board 7's top bar lost the title it never should have had: it is search + *Add item* over `Showing 0 of 0`, and the empty state no longer carries a second primary. The household tile on both is **slate**, not the hard-coded terracotta, because terracotta is Calfee's colour and these boards are a household being made.
 
 ## Sort menu
 The trigger names the active sort — `⇅ Sort  Recently added ⌄` — so the menu is only opened to change it. Ghost at rest; `#FDFAF4` + `#E2D5C0` on hover; `#F2EADC` + `#CFBEA3` when open; crimson focus ring.
@@ -951,7 +960,7 @@ Twenty items. Insertion order is the list order, so **Recently added** runs bott
 
 > **Why it grew from eight.** Every store in the old set had at most one low or out item, so the shopping list was five groups of one row and there was nothing to judge — no grouping to test, no scroll, no reason to hide checked rows, and the one flow that most needed sample data was the one the data couldn't exercise. The extension also gets a store with two *out* and two *low* (Costco) so within-group ordering is visible, and one storeless item so `NO STORE` is drawn rather than described.
 
-> **Knock-on:** items 9–20 are appended, and *Recently added* is newest-first, so they land at the **top** of the default grid. The app canvas's 27 boards were drawn against the original eight and would need a re-render to match. Nothing about their layout changes — only which rows appear — so this is a redraw, not a redesign.
+> **Knock-on:** items 9–20 are appended, and *Recently added* is newest-first, so they land at the **top** of the default grid. The app canvas's 27 boards were drawn against the original eight and would need a re-render to match. Nothing about their layout changes — only which rows appear — so this is a redraw, not a redesign. The marketing page's hero mock is unaffected: it shows items 1, 3 and 5, whose numbers did not change.
 
 ## App icon
 **Oat** — ground `#E2D5C0`, L in ink `#241E17`, **Playfair Display roman 800 at 66% cap height**. 11.4:1.
@@ -995,11 +1004,11 @@ Search **is** built — it is row 1 of the top bar — and this document simply 
 Four more components are in the build and were never in this document, found the same way. They are listed rather than specced, because one screenshot is not a spec:
 
 - **Filter chips carry counts** — `Pantry 10`, `Snack 0` — including zeroes. The applied chips do **not**: out there the count would be the count before this filter, or after it, and both are wrong.
-- **A leading `All items 20` chip** heads the Location group, selected, acting as that group's clear. How it interacts with `Clear filters` is undecided — clearing from row 3 presumably re-selects it.
+- **A leading `All items 20` chip** heads the Location group, selected, acting as that group's clear. How it interacts with `Clear filters` is undecided — clearing from row 3 presumably re-selects it. *Structure* now specs its behaviour (it lights when the group is empty), but **the front-door canvas's drawer boards do not draw it** — they were rendered before that line existed, so a first-run drawer shows three location chips and no `All items 0` ahead of them.
 - **The drawer has a collapse button** beside the wordmark, which is how the rail is reached; the rail spec describes the return trip but not the outbound one.
 - **The Filter and Settings tabs carry icons**, and the item card's stepper is asymmetric — minus on the sunk fill, plus on the ink primary.
 
-The lesson is the one worth writing down: **anything not drawn on a canvas drifts out of this document silently.** Two turns of shopping-list work were specced against a top bar with a title that does not exist — and, on 27 Aug, two branches of this file each dropped the other's sections. See the merge note at the top.
+The lesson is the one worth writing down: **anything not drawn on a canvas drifts out of this document silently.** Two turns of shopping-list work were specced against a top bar with a title that does not exist — and, on 27 Aug, three branches of this file each dropped the others' sections. See the merge note at the top. The reconciliation passes added a third lesson: **a union merge leaves the branches contradicting each other**, and the contradictions hide in the places two branches happened to describe the same screen — the marketing copy, the zero-items rule, and two boards.
 
 ### Flows outside the app shell
 Specced and drawn — see *Flows outside the shell* and *The marketing page*. What is left in that area:
@@ -1011,6 +1020,7 @@ Specced and drawn — see *Flows outside the shell* and *The marketing page*. Wh
 - Sign-out confirmation, if any. Currently a plain ghost action with nothing behind it.
 - **Display-name validation.** Length ceiling, whether two members may share a name, and what the field does with an empty-after-trim value. The button is drawn disabled on empty; nothing else is decided.
 - **Renaming propagation.** Changing the display name changes it everywhere it is rendered — Members, invites you issued, the drawer row. Whether that is instant for other members or arrives on their next load is a data question the UI currently doesn't acknowledge.
+- **The marketing page has never mentioned the shopping list's best argument** — that you never write the list, because the pantry already knows. The third benefit card now says it; whether the hero should is untested, and the hero mock still shows the item grid rather than the list.
 
 ### Empty states
 Zero items in a new household is drawn (*Flows outside the shell*), and the shopping list's *scoped, nothing to buy* is drawn (*Shopping list*). Still open: no filter matches · a location with nothing in it · the shopping list's other empty, *Nothing to buy in this filter* — specced but not drawn, and near-identical to the one that is. **No search results** may already exist in the build; check before drawing it.

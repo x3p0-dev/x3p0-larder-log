@@ -24,6 +24,7 @@ import {
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
+import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplayName } from '../shared/profile';
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
@@ -687,6 +688,26 @@ check('nothing selected counts zero', countTermFilters(NO_TERM_FILTERS), 0);
 const LIVE = ['a', 'b'];
 check('prune keeps the reference when nothing is stale', pruneTermFilter(LIVE, () => true) === LIVE, true);
 check('prune drops a vanished term', pruneTermFilter(LIVE, (id) => id !== 'b'), ['a']);
+
+// --- D46: the account's display name ---
+check('a name is trimmed and collapsed', normalizeDisplayName('  Justin   Tadlock '), 'Justin Tadlock');
+check('whitespace alone is not a name', normalizeDisplayName('   \t \n '), '');
+check('a non-string is not a name', normalizeDisplayName(undefined), '');
+check('a long name is truncated, not refused', normalizeDisplayName('x'.repeat(200)).length, MAX_DISPLAY_NAME);
+check('a real name is valid', isValidDisplayName(' Rowan '), true);
+check('a blank name is not', isValidDisplayName('  '), false);
+
+// The fallback chain: profile, then a membership's snapshot, then the identity.
+// It is what grandfathers an account that predates the `profiles` table, and
+// what leaves a genuinely nameless one detectable.
+check('the profile wins', pickDisplayName('Justin', 'Old Name', 'Gravatar Name'), 'Justin');
+check('a membership answers when the profile has not', pickDisplayName('', 'Old Name', 'Gravatar Name'), 'Old Name');
+check('the identity is the last link', pickDisplayName('', '', 'Gravatar Name'), 'Gravatar Name');
+check('a blank link is skipped, not returned', pickDisplayName('', '   ', 'Gravatar Name'), 'Gravatar Name');
+// The case the first-run screen exists for, and the one `needsName` keys on.
+check('nothing anywhere is empty, not a placeholder', pickDisplayName('', '', ''), '');
+check('no candidates at all is empty', pickDisplayName(), '');
+check('the chain normalizes what it picks', pickDisplayName('  Sedge   Miller  '), 'Sedge Miller');
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

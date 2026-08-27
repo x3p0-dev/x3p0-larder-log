@@ -11,6 +11,7 @@ import type {
 	ItemDraft,
 	PantryData,
 	PantryResult,
+	ProfileResult,
 	Stamps,
 	TermDraft,
 	TermKind,
@@ -306,4 +307,58 @@ export function useInvitePreview(code: string | null): InvitePreviewResult | nul
 	if (! code) return null;
 
 	return isLoading(result) ? null : result;
+}
+
+export type ProfileStatus =
+	| { state: 'loading' }
+	| { state: 'guest' }
+	/** `displayName` is `''` exactly when `needsName` is true — see `ProfileResult`. */
+	| { state: 'ready'; displayName: string; needsName: boolean };
+
+/**
+ * The signed-in account's own name.
+ *
+ * Its own hook rather than a field on `usePantryData`, for the same reason
+ * `useInvitePreview` is: it answers **before** a household exists, and every
+ * other subscription in that hook is scoped to one. Rolling it in would make
+ * the first-run screen depend on three queries that have nothing to say to it.
+ *
+ * The error is held here rather than shared with `usePantryData`'s, because the
+ * only screen that renders this one has no app shell to put a banner in.
+ */
+export function useProfile(): {
+	status: ProfileStatus;
+	/** True when the server took it. False leaves the field and its typing alone. */
+	setDisplayName: (name: string) => Promise<boolean>;
+	error: string | null;
+	dismissError: () => void;
+} {
+	const result = useQuery<ProfileResult>('profile');
+	const [error, setError] = useState<string | null>(null);
+	const rawSetDisplayName = useMutation<[string], void>('setDisplayName');
+
+	const status: ProfileStatus = useMemo(() => {
+		if (isLoading(result)) return { state: 'loading' };
+		if (result.state === 'guest') return { state: 'guest' };
+
+		return { state: 'ready', displayName: result.displayName, needsName: result.needsName };
+	}, [result]);
+
+	return {
+		status,
+		setDisplayName: useCallback(async (name) => {
+			try {
+				await rawSetDisplayName(name);
+				setError(null);
+
+				return true;
+			} catch (thrown) {
+				setError(thrown instanceof Error ? thrown.message : 'Something went wrong.');
+
+				return false;
+			}
+		}, [rawSetDisplayName]),
+		error,
+		dismissError: useCallback(() => setError(null), []),
+	};
 }

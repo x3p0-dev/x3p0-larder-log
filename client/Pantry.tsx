@@ -14,6 +14,7 @@ import { AppliedFilters } from './components/AppliedFilters';
 import type { AppliedFilter } from './components/AppliedFilters';
 import { ItemCard } from './components/ItemCard';
 import { EmptyState } from './components/EmptyState';
+import { DisplayNameCard } from './components/DisplayNameCard';
 import { FirstRun } from './components/FirstRun';
 import { InviteLanding } from './components/InviteLanding';
 import { OutsideShell } from './components/OutsideShell';
@@ -26,7 +27,7 @@ import type { ConfirmTone } from './components/ConfirmDialog';
 
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
-import { usePantryData, useInvitePreview } from './hooks/usePantryData';
+import { usePantryData, useInvitePreview, useProfile } from './hooks/usePantryData';
 import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
 import { addedAtOf, changedAtOf } from '../shared/stamp';
 import { useToasts } from './hooks/useToasts';
@@ -337,6 +338,15 @@ function plural(count: number, noun: string): string {
 
 type Props = {
 	userId: string;
+	/**
+	 * The **identity's** name, which is a suggestion rather than an answer.
+	 *
+	 * It is whatever Gravatar or the Spacefast signup carried, and it is often
+	 * nothing at all — which is the whole reason the account keeps its own
+	 * display name (D46). Everything below reads `accountName`, resolved from
+	 * the profile with this as the last fallback; the one place this is used
+	 * directly is prefilling the field that sets the profile.
+	 */
 	displayName: string;
 	email: string;
 	/** The Gravatar avatar, when the identity carries one. */
@@ -363,6 +373,27 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const [selectedHousehold, setSelectedHousehold] = usePersistentState<string | null>(householdKey, null);
 
 	const api = usePantryData(selectedHousehold);
+	const profile = useProfile();
+
+	/**
+	 * The name the rest of the household sees, and the one every surface below
+	 * renders.
+	 *
+	 * The profile answers whenever it has one. The identity's name is the
+	 * fallback for the moment before the query lands — and for a dev guest,
+	 * which has no profile row and no household to inherit a name from.
+	 */
+	const accountName = (
+		(profile.status.state === 'ready' ? profile.status.displayName : '') || displayName || 'Signed in'
+	);
+
+	/**
+	 * Nobody gets past this without a name (D46), and *settled* is the stronger
+	 * of the two — it means the question has been answered, not merely that the
+	 * screen is not showing.
+	 */
+	const needsName = profile.status.state === 'ready' && profile.status.needsName;
+	const nameSettled = profile.status.state === 'ready' && ! profile.status.needsName;
 
 	/**
 	 * A household we have just created or joined, which the list has not caught
@@ -602,6 +633,17 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	useEffect(() => {
 		if (! pendingCode || ! autoJoining) return;
 
+		/*
+		 * And not before the name is settled. The membership this is about to
+		 * create carries a copy of the account's name, so redeeming ahead of the
+		 * first-run screen would stamp the row with whatever Gravatar supplied —
+		 * possibly nothing — and announce that to the household. `setDisplayName`
+		 * writes back through every membership, so the end state is the same
+		 * either way; waiting is what keeps the other members from seeing the
+		 * wrong name in between.
+		 */
+		if (! nameSettled) return;
+
 		let live = true;
 
 		void joinWithCode(pendingCode).then((householdId) => {
@@ -617,7 +659,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		});
 
 		return () => { live = false; };
-	}, [pendingCode, autoJoining]);
+	}, [pendingCode, autoJoining, nameSettled]);
 
 	/**
 	 * Redeems a code and lands on what it opened.
@@ -1433,13 +1475,64 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * is redeemed, so a consented join never flashes the buttons it does not
 	 * need.
 	 */
+	/*
+	 * The display name comes before everything, the invite landing included.
+	 *
+	 * Both halves of this are load-bearing. Waiting on the query means the
+	 * landing card cannot paint and then be replaced by the name screen a beat
+	 * later — it costs nothing, since every subscription on this screen starts
+	 * in the same tick. And putting the name *ahead* of the invite is the point
+	 * of D46: the person arriving on somebody else's link is the one the rest of
+	 * that household is about to see a name for.
+	 */
+	if (profile.status.state === 'loading') {
+		return (
+			<OutsideShell dark={dark} theme={theme}>
+				<p class="text-[13.5px]" style={{ color: theme.textFaint }}>Loading&hellip;</p>
+			</OutsideShell>
+		);
+	}
+
+	if (needsName) {
+		return (
+			<OutsideShell dark={dark} theme={theme}>
+				<div class="w-full max-w-[440px]">
+					{profile.error && (
+						<div
+							role="alert"
+							class="flex items-start justify-between gap-3 px-3.5 py-2.5 rounded-[13px] text-sm mb-4"
+							style={{
+								background: theme.surfaceAlt,
+								color: theme.dangerText,
+								border: `1px solid ${theme.dangerText}`,
+							}}
+						>
+							<span>{profile.error}</span>
+							<button onClick={profile.dismissError} aria-label="Dismiss" class="shrink-0">
+								<X size={15} />
+							</button>
+						</div>
+					)}
+					<DisplayNameCard
+						suggestion={displayName}
+						email={email}
+						picture={picture}
+						onSubmit={profile.setDisplayName}
+						onSignOut={onSignOut}
+						theme={theme}
+					/>
+				</div>
+			</OutsideShell>
+		);
+	}
+
 	if (pendingCode) {
 		return (
 			<OutsideShell dark={dark} theme={theme}>
 				<InviteLanding
 					preview={autoJoining ? null : invitePreview}
 					signedIn
-					displayName={displayName} email={email} picture={picture}
+					displayName={accountName} email={email} picture={picture}
 					onSignIn={() => {}}
 					onJoin={async () => { await joinWithCode(pendingCode); }}
 					onDismiss={(householdId) => {
@@ -1460,7 +1553,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			<Gate
 				status={api.status}
 				dark={dark}
-				displayName={displayName}
+				displayName={accountName}
 				email={email}
 				picture={picture}
 				onCreateHousehold={createHousehold}
@@ -1507,7 +1600,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					households={api.households} currentHouseholdId={api.currentHouseholdId}
 					onSelectHousehold={setSelectedHousehold}
 					onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
-					accountName={displayName}
+					accountName={accountName}
 					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
 					dark={dark}
 					/*
@@ -1533,7 +1626,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				households={api.households} currentHouseholdId={api.currentHouseholdId}
 				onSelectHousehold={setSelectedHousehold}
 				onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
-				accountName={displayName}
+				accountName={accountName}
 				settings={{
 					themeOverride, setThemeOverride,
 					householdName,
@@ -1542,7 +1635,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					setHouseholdInk: (v) => void api.updateHousehold({ ink: v }),
 					defaultThreshold,
 					setDefaultThreshold: (v) => void api.updateHousehold({ defaultThreshold: v }),
-					accountName: displayName, accountEmail: email, onSignOut,
+					accountName, accountEmail: email, onSignOut,
 					members, invites,
 					me: { membershipId: myMembershipId, role: myRole },
 					onCreateInvite: api.createInvite,

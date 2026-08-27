@@ -1,7 +1,7 @@
 import { capsule, query, mutation, endpoint, text, table, string, boolean, id } from '@spacefast/zero/server';
 
-import type { LogContext } from '@spacefast/zero/server';
-import type { WriteDb } from './schema';
+import type { AuthContext, LogContext } from '@spacefast/zero/server';
+import type { ReadDb, WriteDb } from './schema';
 import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCapability, requireMembership } from './auth';
 
 import { toRole, canInviteRole } from '../shared/roles';
@@ -16,10 +16,12 @@ import type {
 	HouseholdSummary,
 	InvitePreviewResult,
 	PantryResult,
+	ProfileResult,
 	TermKind,
 } from '../shared/types';
 import { SEED_LOCATIONS, SEED_TYPES, SEED_STORES } from '../shared/seed';
 import { householdInk, toHouseholdInk } from '../shared/household';
+import { normalizeDisplayName, pickDisplayName } from '../shared/profile';
 
 /**
  * The Larder Log capsule.
@@ -56,6 +58,34 @@ function termLabel(kind: TermKind): string {
 }
 
 /**
+ * The name to stamp on a membership row this caller is about to be given.
+ *
+ * `memberships.displayName` is a **denormalized copy** of the account's name,
+ * not a second name — it is what the member list and the invite card read, so
+ * they never have to join a profile row per member on a live query. Every path
+ * that writes one goes through here, and `setDisplayName` writes back through
+ * all of them, which is what keeps the copy honest.
+ *
+ * The chain is the one `pickDisplayName` documents: the profile, then whatever
+ * name the account already joined somewhere under, then the identity. The last
+ * link is what an account created before this table has, and the reason a
+ * membership minted for one is not blank.
+ */
+async function accountName(ctx: { auth: AuthContext; db: ReadDb | WriteDb }): Promise<string> {
+	const profile = await ctx.db.profiles
+		.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+		.first();
+
+	if (profile) return pickDisplayName(profile.displayName, ctx.auth.displayName);
+
+	const memberships = await ctx.db.memberships
+		.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+		.collect();
+
+	return pickDisplayName(...memberships.map((m) => m.displayName), ctx.auth.displayName);
+}
+
+/**
  * The database schema, as specified in `.docs/data-model.md`.
  *
  * **It has to be declared in this file, and it has to be a literal.** The
@@ -86,6 +116,23 @@ function termLabel(kind: TermKind): string {
  *   encoding on purpose (D24).
  */
 export const schema = {
+
+	// The account's own name (D46), keyed by `ctx.auth.userId` rather than by a
+	// row id — an identity is not a row this app creates, so `by_user` is the
+	// only way in and every read goes through it. One row per account at most:
+	// `setDisplayName` looks before it inserts, because Zero has no unique
+	// constraint to lean on any more than it has a foreign key.
+	//
+	// Stamped from birth on purpose. Nothing orders profiles by time today, but
+	// D44's own note is that a column is permanent and a row written without one
+	// never gets one — and this table has no rows yet, so the stamps cost
+	// nothing here and could not be added for free later.
+	profiles: table({
+		userId: string(),
+		displayName: string(),
+		addedAt: string().default(''),
+		changedAt: string().default(''),
+	}).index('by_user', ['userId']),
 
 	// `ink` is the household's colour token (D42) — the tile on the rail, in the
 	// switcher and on the invite card. Added after the fact, so a row from before
@@ -210,6 +257,45 @@ export default capsule({
 	schema,
 
 	queries: {
+		/**
+		 * Who the caller is, by the only name anyone else in a household sees.
+		 *
+		 * The first thing the client asks, and the one query that can answer
+		 * before there is a household to answer about — which is the point.
+		 * Someone accepting an invite never sees *Name your household*, and they
+		 * are exactly the person whose name other people need, so the name is
+		 * collected before the path forks (D46).
+		 *
+		 * **`needsName` is not "has no profile row".** An account that predates
+		 * this table carries the Gravatar name it joined under on every
+		 * membership it holds; sending it through a screen it has effectively
+		 * already answered would be a wall in front of people who were using the
+		 * app yesterday. So an inherited name grandfathers the account, and only
+		 * an account with no name *anywhere* is stopped.
+		 *
+		 * Nothing here is the identity's own `displayName`. The client has that
+		 * already and uses it to prefill the field — a suggestion is not an
+		 * answer, and reporting one as `displayName` would make `needsName`
+		 * disagree with the value beside it.
+		 */
+		profile: query(async (ctx): Promise<ProfileResult> => {
+			if (! isSignedIn(ctx.auth)) return { state: 'guest' };
+
+			const row = await ctx.db.profiles
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.first();
+
+			if (row) return { state: 'ready', displayName: row.displayName, needsName: false };
+
+			const memberships = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.collect();
+
+			const inherited = pickDisplayName(...memberships.map((m) => m.displayName));
+
+			return { state: 'ready', displayName: inherited, needsName: inherited === '' };
+		}),
+
 		/**
 		 * Every household the caller belongs to, for the switcher.
 		 *
@@ -462,6 +548,63 @@ export default capsule({
 
 	mutations: {
 		/**
+		 * The account's name, set on first run and changed from Settings later.
+		 *
+		 * Two writes, and the second is the one to be careful about: the profile
+		 * row is the record, and every membership this account holds carries a
+		 * **copy** of the name so the member list and the invite card can be read
+		 * without a join. A rename that skipped the copies would show the new
+		 * name to the person who typed it and the old one to everybody else,
+		 * which is the failure mode that makes a denormalized column worse than
+		 * no column at all.
+		 *
+		 * Not scoped to a household, alone among the writes: an account is not
+		 * inside one, and this is reachable before any exists.
+		 */
+		setDisplayName: mutation(async (ctx, rawName: string) => {
+			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
+
+			const displayName = normalizeDisplayName(rawName);
+
+			// Required, not skippable — the alternatives are an unnamed row in
+			// Members or an email address, which is not a name and exposes one.
+			if (! displayName) throw new AccessError('Enter the name you want the rest of your household to see.');
+
+			const now = stampFrom(Date.now());
+
+			const existing = await ctx.db.profiles
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.first();
+
+			if (existing) {
+				await ctx.db.profiles.update(existing.id, { displayName, changedAt: now });
+			} else {
+				await ctx.db.profiles.insert({
+					userId: ctx.auth.userId,
+					displayName,
+					addedAt: now,
+					changedAt: now,
+				});
+			}
+
+			const memberships = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.collect();
+
+			for (const row of memberships) {
+				// Skipped rather than rewritten when it already agrees: a rename
+				// across five households should not be five writes when it is one.
+				if (row.displayName === displayName) continue;
+
+				await ctx.db.memberships.update(row.id, { displayName });
+			}
+
+			// `invitePreview` names the inviter, and it is read by someone who is
+			// not signed in and cannot refresh anything themselves.
+			ctx.invalidate('profile', 'household', 'invitePreview');
+		}),
+
+		/**
 		 * A new household, owned by the caller — their first, or their fifth.
 		 *
 		 * D18 refused this to anyone who already belonged somewhere. D33 dropped
@@ -491,7 +634,10 @@ export default capsule({
 			await ctx.db.memberships.insert({
 				householdId: household.id,
 				userId: ctx.auth.userId,
-				displayName: ctx.auth.displayName,
+				// The account's name, not the identity's (D46). The two differ for
+				// anyone who changed theirs, and this row is what the member list
+				// renders.
+				displayName: await accountName(ctx),
 				role: 'owner',
 			});
 
@@ -944,7 +1090,10 @@ export default capsule({
 			await ctx.db.memberships.insert({
 				householdId: invite.householdId,
 				userId: ctx.auth.userId,
-				displayName: ctx.auth.displayName,
+				// The account's name, not the identity's (D46) — and this is the
+				// path that most needs it: someone arriving on an invite is the
+				// person the rest of the household is about to see a name for.
+				displayName: await accountName(ctx),
 				role: toRole(invite.role),
 			});
 

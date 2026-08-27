@@ -2247,3 +2247,108 @@ border.
   hosted runtime issues sequential integers — a location and a store both
   holding `"4"` is the normal state of a freshly seeded household, not a
   hypothetical.
+
+## D46. The display name is on the account, and it is asked before the fork
+
+**Decided:** 2026-08-27
+
+**The account carries a name; the identity does not carry it for us.**
+
+Gravatar is the sign-in provider, but a real signup on the published space is
+janky in a way the design assumed away: a lot of accounts arrive through the
+my.spacefast.com path with **no profile name at all**, and the ones that do
+arrive with a name did not necessarily set it on Gravatar and did not set it
+*here*. `ctx.auth.displayName` is therefore a suggestion, not an answer. Larder
+Log collects its own **display name** and stores it on the account.
+
+### Why a new table
+
+`memberships.displayName` already existed and is not a substitute. It is scoped
+to one household, and the moment that matters most — someone following an invite
+link — has no membership yet. The name is also the *same* name in every
+household: asking again per pantry would be asking the same question twice and
+inviting two answers.
+
+So `profiles` — `userId`, `displayName`, and D44's two stamps — with a `by_user`
+index, which is the only way in. The **third additive schema change since Phase
+2**, after `households.ink` (D42) and D44's nine stamp columns: ten tables, five
+queries, seventeen mutations, and it applies on the next publish with no flag.
+
+The stamps are there from birth on purpose. Nothing orders profiles by time
+today, and D44's own note is the argument for including them anyway — a column
+is permanent, a row written without one never gets one, and this table has no
+rows yet, so they are free here and could never be free again.
+
+### `memberships.displayName` stays, as a copy
+
+It is now a **denormalized copy of the account's name**, and that is a decision
+rather than an accident. The alternative is for the `household` query to join a
+profile row per member on every refetch, and `invitePreview` to do the same for
+the inviter — on a live query that re-runs whole, for a value that changes
+approximately never.
+
+The cost of a copy is that it can go stale, so `setDisplayName` writes back
+through every membership the account holds. A rename that skipped that would
+show the new name to the person who typed it and the old one to everybody else,
+which is worse than having no column. Rows already carrying the name are
+skipped, so a rename across five households is one write, not five.
+
+`accountName()` in the capsule is the single place a membership's name is
+resolved, and it walks `pickDisplayName`'s chain: the profile, then a name the
+account already joined somewhere under, then the identity.
+
+### It is its own step, before the fork
+
+Someone accepting an invite never sees *Name your household*, and they are
+exactly the person whose name the rest of that household is about to see. So the
+name is asked once, immediately after first sign-in, **ahead of both** the
+first-run household screen and the `?join=` landing. In `Pantry` that means the
+gate sits above the invite card, and the consented auto-redeem waits for the
+name to settle — the end state is the same either way, since the write-through
+would fix the membership a beat later, but waiting is what keeps the other
+members from seeing the wrong name in between.
+
+The screen blocks on the `profile` query rather than painting the invite card
+and replacing it. That costs nothing: every subscription on the screen starts in
+the same tick.
+
+### Existing accounts are grandfathered, and the rule is narrower than it looks
+
+`needsName` is **not** "has no profile row". An account that predates this table
+carries the Gravatar name it joined under on every membership it holds, which is
+a name it has effectively already answered with. Sending those people through a
+required screen would be a wall in front of everyone who was using the app
+yesterday.
+
+So the query falls back to the memberships, and `needsName` is true only when
+there is no name **anywhere**. That covers both cases that deserve the screen: a
+brand-new account, and an old one that never had a name to inherit.
+
+### Required, not skippable
+
+A blank display name puts an unnamed row in Members and an unsigned change in a
+shared list. The only fallbacks are an email address — which is not a name, and
+exposes one — or a generated label nobody recognises. It is one field, once.
+
+The rejected alternative is optional-with-a-fallback to the email local-part,
+and it is one line to change if the friction proves worse than the ambiguity.
+
+### Two departures from the boards
+
+- **The account row carries a *Sign out*.** The boards draw the row without one.
+  The screen is *required*, so without it an account signed in by mistake has no
+  exit that is not clearing cookies — a dead end the boards could not see
+  because they are two states, not a flow. Same control and same treatment as
+  `SignedInRow`'s.
+- **The identity's name is passed through raw.** The entry used to hand `Pantry`
+  `auth.displayName || 'Signed in'`, which made an absent name look present —
+  precisely the case this screen exists to catch. It would have prefilled the
+  field with *Signed in* and told the visitor Gravatar had a name for them.
+  `Pantry` resolves the account's real name and falls back for display there.
+
+### What is deliberately not in this round
+
+Editing the name from the drawer. Settings' Account section is specified for it
+(*Editing the display name*), and a new sidebar drawer is in flight — the
+mutation is already the right shape for it, since `setDisplayName` is an upsert
+and the write-through is what a rename needs.

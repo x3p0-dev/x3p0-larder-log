@@ -219,3 +219,22 @@ export type InvitePreview =
 	| { state: 'valid'; household: InviteHousehold; role: Role; inviter: string; expiresAt: string };
 
 export type InvitePreviewResult = InvitePreview;
+
+/**
+ * The signed-in account's own name, and whether it has one yet.
+ *
+ * Like `InvitePreview` and unlike everything else, this does **not** follow
+ * `QueryState`: `no-household` is not one of its answers. The whole point of
+ * the display name is that it is asked *before* the path forks into
+ * create-a-household and accept-an-invite, so a caller with no household is
+ * the most ordinary case this query has.
+ *
+ * `needsName` is the gate, and it is narrower than "has no profile row". An
+ * account that predates the `profiles` table has a Gravatar name recorded on
+ * every membership it holds, which is a name it effectively already answered
+ * with — so it is grandfathered and `displayName` carries that name instead.
+ * Only an account with no name anywhere is stopped.
+ */
+export type ProfileResult =
+	| { state: 'guest' }
+	| { state: 'ready'; displayName: string; needsName: boolean };

@@ -685,6 +685,73 @@ term. `npm test` is at 222 assertions, fourteen of them new.
 variants' line numbers compared against their base rules. **Nobody has clicked
 it.**
 
+### Phase 4.11 — The account's display name ✅ (2026-08-27)
+
+`.claude/docs/design/ui-directions.md` § *First run — the display name*, drawn on
+`.claude/docs/design/display-name-light.html` / `-dark.html` — two states, light
+and dark. Governed by
+[D46](decisions.md#d46-the-display-name-is-on-the-account-and-it-is-asked-before-the-fork):
+**the account carries a name; the identity does not carry it for us.**
+
+A real signup on the published space is janky in a way the design assumed away —
+plenty of accounts arrive through my.spacefast.com with no profile name, and the
+ones that have one did not set it here. So `ctx.auth.displayName` is a
+suggestion and the app collects its own.
+
+**The third additive schema change since Phase 2**, after `households.ink` (D42)
+and D44's nine stamp columns. Ten tables, five queries, seventeen mutations; it
+applies on the next publish with no flag.
+
+- **`profiles`** — `userId`, `displayName`, and D44's two stamps, on a `by_user`
+  index. Stamped from birth because a column is permanent and this table had no
+  rows yet.
+- **`profile` query** — takes no argument and answers *before* a household
+  exists, which is the point. `needsName` is narrower than "has no profile row":
+  an account that predates the table inherits the Gravatar name off its own
+  memberships and is grandfathered, so only an account with no name **anywhere**
+  is stopped.
+- **`setDisplayName` mutation** — an upsert, plus a write-through to every
+  membership the account holds. `memberships.displayName` is now a documented
+  *copy*, and the write-through is what keeps it from showing the new name to
+  the person who typed it and the old one to everyone else. Rows already
+  agreeing are skipped.
+- **`accountName()` in the capsule** — the one place a membership's name is
+  resolved, walking profile → membership → identity. `createHousehold` and
+  `redeemInvite` both stamp through it.
+- **`shared/profile.ts`** — `normalizeDisplayName`, `isValidDisplayName`, and
+  `pickDisplayName`, which is the fallback chain both halves walk. `npm test` is
+  at 235 assertions, thirteen of them new.
+- **`DisplayNameCard.tsx`** — the card, from the boards: eyebrow, the 52px
+  avatar beside the email, *What should we call you?*, the field with its
+  crimson focus border and halo, a hint that switches on whether Gravatar
+  supplied a name, and *Continue* disabled until something is typed. The hint's
+  branch is fixed at mount, so clearing the field does not rewrite where the
+  value came from.
+- **The gate sits above the invite landing** in `Pantry`, and the consented
+  auto-redeem waits for the name to settle. `accountName` — profile, then
+  identity — replaces the auth name on every surface that renders a person.
+
+**Two departures from the boards**, both in D46: the account row carries a
+*Sign out* (the screen is required, and without one a mis-signed-in account has
+no exit), and the entry passes the identity's name through raw — the old
+`auth.displayName || 'Signed in'` made an absent name look present, which is
+exactly the case this screen exists to catch.
+
+**Editing the name in the drawer is deliberately not in this round.** Settings'
+Account section is specified for it and a new sidebar drawer is in flight;
+`setDisplayName` is already the right shape, since it upserts and writes through.
+
+**Verified without a browser**: typecheck clean, 235 assertions, the artifact
+shows `profiles` with its `by_user` index and the two new handlers, every new
+utility is in the live `/zero.css` (selectors printed and unescaped, exact
+match), and the **real handlers** were driven over `POST /__spacefast/zero/run`
+on a second `sf dev` at `--port 4199` — a blank name refused, whitespace
+collapsed on the way in, a membership stamped with the account's name, a rename
+reaching the member list, an unchanged rename touching only `profiles`, and the
+grandfathering path confirmed by creating a household with no profile row and
+watching `needsName` come back **false** with the inherited name.
+**Nobody has clicked it.**
+
 ### Published: v8, v9, v10 — 2026-08-27
 
 **v10** (`ver_0026484fd67c495b8d3b7d52b9215d67`) is live: the term composer's

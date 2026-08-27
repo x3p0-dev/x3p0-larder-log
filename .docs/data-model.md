@@ -18,8 +18,9 @@ ISO 8601 UTC with milliseconds, so they string-compare correctly. See
 **The app therefore keeps its own stamps, under its own names.** Because undo
 re-inserts rather than un-deletes (D17), a restored row gets a fresh `createdAt`
 and a fresh `updatedAt`, so neither can carry a row's real age across an undo —
-which is how a restored item ended up at the top of *Recently added*. Five
-tables carry `addedAt`, and four of those carry `changedAt` as well; every
+which is how a restored item ended up at the top of *Recently added*. Six
+tables carry `addedAt`, and five of those carry `changedAt` as well — the sixth
+pair arrived with `profiles`, created after D44 and so stamped from birth; every
 ordering in the app reads those, never the built-ins
 ([D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)).
 The rules live in `shared/stamp.ts`. The built-ins survive only as the last
@@ -32,6 +33,37 @@ no timestamps beyond the built-ins — every stamp below is a `string()` holding
 ISO 8601 UTC.
 
 ## Tables
+
+### `profiles`
+
+The account's own name. One row per signed-in identity, at most.
+
+```ts
+profiles: table({
+  userId: string(),                // ctx.auth.userId — the only way in
+  displayName: string(),
+  addedAt: string().default(""),   // ours, ISO 8601 UTC — D44
+  changedAt: string().default(""),
+})
+  .index("by_user", ["userId"])
+```
+
+**Why this exists at all**: `ctx.auth.displayName` is a *suggestion*. A lot of
+accounts arrive through the my.spacefast.com signup carrying no profile name,
+and the ones that do carry one did not set it here. So the app collects its own
+([D46](decisions.md#d46-the-display-name-is-on-the-account-and-it-is-asked-before-the-fork)),
+before the path forks into create-a-household and accept-an-invite — the person
+following an invite link has no membership to hang a name on and is exactly the
+person whose name other people need.
+
+There is **no unique constraint** to lean on, any more than `id()` is a foreign
+key. `setDisplayName` reads through `by_user` before it inserts, and that read
+is the whole of the "one row per account" rule.
+
+The stamps are here from birth deliberately. Nothing orders profiles by time, but
+[D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)'s
+own note is the argument: a column is permanent, a row written without one never
+gets one, and this table had no rows yet.
 
 ### `households`
 
@@ -89,6 +121,21 @@ household, fall back to a deterministic default) and a mutation through
 
 `role` is the authorization level, defaulting to the least privileged value. See
 [Roles](#roles) below.
+
+`displayName` is a **denormalized copy of `profiles.displayName`**, not a second
+name (D46). It is what the member list and the invite card's inviter line read,
+so neither has to join a profile row per member on a live query that re-runs
+whole. Two rules keep the copy honest, and both are load-bearing:
+
+- every path that inserts a membership stamps it through `accountName()` in the
+  capsule, which walks the profile → membership → identity chain;
+- `setDisplayName` writes back through **every** membership the account holds. A
+  rename that skipped that would show the new name to the person who typed it
+  and the old one to everybody else, which is worse than having no column.
+
+A row written before `profiles` existed holds the Gravatar name the account
+joined under, and that is not dead weight: it is what grandfathers an existing
+account past the required first-run screen.
 
 ### `invites`
 
@@ -364,10 +411,12 @@ mutation checks a capability from [Roles](#roles) before it writes.
 
 | Handler | Kind | Purpose |
 |---|---|---|
+| `profile` | query | The caller's own display name, and whether they still owe one — [D46](decisions.md#d46-the-display-name-is-on-the-account-and-it-is-asked-before-the-fork). Takes no argument, and answers before a household exists |
 | `households` | query | Every household the caller belongs to — name, colour, their role there, item count. Takes no argument |
 | `household` | query | The named household + members + live invites |
 | `pantry` | query | Items with their types/stores joined, plus all three taxonomies, **A–Z** |
 | `invitePreview` | query | What an invite link says about itself, to a signed-out guest — [D39](decisions.md#d39-an-invite-preview-is-the-one-query-that-answers-a-guest) |
+| `setDisplayName` | mutation | Upsert the account's name and write it through every membership. The one write not scoped to a household |
 | `addItem` | mutation | Create an item and its join rows. Takes optional `addedAt` / `changedAt` — **undo only** |
 | `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |

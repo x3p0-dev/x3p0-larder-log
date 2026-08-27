@@ -2992,3 +2992,38 @@ read-only, aggregate-only view of a table would have answered this without
 publishing a custom endpoint to production and then having to remember to take
 it out again.
 
+
+## 2026-08-27 — `mutation.run` reports what it invalidated
+
+### 👍 `changedTables` and `changedQueries` are a free correctness check
+
+Adding a tenth table (`profiles`) meant adding a mutation that writes two tables
+and invalidates three queries. Driving it over `POST /__spacefast/zero/run`, the
+response carried both lists back:
+
+```json
+{"op":"mutation.result","ok":true,
+ "changedTables":["profiles","memberships"],
+ "changedQueries":["profile","household","invitePreview"]}
+```
+
+That is a direct read on whether `ctx.invalidate()` names the right set — the
+thing D26 exists for and the thing nothing else in this environment can see
+without a browser and two tabs. It also caught the opposite case for free: a
+rename to the name already stored came back `changedTables: ["profiles"]` alone,
+proving the "skip a membership row that already agrees" branch actually skipped.
+
+Undocumented, like the `run` endpoint itself. Worth promoting: for anyone
+writing handlers without a client in front of them, this is the cheapest
+feedback loop the platform has.
+
+### 🤔 A new table's index is invisible in the dry-run footer
+
+`npx sf publish --dry-run` prints file count, bytes, mode, SPA and target — and
+nothing about the schema, so a new table is confirmed only by reading
+`.spacefast/zero/artifact.json` afterwards. The artifact is complete and correct
+(the `by_user` index is there, the two `.default("")` columns are there), but
+the command whose whole job is "show me what a publish would do" says nothing
+about the part of a publish that is irreversible without a flag. One line —
+`Schema  10 tables, 0 pending migrations` — would put the most consequential
+diff in front of the person about to ship it.

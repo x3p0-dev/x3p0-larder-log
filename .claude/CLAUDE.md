@@ -39,7 +39,7 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, four live queries, and sixteen mutations. The schema is
+`.docs/data-model.md`, five live queries, and seventeen mutations. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -464,7 +464,7 @@ change; nothing server-side moved.
 inside a group, AND across groups. Each group holds a **list** of ids;
 `shared/filter.ts` owns the rule and is in `shared/` because an `every` where a
 `some` belongs still compiles, still runs, and hands back an empty grid.
-`npm test` is at 222 assertions.
+`npm test` is at 235 assertions.
 
 - `FilterSection` and the rail flyouts **toggle** and carry `aria-pressed`;
   *All items* lights on an **empty** group rather than tracking an id.
@@ -486,6 +486,80 @@ OR-across — `sf dev` on `--port 4199` compiles and serves, and **every** new
 utility is in the live `/zero.css`, checked by *printing and unescaping the
 selectors*, including the `md:` variants' line numbers to prove each lands after
 the base rule it overrides. **Nobody has clicked any of it.**
+
+### The account's display name (Phase 4.11) is built — 2026-08-27
+
+The spec's *First run — the display name*, drawn on
+`.claude/docs/design/display-name-light.html` / `-dark.html`, governed by
+[D46](../.docs/decisions.md#d46-the-display-name-is-on-the-account-and-it-is-asked-before-the-fork):
+**the account carries a name; the identity does not carry it for us.** A real
+signup on the published space is janky in a way the design assumed away — plenty
+of accounts arrive through my.spacefast.com with no profile name, and the ones
+that have one did not set it here. `ctx.auth.displayName` is a **suggestion, not
+an answer**.
+
+**The third additive schema change since Phase 2**, after `households.ink` (D42)
+and D44's nine stamp columns. Now **ten tables, five queries, seventeen
+mutations**; it applies on the next publish with no flag.
+
+- **`profiles`** — `userId`, `displayName`, `addedAt`, `changedAt`, on a
+  `by_user` index, which is the only way in. **Stamped from birth on purpose**:
+  D44's own note is that a column is permanent and a row written without one
+  never gets one, and this table had no rows yet. There is no unique constraint
+  any more than `id()` is a foreign key — `setDisplayName` reads before it
+  inserts, and that read *is* the one-row-per-account rule.
+- **`memberships.displayName` is now a documented copy**, not a second name.
+  `setDisplayName` **writes back through every membership** the account holds;
+  skipping that would show the new name to the person who typed it and the old
+  one to everybody else, which is worse than having no column. Rows already
+  agreeing are skipped, so a rename across five households is one write.
+  `accountName()` in the capsule is the single place a membership's name is
+  resolved — profile → membership → identity — and both `createHousehold` and
+  `redeemInvite` stamp through it.
+- **`needsName` is narrower than "has no profile row".** An account that
+  predates the table carries the Gravatar name it joined under on every
+  membership, which is a name it effectively already gave; sending those people
+  through a required screen would be a wall in front of everyone who was using
+  the app yesterday. So the query falls back to the memberships and stops only
+  an account with **no name anywhere**. Verified by creating a household with no
+  profile row and watching `needsName` come back false with the inherited name.
+- **The gate is above the invite landing, not below it.** Someone accepting an
+  invite never sees *Name your household* and is exactly the person whose name
+  the household is about to see. The consented auto-redeem waits on
+  `nameSettled` for the same reason — the write-through would fix the membership
+  a beat later either way, and waiting is what keeps the others from seeing the
+  wrong name in between. The screen **blocks on the `profile` query** rather
+  than painting the invite card and replacing it, which costs nothing since
+  every subscription starts in the same tick.
+- **`shared/profile.ts`** owns the rule — `normalizeDisplayName`,
+  `isValidDisplayName`, and `pickDisplayName`, the fallback chain both halves
+  walk. `npm test` is at **235 assertions**.
+- **`Pantry` renders `accountName` everywhere a person appears**, resolved from
+  the profile with the identity as fallback. The entry now passes
+  `auth.displayName` **raw** — the old `|| 'Signed in'` made an absent name look
+  present, which is precisely the case this screen exists to catch, and it would
+  have prefilled the field with *Signed in*.
+- **Two deliberate departures from the boards.** The account row carries a
+  *Sign out*: the screen is required, so without one an account signed in by
+  mistake has no exit that is not clearing cookies. And the hint's branch —
+  *from your Gravatar profile* vs *Gravatar didn't have a name for you* — is
+  **fixed at mount**, so clearing the field does not rewrite where the value
+  came from.
+
+**Editing the name in the drawer is deliberately not in this round** — Settings'
+Account section is specified for it and a new sidebar drawer is in flight.
+`setDisplayName` is already the right shape: it upserts, and the write-through
+is what a rename needs.
+
+**A fresh `sf dev` now hits the name card first**, since a dev guest has no
+profile row and no household to inherit from. That is the only way to click the
+screen locally, and it costs one Enter.
+
+**Verified without a browser**: typecheck clean, 235 assertions, the artifact
+shows `profiles` with `by_user` plus `profile` and `setDisplayName`, every new
+utility is in the live `/zero.css` (selectors printed and unescaped, exact
+match), and the **real handlers** were driven over `POST /__spacefast/zero/run`
+on a second `sf dev` at `--port 4199`. **Nobody has clicked it.**
 
 ### Empty results — 2026-08-26
 
@@ -903,13 +977,14 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D45, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar** |
+| `.docs/decisions.md` | D1–D46, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
 | `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
 | `.claude/docs/design/larderloghouseholdcolourboards.html` | **The 8 boards for the household colour** — four screens, light and dark |
 | `.claude/docs/design/appliedfilterbar.html` | **The applied filter bar** — a live page rather than boards: desktop, 390, and the state strip, in both themes |
+| `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |
@@ -992,13 +1067,13 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 222 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 235 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
   invite-link parsing, the dev-guest bypass in `shared/identity.ts`, D44's
-  stamp guards and A–Z term ordering, and D45's *OR inside a group, AND across
-  groups*. **Add to it** when you touch any of those — that file is the app's
+  stamp guards and A–Z term ordering, D45's *OR inside a group, AND across
+  groups*, and D46's display-name fallback chain. **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still

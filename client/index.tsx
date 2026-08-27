@@ -211,7 +211,16 @@ export function App() {
 		return (
 			<Pantry
 				userId={auth.userId as string}
-				displayName={devGuest ? 'Local dev guest' : (auth.displayName || 'Signed in')}
+				/*
+				 * The identity's name, raw — **no `|| 'Signed in'` fallback here
+				 * any more**. That fallback made the name look present when it was
+				 * absent, which is precisely the case D46's first-run screen
+				 * exists to catch: it would have prefilled the field with
+				 * "Signed in" and told the visitor Gravatar had a name for them.
+				 * `Pantry` resolves the account's real name and falls back for
+				 * display there instead.
+				 */
+				displayName={devGuest ? 'Local dev guest' : (auth.displayName ?? '')}
 				email={devGuest ? '' : (auth.email ?? '')}
 				picture={devGuest ? undefined : auth.picture}
 				onSignOut={() => signOut()}
