@@ -63,38 +63,48 @@ import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
  * Publix and Costco are fine in a spec, but a named chain inside a screenshot
  * on a public page reads as a partnership.
  */
+/**
+ * A term for the page's mocks.
+ *
+ * Nothing here is sorted or restored, so the three stamps `Term` carries are
+ * dead weight on a literal — this fills them once rather than eight times.
+ */
+function mockTerm(id: string, name: string, ink: string): Term {
+	return { id, name, ink, createdAt: '', addedAt: '', changedAt: '' };
+}
+
 const MOCK_LOCATIONS: Term[] = [
-	{ id: 'loc-pantry', name: 'Pantry', ink: 'color-10' },
-	{ id: 'loc-fridge', name: 'Refrigerator', ink: 'color-1' },
-	{ id: 'loc-freezer', name: 'Freezer', ink: 'color-12' },
+	mockTerm('loc-pantry', 'Pantry', 'color-10'),
+	mockTerm('loc-fridge', 'Refrigerator', 'color-1'),
+	mockTerm('loc-freezer', 'Freezer', 'color-12'),
 ];
 
 const MOCK_TYPES: Term[] = [
-	{ id: 'type-produce', name: 'Produce', ink: 'color-10' },
-	{ id: 'type-protein', name: 'Protein', ink: 'color-6' },
-	{ id: 'type-grain', name: 'Grain', ink: 'color-8' },
+	mockTerm('type-produce', 'Produce', 'color-10'),
+	mockTerm('type-protein', 'Protein', 'color-6'),
+	mockTerm('type-grain', 'Grain', 'color-8'),
 ];
 
 const MOCK_STORES: Term[] = [
-	{ id: 'store-grocery', name: 'Grocery', ink: 'color-2' },
-	{ id: 'store-warehouse', name: 'Warehouse', ink: 'color-9' },
+	mockTerm('store-grocery', 'Grocery', 'color-2'),
+	mockTerm('store-warehouse', 'Warehouse', 'color-9'),
 ];
 
 const MOCK_ITEMS: Item[] = [
 	{
 		id: 'mock-beef', name: 'Ground Beef', locationId: 'loc-freezer',
 		qty: '12', threshold: '4', notes: '',
-		typeIds: ['type-protein'], storeIds: ['store-warehouse'], createdAt: '',
+		typeIds: ['type-protein'], storeIds: ['store-warehouse'], createdAt: '', addedAt: '', changedAt: '',
 	},
 	{
 		id: 'mock-apples', name: 'Apples', locationId: 'loc-fridge',
 		qty: '3', threshold: '6', notes: '',
-		typeIds: ['type-produce'], storeIds: ['store-grocery'], createdAt: '',
+		typeIds: ['type-produce'], storeIds: ['store-grocery'], createdAt: '', addedAt: '', changedAt: '',
 	},
 	{
 		id: 'mock-oats', name: 'Rolled Oats', locationId: 'loc-pantry',
 		qty: '0', threshold: '2', notes: '',
-		typeIds: ['type-grain'], storeIds: ['store-grocery'], createdAt: '',
+		typeIds: ['type-grain'], storeIds: ['store-grocery'], createdAt: '', addedAt: '', changedAt: '',
 	},
 ];
 
@@ -117,9 +127,9 @@ const SLICES: {
 		icon: MapPin,
 		body: 'Where it’s kept. The pantry, the upright freezer, the chest freezer out in the garage.',
 		terms: [
-			{ id: 's-pantry', name: 'Pantry', ink: 'color-10' },
-			{ id: 's-fridge', name: 'Refrigerator', ink: 'color-1' },
-			{ id: 's-freezer', name: 'Freezer', ink: 'color-12' },
+			mockTerm('s-pantry', 'Pantry', 'color-10'),
+			mockTerm('s-fridge', 'Refrigerator', 'color-1'),
+			mockTerm('s-freezer', 'Freezer', 'color-12'),
 		],
 	},
 	{
@@ -127,9 +137,9 @@ const SLICES: {
 		icon: Store,
 		body: 'Where you buy it. Filter to one and you’re looking at its shopping list.',
 		terms: [
-			{ id: 's-grocery', name: 'Grocery', ink: 'color-2' },
-			{ id: 's-warehouse', name: 'Warehouse', ink: 'color-9' },
-			{ id: 's-market', name: 'Market', ink: 'color-14' },
+			mockTerm('s-grocery', 'Grocery', 'color-2'),
+			mockTerm('s-warehouse', 'Warehouse', 'color-9'),
+			mockTerm('s-market', 'Market', 'color-14'),
 		],
 	},
 	{
@@ -146,9 +156,9 @@ const SLICES: {
 		 * colours.
 		 */
 		terms: [
-			{ id: 's-produce', name: 'Produce', ink: 'color-10' },
-			{ id: 's-protein', name: 'Protein', ink: 'color-6' },
-			{ id: 's-grain', name: 'Grain', ink: 'color-8' },
+			mockTerm('s-produce', 'Produce', 'color-10'),
+			mockTerm('s-protein', 'Protein', 'color-6'),
+			mockTerm('s-grain', 'Grain', 'color-8'),
 		],
 	},
 ];

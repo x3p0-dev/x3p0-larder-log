@@ -34,11 +34,13 @@
 
 				{ "slug": "drawer-card", "name": "Drawer card", "color": "light-dark(#262019, #1C1710)" },
 				{ "slug": "drawer-card-hover", "name": "Drawer card hover", "color": "light-dark(#332B22, #241E16)" },
+				{ "slug": "drawer-raised-hover", "name": "Drawer raised hover", "color": "light-dark(#42392C, #2E2719)" },
 
 				{ "slug": "drawer-press", "name": "Drawer pressed", "color": "#F2E9DA" },
 				{ "slug": "drawer-press-ink", "name": "Drawer pressed text", "color": "#241E17" },
 				{ "slug": "focus-dark", "name": "Focus on dark", "color": "#D4636B" },
-				{ "slug": "drawer-danger", "name": "Danger on dark", "color": "#D4636B" }
+				{ "slug": "drawer-danger", "name": "Danger on dark", "color": "#D4636B" },
+				{ "slug": "drawer-danger-hover", "name": "Danger on dark, hovered", "color": "#E8828A" }
 			]
 		},
 		"typography": {

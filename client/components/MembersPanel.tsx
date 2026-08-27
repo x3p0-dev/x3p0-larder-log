@@ -100,7 +100,6 @@ export function MembersPanel({ members, me, onChangeRole, onRemoveMember, theme 
 									onClick={() => onRemoveMember(member.id)}
 									disabled={strands}
 									class={`shrink-0 flex items-center justify-center w-7 h-7 ${DRAWER_ICON_DANGER}`}
-									style={{ color: theme.dangerText }}
 									aria-label={`Remove ${member.displayName}`}
 								>
 									<UserMinus size={14} />

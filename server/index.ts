@@ -7,7 +7,8 @@ import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCap
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
-import { normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
+import { normalizeStamp, stampFrom } from '../shared/stamp';
+import { byName, normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
 import { CODE_BYTES, PENDING_CODE, codeFromBytes, codeFromSeed, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
 import type {
 	HouseholdListResult,
@@ -95,6 +96,9 @@ export const schema = {
 		createdBy: string(),
 		defaultThreshold: string().default('1'),
 		ink: string().default(''),
+		// No `changedAt` here, deliberately (D44): nothing orders households by
+		// recency, and a rename is not an event anything in the app reacts to.
+		addedAt: string().default(''),
 	}),
 
 	memberships: table({
@@ -129,6 +133,12 @@ export const schema = {
 		name: string(),
 		ink: string(),
 		icon: string(),
+		// D44's pair. `addedAt` is ours because the platform's `createdAt` cannot
+		// be set by app code and so cannot survive an undo's re-insert; `changedAt`
+		// is ours for the same reason `updatedAt` is not used. Both default to ''
+		// and nothing backfills, so `addedAtOf()` / `changedAtOf()` fall back.
+		addedAt: string().default(''),
+		changedAt: string().default(''),
 	}).index('by_household', ['householdId']),
 
 	// Same as `locations`: reserved, not read. See D34.
@@ -137,6 +147,12 @@ export const schema = {
 		name: string(),
 		ink: string(),
 		icon: string(),
+		// D44's pair. `addedAt` is ours because the platform's `createdAt` cannot
+		// be set by app code and so cannot survive an undo's re-insert; `changedAt`
+		// is ours for the same reason `updatedAt` is not used. Both default to ''
+		// and nothing backfills, so `addedAtOf()` / `changedAtOf()` fall back.
+		addedAt: string().default(''),
+		changedAt: string().default(''),
 	}).index('by_household', ['householdId']),
 
 	// Stores never had the column at all.
@@ -144,8 +160,21 @@ export const schema = {
 		householdId: id('households'),
 		name: string(),
 		ink: string(),
+		// D44's pair. `addedAt` is ours because the platform's `createdAt` cannot
+		// be set by app code and so cannot survive an undo's re-insert; `changedAt`
+		// is ours for the same reason `updatedAt` is not used. Both default to ''
+		// and nothing backfills, so `addedAtOf()` / `changedAtOf()` fall back.
+		addedAt: string().default(''),
+		changedAt: string().default(''),
 	}).index('by_household', ['householdId']),
 
+	// `addedAt` is when the *item* entered the pantry, which outlives the row it
+	// is on: undo re-inserts (D17), so a restored item is a new row with a new
+	// `createdAt`, and this is what carries its place in *Recently added* across
+	// that. Zero refuses an app-set `createdAt` outright, so the stamp has to be
+	// ours, and `changedAt` is ours for the same reason. Both were added after
+	// the fact, so a row from before them holds '' and the fallbacks in
+	// `shared/stamp.ts` answer for it.
 	items: table({
 		householdId: id('households'),
 		name: string(),
@@ -153,6 +182,8 @@ export const schema = {
 		qty: string(),
 		threshold: string(),
 		notes: string().default(''),
+		addedAt: string().default(''),
+		changedAt: string().default(''),
 	}).index('by_household', ['householdId']),
 
 	itemTypes: table({
@@ -352,13 +383,20 @@ export default capsule({
 					notes: item.notes,
 					typeIds: typesByItem.get(item.id) ?? [],
 					storeIds: storesByItem.get(item.id) ?? [],
-					// Zero's own stamp (D35). Nothing writes it; the client sorts
-					// *Recently added* on it, which `collect()` order could not do.
+					// Zero's own stamp (D35). Nothing writes it, and nothing can.
 					createdAt: item.createdAt,
+					// Ours, and the ones every ordering in the app actually uses —
+					// see `shared/stamp.ts`. Both are `''` on a row written before
+					// the columns, which is what the fallbacks are for.
+					addedAt: item.addedAt,
+					changedAt: item.changedAt,
 				})),
-				locations: locations.map((l) => ({ id: l.id, name: l.name, ink: l.ink })),
-				types: types.map((t) => ({ id: t.id, name: t.name, ink: t.ink })),
-				stores: stores.map((s) => ({ id: s.id, name: s.name, ink: s.ink })),
+				// A–Z, once and here, so the drawer's filters, the item sheet's
+				// chips and the shopping list's cards cannot disagree about the
+				// order of the same three lists.
+				locations: byName(locations).map(termDto),
+				types: byName(types).map(termDto),
+				stores: byName(stores).map(termDto),
 			};
 		}),
 
@@ -436,10 +474,13 @@ export default capsule({
 		createHousehold: mutation(async (ctx, name: string, ink?: string) => {
 			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
 
+			const now = Date.now();
+
 			const household = await ctx.db.households.insert({
 				name: normalizeName(name) || 'My Pantry',
 				createdBy: ctx.auth.userId,
 				defaultThreshold: '1',
+				addedAt: stampFrom(now),
 				// Both creation surfaces arrive with one already picked — the first
 				// colour unused across the caller's households. An absent or bogus
 				// one stores '' and takes the id-derived default rather than
@@ -457,12 +498,20 @@ export default capsule({
 			// Seed the taxonomies. Without at least one location the household
 			// cannot hold an item at all — `locationId` is required and there
 			// are no nullable fields — so a bare household is a dead end.
+			//
+			// These go in through `insert` rather than `createTerm`, so they are
+			// the one path that could leave a term unstamped. `stamps` is the
+			// same object for all fifteen: they arrive together, and staggering
+			// them by a millisecond each would imply an order that isn't real.
+			const stamps = { addedAt: stampFrom(now), changedAt: stampFrom(now) };
+
 			for (const seed of SEED_LOCATIONS) {
 				await ctx.db.locations.insert({
 					householdId: household.id,
 					name: seed.name,
 					ink: normalizeInk(seed.ink),
 					icon: '',
+					...stamps,
 				});
 			}
 
@@ -472,6 +521,7 @@ export default capsule({
 					name: seed.name,
 					ink: normalizeInk(seed.ink),
 					icon: '',
+					...stamps,
 				});
 			}
 
@@ -480,6 +530,7 @@ export default capsule({
 					householdId: household.id,
 					name: seed.name,
 					ink: normalizeInk(seed.ink),
+					...stamps,
 				});
 			}
 
@@ -525,11 +576,26 @@ export default capsule({
 					notes?: string;
 					typeIds?: string[];
 					storeIds?: string[];
+					/**
+					 * The removed row's own stamps, on the undo path only (D17).
+					 *
+					 * Absent on an ordinary add, where both are now. Supplied, each
+					 * is still validated and clamped — see `normalizeStamp`. Undo
+					 * carries both so a restored item is indistinguishable from the
+					 * one that was removed, which is what undo is supposed to mean.
+					 */
+					addedAt?: string;
+					changedAt?: string;
 				}
 			) => {
 				const membership = await requireCapability(ctx, householdId, 'item:write');
 
 				if (! isValidName(draft.name)) throw new AccessError('An item needs a name.');
+
+				// One clock read for both stamps: two calls can straddle a
+				// millisecond, and an item whose `changedAt` predates its `addedAt`
+				// is a row that was modified before it existed.
+				const now = Date.now();
 
 				// The location must be one of ours. `id()` is not a foreign key,
 				// so nothing beneath this line would catch a bogus reference.
@@ -542,6 +608,8 @@ export default capsule({
 					qty: normalizeQty(draft.qty),
 					threshold: normalizeQty(draft.threshold),
 					notes: normalizeNotes(draft.notes),
+					addedAt: normalizeStamp(draft.addedAt, now),
+					changedAt: normalizeStamp(draft.changedAt, now),
 				});
 
 				await syncJoins(ctx.db, membership.householdId, item.id, draft.typeIds ?? [], draft.storeIds ?? []);
@@ -574,7 +642,10 @@ export default capsule({
 
 				const item = assertInHousehold(await ctx.db.items.get(itemId), membership);
 
-				const next: Record<string, string> = {};
+				// Unconditional: this mutation is only reached by someone pressing
+				// Save, and the join rows below can change without a single column
+				// in `next` doing so.
+				const next: Record<string, string> = { changedAt: stampFrom(Date.now()) };
 
 				if (patch.name !== undefined) {
 					if (! isValidName(patch.name)) throw new AccessError('An item needs a name.');
@@ -610,7 +681,12 @@ export default capsule({
 			// and neither deserves to be honored.
 			const step = delta < 0 ? -1 : 1;
 
-			await ctx.db.items.update(item.id, { qty: fromInt(toInt(item.qty) + step) });
+			// The hot path is not exempt: a quantity is information about the item,
+			// so `-1` on a card is a change like any other (D44).
+			await ctx.db.items.update(item.id, {
+				qty: fromInt(toInt(item.qty) + step),
+				changedAt: stampFrom(Date.now()),
+			});
 
 			ctx.invalidate('pantry');
 		}),
@@ -633,7 +709,18 @@ export default capsule({
 		// --- taxonomy ---
 
 		createTerm: mutation(
-			async (ctx, householdId: string, kind: TermKind, draft: { name: string; ink: string }) => {
+			async (
+				ctx,
+				householdId: string,
+				kind: TermKind,
+				draft: {
+					name: string;
+					ink: string;
+					/** The deleted term's own stamps, on the undo path only. See `addItem`. */
+					addedAt?: string;
+					changedAt?: string;
+				}
+			) => {
 				const membership = await requireCapability(ctx, householdId, 'taxonomy:write');
 				const tableName = termTable(kind);
 
@@ -652,13 +739,18 @@ export default capsule({
 				const name = normalizeName(draft.name);
 				const ink = normalizeInk(draft.ink);
 				const owner = membership.householdId;
+				const now = Date.now();
+				const stamps = {
+					addedAt: normalizeStamp(draft.addedAt, now),
+					changedAt: normalizeStamp(draft.changedAt, now),
+				};
 
 				// `stores` has no `icon` column; the other two get the empty string
 				// the reserved column holds (D34).
 				const row =
 					tableName === 'stores'
-						? await ctx.db.stores.insert({ householdId: owner, name, ink })
-						: await ctx.db[tableName].insert({ householdId: owner, name, ink, icon: '' });
+						? await ctx.db.stores.insert({ householdId: owner, name, ink, ...stamps })
+						: await ctx.db[tableName].insert({ householdId: owner, name, ink, icon: '', ...stamps });
 
 				ctx.invalidate('pantry');
 
@@ -683,7 +775,7 @@ export default capsule({
 					termLabel(kind)
 				);
 
-				const next: Record<string, string> = {};
+				const next: Record<string, string> = { changedAt: stampFrom(Date.now()) };
 
 				if (patch.name !== undefined) {
 					if (! isValidName(patch.name)) throw new AccessError('A name is required.');
@@ -1012,6 +1104,24 @@ export default capsule({
 const PROBE_KEY = 'k7Qv2ZmR9xLpT4Hd';
 
 // --- helpers ---
+
+/**
+ * One term row as the client sees it.
+ *
+ * The three taxonomies are the same shape and always have been; this is the one
+ * place that says so, rather than three near-identical `map` bodies that have
+ * to be kept in step every time a column joins the DTO.
+ */
+function termDto(t: { id: string; name: string; ink: string; addedAt: string; changedAt: string; createdAt: string }) {
+	return {
+		id: t.id,
+		name: t.name,
+		ink: t.ink,
+		createdAt: t.createdAt,
+		addedAt: t.addedAt,
+		changedAt: t.changedAt,
+	};
+}
 
 /**
  * An invite code, from the best entropy this runtime offers.

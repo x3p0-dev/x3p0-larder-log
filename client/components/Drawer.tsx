@@ -162,7 +162,16 @@ export function Drawer({
 					 * **This number is a function of the card floor.** Change
 					 * `minmax(320px,…)` in `Pantry` and it has to be re-derived.
 					 */
-					'fixed min-[1120px]:sticky top-0 left-0 z-40 h-screen shrink-0 flex flex-col ' +
+										/*
+					 * `h-dvh`, not `h-screen`. On mobile Chrome `100vh` is the *large*
+					 * viewport — the one with the URL bar hidden — so a full-height
+					 * fixed drawer runs ~60px past what you can actually see, and that
+					 * dead band is the tail of this column's scroll port. Anything
+					 * pinned to the end of the Filter list was unreachable: opening a
+					 * term's colour picker on the last row put the sixteen swatches
+					 * below the fold with no scroll left to give.
+					 */
+					'fixed min-[1120px]:sticky top-0 left-0 z-40 h-dvh shrink-0 flex flex-col ' +
 					'w-[328px] min-[1120px]:w-[340px] transition-transform duration-200 ' +
 					(open ? 'translate-x-0' : '-translate-x-full min-[1120px]:translate-x-0') +
 					(collapsed ? ' min-[1120px]:hidden' : '')

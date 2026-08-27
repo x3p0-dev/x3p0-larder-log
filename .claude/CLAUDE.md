@@ -22,10 +22,15 @@ WordPress, say so rather than building it.
 
 **Phases 3 and 4 are built and are now published** — v4 went live on
 2026-08-26, ending a three-day publish blockade. Publishing still needs a
-rationale-header shim. **The hosted runtime is a different JS engine from the
-one `sf dev` runs**, which broke `createInvite` in production while it worked
-locally — read *The hosted runtime is not the engine `sf dev` runs* before
-writing any handler. A real Spacefast Zero project: `sf.jsonc`,
+rationale-header shim. **There is unpublished work in the tree**: v4 predates
+D44's nine stamp columns, the A–Z term order, and the 2026-08-27 device fixes,
+so the next publish carries a schema change (additive, no flag).
+
+**The hosted runtime is a different JS engine from the one `sf dev` runs**,
+which broke `createInvite` in production while it worked locally — read *The
+hosted runtime is not the engine `sf dev` runs* before writing any handler.
+
+A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
 `.docs/data-model.md`, four live queries, and sixteen mutations. The schema is
@@ -136,8 +141,9 @@ idioms that were there before.
 - **Leave household** moved to the foot of the Household section and relabels to
   *Delete household* for the last member. `deleteHousehold` finally has a client
   caller.
-- ***Recently added* sorts on `createdAt`** (D35). It previously applied no sort
-  at all, so it rendered oldest-first — the opposite of its label.
+- ***Recently added* got a sort at all** (D35). It previously applied none, so
+  it rendered oldest-first — the opposite of its label. It sorted on the
+  platform's `createdAt` until D44 moved it to `addedAt` on 2026-08-27.
 
 ### Flows outside the shell (Phase 4.7) are built — 2026-08-26
 
@@ -258,7 +264,8 @@ hand-writing the escaped form.
 
 The spec's *Household colour*, governed by
 [D42](../.docs/decisions.md#d42-a-household-has-a-colour-and-it-is-one-of-the-sixteen).
-**The one schema change since Phase 2, and it is additive**: `households.ink`,
+**The first of two additive schema changes since Phase 2** (the other is D44's
+nine stamp columns): `households.ink`,
 a colour token defaulting to `''`. Nine tables and sixteen mutations still; the
 column applies on the next publish with no flag.
 
@@ -288,6 +295,17 @@ column applies on the next publish with no flag.
   knowingly differs from the boards: the spec asks for a 34px preview on the
   grounds that the tile is elsewhere, but the drawer's own household row is
   directly above the panel and already shows it.
+- **A selected chip keeps its dot, everywhere** (2026-08-27). The item sheet's
+  Location / Type / Store chips dropped theirs on selection, on the reasoning
+  that the fill already said what the dot was for — but the fill says
+  *selected*, and only the dot says *which term*. The drawer's filter chips
+  already kept theirs; this is the sheet catching up. **The dot reads against
+  the chip, not the sheet**: a selected chip is filled with `inkBg`, the page's
+  inverse, so the dot takes the *other* theme's value —
+  `entityColorFor(id, terms, on ? ! dark : dark)`. That is not only consistent
+  but measurably better, since those two palettes are tuned against exactly
+  these two grounds: across all sixteen colours the worst dot-on-fill contrast
+  goes from 1.98:1 to 3.09:1, clearing the 3:1 non-text floor everywhere.
 - **Every picker draws one palette, and it follows the theme** — light `base` in
   light, the dark variant in dark, on the drawer and on a card alike.
   `ColorPicker`'s `onDark` now governs the **well and the selected ring only**,
@@ -334,6 +352,14 @@ classes are in `/zero.css` in the right order (base → hover → active), and t
 `color-7` stored, an omitted colour resolving to a stable default,
 `updateHousehold` writing a new one, `invitePreview` returning the household's
 own colour. **Nobody has clicked any of it.**
+
+**Superseded 2026-08-27: it has been clicked.** A real session on a Pixel 8 Pro
+and with a second person found six defects nothing in this list could have
+caught — a stale effect dependency, a ring clipped by `overflow-x-auto`, a
+`100vh` drawer running past the mobile viewport, a hover painted the colour of
+the row under it, a picker that snapped shut, and a chip that dropped its dot.
+**Compiling, curling and reading the artifact prove a build is coherent, not
+that it is usable.**
 
 ### Empty results — 2026-08-26
 
@@ -443,6 +469,69 @@ and rejected: `sf dev` serves no project static files, so a self-hosted face is
 invisible locally and appears only after a publish. **Confirmed rendering under
 `sf dev` on 2026-08-25** — the whole reason for choosing a remote URL was that
 this check is possible at all.
+
+### Every ordered row carries its own stamps (D44) — 2026-08-27
+
+**The rule: a timestamp this app sorts by is a timestamp this app writes.** The
+platform's `createdAt` and `updatedAt` are readable but **cannot be set by app
+code** — an insert supplying one is refused outright, *"Zero manages
+items.createdAt; app code cannot set it directly"*, confirmed against a running
+capsule rather than inferred from the docs' "those names are reserved". So
+neither survives a re-insert, and undo is a re-insert (D17). **Do not try
+again.**
+
+**The second additive schema change since Phase 2**, and the largest: nine
+columns across five tables, all ISO 8601 UTC strings defaulting to `''`. Nine
+tables and sixteen mutations still; applies on the next publish with no flag,
+exactly as `households.ink` did.
+[D44](../.docs/decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)
+has the table.
+
+- **`items`, `locations`, `types`, `stores` get both** `addedAt` and
+  `changedAt`. **`households` gets `addedAt` only** — nothing orders households
+  by recency and a rename is not an event anything reacts to.
+- **`shared/stamp.ts`** owns every rule: `stampFrom`, `normalizeStamp` (falls
+  back to now for anything unparseable and **clamps a future stamp**, so a bad
+  value cannot pin a row to the top of a list forever), `addedAtOf`, and
+  `changedAtOf`, whose fallback chain is `changedAt` → `addedAt` →
+  `createdAt`. `npm test` is at 198 assertions.
+- **`changedAt` is bumped by every mutation that writes a visible field** —
+  `updateItem`, `adjustQty`, `updateTerm`. **`adjustQty` is not exempt**: a
+  quantity is information about the item, and the hot path being hot is not a
+  reason for it to lie.
+- **Nothing reads `changedAt` yet**, and that is deliberate. The column has to
+  exist before there are rows to stamp — a row written without one never gets
+  one, because nothing backfills.
+- **The fallbacks are permanent, not transitional.** Every row that exists on
+  the published space today holds `''` forever.
+- **Both create mutations take stamps beside the draft, not in it.**
+  `ItemDraft` and `TermDraft` omit them, because no form holds one — undo is the
+  only caller that passes any.
+- **`createHousehold` seeds fifteen terms through `insert`, not `createTerm`**,
+  so it is the one path that could leave a term unstamped. It shares one stamp
+  across all fifteen: they arrive together, and staggering them by a millisecond
+  each would imply an order that isn't real.
+
+**Term lists are A–Z now**, sorted once in the `pantry` query so the drawer's
+filters, the item sheet's chips and the shopping list's cards cannot disagree.
+They were in `collect()` order — seed order, then creation order. This also
+closes what D36 recorded as "a restored term appends". `byName()` is in
+`shared/term.ts`; `termDto()` in the capsule is the one place the three
+taxonomies' shared DTO shape is written down.
+
+**Not covered:** `memberships`, `invites`, and the join tables. Nothing orders
+them by time today, and a column is permanent — if any of them grows a
+chronological view, it needs stamps *before* the rows that would want them.
+
+Verified against the real handlers over `POST /__spacefast/zero/run`, on a
+**second `sf dev` started with `--port 4199`** so the one already running was
+undisturbed: three items added in order and the middle one removed and undone
+(`addedAt` order keeps it in place, `createdAt` order — the bug — puts it
+first); seeded terms A–Z and stamped; `changedAt` moving on `adjustQty` and
+again on `updateItem` while `addedAt` holds still; a removed item and a deleted
+term both restored with **both** stamps byte-identical and a visibly newer
+`createdAt`; a renamed store re-sorting alphabetically. **Nobody has clicked
+it.**
 
 ### Publishing works again as of 2026-08-26 — v4 is live
 
@@ -636,7 +725,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D42, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 governs row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour** |
+| `.docs/decisions.md` | D1–D44, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -724,13 +813,13 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 181 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 198 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
-  invite-link parsing, and the dev-guest bypass in `shared/identity.ts`. **Add
-  to it** when you touch any of those — that file is the app's only
-  authorization test.
+  invite-link parsing, the dev-guest bypass in `shared/identity.ts`, and D44's
+  stamp guards and A–Z term ordering. **Add to it** when you touch any of
+  those — that file is the app's only authorization test.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
   the fastest way to catch string-encoded numbers used as numbers.
   **It will not catch a term id rendered where a name belongs** — both are
@@ -843,6 +932,14 @@ Do not claim something works because it compiled. Three hard limits:
   (`guest:local`). So a second tab is the same user: enough to watch a mutation
   propagate, not enough to test two members of a household. Anything touching
   sign-in, invites, or roles goes to the published space.
+- **`?members` puts two stand-ins in the Members panel** —
+  `http://127.0.0.1:4173/?members` — so the role chips, the remove button and
+  the last-owner guard can be *looked at* locally. Loopback-only, one page load,
+  ignored elsewhere, and the rows never leave the client: `isDevMember` answers
+  `changeRole` and `removeMember` before either reaches the network. See
+  `client/lib/devMembers.ts`, and take it out with D14 alongside `?signedout`.
+  It is a way to see the panel, **not** a way to test the handlers — those still
+  need two real people on the published space.
 - **A failing query is invisible to the client.** Zero emits `query.result` only
   — there is no error path — so a query that throws leaves `useQuery` on its
   initial value forever, indistinguishable from loading. This is why queries

@@ -86,7 +86,7 @@ can't be queried without a scope, would help a lot.
 
 ### ❓ Open API questions the docs don't answer
 
-Collected in [`docs/notes.md`](../../docs/notes.md); the ones that actually
+Collected in [`.docs/notes.md`](../../.docs/notes.md); the ones that actually
 block design decisions:
 
 1. **Can `query()` take arguments?** Every `mutation()` example has typed args;
@@ -345,7 +345,7 @@ hand-rolled hole in its own auth gate.
 We then did exactly that, which is the point: `client/index.tsx` now lets a
 guest through when `location.hostname` is a loopback address, with a permanent
 on-screen badge so a local session can't be mistaken for a real one
-([D14](../../docs/decisions.md)). It works, and it is inert on a published
+([D14](../../.docs/decisions.md)). It works, and it is inert on a published
 space — but it is a hole in the only auth boundary the app has, written by hand,
 because the platform gave us no other way to see our own UI. That is a bad thing
 to make every developer of a gated app invent for themselves.
@@ -811,7 +811,7 @@ output mentions that the thing it just published cannot be opened.
 
 It also breaks the flow the platform is otherwise built for. Our Phase 3 invite
 link is useless if the recipient hits a platform 403 before reaching our join
-route — see [D15](../../docs/decisions.md#d15-the-space-is-public-the-apps-own-gate-is-the-boundary).
+route — see [D15](../../.docs/decisions.md#d15-the-space-is-public-the-apps-own-gate-is-the-boundary).
 
 **What we'd suggest:** say the space is private in the publish receipt, with the
 one command or click that changes it. Better still, let `sf.jsonc`'s `access`
@@ -2870,3 +2870,49 @@ remember to remove.
 
 An invite minted on the published space was redeemed by **a second person**, who
 joined the household. First real multi-user use of the app.
+
+## 2026-08-27 — reserved columns, and a good error message
+
+### 👍 The refusal on a reserved column says exactly what is wrong
+
+`items.createdAt` cannot be set by app code, and the runtime says so in one
+sentence:
+
+```
+Error: Zero manages items.createdAt; app code cannot set it directly.
+```
+
+Named table, named column, named rule. This is the error message every other
+refusal in the platform should be measured against — compare the silent 500 an
+uncaught handler exception produces. It cost one probe request to establish
+something the docs only imply.
+
+### 🤔 "those names are reserved" could say what *reserved* means
+
+`AGENTS.md` says every row gets `id`, `createdAt` and `updatedAt` for free and
+that "those names are reserved". Reserved for what, exactly, is left open — it
+reads as *you cannot name your own column this*, and it also means *you cannot
+supply a value on insert*. The second is the load-bearing one and it is not
+written down anywhere we could find.
+
+It matters because it decides a schema. An app that wants a creation stamp it
+controls — one that can survive a delete-and-reinsert, say — cannot borrow the
+built-in and has to carry its own column. Worth one clause in the limits list:
+*"reserved: you cannot declare them, and `insert()` rejects a supplied value."*
+
+Related, and a genuine feature request: **an optional app-supplied `createdAt`
+on insert**, for exactly the restore case. Every undo built on re-insert has
+this problem, and every one of them will end up with a duplicate timestamp
+column. We now have nine of them across five tables — `addedAt` and `changedAt`
+everywhere the app orders rows — which is entirely a workaround for two columns
+the platform already provides and will not let us write. `updatedAt` has the
+same problem one field over: a restored row's is the moment it was restored.
+
+### 👍 `POST /__spacefast/zero/run` keeps earning its place
+
+Three items added, one removed, one re-added with a carried stamp, and the list
+read back — the whole round trip, against the real handlers, from a shell. Still
+undocumented. Also worth noting: `sf dev --port` makes a second dev server
+trivial, so a scratch instance can be driven without disturbing one somebody is
+clicking in. Both of these deserve to be in the docs.
+

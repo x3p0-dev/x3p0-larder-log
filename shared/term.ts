@@ -146,3 +146,21 @@ export function termUsageCount(
 
 	return list.filter((it) => it.storeIds.includes(termId)).length;
 }
+
+/**
+ * Terms, A–Z by name.
+ *
+ * The one ordering every term list uses. They were rendered in `collect()`
+ * order — insertion order, which is the seed order for a new household and
+ * then whatever order things happened to be created in after that. Nothing
+ * about that order means anything to a reader, and it put a term you added
+ * last week at the end of a list you scan by name.
+ *
+ * Applied server-side in the `pantry` query, so the drawer's filters, the item
+ * sheet's chips and the shopping list's store cards cannot disagree about it.
+ * Returns a new array; the input is not touched.
+ */
+export function byName<T extends { name: string }>(terms: readonly T[]): T[] {
+	return [...terms].sort((a, b) => a.name.localeCompare(b.name));
+}
+

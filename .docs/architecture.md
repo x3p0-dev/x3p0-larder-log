@@ -18,22 +18,25 @@ larder-log/
   client/
     index.tsx          # exports App: the sign-in gate and nothing else
     Pantry.tsx         # the signed-in application
-    components/
+    components/        # 29 files; the shell, the surfaces, the dialogs
     hooks/
       usePantryData.ts # the ONLY module importing @spacefast/zero/client
-      usePersistentState.ts  # theme override only — everything else is server
+      usePersistentState.ts  # the three localStorage keys — D25, D33, D41
       useSystemTheme.ts
+      useToasts.ts     # the toast stack; each row owns its own countdown (D36)
+      useTripChecks.ts # a shopping trip's ticks, per device (D41)
     lib/
       theme.ts         # the Theme object, status colors, chip styles
       palette.ts       # what each color token LOOKS like in this theme (D32)
       controlStyles.ts # hover/active/focus class names — DRAWER_* and PAGE_*
       fonts.ts         # the Google Fonts <link>, injected at boot (D31)
       appIcon.ts       # title, favicons and theme-color, injected at boot
-      icons.ts         # the lucide components behind shared/icons.ts keys (D23)
       actions.ts       # the taxonomy action shape
-      pendingInvite.ts # holds an invite code across sign-in (D28)
+      pendingInvite.ts # holds an invite code across sign-in (D28, D38)
+      signInAttempt.ts # remembers an abandoned sign-in, for the bounce (D37)
+      devMembers.ts    # `?members`: stand-in rows, loopback only. Goes with D14
   server/
-    index.ts           # capsule(): the schema, 2 queries, 16 mutations
+    index.ts           # capsule(): the schema, 4 queries, 16 mutations, 2 endpoints
     schema.ts          # ReadDb / WriteDb only — the tables CANNOT live here (D27)
     auth.ts            # membershipState / requireMembership / requireCapability
   shared/              # imports NOTHING — see below
@@ -41,25 +44,28 @@ larder-log/
     roles.ts           # the D20 capability matrix; can()
     identity.ts        # who counts as signed in (the dev-guest bypass)
     membership.ts      # D33's read-heals/write-refuses rule; D22's last-owner guard
+    household.ts       # a household's letter and colour, from its row (D42)
     invite.ts          # code generation, 14-day expiry (D24)
+    sha256.ts          # hand-written; the hosted runtime has no `crypto` (D43)
     joinLink.ts        # ?join=<code> links: build, parse, strip, group (D28)
     palette.ts         # WHICH color tokens exist — no colors in it (D32)
-    term.ts            # name/ink validation
-    icons.ts           # icon KEYS (the components live in client/lib) (D23)
-    seed.ts            # starter taxonomies for a new household
+    term.ts            # name/ink validation, and the A-Z term order (D44)
+    stamp.ts           # addedAt / changedAt, and their fallbacks (D44)
+    shoppingList.ts    # grouping items by store, and both orderings (D41)
+    seed.ts            # starter taxonomies for a new household (D40)
     qty.ts             # the string <-> integer boundary (D4)
     status.ts          # out / low / ok derivation (D9)
-  tests/shared.test.ts # 111 assertions; `npm test`, no runner
+  tests/shared.test.ts # 198 assertions; `npm test`, no runner
   icons/               # favicons and PWA icons; served at /icons/ in production
-  theme.json           # the palette and type scale, as light-dark() pairs
+  sf.jsonc             # runtime config. JSONC — comments allowed here
+  theme.json           # the palette and type scale, as light-dark() pairs.
+                       #   STRICT JSON: a `//` line stops `sf dev` starting
+  tsconfig.json        # strict; `npm run typecheck`
+  .env.server          # server-only secrets, synced on publish. INVITE_SECRET (D43)
   .docs/               # these documents — dot-prefixed to stay out of the
                        #   publish payload's web root (D29)
   .claude/CLAUDE.md    # project instructions, dot-prefixed for the same reason
-  .claude/docs/        # mockup, platform feedback log, Zero's own AGENTS.md
-  sf.jsonc             # runtime config
-  theme.json           # WordPress theme.json v3 — see Styling
-  tsconfig.json        # strict; `npm run typecheck`
-  .env.server          # server-only secrets, synced on publish (none yet)
+  .claude/docs/        # design specs, platform feedback log, Zero's own AGENTS.md
 ```
 
 `shared/` is the important one. It imports nothing — not Preact, not the Zero
@@ -309,8 +315,11 @@ Recorded because the same conversions apply to anything still being read from
 Phase 2 then changed the two things the port had deliberately deferred:
 
 - `usePersistentState` (localStorage) → `useQuery` / `useMutation`, via
-  `client/hooks/usePantryData.ts`. The one surviving call site is the per-device
-  theme override ([D25](decisions.md#d25-no-preferences-table))
+  `client/hooks/usePantryData.ts`. **Three** call sites survive, all per-device
+  by design: the theme override ([D25](decisions.md#d25-no-preferences-table)),
+  which household this device is pointed at
+  ([D33](decisions.md#d33-a-user-may-belong-to-several-households)), and a
+  shopping trip's ticks ([D41](decisions.md#d41-the-shopping-list-is-a-mode-and-its-checks-are-local))
 - Taxonomy references by **name** → by **id**, which was the bulk of the work.
   Watch for the failure mode it introduced: an id rendered where a name belongs
   **typechecks**, because both are `string`, and only shows up as a UUID on

@@ -26,7 +26,36 @@ export type Term = {
 	id: string;
 	name: string;
 	ink: string;
+	/**
+	 * Zero's own insert stamp, ISO 8601 UTC — never written by this app, and it
+	 * cannot be (D35, D44). Kept only as the last fallback for rows written
+	 * before the two below existed.
+	 */
+	createdAt: string;
+
+	/** When this entered the household, as this app stamps it. See `shared/stamp.ts`. */
+	addedAt: string;
+
+	/** When it was last edited. Bumped by every mutation that writes a visible field. */
+	changedAt: string;
 };
+
+/**
+ * The editable subset of a term, as the composer holds it.
+ *
+ * The stamps are omitted for the same reason `ItemDraft` omits them: no form
+ * holds one, and the single caller that supplies a value is undo, which passes
+ * them beside the draft.
+ */
+export type TermDraft = Omit<Term, 'id' | 'createdAt' | 'addedAt' | 'changedAt'>;
+
+/**
+ * A row's stamps, as undo hands them back to a create mutation.
+ *
+ * Both optional: a create with neither is stamped now, which is every path
+ * except a restore.
+ */
+export type Stamps = { addedAt?: string; changedAt?: string };
 
 /** An inventory row. `qty` and `threshold` are decimal strings — see D4. */
 export type Item = {
@@ -39,23 +68,29 @@ export type Item = {
 	threshold: string;
 	notes: string;
 	/**
-	 * Zero's own insert stamp, ISO 8601 UTC — never written by this app (D35).
-	 *
-	 * Carried on the DTO so *Recently added* can be a real ordering instead of
-	 * whatever order `collect()` happened to return, which was oldest-first and
-	 * therefore the exact opposite of the label. It string-compares correctly,
-	 * which is the only reason sorting on it is safe here (D4).
+	 * Zero's own insert stamp, ISO 8601 UTC — never written by this app, and it
+	 * cannot be (D35, D44). Kept only as the last fallback for rows written
+	 * before the two below existed.
 	 */
 	createdAt: string;
+
+	/** When this entered the household, as this app stamps it. See `shared/stamp.ts`. */
+	addedAt: string;
+
+	/** When it was last edited. Bumped by every mutation that writes a visible field. */
+	changedAt: string;
 };
 
 /**
  * The editable subset of an item, as the add and edit forms hold it.
  *
  * `createdAt` is omitted with `id` for the same reason: both are the platform's
- * to assign, and `insert()` rejects either one outright.
+ * to assign, and `insert()` rejects either one outright. `addedAt` and
+ * `changedAt` are omitted because no form holds one — the server stamps them,
+ * and the single caller that supplies values is undo, which passes them beside
+ * the draft rather than in it.
  */
-export type ItemDraft = Omit<Item, 'id' | 'createdAt'>;
+export type ItemDraft = Omit<Item, 'id' | 'createdAt' | 'addedAt' | 'changedAt'>;
 
 export type Member = {
 	id: string;

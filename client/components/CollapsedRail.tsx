@@ -267,7 +267,7 @@ export function CollapsedRail({
 	return (
 		<aside
 			class={
-				'sticky top-0 h-screen w-[68px] shrink-0 flex-col items-center gap-3 py-[18px] z-40 ' +
+				'sticky top-0 h-dvh w-[68px] shrink-0 flex-col items-center gap-3 py-[18px] z-40 ' +
 				(autoOnly ? 'hidden md:max-[1120px]:flex' : 'hidden md:flex')
 			}
 			style={{ background: theme.drawer.bg }}

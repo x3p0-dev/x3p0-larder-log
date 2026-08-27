@@ -82,7 +82,15 @@ function ChipRow({
 			<div class="flex flex-wrap gap-[7px]">
 				{terms.map((t) => {
 					const on = selected.includes(t.id);
-					const c = entityColorFor(t.id, terms, dark);
+					/*
+					 * **The dot is read against the chip, not against the sheet.**
+					 * A selected chip is filled with `inkBg`, which is the page's
+					 * inverse — near-black in light, cream in dark — so the dot on
+					 * one takes the *other* theme's value: the bright variant on
+					 * the dark fill, the saturated base on the cream one. Passing
+					 * `dark` straight through drew a light base on near-black.
+					 */
+					const c = entityColorFor(t.id, terms, on ? ! dark : dark);
 
 					return (
 						<button
@@ -94,12 +102,13 @@ function ChipRow({
 							style={on ? { background: theme.inkBg, color: theme.inkText, fontWeight: 600, border: '1px solid transparent' } : undefined}
 						>
 							{/*
-							  * The dot goes when the chip is on: the fill has already
-							  * said the only thing the dot was there to help with, and
-							  * the colour identifies the term while the inversion says
-							  * it is selected.
+							  * The dot stays when the chip is on — the same rule the
+							  * drawer's filter chips follow. It is the only thing
+							  * carrying the term's own colour, and dropping it on
+							  * selection stops the chip saying *which* term it is at
+							  * the exact moment you have picked it.
 							  */}
-							{! on && <span class="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: c.dot }} />}
+							<span class="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: c.dot }} />
 							{t.name}
 						</button>
 					);
@@ -148,10 +157,18 @@ export function ItemSheet({
 	const editing = mode === 'edit';
 	const nameRef = useRef<HTMLInputElement>(null);
 
+	/*
+	 * Focus is an *opening* effect and nothing else. Folded in with the Escape
+	 * listener it depended on `onClose`, which the parent rebuilds every render
+	 * — so every keystroke, every chip, every stepper press re-ran it and threw
+	 * the caret back into the name field mid-edit.
+	 */
+	useEffect(() => {
+		if (open) nameRef.current?.focus();
+	}, [open]);
+
 	useEffect(() => {
 		if (! open) return;
-
-		nameRef.current?.focus();
 
 		function onKey(e: KeyboardEvent) {
 			if (e.key === 'Escape') onClose();
@@ -191,7 +208,8 @@ export function ItemSheet({
 				aria-label={editing ? `Edit ${title ?? 'item'}` : 'Add an item'}
 				class={
 					'fixed z-50 flex flex-col ' +
-					'inset-x-0 bottom-0 max-h-[92vh] rounded-t-3xl ' +
+					/* `dvh` for the same reason the drawer takes it: `vh` is the URL-bar-hidden viewport, so the sheet's foot — Save — sat under the browser chrome. */
+					'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-3xl ' +
 					'md:inset-y-0 md:left-auto md:right-0 md:w-[480px] md:max-h-none md:rounded-none'
 				}
 				style={{

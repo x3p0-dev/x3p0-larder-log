@@ -11,6 +11,8 @@ import type {
 	ItemDraft,
 	PantryData,
 	PantryResult,
+	Stamps,
+	TermDraft,
 	TermKind,
 } from '../../shared/types';
 
@@ -67,14 +69,20 @@ export type PantryApi = {
 	createHousehold: (name: string, ink: string) => Promise<string | null>;
 	updateHousehold: (patch: { name?: string; defaultThreshold?: string; ink?: string }) => Promise<void>;
 
-	addItem: (draft: ItemDraft) => Promise<string | null>;
+	/**
+	 * `stamps` is supplied by **undo only**, carrying the removed row's own
+	 * `addedAt` / `changedAt` so the restored item lands back in its place under
+	 * *Recently added* rather than at the top (D17, D44). An ordinary add omits
+	 * it and the server stamps now.
+	 */
+	addItem: (draft: ItemDraft, stamps?: Stamps) => Promise<string | null>;
 	/** True when the server accepted the edit. False leaves the sheet open. */
 	updateItem: (id: string, patch: Partial<ItemDraft>) => Promise<boolean>;
 	adjustQty: (id: string, delta: number) => Promise<void>;
 	/** True when the row is really gone — the undo toast is armed on this. */
 	removeItem: (id: string) => Promise<boolean>;
 
-	createTerm: (kind: TermKind, draft: { name: string; ink: string }) => Promise<string | null>;
+	createTerm: (kind: TermKind, draft: TermDraft, stamps?: Stamps) => Promise<string | null>;
 	updateTerm: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
 	/**
 	 * True when the term is really gone — the undo toast is armed on this.
@@ -127,11 +135,11 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 
 	const rawCreateHousehold = useMutation<[string, string], { householdId: string }>('createHousehold');
 	const rawUpdateHousehold = useMutation<[string, { name?: string; defaultThreshold?: string; ink?: string }], void>('updateHousehold');
-	const rawAddItem = useMutation<[string, ItemDraft], { id: string }>('addItem');
+	const rawAddItem = useMutation<[string, ItemDraft & Stamps], { id: string }>('addItem');
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
 	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
 	const rawRemoveItem = useMutation<[string, string], void>('removeItem');
-	const rawCreateTerm = useMutation<[string, TermKind, { name: string; ink: string }], { id: string }>('createTerm');
+	const rawCreateTerm = useMutation<[string, TermKind, TermDraft & Stamps], { id: string }>('createTerm');
 	const rawUpdateTerm = useMutation<[string, TermKind, string, { name?: string; ink?: string }], void>('updateTerm');
 	const rawDeleteTerm = useMutation<[string, TermKind, string], void>('deleteTerm');
 	const rawCreateInvite = useMutation<[string, string], { code: string; expiresAt: string }>('createInvite');
@@ -210,8 +218,8 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			await run(() => rawUpdateHousehold(currentHouseholdId, patch));
 		}, [run, rawUpdateHousehold, currentHouseholdId]),
 
-		addItem: useCallback(async (draft) => {
-			const result = await run(() => rawAddItem(currentHouseholdId, draft));
+		addItem: useCallback(async (draft, stamps) => {
+			const result = await run(() => rawAddItem(currentHouseholdId, { ...draft, ...stamps }));
 			return result ? result.id : null;
 		}, [run, rawAddItem, currentHouseholdId]),
 
@@ -231,8 +239,8 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			(await run(() => rawRemoveItem(currentHouseholdId, id).then(() => true))) === true
 		), [run, rawRemoveItem, currentHouseholdId]),
 
-		createTerm: useCallback(async (kind, draft) => {
-			const result = await run(() => rawCreateTerm(currentHouseholdId, kind, draft));
+		createTerm: useCallback(async (kind, draft, stamps) => {
+			const result = await run(() => rawCreateTerm(currentHouseholdId, kind, { ...draft, ...stamps }));
 			return result ? result.id : null;
 		}, [run, rawCreateTerm, currentHouseholdId]),
 

@@ -45,9 +45,19 @@ export const DRAWER_BUTTON =
 export const DRAWER_ICON =
 	'transition-colors text-on-dark-label hover:text-on-dark hover:bg-drawer-raised rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
 
-/** A destructive icon control. Red at rest so the consequence is legible. */
+/**
+ * A destructive icon control. Red at rest so the consequence is legible.
+ *
+ * **It sits on `drawer-raised`, not on the drawer** — the only place it appears
+ * is the member row, which is a raised card. So the hover is
+ * `drawer-raised-hover` and the ring offsets against `drawer-raised`: painted
+ * with the drawer's own values it hovered to exactly the colour it was already
+ * on and drew its focus gap in a dark that is nowhere near it. The crimson is a
+ * class rather than an inline style for the same reason everything else here is
+ * — an inline `color` outranks `hover:text-*` and leaves the control inert.
+ */
 export const DRAWER_ICON_DANGER =
-	'transition-colors hover:bg-drawer-raised rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer disabled:opacity-40 disabled:pointer-events-none';
+	'transition-colors text-drawer-danger hover:text-drawer-danger-hover hover:bg-drawer-raised-hover rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised disabled:opacity-40 disabled:pointer-events-none';
 
 /** A text field on the drawer. */
 export const DRAWER_INPUT =

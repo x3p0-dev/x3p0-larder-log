@@ -633,6 +633,86 @@ omitted colour resolving to a stable default, `updateHousehold` writing a new
 one, and `invitePreview` returning the household's own colour rather than a
 location's. **Nobody has clicked any of it.**
 
+**Superseded 2026-08-27: it has been clicked.** Phases 4.5–4.9 went through a
+real session on a phone and with a second person, which found six things
+compiling and curling could not — see *Real-device testing* below. Treat the
+"nobody has clicked" line above as the state at the time of writing, not now.
+
+### Real-device testing, and what it found — 2026-08-27
+
+The first round of use on a phone and by a second person. Everything here is a
+fix to something already built; nothing new was designed.
+
+**The item sheet threw focus back into the name field on every keystroke.**
+The focus call was folded into the Escape-listener effect, whose deps included
+`onClose` — which `Pantry` rebuilds every render, so every chip press, every
+stepper tap and every character re-ran it. Split into two effects; focus depends
+on `open` alone. **The general rule: a "do this once when it opens" effect must
+not share a dependency list with a listener that has to track a live callback.**
+
+**A selected status pill's ring was clipped on three sides.** `overflow-x-auto`
+clips on **both** axes, and the ring is a 3.5px `box-shadow` outside the border
+box. `p-1 -m-1` on the compact scroller gives the ring room inside the scroll
+port and gives the row back the width; chip positions are unchanged.
+
+**The colour picker closed after every choice.** Recolouring is comparison — you
+pick, look at the dot against the name, pick again — and snapping shut meant
+re-opening the sixteen for every second guess. It now closes on the swatch and
+nothing else.
+
+**The picker's colours were unreachable on a Pixel 8 Pro.** The drawer was
+`h-screen`, and on mobile Chrome `100vh` is the *large* viewport — the one with
+the URL bar hidden — so a full-height fixed drawer runs ~60px past what you can
+see. That dead band is the tail of the Filter list's scroll port, so a picker
+opened on a row near the bottom had no scroll left to reach it. `h-dvh` on the
+drawer and the rail, `92dvh` on the item sheet, whose Save row had the same
+problem. **`h-screen` is wrong for anything full-height and fixed on a phone.**
+
+**The remove-member button had no hover.** `DRAWER_ICON_DANGER` hovered to
+`bg-drawer-raised`, which is exactly the colour of the member row it sits on,
+and offset its focus ring against `drawer` — a value nowhere near it. Its
+crimson was an inline `style`, which outranks any `hover:text-*`. Two new
+tokens, `drawer-raised-hover` and `drawer-danger-hover`, and the colour is a
+class now. **This is the third time a control has been styled against the wrong
+surface**; the rule is that a `DRAWER_*` or `PAGE_*` constant is named for the
+ground it sits on, and a control on a *raised* row is on neither.
+
+**A selected chip in the item sheet lost its colour dot.** The drawer's filter
+chips already kept theirs. See D44's note in decisions, and the contrast
+figures: deriving the dot from the *chip's* fill rather than the page's theme
+took the worst case across all sixteen colours from 1.98:1 to 3.09:1.
+
+**`?members` was added** — two stand-in member rows, loopback only, so the role
+chips and the remove button can be looked at without a second real person. Same
+shape as `?signedout`, and it goes out with D14. The rows never leave the
+client: `isDevMember` answers `changeRole` and `removeMember` before either
+reaches the network.
+
+### Undo puts things back where they were — 2026-08-27
+
+Reported from use: undoing a removal sent the item to the top of *Recently
+added* instead of back where it was. D17's re-insert makes the row genuinely
+new, and D35 pointed the sort straight at the platform's `createdAt`; D36's
+write-up had argued that was correct.
+
+The platform will not let an insert set `createdAt`, so the app carries its own
+stamps —
+[D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo).
+Nine columns across five tables, additive, no flag. `changedAt` has **no reader
+yet**, deliberately: nothing backfills, so a column added later is `''` on every
+row that already exists.
+
+Term lists became **A–Z**, sorted once in the `pantry` query, which also closed
+what D36 recorded as "a restored term appends".
+
+Still open, and only worth doing if wanted:
+
+- **No sort reads `changedAt`.** A *Recently changed* option in `SortMenu` is
+  the obvious use and was not built, because it was not asked for.
+- **`memberships`, `invites` and the join tables have no stamps.** Nothing
+  orders them by time today. The same reasoning that put the columns in now
+  applies to them: rows that exist before a column never get a value.
+
 ### Empty results get the first-run treatment — 2026-08-26
 
 The household-with-nothing-in-it had the full screen — Playfair italic 27px, a

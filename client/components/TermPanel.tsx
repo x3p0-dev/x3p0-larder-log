@@ -184,10 +184,16 @@ export function TermRow({
 				</button>
 			</div>
 
+			{/*
+			  * The picker stays open after a choice. It closes on the swatch, and
+			  * nothing else: recolouring is comparison — you pick one, look at the
+			  * dot against the name, and pick again — and snapping shut meant
+			  * re-opening the sixteen for every second guess.
+			  */}
 			{pickerOpen && (
 				<ColorPicker
 					value={ink}
-					onChange={(token) => { onColor(token); setPickerOpen(false); }}
+					onChange={onColor}
 					theme={theme}
 					onDark={onDark}
 					well={s.well}

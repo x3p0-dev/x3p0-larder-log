@@ -19,7 +19,7 @@ import {
 } from '../shared/invite';
 import {
 	normalizeName, normalizeNotes, termKey, normalizeInk, DEFAULT_INK, isInk,
-	isValidName, MAX_NAME, termBlock, termUsageCount,
+	isValidName, MAX_NAME, termBlock, termUsageCount, byName,
 } from '../shared/term';
 import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
@@ -27,6 +27,7 @@ import { householdInk, householdLetter, toHouseholdInk } from '../shared/househo
 import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { fromInt, toInt } from '../shared/qty';
+import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
 import { sha256, sha256Hex } from '../shared/sha256';
 import type { Item, Term } from '../shared/types';
@@ -422,15 +423,19 @@ for (const [label, group] of [
 // dropped item still leaves a plausible-looking list, and nobody notices until
 // they are standing in the shop without the thing they came for.
 
+function term(id: string, name: string, ink: string): Term {
+	return { id, name, ink, createdAt: '', addedAt: '', changedAt: '' };
+}
+
 const STORES: Term[] = [
-	{ id: 's-costco', name: 'Costco', ink: 'color-10' },
-	{ id: 's-aldi', name: 'Aldi', ink: 'color-14' },
+	term('s-costco', 'Costco', 'color-10'),
+	term('s-aldi', 'Aldi', 'color-14'),
 ];
 
 function item(name: string, qty: string, threshold: string, storeIds: string[]): Item {
 	return {
 		id: `i-${name}`, name, locationId: 'l-1', typeIds: [], storeIds,
-		qty, threshold, notes: '', createdAt: '2026-08-26T00:00:00.000Z',
+		qty, threshold, notes: '', createdAt: '2026-08-26T00:00:00.000Z', addedAt: '', changedAt: '',
 	};
 }
 
@@ -505,6 +510,93 @@ check(
 check('only a token is stored', toHouseholdInk('color-3'), 'color-3');
 check('a hex is refused rather than stored', toHouseholdInk('#a85e33'), '');
 check('and so is nothing at all', toHouseholdInk(undefined), '');
+
+// --- when an item entered the pantry, which outlives its row (D17) ---
+//
+// The whole point is undo: `removeItem` really deletes and undo re-inserts, so
+// the restored row's `createdAt` is *now* and sorting on it threw the item to
+// the top of *Recently added* instead of putting it back. Zero refuses an
+// app-set `createdAt`, so this stamp is the only thing that can carry across.
+
+const STAMP_NOW = Date.parse('2026-08-01T12:00:00.000Z');
+
+check('an ordinary add is stamped now', normalizeStamp(undefined, STAMP_NOW), '2026-08-01T12:00:00.000Z');
+check('and so is an empty string', normalizeStamp('', STAMP_NOW), '2026-08-01T12:00:00.000Z');
+
+// The undo path: the removed row's own stamp, handed back and honoured.
+check('undo carries the old stamp across', normalizeStamp('2026-07-04T09:30:00.000Z', STAMP_NOW), '2026-07-04T09:30:00.000Z');
+
+// Both guards keep a bad value from doing the exact thing this fixes — pinning
+// a row to the top of the list, permanently.
+check('an unparseable stamp falls back to now', normalizeStamp('last tuesday', STAMP_NOW), '2026-08-01T12:00:00.000Z');
+check('a future stamp is clamped to now', normalizeStamp('2030-01-01T00:00:00.000Z', STAMP_NOW), '2026-08-01T12:00:00.000Z');
+check('the boundary is inclusive', normalizeStamp('2026-08-01T12:00:00.000Z', STAMP_NOW), '2026-08-01T12:00:00.000Z');
+
+// Anything stored is re-encoded, so a row can never hold a string that sorts
+// differently than it reads — the only reason comparing these is safe (D4).
+check('a non-UTC stamp is normalized to UTC', normalizeStamp('2026-07-04T09:30:00+02:00', STAMP_NOW), '2026-07-04T07:30:00.000Z');
+check('stampFrom round-trips', stampFrom(Date.parse('2026-07-04T09:30:00.000Z')), '2026-07-04T09:30:00.000Z');
+
+// `addedAt` defaults to '' and nothing backfills it, so this fallback is the
+// sort key for every row added before the column — not a transitional case.
+check(
+	'a row from before the column sorts on createdAt',
+	addedAtOf({ addedAt: '', createdAt: '2026-06-01T00:00:00.000Z' }),
+	'2026-06-01T00:00:00.000Z'
+);
+check(
+	'a row that has one sorts on that',
+	addedAtOf({ addedAt: '2026-05-01T00:00:00.000Z', createdAt: '2026-08-01T00:00:00.000Z' }),
+	'2026-05-01T00:00:00.000Z'
+);
+
+// The bug, as an assertion. A restored row is newer than everything by
+// `createdAt` and must still fall between its neighbours by `addedAt`.
+const restored = { addedAt: '2026-06-15T00:00:00.000Z', createdAt: '2026-08-27T00:00:00.000Z' };
+const older = { addedAt: '', createdAt: '2026-06-01T00:00:00.000Z' };
+const newer = { addedAt: '', createdAt: '2026-07-01T00:00:00.000Z' };
+check(
+	'an undone removal sorts back into place, not to the top',
+	[newer, restored, older].sort((a, b) => addedAtOf(b).localeCompare(addedAtOf(a))).map((r) => r.createdAt),
+	['2026-07-01T00:00:00.000Z', '2026-08-27T00:00:00.000Z', '2026-06-01T00:00:00.000Z']
+);
+
+// The modified stamp, and its two fallbacks. A row is never changed before it
+// exists, so `addedAt` is the right second choice — `createdAt` is only reached
+// when neither of ours was ever written.
+check(
+	'changedAt wins when it is set',
+	changedAtOf({ changedAt: '2026-08-10T00:00:00.000Z', addedAt: '2026-08-01T00:00:00.000Z', createdAt: '2026-07-01T00:00:00.000Z' }),
+	'2026-08-10T00:00:00.000Z'
+);
+check(
+	'an unmodified row falls back to addedAt',
+	changedAtOf({ changedAt: '', addedAt: '2026-08-01T00:00:00.000Z', createdAt: '2026-07-01T00:00:00.000Z' }),
+	'2026-08-01T00:00:00.000Z'
+);
+check(
+	'a row from before both columns falls back to createdAt',
+	changedAtOf({ changedAt: '', addedAt: '', createdAt: '2026-07-01T00:00:00.000Z' }),
+	'2026-07-01T00:00:00.000Z'
+);
+
+// --- terms are A–Z, and that is the only order any of them appear in ---
+//
+// They were rendered in `collect()` order, which is seed order for a new
+// household and creation order after that — an order nothing about the list
+// tells a reader to expect.
+
+const UNSORTED: Term[] = [
+	term('t-3', 'Refrigerator', 'color-1'),
+	term('t-1', 'Pantry', 'color-10'),
+	term('t-2', 'Freezer', 'color-12'),
+];
+
+check('terms come back A–Z', byName(UNSORTED).map((t) => t.name), ['Freezer', 'Pantry', 'Refrigerator']);
+// The seeds are deliberately *not* alphabetical (D40), so this is the case
+// that would have gone unnoticed: sorting has to be someone's job.
+check('the input is not mutated', UNSORTED.map((t) => t.name), ['Refrigerator', 'Pantry', 'Freezer']);
+check('an empty list is fine', byName([]), []);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

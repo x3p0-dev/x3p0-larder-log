@@ -25,6 +25,8 @@ import type { ConfirmTone } from './components/ConfirmDialog';
 import { useSystemTheme } from './hooks/useSystemTheme';
 import { usePersistentState } from './hooks/usePersistentState';
 import { usePantryData, useInvitePreview } from './hooks/usePantryData';
+import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
+import { addedAtOf, changedAtOf } from '../shared/stamp';
 import { useToasts } from './hooks/useToasts';
 import { useTripChecks } from './hooks/useTripChecks';
 
@@ -36,7 +38,7 @@ import { normalizeCode } from '../shared/invite';
 import { wouldStrandHousehold } from '../shared/membership';
 import type { StatusKey } from '../shared/status';
 import { statusKeyFor } from '../shared/status';
-import type { Item, ItemDraft, Term, TermKind, ThemeOverride } from '../shared/types';
+import type { Item, ItemDraft, Member, Term, TermKind, ThemeOverride } from '../shared/types';
 import { DEFAULT_ROLE, can } from '../shared/roles';
 import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
@@ -640,7 +642,18 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * query has not landed — never "this household has no colour".
 	 */
 	const householdInk = household?.household.ink ?? '';
-	const members = household?.members ?? [];
+	/*
+	 * The stand-ins are held in state rather than appended as a constant, so a
+	 * role chip and a removal actually *land* on them. Nothing here is written
+	 * or sent — see `client/lib/devMembers.ts` — but a panel whose controls do
+	 * nothing when pressed is not much better than a panel with one row in it.
+	 */
+	const [devMembers, setDevMembers] = useState<Member[]>(devMembersEnabled() ? [...DEV_MEMBERS] : []);
+	const realMembers = household?.members ?? [];
+	const members = useMemo(
+		() => devMembers.length ? [...realMembers, ...devMembers] : realMembers,
+		[realMembers, devMembers],
+	);
 	const invites = household?.invites ?? [];
 	// The least privileged role until the query says otherwise, so a control is
 	// never enabled on the strength of data that hasn't arrived.
@@ -696,15 +709,17 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			/*
 			 * *Recently added* used to apply no sort at all, which left the list
 			 * in `collect()` order — oldest first, the exact opposite of what the
-			 * label promised. `createdAt` is Zero's own insert stamp (D35), ISO
-			 * 8601 UTC, so it is the one string in the app that compares
-			 * correctly without parsing.
+			 * label promised (D35).
 			 *
-			 * An undone removal therefore comes back at the *top* rather than in
-			 * its old slot: undo re-inserts through `addItem` (D17), so the row is
-			 * genuinely new and genuinely the most recently added thing here.
+			 * It sorts on `addedAt`, **not** the platform's `createdAt`, and the
+			 * difference is exactly one case: an undone removal. Undo re-inserts
+			 * (D17), so the row is new and its `createdAt` is now — sorting on
+			 * that threw a restored item to the top of the list instead of
+			 * putting it back where it was, which is not what undo means. See
+			 * `shared/stamp.ts`; the fallback is what keeps rows from before the
+			 * column ordering correctly.
 			 */
-			arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+			arr.sort((a, b) => addedAtOf(b).localeCompare(addedAtOf(a)));
 		}
 		else if (sortBy === 'restock') {
 			// Out first, then low, then stocked — the order you would walk the
@@ -953,7 +968,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			lead: 'Removed',
 			name: item.name,
 			// Re-insert rather than un-delete. The row comes back with a new id
-			// (D17), which nothing references.
+			// (D17), which nothing references — but it carries the removed row's
+			// *own* stamps, so *Recently added* puts it back where it was rather
+			// than at the top, and it does not read as freshly edited either.
+			// That is what has to survive the round trip; see `shared/stamp.ts`.
 			onUndo: () => {
 				void api.addItem({
 					name: item.name,
@@ -963,7 +981,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					qty: item.qty,
 					threshold: item.threshold,
 					notes: item.notes,
-				});
+				}, { addedAt: addedAtOf(item), changedAt: changedAtOf(item) });
 			},
 		});
 	}
@@ -1023,12 +1041,18 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	/**
 	 * Puts a deleted term back, and the filter with it if it was the active one.
 	 *
-	 * Name and colour survive; **position does not**. The term is re-created, so
-	 * it is a new row at the end of its list — the same trade D17 makes for an
-	 * item, for the same reason.
+	 * **Position survives now**, two different ways: term lists are sorted A–Z
+	 * server-side, so a restored term lands where its name puts it rather than
+	 * at the end, and its stamps travel with it so the row is not younger than
+	 * it was. The term is still genuinely re-created — same trade as D17 — but
+	 * nothing visible reveals that any more.
 	 */
 	async function restoreTerm(kind: TermKind, term: Term, wasActive: boolean) {
-		const id = await taxonomy.create(kind, { name: term.name, ink: term.ink });
+		const id = await taxonomy.create(
+			kind,
+			{ name: term.name, ink: term.ink },
+			{ addedAt: addedAtOf(term), changedAt: changedAtOf(term) }
+		);
 
 		if (id && wasActive) setActiveTerm(kind, id);
 	}
@@ -1064,6 +1088,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				return;
 
 			case 'remove-member':
+				// The stand-ins take the real dialog and the real toast; only the
+				// mutation is skipped. See `client/lib/devMembers.ts`.
+				if (isDevMember(action.membershipId)) {
+					setDevMembers((prev) => prev.filter((m) => m.id !== action.membershipId));
+					toasts.push({ lead: 'Member removed.' });
+					return;
+				}
+
 				if (await api.removeMember(action.membershipId)) toasts.push({ lead: 'Member removed.' });
 				return;
 
@@ -1334,7 +1366,16 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 						if (invite) setPending({ kind: 'revoke-invite', inviteId, role: invite.role });
 					},
-					onChangeRole: api.changeRole,
+					// A stand-in never reaches the network: it is answered here and
+					// the server is never asked about an id it has no row for.
+					onChangeRole: (membershipId, role) => {
+						if (isDevMember(membershipId)) {
+							setDevMembers((prev) => prev.map((m) => m.id === membershipId ? { ...m, role } : m));
+							return;
+						}
+
+						api.changeRole(membershipId, role);
+					},
 					onRemoveMember: (membershipId) => {
 						const member = members.find((m) => m.id === membershipId);
 
@@ -1504,10 +1545,18 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							 * three lines or shove the sort off the end. With room they
 							 * size to their content and the trigger sits right after
 							 * them.
+							 *
+							 * `p-1 -m-1` is what makes that scroller safe to select in:
+							 * `overflow-x-auto` clips on **both** axes, and a selected
+							 * pill's ring is a 3.5px box-shadow *outside* its border box
+							 * — so it was shaved top and bottom on every chip and on the
+							 * left of the first one. The padding gives the ring room
+							 * inside the scroll port; the negative margin gives the row
+							 * back the width it cost.
 							 */
 							<div class={
 								compact
-									? 'flex-1 min-w-0 flex items-center gap-2 overflow-x-auto'
+									? 'flex-1 min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1'
 									: 'flex items-center gap-3.5 flex-wrap'
 							}>
 								{STATUS_CHIPS.map(({ key, label, short }) => (

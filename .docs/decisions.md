@@ -377,6 +377,13 @@ cross-device. If either becomes a real complaint, that is the signal to revisit.
 "recently deleted" view or cross-device recovery. Adding the column later is an
 additive migration, so this stays cheap to reverse.
 
+**Amended 2026-08-27 by [D44](#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo).**
+One thing this decision waved through turned out to be a real complaint: a
+restored item took a **new `createdAt`**, so *Recently added* put it at the top
+of the list instead of back where it was. The tombstone stays exactly as
+described — `removeItem` still really deletes and undo still re-runs `addItem` —
+but the row now carries an `addedAt` of its own that undo hands back.
+
 ---
 
 ## D18. One household per user, enforced in the handler — not in the schema
@@ -1262,6 +1269,36 @@ but a "recently edited" view built on `updatedAt` will not show it.
 these dates adds the field to the DTO it needs; the storage half is already
 done and needs no publish to start working.
 
+### Amended 2026-08-27 by [D44](#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)
+
+**"We cannot add our own" was the wrong conclusion from a correct premise.** The
+names are reserved, so a column *called* `createdAt` is impossible — but a
+column called something else is not, and that turned out to matter. What this
+decision did not test is whether a reserved column can be **written**: it cannot
+(*"Zero manages items.createdAt; app code cannot set it directly"*), and since
+undo re-inserts rather than un-deletes (D17), a stamp the app cannot write
+cannot survive an undo. A restored item took a fresh `createdAt` and shot to the
+top of *Recently added*.
+
+So the app now carries `addedAt` on five tables and `changedAt` on four of them,
+and **every ordering reads those**. The platform's pair survives as the last
+fallback for rows written before those columns, and as the record above of what
+they do.
+
+Two of the three consequences below are superseded with it:
+
+- **The `updateItem` note stands but no longer bites.** `next` is never empty
+  now — it always carries `changedAt` — so the unconditional `items.update()`
+  is no longer the only thing keeping the row's date honest. Do not remove it
+  anyway; `updatedAt` is still the platform's answer to "when did this row last
+  change" and something may yet read it.
+- **The term-cascade gap is unchanged and now applies to `changedAt` too.**
+  `deleteTerm` removes join rows only, so an item silently loses a tag and
+  neither stamp moves. Still left as-is, and still the thing a *Recently
+  changed* view would get wrong.
+- **They do surface to the client now** — `Item` and `Term` both carry all
+  three.
+
 **Rejected: a hand-rolled `createdAt` under a different name** (`addedAt`,
 `published`). It would compile, and it would then have to be set correctly in
 sixteen mutations forever, duplicating a column the platform maintains for free
@@ -1357,16 +1394,19 @@ crimson, matching the boards — the row's count already says what will happen.
 Undo re-inserts rather than un-deletes (D17), so a restored item is a **new
 row**. Two consequences the spec asked about:
 
-- **Position is not restored, and no longer needs to be.** The spec justified
-  restoring it with "there are no timestamps". That premise is false as of D35
-  — every row carries `createdAt` — and *Recently added* now sorts on it,
-  newest first. It previously applied **no sort at all**, leaving the list in
-  `collect()` order, which is oldest-first and the exact opposite of the label.
-  An undone item comes back at the top, which is where a row that was just
-  re-added belongs.
-- **A restored term appends.** Name and colour survive, and the filter it was
-  driving is re-pointed at the new id, but it lands at the end of its chip list.
-  Same trade as D17, and not worth a client-held ordering to paper over.
+- **Position is restored after all — see
+  [D44](#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)
+  (2026-08-27), which reverses what this bullet used to say.** The spec had
+  justified restoring position with "there are no timestamps"; that premise is
+  false as of D35, and this section concluded from it that an undone item
+  belongs at the top — reasoning from the *row*, which really is new, rather
+  than from the *item*, which is not. In use it read as a bug. The item now
+  carries an `addedAt` that undo hands back, and *Recently added* sorts on that.
+- **A restored term no longer appends — see D44 (2026-08-27), which also
+  reverses this.** It used to land at the end of its chip list, because the
+  lists were in `collect()` order. They sort A–Z now, so a term put back by undo
+  lands where its name puts it, and the fix cost an ordering rather than the
+  client-held position this bullet was right to reject.
 
 **Removing a member is a confirm, not an undo**, even though re-inviting is
 possible: it reaches a person who is not looking at your screen, which is the
@@ -1881,3 +1921,111 @@ locally with `crypto` forced off.
 Verified: five distinct codes over the mixer with `crypto` forced off, one
 redeemed through `invitePreview`, and — on 2026-08-27 — **a second person
 actually joined a household from a real invite link.**
+
+---
+
+## D44. The app writes its own timestamps, because the platform's cannot survive an undo
+
+**Decided:** 2026-08-27
+
+**The rule: a timestamp this app sorts by is a timestamp this app writes.** The
+platform's `createdAt` and `updatedAt` are readable and useful, but neither can
+be set by app code, so neither survives a re-insert — and undo is a re-insert
+(D17).
+
+Five tables gain columns, all ISO 8601 UTC strings defaulting to `''`:
+
+| Table | `addedAt` | `changedAt` |
+|---|---|---|
+| `items` | ✓ | ✓ |
+| `locations`, `types`, `stores` | ✓ | ✓ |
+| `households` | ✓ | — |
+
+`households` has no `changedAt` deliberately: nothing orders households by
+recency, and a rename is not an event anything in the app reacts to. Adding one
+later is additive, so this stays cheap to revisit.
+
+`addedAt` is written once, at insert. `changedAt` is bumped by **every mutation
+that writes a field a person can see** — `updateItem`, `adjustQty`,
+`updateTerm`. `adjustQty` is not exempt: a quantity is information about the
+item, and the hot path being hot is not a reason for it to lie.
+
+Both create mutations — `addItem` and `createTerm` — accept optional stamps, and
+the **only** caller that supplies them is undo, handing back the removed row's
+own values. *Recently added* sorts on `addedAtOf(item)`; `changedAtOf` exists
+for the same reason and **nothing reads it yet**, which is deliberate — the
+column has to exist before there are rows to stamp, and a row written without
+one never gets one.
+
+The one path that could have left a term unstamped is `createHousehold`, which
+seeds fifteen terms through `insert` rather than `createTerm`. They share one
+stamp: the seeds arrive together, and staggering them a millisecond apart would
+imply an order that isn't real.
+
+**Why:** D17 makes undo a re-insert, so a restored item is a new row with a new
+`createdAt`, and D35 made *Recently added* sort on exactly that. Undoing a
+removal therefore threw the item to the top of the list. D36's write-up argued
+that was correct — *"which is where a row that was just re-added belongs"* — but
+that reasons from the row rather than from the item. Undo means *nothing
+happened*, and a list that reorders itself is something happening.
+
+**Why not just set `createdAt` on the re-insert:** the platform refuses. An
+insert supplying it fails with *"Zero manages items.createdAt; app code cannot
+set it directly"* — confirmed against a running capsule on 2026-08-27, not
+inferred from the docs' "those names are reserved". That refusal is the entire
+reason this column exists.
+
+**Additive, and it applies on the next publish with no flag** — the same shape
+as `households.ink` (D42). Nine tables, sixteen mutations, zero migrations.
+A row written before these holds `''`, which is not a transitional state:
+nothing backfills, so the fallback chain — `changedAt` → `addedAt` →
+`createdAt` — is that row's sort key permanently. Every link is ISO 8601 UTC on
+the same scale, so a list mixing them still orders correctly (D4).
+
+**The supplied stamp is validated, not trusted.** `normalizeStamp` falls back to
+now for anything unparseable and **clamps a future stamp to now** — a stamp
+ahead of the clock would pin a row to the top of *Recently added* forever, which
+is the bug this exists to fix rather than a new way to cause it.
+
+### Rejected
+
+- **A `deletedAt` soft delete.** Would restore the row itself and need no new
+  stamp, but it is what D17 rejected and for the same reason: a filter on every
+  read, forever, and a second mode for cascade cleanup to get wrong.
+- **Patching the sort client-side** by remembering `newId → old stamp` for the
+  session. Free, and wrong the moment you reload or open a second device —
+  the item would jump to the top later, which is worse than jumping now.
+- **Reusing `updatedAt`** for `changedAt`. Platform-managed the same way
+  `createdAt` is, so it cannot survive an undo either — a restored row's
+  `updatedAt` is the moment it was restored, which is the same bug one field
+  over.
+- **Ordering terms by `addedAt`** instead of A–Z. It would have "restored
+  position" in the same sense items get it, but creation order is not an order
+  anybody reads a name list in. Alphabetical is what the eye is already doing.
+
+**Trade-off accepted:** `addedAt` and `createdAt` are the same value for any
+item that has never been removed, which makes the column look redundant on
+inspection. It diverges exactly once per undo, which is the whole point.
+
+**Terms are now ordered too, and it is not by a stamp.** The three taxonomies
+sort **A–Z by name**, applied once in the `pantry` query so the drawer's
+filters, the item sheet's chips and the shopping list's cards cannot disagree.
+They were in `collect()` order — seed order for a new household, creation order
+after that, which is an order nothing about the list tells a reader to expect.
+This also closes what D36 recorded as *"a restored term appends"*: a term put
+back by undo lands where its name puts it.
+
+**Not covered:** `memberships`, `invites`, and the two join tables. Nothing
+orders them by time today, and every column is permanent — dropping one needs
+`sf db migrate --drop`. If any of them ever grows a chronological view, it needs
+its own stamps *before* the rows that would want them exist.
+
+Verified against the real handlers over `POST /__spacefast/zero/run`: three
+items added in order, the middle one removed and undone, and the list read back
+— `addedAt` order keeps it in the middle while `createdAt` order (the bug) puts
+it first. Then, on a fresh household: seeded terms come back A–Z and stamped;
+an item's `changedAt` moves on `adjustQty` and again on `updateItem` while its
+`addedAt` holds still; a removed item and a deleted term both come back with
+**both** stamps byte-identical and a visibly newer `createdAt`; and a renamed
+store re-sorts alphabetically. The clamp and the fallbacks were driven the same
+way.

@@ -2,16 +2,34 @@
 
 Every table below lives in the app's Zero database. Zero adds `id`, `createdAt`,
 and `updatedAt` (all strings) to every row automatically — they are never
-declared. The names are **reserved**: declaring one throws at schema-definition
-time, so there is no way to hand-roll a created or modified date. Verified
-2026-08-26: both are stamped at insert, `createdAt` is never rewritten, and
-`updatedAt` is bumped by every `update()` — including an empty one. They are
+declared. The names are **reserved** in two senses, and the second one took a
+while to find:
+
+1. Declaring one throws at schema-definition time.
+2. **`insert()` refuses a supplied value** — *"Zero manages items.createdAt; app
+   code cannot set it directly"* — confirmed against a running capsule on
+   2026-08-27.
+
+Verified 2026-08-26: both are stamped at insert, `createdAt` is never rewritten,
+and `updatedAt` is bumped by every `update()` — including an empty one. They are
 ISO 8601 UTC with milliseconds, so they string-compare correctly. See
 [D35](decisions.md#d35-created-and-modified-dates-are-the-platforms-not-ours).
 
+**The app therefore keeps its own stamps, under its own names.** Because undo
+re-inserts rather than un-deletes (D17), a restored row gets a fresh `createdAt`
+and a fresh `updatedAt`, so neither can carry a row's real age across an undo —
+which is how a restored item ended up at the top of *Recently added*. Five
+tables carry `addedAt`, and four of those carry `changedAt` as well; every
+ordering in the app reads those, never the built-ins
+([D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)).
+The rules live in `shared/stamp.ts`. The built-ins survive only as the last
+fallback for rows written before those columns existed — nothing backfills, so
+that fallback is permanent for those rows.
+
 Field types available: `string()`, `boolean()`, `id(table)`, each with an
 optional `.default(value)`. That's the whole vocabulary. No numbers, no arrays,
-no timestamps beyond the built-ins.
+no timestamps beyond the built-ins — every stamp below is a `string()` holding
+ISO 8601 UTC.
 
 ## Tables
 
@@ -25,8 +43,13 @@ households: table({
   createdBy: string(),                    // ctx.auth.userId of the creator
   defaultThreshold: string().default("1"), // numeric-as-string
   ink: string().default(""),              // colour token; "" means unset
+  addedAt: string().default(""),          // ours, ISO 8601 UTC — D44
 })
 ```
+
+**No `changedAt` here, deliberately.** Nothing orders households by recency and
+a rename is not an event anything in the app reacts to. Adding one later is
+additive, so it stays cheap to revisit.
 
 `ink` is a colour **token** (`color-7`), exactly as `terms.ink` is
 ([D32](decisions.md#d32-a-term-stores-a-color-token-not-a-color)). It was added
@@ -122,21 +145,40 @@ locations: table({
   name: string(),
   ink: string(),                 // a color TOKEN (`color-7`), not a hex — D32
   icon: string(),                // reserved, always "" — D34
+  addedAt: string().default(""),   // ours — D44
+  changedAt: string().default(""), // bumped by updateTerm — D44
 }).index("by_household", ["householdId"]),
 
 types: table({
   householdId: id("households"),
   name: string(),
   ink: string(),                 // color token — D32
-  icon: string(),                // key from shared/icons.ts
+  icon: string(),                // reserved, always "" — D34
+  addedAt: string().default(""),
+  changedAt: string().default(""),
 }).index("by_household", ["householdId"]),
 
 stores: table({
   householdId: id("households"),
   name: string(),
   ink: string(),                 // color token — D32
+  addedAt: string().default(""),
+  changedAt: string().default(""),
 }).index("by_household", ["householdId"])
 ```
+
+**Terms are ordered A–Z by name, and the ordering is applied once** — in the
+`pantry` query, by `byName()` in `shared/term.ts`. The drawer's filters, the item
+sheet's chips and the shopping list's store cards all render the same three
+lists, so sorting in any one of them would let the other two disagree. They were
+previously in `collect()` order, which is seed order for a new household and
+creation order after that. A term restored by undo therefore lands where its
+name puts it rather than at the end (D44).
+
+**`createHousehold` seeds fifteen terms through `insert`, not `createTerm`**, so
+it is the one path that could leave a term unstamped. All fifteen share one
+stamp: they arrive together, and staggering them a millisecond apart would imply
+an order that isn't real.
 
 **`ink` holds a token, not a color.** A term stores `color-7`; what that looks
 like is decided by the active theme in `client/lib/palette.ts`, so re-theming
@@ -156,8 +198,19 @@ items: table({
   qty: string(),                    // non-negative integer, as a string
   threshold: string(),              // non-negative integer, as a string
   notes: string().default(""),
+  addedAt: string().default(""),    // when the ITEM entered the pantry — D44
+  changedAt: string().default(""),  // bumped by updateItem AND adjustQty — D44
 }).index("by_household", ["householdId"])
 ```
+
+`addedAt` is what *Recently added* sorts on. It is not the same thing as
+`createdAt`: the row is new after an undo, the item is not.
+
+`changedAt` is bumped by **every mutation that writes a field a person can
+see**, `adjustQty` included — a quantity is information about the item, and the
+hot path being hot is not a reason for it to lie. **Nothing reads it yet**, and
+that is deliberate: a row written without one never gets one, so the column has
+to exist before the rows do.
 
 Note what is **absent**:
 
@@ -313,12 +366,13 @@ mutation checks a capability from [Roles](#roles) before it writes.
 |---|---|---|
 | `households` | query | Every household the caller belongs to — name, colour, their role there, item count. Takes no argument |
 | `household` | query | The named household + members + live invites |
-| `pantry` | query | Items with their types/stores joined, plus all three taxonomies |
-| `addItem` | mutation | Create an item and its join rows |
-| `updateItem` | mutation | Patch fields and reconcile join rows |
-| `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path |
+| `pantry` | query | Items with their types/stores joined, plus all three taxonomies, **A–Z** |
+| `invitePreview` | query | What an invite link says about itself, to a signed-out guest — [D39](decisions.md#d39-an-invite-preview-is-the-one-query-that-answers-a-guest) |
+| `addItem` | mutation | Create an item and its join rows. Takes optional `addedAt` / `changedAt` — **undo only** |
+| `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
+| `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |
 | `removeItem` | mutation | Delete an item and its joins |
-| `createTerm` / `renameTerm` / `recolorTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind |
+| `createTerm` / `updateTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind. `createTerm` takes the same optional stamps |
 | `updateHousehold` | mutation | Name, colour and `defaultThreshold` — owner only |
 | `createInvite` / `revokeInvite` / `redeemInvite` | mutation | Membership; the invite carries its role |
 | `changeRole` | mutation | Promote or demote a member — owner only, last-owner guarded |

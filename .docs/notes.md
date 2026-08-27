@@ -3,7 +3,22 @@
 Things we haven't settled. Move each one to [decisions.md](decisions.md) when it
 gets answered.
 
-## Blocked: we cannot publish (2026-08-25)
+## Blocked: we cannot publish (2026-08-25) — *half resolved 2026-08-26*
+
+> **Update, 2026-08-26.** `sf publish` completed: **v4**, 71 files, 18 seconds.
+> Problem 4 below — the broken `finalize` — **is fixed on Spacefast's side**, and
+> nothing here changed to cause that. Problems 1–3 stand: npm's `latest` is
+> still `spacefast@0.0.26`, the binary channel is still 0.0.27, and that binary
+> still cannot compile a Zero capsule. The only reason the publish went through
+> is that the rationale header was attached out of band, by a `fetch` wrapper
+> loaded with `NODE_OPTIONS=--import`. **The shim is not in the repo** — it lives
+> in the session scratchpad and has to be rewritten each time. Check npm before
+> publishing again; 0.0.27, or `--rationale` / `SPACEFAST_RATIONALE` on 0.0.26,
+> retires it. The rationale must be **true**: it exists so an agent-driven
+> mutation is attributable, and supplying the metadata is compliance while
+> hiding it is not.
+>
+> The rest of this section is kept as the record of what the lockout was.
 
 Three platform problems compose into a lockout. None of them is ours, and the
 code is ready.
@@ -69,6 +84,14 @@ summarized here.
   `useQuery` / `useMutation` side is not proven by this; see below.
 - **`insert()` returns the whole row**, not an id — `createdAt` and the new `id`
   come back without a follow-up `get()`.
+- **Can `createdAt` be supplied on insert? No** (2026-08-27). The docs say the
+  name is "reserved", which reads as *you cannot declare a column called that*.
+  It also means the runtime refuses a value: *"Zero manages items.createdAt; app
+  code cannot set it directly"*. The same holds for `updatedAt`, which is
+  rewritten on every `update()` regardless. **This is why the app carries its own
+  `addedAt` / `changedAt`** — a stamp that cannot be written cannot survive
+  undo's re-insert
+  ([D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)).
 
 ### The new risk
 
@@ -303,6 +326,20 @@ later:
   Only **eight of sixteen** `onDrawer` values are specified in the first place
   (see the roadmap), so the divergence is already partial. Worth settling when
   those eight are finished rather than before.
+
+  **A data point for option 3, from 2026-08-27.** The item sheet's selected
+  chips had the same shape of bug and it was fixed by deriving rather than
+  tabling: a selected chip is filled with `inkBg`, the page's *inverse*, so its
+  dot takes the other theme's value — `entityColorFor(id, terms, on ? ! dark :
+  dark)`. That is not a compromise, it is measurably better, because the two
+  palettes are tuned against exactly those two grounds: across all sixteen
+  colours the worst dot-on-fill contrast went from 1.98:1 to 3.09:1, clearing
+  the 3:1 non-text floor everywhere. **The rule that emerged is "the dot reads
+  against the surface it sits on"**, which is what the drawer chip is *also*
+  doing — `drawerDot` exists because near-black is a third ground. So the
+  divergence may be correct and the picker may be the thing that is wrong, which
+  is a fourth option this list did not have: draw the picker's dots against the
+  panel they open on. Still not worth settling until the eight are finished.
 
 ## Paid off in Phase 2
 
