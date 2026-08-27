@@ -73,11 +73,14 @@ type Props = {
  * live one level down, and what is left is three blocks that are shorter than
  * the control to fold them.
  *
- * **The Filter tab deliberately does not share this.** Boxing its chip groups
- * the same way was built and reverted: a settings block holds rows of one value
- * each and earns an edge, while a filter group is a cloud of chips that already
- * has one per chip. Three cards of chips read as clutter, and `drawer-raised`
- * is what the chips are made of, so they lost their own edge to the card's.
+ * **The Filter tab deliberately does not share this at rest.** Boxing its chip
+ * groups the same way was built and reverted: a settings block holds rows of one
+ * value each and earns an edge, while a filter group is a cloud of chips that
+ * already has one per chip. Three cards of chips read as clutter, and
+ * `drawer-raised` is what the chips are made of, so they lost their own edge to
+ * the card's. A group **being edited** takes the card, and that is consistent
+ * rather than contradictory: the chips are gone by then, and what is inside is
+ * rows of one value each.
  */
 function Block({ title, theme, children }: { title: string; theme: Theme; children: ComponentChildren }) {
 	return (

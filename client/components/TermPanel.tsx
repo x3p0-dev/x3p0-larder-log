@@ -57,13 +57,15 @@ export function panelSkin(theme: Theme, onDark: boolean): Skin {
  * whatever column it drops into, so it reads as a tray opening rather than a
  * card floating inside the list.
  *
- * `flush` is for the one caller that opens **inside a card rather than inside a
- * list** — Settings › Household. There the panel is the top of the card it
- * drops into, so it takes the card's own top corners, drops its ring, and lets
- * the hairline above the next row be its bottom edge. Rounding a box inside a
- * box inside a card stacked three nested outlines on one screen, and the
- * innermost one — the colour picker's well — is the only one carrying
- * information.
+ * `flush` is for the callers that open **inside a card rather than inside a
+ * list** — Settings › Household, and the Filter tab's `EDITING` panel, which
+ * becomes a card of its own once the chips it replaces are gone. There the
+ * panel is the top of the card it drops into, so it takes the card's own top
+ * corners, drops its ring, and lets whatever is under it be its bottom edge —
+ * the hairline above Members in the first case, the card's clipped radius in
+ * the second. Rounding a box inside a box inside a card stacked three nested
+ * outlines on one screen, and the innermost one — the colour picker's well —
+ * is the only one carrying information.
  */
 export function TermPanel({
 	label, mode, onDone, onDark = false, flush = false, theme, children,
@@ -72,7 +74,7 @@ export function TermPanel({
 	mode: 'new' | 'editing';
 	onDone: () => void;
 	onDark?: boolean;
-	/** Fill the top of the card this drops into, rather than float inside it. */
+	/** Fill the card this drops into, from its top corners, rather than float inside it. */
 	flush?: boolean;
 	theme: Theme;
 	children: preact.ComponentChildren;

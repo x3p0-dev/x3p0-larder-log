@@ -36,12 +36,21 @@ type SectionProps = {
 /**
  * One filter section, and the place its terms are managed.
  *
- * Two affordances, deliberately separate. The **pencil** opens
- * `LOCATION · EDITING` — rename, recolour, delete what is already there. The
- * **dashed chip** opens `LOCATION · NEW` — one row, for the term you are about
- * to make. Both drop the same recessed panel in below the group rather than
- * replacing it, so the chips stay put and you can still see what exists while
- * you add to it.
+ * Two affordances, deliberately separate — and they are separate in what they
+ * do to the group as well as in what they open.
+ *
+ * The **pencil** opens `LOCATION · EDITING` and the chips **go**: that panel
+ * already lists every term in the group, with its colour and its count, so
+ * leaving the chips above it printed the same list twice and made the section
+ * twice as tall to say the same thing. It takes the Settings card's
+ * construction while it is there — `raised` fill, a `line` border, radius 13,
+ * with the panel `flush` inside it — which is what the Household rename one tab
+ * over already looks like.
+ *
+ * The **dashed chip** opens `LOCATION · NEW` — one row, for the term you are
+ * about to make — and that one still drops in *below* the chips, which stay
+ * put. It shows nothing of what exists, so hiding what does would mean naming a
+ * new term with the existing names off screen.
  *
  * Term management lives here rather than in Settings so that filtering by a
  * term and fixing its name happen in the same place.
@@ -121,6 +130,8 @@ export function FilterSection({
 
 			{open && (
 				<>
+					{/* Hidden while editing: the panel below is the same list. */}
+					{! editing && (
 					<div class="flex flex-wrap gap-[7px]">
 						{leadingAll && (
 							<button
@@ -165,6 +176,7 @@ export function FilterSection({
 							</button>
 						)}
 					</div>
+					)}
 
 					{canEdit && composing && (
 						<TermPanel label={title} mode="new" onDone={commit} onDark theme={theme}>
@@ -178,19 +190,33 @@ export function FilterSection({
 					)}
 
 					{canEdit && editing && (
-						<TermPanel label={title} mode="editing" onDone={() => setEditing(false)} onDark theme={theme}>
-							{entities.map((e) => (
-								<TermRow
-									key={e.id}
-									name={e.name} ink={e.ink}
-									count={countFor?.(e.id) ?? 0}
-									onName={(next) => { if (next.trim()) onRename(e.id, next.trim()); }}
-									onColor={(token) => onRecolor(e.id, token)}
-									onAction={() => onDelete(e.id)} action="delete"
-									onDark theme={theme}
-								/>
-							))}
-						</TermPanel>
+						/*
+						 * A card, not the tray the `NEW` panel gets. Nothing is
+						 * dropping in below a group here — for as long as it is
+						 * open this *is* the group, so it stops bleeding to the
+						 * column edge and sits inside the pane's gutter like a
+						 * Settings block. `overflow-hidden` is what lets the
+						 * `flush` panel's square bottom corners take the card's
+						 * radius; its top corners are already the card's own.
+						 */
+						<div
+							class="flex flex-col rounded-[13px] overflow-hidden"
+							style={{ background: d.raised, border: `1px solid ${d.line}` }}
+						>
+							<TermPanel label={title} mode="editing" onDone={() => setEditing(false)} onDark flush theme={theme}>
+								{entities.map((e) => (
+									<TermRow
+										key={e.id}
+										name={e.name} ink={e.ink}
+										count={countFor?.(e.id) ?? 0}
+										onName={(next) => { if (next.trim()) onRename(e.id, next.trim()); }}
+										onColor={(token) => onRecolor(e.id, token)}
+										onAction={() => onDelete(e.id)} action="delete"
+										onDark theme={theme}
+									/>
+								))}
+							</TermPanel>
+						</div>
 					)}
 				</>
 			)}
