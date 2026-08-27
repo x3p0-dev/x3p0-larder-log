@@ -300,6 +300,18 @@ export type Theme = {
 		well: string;
 		line: string;
 		dashed: string;
+		/**
+		 * The fill of a menu that flies out *over* the drawer — the role menu in
+		 * the Members pane, and the account menu above the foot row.
+		 *
+		 * Near the drawer's own body on purpose. Both menus open over the darkest
+		 * panel in the app, and reusing the page's cream popover there breaks the
+		 * first rule of the theming section: the brightest thing on screen would
+		 * be opening over the darkest. Separation comes from `menuLine` and the
+		 * drop shadow, not from the fill.
+		 */
+		menu: string;
+		menuLine: string;
 		ink: string;
 		inkMuted: string;
 		inkFaint: string;
@@ -349,6 +361,7 @@ export function getTheme(dark: boolean): Theme {
 			drawer: {
 				bg: 'linear-gradient(180deg, #15110B 0%, #0F0C07 100%)',
 				raised: '#231D15', well: '#0A0805', line: '#2C2419', dashed: '#3A3025',
+				menu: '#15110B', menuLine: '#3A3025',
 				...DRAWER_INK,
 			},
 		}
@@ -371,6 +384,7 @@ export function getTheme(dark: boolean): Theme {
 			drawer: {
 				bg: 'linear-gradient(180deg, #2B2419 0%, #1F1A13 100%)',
 				raised: '#332B22', well: '#191510', line: '#3B3126', dashed: '#4A4031',
+				menu: '#241E17', menuLine: '#4A4031',
 				...DRAWER_INK,
 			},
 		};

@@ -546,10 +546,10 @@ mutations**; it applies on the next publish with no flag.
   and [D48](../.docs/decisions.md#d48-a-name-nobody-typed-is-not-an-answer)
   removed the prefill.
 
-**Editing the name in the drawer is deliberately not in this round** — Settings'
-Account section is specified for it and a new sidebar drawer is in flight.
-`setDisplayName` is already the right shape: it upserts, and the write-through
-is what a rename needs.
+**Editing the name in the drawer landed with Phase 4.12** — in the account menu
+rather than a Settings section, since D49 removed the Account block. It goes
+through the same `setDisplayName`, which was already the right shape: it upserts,
+and the write-through is what a rename needs.
 
 **A fresh `sf dev` now hits the name card first**, since a dev guest has no
 profile row and no household to inherit from. That is the only way to click the
@@ -636,6 +636,79 @@ chose and reported success having collected nothing.
 Verified: typecheck clean, 235 assertions, and the running `sf dev` recompiled
 and served a `/client.js` with none of the removed strings and the kept one
 intact. **Nobody has clicked it.**
+
+### The sidebar drawer redesign (Phase 4.12) is built — 2026-08-27
+
+The spec's *Settings tab*, drawn on
+`.claude/docs/design/larderlogdrawerpreview.html`, governed by
+[D49](../.docs/decisions.md#d49-settings-is-three-blocks-and-members-are-a-level-down).
+**Client only**: no schema change, no new handler — still ten tables, five
+queries, seventeen mutations.
+
+The pane had six labelled sections and printed the same two facts three times
+over — you in Account, again in Members, again in the row at the foot; the
+household in the switcher and again under its own heading. Three rules cut it
+down: **the household tile appears once** (in the switcher), **you appear once**
+(in the row at the foot), and **scope is in the label**.
+
+- **Three blocks and a row.** *Household* — name and colour behind the pencil,
+  the item count in meta, a **Members** row with three stacked avatars and a
+  chevron, and *Leave household* **inside the same card** under a hairline. The
+  rename panel is **flush** with that card rather than a box inside it — a
+  rounded `TermPanel` there put three nested outlines on one screen, and only
+  the innermost (the colour picker's well) says anything →
+  *Preferences*, which are yours (Appearance) → *Pantry settings*, which are the
+  household's (the default low-stock threshold). **There is no Account block**,
+  and nothing says whether you are signed in: if you are reading it, you are.
+- **The threshold moved out of Preferences and became a stepper.** It is a fact
+  about the pantry, not about the person looking at it. A stepper also has no
+  empty state, which is what the old commit-on-blur field existed to survive.
+  **Its minus at zero stays live and faint**, never disabled — the item card's
+  rule.
+- **`MembersPane.tsx` is a second level, pushed by the chevron.** Members and
+  invites are one subject and get the full 340 together, which is what finally
+  **settled the standing complaint that invite links are cramped**. The pane
+  **drops the Filter / Settings tabs while pushed** — back is the only way out —
+  and a household switch pops it. `Drawer` owns that state for exactly that
+  reason.
+- **`RoleMenu.tsx` — the role word is the trigger.** Owner only, never on your
+  own row, and *Remove from household* is the last row of the same menu, so
+  there is no `⋯`. **Selection is a check, not a fill** (the sort menu's rule's
+  second user) and **nothing in it is disabled**: the last-owner case is
+  unreachable from a menu only an owner sees on somebody else's row.
+- **`AccountMenu.tsx` is one component in two places** — the drawer's foot row
+  and the collapsed rail's account flyout. Identity row with a pencil that flips
+  it **in place** into the composer's field, a hairline, *Sign out*. **This is
+  where the display name is edited now**, which Phase 4.11 deferred. No toast:
+  the row returning read-only with the new name is the confirmation.
+- **The invite composer is the term composer again** — the dashed row stays put
+  and drops the panel in below itself, role chips with *Editor* preselected, and
+  a sentence that changes with the chip. **Expiry is a countdown, not a date**
+  inside the app; the `?join=` landing keeps its date deliberately. All but the
+  newest invite card collapses to its header.
+- **`Theme.drawer` gained `menu` and `menuLine`** — the two menus are near the
+  drawer's own body on purpose, separated by their border and shadow. Reusing
+  the sort menu's cream popover was rejected: it would put the brightest thing on
+  screen over the darkest panel in the app.
+- **`useDismiss.ts`** is the Escape + outside-press pair the switcher had inline.
+  **Its ref wraps the trigger as well as the panel** — a handler exempting only
+  the panel closes on `pointerdown` and lets the trigger reopen on the `click`,
+  which is the bug the rail needed a `dismissed` ref for.
+- **Three control styles went with the surfaces they described** —
+  `DRAWER_ICON_DANGER`, `DRAWER_CARD`, and the on-drawer form of
+  `DRAWER_GHOST_DANGER`. Both surviving crimson ghosts now sit on a **card**, so
+  the hover is `drawer-raised-hover`: painted with the drawer's own values they
+  hovered to exactly the colour they were already on.
+
+**One knowing departure from the boards**, the fifth overall: the rail's account
+flyout keeps the rail's own flyout surface and only its width moves to 292.
+Household and appearance sit a few pixels above it on that surface, and one
+flyout in three wearing a different fill reads as a different kind of thing.
+
+**Verified without a browser**: typecheck clean, 235 assertions, `sf dev` on
+`--port 4199` compiles and serves, and **every class literal in the twelve
+touched files** was diffed against the live `/zero.css` by unescaping the
+sheet's own selectors — printed, never hand-written. **Nobody has clicked it.**
 
 ### Empty results — 2026-08-26
 
@@ -1056,13 +1129,14 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D48, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy** |
+| `.docs/decisions.md` | D1–D48, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
 | `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
 | `.claude/docs/design/larderloghouseholdcolourboards.html` | **The 8 boards for the household colour** — four screens, light and dark |
 | `.claude/docs/design/appliedfilterbar.html` | **The applied filter bar** — a live page rather than boards: desktop, 390, and the state strip, in both themes |
+| `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
 | `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes. **The build has one state now** — D48 removed the prefill, so neither board's hint exists |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |

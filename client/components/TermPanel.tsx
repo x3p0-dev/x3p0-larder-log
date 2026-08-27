@@ -56,14 +56,24 @@ export function panelSkin(theme: Theme, onDark: boolean): Skin {
  * same pill in the filter tab. The negative margin lets it bleed to the edge of
  * whatever column it drops into, so it reads as a tray opening rather than a
  * card floating inside the list.
+ *
+ * `flush` is for the one caller that opens **inside a card rather than inside a
+ * list** — Settings › Household. There the panel is the top of the card it
+ * drops into, so it takes the card's own top corners, drops its ring, and lets
+ * the hairline above the next row be its bottom edge. Rounding a box inside a
+ * box inside a card stacked three nested outlines on one screen, and the
+ * innermost one — the colour picker's well — is the only one carrying
+ * information.
  */
 export function TermPanel({
-	label, mode, onDone, onDark = false, theme, children,
+	label, mode, onDone, onDark = false, flush = false, theme, children,
 }: {
 	label: string;
 	mode: 'new' | 'editing';
 	onDone: () => void;
 	onDark?: boolean;
+	/** Fill the top of the card this drops into, rather than float inside it. */
+	flush?: boolean;
 	theme: Theme;
 	children: preact.ComponentChildren;
 }) {
@@ -71,8 +81,16 @@ export function TermPanel({
 
 	return (
 		<div
-			class="flex flex-col gap-2.5 -mx-2.5 px-2.5 pt-3 pb-3.5 rounded-[14px]"
-			style={{ background: s.panel, boxShadow: `inset 0 0 0 1px ${s.hairline}` }}
+			class={
+				'flex flex-col gap-2.5 pt-3 pb-3.5 ' +
+				/* 12, not 13: the card's radius less its 1px border, so the fill
+				 * follows the inside of the corner rather than cutting across it. */
+				(flush ? 'pl-3.5 pr-3 rounded-t-[12px]' : '-mx-2.5 px-2.5 rounded-[14px]')
+			}
+			style={{
+				background: s.panel,
+				boxShadow: flush ? undefined : `inset 0 0 0 1px ${s.hairline}`,
+			}}
 		>
 			<div class="flex items-center justify-between gap-2">
 				<span class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: s.label }}>

@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — drawer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,500&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; color: #241E17; background: #F3EADC;
+    font-family: Karla, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    padding: 12px 18px;
+    background: rgba(253,250,244,.94);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #E2D5C0;
+  }
+  .brand {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700; font-size: 20px; letter-spacing: -0.01em; white-space: nowrap;
+  }
+  .brand i { font-weight: 600; color: #BE3346; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #F2EADC; border-radius: 13px; }
+  .tab {
+    font: 600 13.5px/1 Karla, sans-serif; color: #4C4237;
+    background: transparent; border: 0; cursor: pointer;
+    padding: 0 12px; height: 32px; border-radius: 9px; white-space: nowrap;
+  }
+  .tab:hover { background: #FDFAF4; }
+  .tab[aria-selected="true"] { background: #241E17; color: #F2E9DA; }
+  .tab:focus-visible { outline: 2px solid #BE3346; outline-offset: 2px; }
+  .spacer { flex-grow: 1; }
+  .opts { display: flex; align-items: center; gap: 14px; font-size: 13px; color: #6F6049; }
+  .opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+  .opts input { accent-color: #BE3346; }
+  kbd {
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #F2EADC; border: 1px solid #E2D5C0; border-bottom-width: 2px;
+    border-radius: 5px; padding: 3px 5px; color: #4C4237;
+  }
+  main {
+    flex-grow: 1;
+    background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD);
+    padding: 34px 24px 60px;
+    display: flex; justify-content: center; align-items: flex-start; gap: 40px;
+    overflow-x: auto;
+  }
+  .pane { display: none; flex: 0 0 auto; }
+  .pane.is-on { display: block; }
+  .pane.drawer > div { box-shadow: 0 18px 44px rgba(36,30,23,.22); border-radius: 16px; }
+  .pane.study > div { background: none !important; padding: 0 !important; }
+  .pane::before {
+    content: attr(data-label); display: none;
+    font: 700 10.5px/1 Karla, sans-serif;
+    letter-spacing: .15em; text-transform: uppercase; color: #9B8B75;
+    padding-bottom: 10px;
+  }
+  body.compare .pane { display: none; }
+  body.compare .pane[data-view="drawer"],
+  body.compare .pane[data-view="members"] { display: block; }
+  body.compare .pane::before { display: block; }
+  body.compare .tabs { opacity: .4; pointer-events: none; }
+  body.phone .pane.drawer > div { width: 328px !important; }
+  @media (max-width: 720px) {
+    main { padding: 20px 12px 48px; }
+    header { padding: 10px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Larder <i>Log</i></div>
+  <div class="tabs" role="tablist"><button class="tab" data-view="drawer" role="tab" aria-selected="false">The drawer</button><button class="tab" data-view="members" role="tab" aria-selected="false">Members pane</button><button class="tab" data-view="role" role="tab" aria-selected="false">Changing a role</button><button class="tab" data-view="invite" role="tab" aria-selected="false">Making an invite</button><button class="tab" data-view="account" role="tab" aria-selected="false">Your account</button></div>
+  <div class="spacer"></div>
+  <div class="opts">
+    <label><input type="checkbox" id="compare"> Root + members side by side</label>
+    <label><input type="checkbox" id="phone"> 328px</label>
+    <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd></span>
+  </div>
+</header>
+
+<main><section class="pane drawer" data-view="drawer"><div style="width: 340px; box-sizing: border-box; background: linear-gradient(180deg, #2B2419 0%, #1F1A13 100%); padding: 16px 14px 12px; display: flex; flex-direction: column; gap: 18px;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 27px; color: #F2E9DA; letter-spacing: -0.01em;">Larder <span style="font-style: italic; font-weight: 600; color: #D4636B;">Log</span></div>
+    <div style="width: 32px; height: 32px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 10px; background: #332B22; border: 1px solid #3B3126; border-radius: 14px; padding: 10px 12px;">
+    <div style="width: 34px; height: 34px; border-radius: 10px; background: #A03B36; display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 17px; color: #F2E9DA;">G</div>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74;">Household</div>
+      <div style="font-size: 15px; font-weight: 500; color: #F2E9DA;">Granny's</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6.5 8 3.5l3 3"/><path d="M5 9.5l3 3 3-3"/></svg>
+  </div>
+
+  <div style="display: flex; gap: 4px; background: #191510; border-radius: 14px; padding: 4px;">
+    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 38px; border-radius: 11px; font-size: 15px; font-weight: 600; color: #A5937A;">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M4 8h8M6.5 12h3"/></svg>Filter
+    </div>
+    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 38px; border-radius: 11px; background: #F2E9DA; font-size: 15px; font-weight: 600; color: #241E17;">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 5h6M11.5 5H14M2 11h2.5M8 11h6"/><circle cx="9.5" cy="5" r="1.7"/><circle cx="6" cy="11" r="1.7"/></svg>Settings
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 9px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding-left: 4px;">Household</div>
+    <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; display: flex; flex-direction: column;">
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 11px 11px 11px 14px;">
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 15px; font-weight: 500; color: #F2E9DA;">Granny's</div>
+          <div style="font-size: 13px; color: #A5937A;">47 items</div>
+        </div>
+        <div style="width: 32px; height: 32px; border-radius: 10px; background: #3B3126; display: flex; align-items: center; justify-content: center;">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#DCD0BA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.3a1.85 1.85 0 0 1 2.6 2.6L5.6 13.1 2.2 14l.9-3.4z"/></svg>
+        </div>
+      </div>
+
+      <div style="height: 1px; background: #3B3126;"></div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px;">
+        <div style="display: flex; align-items: center;">
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #4A3E2E; box-shadow: 0 0 0 2px #332B22, inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; color: #DCD0BA;">J</div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #4A3E2E; box-shadow: 0 0 0 2px #332B22, inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; color: #DCD0BA; margin-left: -9px;">S</div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #4A3E2E; box-shadow: 0 0 0 2px #332B22, inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600; color: #DCD0BA; margin-left: -9px;">D</div>
+        </div>
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+          <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Members</div>
+          <div style="font-size: 13px; color: #A5937A;">3 people · 1 invite out</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+      </div>
+
+      <div style="height: 1px; background: #3B3126;"></div>
+
+      <div style="display: flex; align-items: center; gap: 9px; padding: 10px 14px; font-size: 14.5px; color: #D4636B;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14H3.5A1.5 1.5 0 0 1 2 12.5v-9A1.5 1.5 0 0 1 3.5 2H6"/><path d="M10.5 11 14 8l-3.5-3"/><path d="M14 8H6.5"/></svg>Leave household
+      </div>
+
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 9px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding-left: 4px;">Preferences</div>
+    <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; padding: 12px 12px 13px; display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 14.5px; color: #DCD0BA; padding-left: 2px;">Appearance</div>
+      <div style="display: flex; gap: 4px; background: #191510; border-radius: 13px; padding: 4px;">
+        <div style="flex-grow: 1; height: 36px; border-radius: 10px; background: #F2E9DA; display: flex; align-items: center; justify-content: center; font-size: 14.5px; font-weight: 600; color: #241E17;">Auto</div>
+        <div style="flex-grow: 1; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14.5px; color: #DCD0BA;">Light</div>
+        <div style="flex-grow: 1; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14.5px; color: #DCD0BA;">Dark</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 9px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding-left: 4px;">Pantry settings</div>
+    <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; display: flex; align-items: center; gap: 10px; padding: 10px 11px 10px 14px;">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 14.5px; color: #DCD0BA;">New items are low at</div>
+        <div style="font-size: 12.5px; color: #7E6E58;">Change it per item any time</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px; background: #191510; border-radius: 10px; padding: 3px;">
+        <div style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#DCD0BA" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h10"/></svg></div>
+        <div style="min-width: 22px; text-align: center; font-size: 15px; font-weight: 600; color: #F2E9DA;">3</div>
+        <div style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#DCD0BA" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid #3B3126; margin-top: 2px; padding-top: 12px; display: flex; align-items: center; gap: 11px;">
+    <div style="width: 32px; height: 32px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #DCD0BA;">J</div>
+    <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+      <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+      <div style="font-size: 13px; color: #7E6E58;">justin@example.com</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+  </div>
+
+</div></section><section class="pane drawer" data-view="members"><div style="width: 340px; box-sizing: border-box; background: linear-gradient(180deg, #2B2419 0%, #1F1A13 100%); padding: 16px 14px 12px; display: flex; flex-direction: column; gap: 18px;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 27px; color: #F2E9DA; letter-spacing: -0.01em;">Larder <span style="font-style: italic; font-weight: 600; color: #D4636B;">Log</span></div>
+    <div style="width: 32px; height: 32px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 11px;">
+    <div style="width: 36px; height: 36px; border-radius: 11px; background: #332B22; border: 1px solid #3B3126; display: flex; align-items: center; justify-content: center;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#DCD0BA" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 1px;">
+      <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 21px; color: #F2E9DA;">Members</div>
+      <div style="font-size: 13px; color: #7E6E58;">Granny's</div>
+    </div>
+  </div>
+
+  <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; display: flex; flex-direction: column;">
+
+    <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+      <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">J</div>
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+        <div style="font-size: 13px; color: #A5937A;">Owner · You</div>
+      </div>
+    </div>
+    <div style="height: 1px; background: #3B3126; margin-left: 60px;"></div>
+
+    <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+      <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">S</div>
+      <div style="flex-grow: 1; min-width: 0; font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sarah Calfee</div>
+      <div style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 12px; border-radius: 13px; background: #3B3126; font-size: 13.5px; color: #DCD0BA;">Editor
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+      </div>
+    </div>
+    <div style="height: 1px; background: #3B3126; margin-left: 60px;"></div>
+
+    <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+      <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">D</div>
+      <div style="flex-grow: 1; min-width: 0; font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Dale Whitaker</div>
+      <div style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 12px; border-radius: 13px; background: #3B3126; font-size: 13.5px; color: #DCD0BA;">Editor
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding: 0 4px 2px;">Invites</div>
+
+    <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+        <div style="font-size: 15px; font-weight: 600; color: #F2E9DA;">Editor</div>
+        <div style="font-size: 13px; color: #7E6E58; white-space: nowrap;">Expires in 12 days</div>
+      </div>
+      <div style="height: 40px; box-sizing: border-box; background: #191510; border: 1px solid #3B3126; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; font-size: 13px; color: #A5937A; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">larderlog.app/join/7fQ2mK9tR4</div>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; border-radius: 11px; background: #F2E9DA; font-size: 14px; font-weight: 600; color: #241E17;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="2"/><path d="M10.5 5.5v-1a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1"/></svg>Copy link
+        </div>
+        <div style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 11px; font-size: 14px; color: #D4636B;">Revoke</div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 13px; border: 1px dashed #4A4031; font-size: 14.5px; color: #A5937A;">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New invite
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid #3B3126; margin-top: 2px; padding-top: 12px; display: flex; align-items: center; gap: 11px;">
+    <div style="width: 32px; height: 32px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #DCD0BA;">J</div>
+    <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+      <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+      <div style="font-size: 13px; color: #7E6E58;">justin@example.com</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+  </div>
+
+</div></section><section class="pane study" data-view="role"><div style="width: 620px; box-sizing: border-box; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); padding: 30px 28px 34px; display: flex; flex-direction: column; gap: 30px;">
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 24px; color: #241E17;">Changing someone's role</div>
+    <div style="font-size: 14.5px; color: #6F6049; max-width: 510px; text-wrap: pretty;">The role word is the trigger, and the menu is the drawer's own surface — so nothing bright opens over the darkest panel in the app, and the role is named once rather than twice. Owner only; it lives in the Members pane.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">At rest</div>
+    <div style="width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 12px; box-sizing: border-box;">
+      <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">J</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+            <div style="font-size: 13px; color: #A5937A;">Owner · You</div>
+          </div>
+        </div>
+        <div style="height: 1px; background: #3B3126; margin-left: 60px;"></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">S</div>
+          <div style="flex-grow: 1; min-width: 0; font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sarah Calfee</div>
+          <div style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 12px; border-radius: 13px; background: #3B3126; font-size: 13.5px; color: #DCD0BA;">Editor
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+          </div>
+        </div>
+        <div style="height: 1px; background: #3B3126; margin-left: 60px;"></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">D</div>
+          <div style="flex-grow: 1; min-width: 0; font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Dale Whitaker</div>
+          <div style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 12px; border-radius: 13px; background: #3B3126; font-size: 13.5px; color: #DCD0BA;">Editor
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Open</div>
+      <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">The chip takes the rail's documented open state — cream fill, ink label — and the menu right-aligns to the card's edge, so it never needs room the drawer doesn't have. Selection is a check, not a fill, so a hovered row still reads.</div>
+    </div>
+    <div style="position: relative; width: 340px;">
+      <div style="width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 12px; box-sizing: border-box;">
+        <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">J</div>
+            <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+              <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+              <div style="font-size: 13px; color: #A5937A;">Owner · You</div>
+            </div>
+          </div>
+          <div style="height: 1px; background: #3B3126; margin-left: 60px;"></div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">S</div>
+            <div style="flex-grow: 1; min-width: 0; font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sarah Calfee</div>
+            <div style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 12px; border-radius: 13px; background: #F2E9DA; font-size: 13.5px; font-weight: 600; color: #241E17;">Editor
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#241E17" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+            </div>
+          </div>
+          <div style="height: 1px; background: #3B3126; margin-left: 60px;"></div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">D</div>
+            <div style="flex-grow: 1; min-width: 0; font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Dale Whitaker</div>
+            <div style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 12px; border-radius: 13px; background: #3B3126; font-size: 13.5px; color: #DCD0BA;">Editor
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="height: 152px;"></div>
+      </div>
+      <div style="position: absolute; left: 104px; top: 126px; width: 224px; background: #241E17; border: 1px solid #4A4031; border-radius: 14px; box-shadow: 0 16px 40px rgba(10,8,5,.44); padding: 6px; display: flex; flex-direction: column; gap: 1px;">
+        <div style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 9px; font-size: 14px; color: #DCD0BA;">Owner</div>
+        <div style="display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px; border-radius: 9px; font-size: 14px; font-weight: 600; color: #F2E9DA;">
+          <div style="flex-grow: 1;">Editor</div>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#D4636B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 5"/></svg>
+        </div>
+        <div style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 9px; font-size: 14px; color: #DCD0BA;">Viewer</div>
+        <div style="height: 1px; background: #3B3126; margin: 5px 6px;"></div>
+        <div style="display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: 9px; font-size: 14px; color: #D4636B;">Remove from household</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 7px; border-top: 1px solid #E2D5C0; padding-top: 18px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Rules the drawing implies</div>
+    <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">Your own row has no trigger — the role is plain meta text and reads <em>Owner · You</em>. Demoting yourself while you are the only owner is the blocked dialog that already exists for leaving, not a disabled menu row. Removing a member inherits the invite pattern: a confirm modal, no undo.</div>
+  </div>
+
+</div></section><section class="pane study" data-view="invite"><div style="width: 620px; box-sizing: border-box; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); padding: 30px 28px 34px; display: flex; flex-direction: column; gap: 30px;">
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 24px; color: #241E17;">Making an invite link</div>
+    <div style="font-size: 14.5px; color: #6F6049; max-width: 510px; text-wrap: pretty;">Three steps, no modal. The dashed row drops the composer in below itself — the same panel the Filter tab uses to make a term, at drawer scale. Owner only; it lives in the Members pane under Invites.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">1 · At rest</div>
+    <div style="width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding: 0 4px 2px;">Invites</div>
+
+      <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <div style="font-size: 15px; font-weight: 600; color: #F2E9DA;">Editor</div>
+          <div style="font-size: 13px; color: #7E6E58; white-space: nowrap;">Expires in 12 days</div>
+        </div>
+        <div style="height: 40px; box-sizing: border-box; background: #191510; border: 1px solid #3B3126; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; font-size: 13px; color: #A5937A; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">larderlog.app/join/7fQ2mK9tR4</div>
+        <div style="display: flex; gap: 8px;">
+          <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; border-radius: 11px; background: #F2E9DA; font-size: 14px; font-weight: 600; color: #241E17;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="2"/><path d="M10.5 5.5v-1a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1"/></svg>Copy link
+          </div>
+          <div style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 11px; font-size: 14px; color: #D4636B;">Revoke</div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 13px; border: 1px dashed #4A4031; font-size: 14.5px; color: #A5937A;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New invite
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">2 · Choosing the role</div>
+      <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">The panel drops in <em>below</em> the dashed row, which stays put — the composer's rule. Its header is separated by a hairline, exactly as the card above it separates its own rows, so the two sit at the same rhythm. Editor is preselected because it is the ordinary case; the sentence beneath changes with the chip.</div>
+    </div>
+    <div style="width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding: 0 4px 2px;">Invites</div>
+
+      <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; padding: 13px 14px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+        <div style="font-size: 15px; font-weight: 600; color: #F2E9DA;">Editor</div>
+        <div style="font-size: 13px; color: #7E6E58; white-space: nowrap;">Expires in 12 days</div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 13px; border: 1px dashed #4A4031; font-size: 14.5px; color: #A5937A;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New invite
+      </div>
+
+      <div style="background: #191510; box-shadow: inset 0 0 0 1px #3B3126; border-radius: 14px; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 11px 11px 15px;">
+          <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74;">New invite</div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; height: 30px; padding: 0 15px; border-radius: 10px; background: #F2E9DA; font-size: 13.5px; font-weight: 600; color: #241E17;">Create</div>
+            <div style="width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="height: 1px; background: #3B3126;"></div>
+        <div style="padding: 15px; display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; gap: 8px;">
+            <div style="height: 34px; padding: 0 15px; border-radius: 999px; border: 1px solid #4A4031; display: flex; align-items: center; font-size: 13.5px; color: #DCD0BA;">Owner</div>
+            <div style="height: 34px; padding: 0 15px; border-radius: 999px; background: #F2E9DA; display: flex; align-items: center; font-size: 13.5px; font-weight: 600; color: #241E17;">Editor</div>
+            <div style="height: 34px; padding: 0 15px; border-radius: 999px; border: 1px solid #4A4031; display: flex; align-items: center; font-size: 13.5px; color: #DCD0BA;">Viewer</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 7px;">
+            <div style="font-size: 13.5px; line-height: 1.5; color: #A5937A; text-wrap: pretty;">Can add, edit and remove items. Can't invite anyone or rename the pantry.</div>
+            <div style="font-size: 12.5px; line-height: 1.45; color: #7E6E58;">The link will work for 14 days.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">3 · Created</div>
+      <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">The panel closes and the new invite lands at the top of the list with its link already showing. No toast — the row appearing with the thing you asked for in it is the confirmation, and you still have to copy the link, so the screen has to stay put anyway.</div>
+    </div>
+    <div style="width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9E8C74; padding: 0 4px 2px;">Invites</div>
+
+      <div style="background: #332B22; border: 1px solid #544737; border-radius: 13px; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <div style="font-size: 15px; font-weight: 600; color: #F2E9DA;">Viewer</div>
+          <div style="font-size: 13px; color: #7E6E58; white-space: nowrap;">Expires in 14 days</div>
+        </div>
+        <div style="height: 40px; box-sizing: border-box; background: #191510; border: 1px solid #3B3126; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; font-size: 13px; color: #A5937A; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">larderlog.app/join/Q4xL8vB2nD</div>
+        <div style="display: flex; gap: 8px;">
+          <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; border-radius: 11px; background: #F2E9DA; font-size: 14px; font-weight: 600; color: #241E17;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="2"/><path d="M10.5 5.5v-1a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1"/></svg>Copy link
+          </div>
+          <div style="display: flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 11px; font-size: 14px; color: #D4636B;">Revoke</div>
+        </div>
+      </div>
+
+      <div style="background: #332B22; border: 1px solid #3B3126; border-radius: 13px; padding: 13px 14px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+        <div style="font-size: 15px; font-weight: 600; color: #F2E9DA;">Editor</div>
+        <div style="font-size: 13px; color: #7E6E58; white-space: nowrap;">Expires in 12 days</div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 13px; border: 1px dashed #4A4031; font-size: 14.5px; color: #A5937A;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New invite
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 7px; border-top: 1px solid #E2D5C0; padding-top: 18px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Two things this decides</div>
+    <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">A card collapses to its header once the link has been copied and the row is just a live invite you are keeping an eye on — one row per invite, expanded only for the newest. And the countdown replaces the date everywhere: <em>expires in 12 days</em> answers the question the date was standing in for, and needs no year, no locale and no format.</div>
+  </div>
+
+</div></section><section class="pane study" data-view="account"><div style="width: 620px; box-sizing: border-box; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); padding: 30px 28px 34px; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 24px; color: #241E17;">You, at the foot of the drawer</div>
+    <div style="font-size: 14.5px; color: #6F6049; max-width: 500px; text-wrap: pretty;">Settings has no Account block, so this row is the only place you appear — and it never says whether you are signed in, because you are. It is the same menu the collapsed rail's Account flyout opens, so one component serves both states of the drawer.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">At rest</div>
+    <div style="width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 12px; box-sizing: border-box;">
+      <div style="border-top: 1px solid #3B3126; padding-top: 12px; display: flex; align-items: center; gap: 11px;">
+        <div style="width: 32px; height: 32px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #DCD0BA;">J</div>
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+          <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+          <div style="font-size: 13px; color: #7E6E58;">justin@example.com</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Open · build this</div>
+      <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">Two things: the name, and the way out. The pencil flips the row inside the menu into the composer's field with a Done pill, exactly as the Filter tab's sections do — no modal, no second screen. The avatar takes the cream ring that marks it as what opened this.</div>
+    </div>
+    <div style="position: relative; height: 264px;">
+      <div style="position: absolute; left: 0; top: 0; width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 12px; box-sizing: border-box;">
+        <div style="height: 186px;"></div>
+        <div style="border-top: 1px solid #3B3126; padding-top: 12px; display: flex; align-items: center; gap: 11px;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: #4A3E2E; box-shadow: 0 0 0 2px #F2E9DA, inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #DCD0BA;">J</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+            <div style="font-size: 13px; color: #7E6E58;">justin@example.com</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+        </div>
+      </div>
+      <div style="position: absolute; left: 24px; top: 42px; width: 292px; background: #241E17; border: 1px solid #4A4031; border-radius: 14px; box-shadow: 0 16px 40px rgba(10,8,5,.44); padding: 6px; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; gap: 11px; padding: 9px 8px 9px 10px;">
+          <div style="width: 38px; height: 38px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">J</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+            <div style="font-size: 13px; color: #7E6E58; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">justin@example.com</div>
+          </div>
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center;">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#DCD0BA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.3a1.85 1.85 0 0 1 2.6 2.6L5.6 13.1 2.2 14l.9-3.4z"/></svg>
+          </div>
+        </div>
+        <div style="height: 1px; background: #3B3126; margin: 4px 6px;"></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 9px; font-size: 14px; color: #DCD0BA;">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14H3.5A1.5 1.5 0 0 1 2 12.5v-9A1.5 1.5 0 0 1 3.5 2H6"/><path d="M10.5 11 14 8l-3.5-3"/><path d="M14 8H6.5"/></svg>Sign out
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; flex-direction: column; gap: 3px;">
+      <div style="display: flex; align-items: center; gap: 9px;">
+        <div style="font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #9B8B75;">Open · planned</div>
+        <div style="display: flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; font: 700 10px/1 Karla, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #855A0F;">Do not build yet</div>
+      </div>
+      <div style="font-size: 14px; color: #4C4237; max-width: 540px; text-wrap: pretty;">A mockup only. When there is somewhere to send people, a third row hands off to Gravatar — its own block between the identity row and sign out, with the outbound arrow that means <em>this leaves the app</em>. It is drawn here so the menu's proportions are known in advance; it ships empty until then.</div>
+    </div>
+    <div style="position: relative; height: 302px;">
+      <div style="position: absolute; left: 0; top: 0; width: 340px; background: linear-gradient(180deg, #2B2419, #1F1A13); border-radius: 16px; padding: 12px; box-sizing: border-box; opacity: .55;">
+        <div style="height: 224px;"></div>
+        <div style="border-top: 1px solid #3B3126; padding-top: 12px; display: flex; align-items: center; gap: 11px;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: #4A3E2E; box-shadow: 0 0 0 2px #F2E9DA, inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #DCD0BA;">J</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+            <div style="font-size: 13px; color: #7E6E58;">justin@example.com</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+        </div>
+      </div>
+      <div style="position: absolute; left: 24px; top: 42px; width: 292px; background: #241E17; border: 1px solid #4A4031; border-radius: 14px; box-shadow: 0 16px 40px rgba(10,8,5,.44); padding: 6px; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; gap: 11px; padding: 9px 8px 9px 10px;">
+          <div style="width: 38px; height: 38px; border-radius: 50%; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #DCD0BA;">J</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <div style="font-size: 15px; color: #F2E9DA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Justin Tadlock</div>
+            <div style="font-size: 13px; color: #7E6E58; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">justin@example.com</div>
+          </div>
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center;">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#DCD0BA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.3a1.85 1.85 0 0 1 2.6 2.6L5.6 13.1 2.2 14l.9-3.4z"/></svg>
+          </div>
+        </div>
+        <div style="height: 1px; background: #3B3126; margin: 4px 6px;"></div>
+        <div style="position: relative; margin: 2px 2px; border: 1px dashed #855A0F; border-radius: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 8px; border-radius: 9px; font-size: 14px; color: #A5937A;">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#7E6E58" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.2"/></svg>
+            <div style="flex-grow: 1;">Change your picture</div>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#7E6E58" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7"/><path d="M13 3 7 9"/><path d="M11 10.5v2.5H3V5h2.5"/></svg>
+          </div>
+        </div>
+        <div style="height: 1px; background: #3B3126; margin: 4px 6px;"></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 9px; font-size: 14px; color: #DCD0BA;">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9E8C74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14H3.5A1.5 1.5 0 0 1 2 12.5v-9A1.5 1.5 0 0 1 3.5 2H6"/><path d="M10.5 11 14 8l-3.5-3"/><path d="M14 8H6.5"/></svg>Sign out
+        </div>
+      </div>
+      <div style="position: absolute; left: 336px; top: 108px; display: flex; align-items: center; gap: 8px;">
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="#855A0F" stroke-width="1.4" stroke-linecap="round"><path d="M23 6H2"/><path d="M6 2 2 6l4 4"/></svg>
+        <div style="font-size: 13px; color: #855A0F; max-width: 200px; text-wrap: pretty;">Mockup only — not in v1</div>
+      </div>
+    </div>
+  </div>
+
+</div></section></main>
+
+<script>
+  var views = ["drawer", "members", "role", "invite", "account"];
+  var labels = {"drawer": "The drawer", "members": "Members pane", "role": "Changing a role", "invite": "Making an invite", "account": "Your account"};
+  var tabEls = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  var paneEls = Array.prototype.slice.call(document.querySelectorAll('.pane'));
+  paneEls.forEach(function (p) { p.setAttribute('data-label', labels[p.dataset.view] || ''); });
+
+  var current = views[0];
+
+  function show(view) {
+    current = view;
+    tabEls.forEach(function (t) { t.setAttribute('aria-selected', String(t.dataset.view === view)); });
+    paneEls.forEach(function (p) { p.classList.toggle('is-on', p.dataset.view === view); });
+    try { localStorage.setItem('larder-view', view); } catch (e) {}
+    if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
+  }
+
+  tabEls.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.view); }); });
+
+  document.addEventListener('keydown', function (e) {
+    if (document.body.classList.contains('compare')) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var i = views.indexOf(current);
+    show(views[(i + (e.key === 'ArrowRight' ? 1 : views.length - 1)) % views.length]);
+  });
+
+  document.getElementById('compare').addEventListener('change', function (e) {
+    document.body.classList.toggle('compare', e.target.checked);
+  });
+  document.getElementById('phone').addEventListener('change', function (e) {
+    document.body.classList.toggle('phone', e.target.checked);
+  });
+
+  window.addEventListener('hashchange', function () {
+    var v = location.hash.slice(1);
+    if (views.indexOf(v) !== -1 && v !== current) show(v);
+  });
+
+  var start = location.hash.slice(1);
+  if (views.indexOf(start) === -1) {
+    try { start = localStorage.getItem('larder-view'); } catch (e) { start = null; }
+  }
+  show(views.indexOf(start) === -1 ? views[0] : start);
+</script>
+
+</body>
+</html>

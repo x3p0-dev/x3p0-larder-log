@@ -752,6 +752,53 @@ grandfathering path confirmed by creating a household with no profile row and
 watching `needsName` come back **false** with the inherited name.
 **Nobody has clicked it.**
 
+### Phase 4.12 — The sidebar drawer redesign ✅ (2026-08-27)
+
+`.claude/docs/design/ui-directions.md` § *Settings tab*, drawn on
+`.claude/docs/design/larderlogdrawerpreview.html` — five screens: the root pane,
+the Members pane, changing a role, making an invite, and the account menu.
+Governed by [D49](decisions.md#d49-settings-is-three-blocks-and-members-are-a-level-down).
+
+**Client only.** No schema change, no new handler, no new query or mutation —
+ten tables, five queries, seventeen mutations, exactly as Phase 4.11 left them.
+
+- **The root pane is three blocks and a row.** *Household* (name and colour
+  behind a pencil, with the item count in meta · a **Members** row with three
+  stacked avatars and a chevron · *Leave household* inside the same card under a
+  hairline) → *Preferences* (Appearance) → *Pantry settings* (the default
+  low-stock threshold, now a stepper rather than a commit-on-blur field). The
+  account row at the foot belongs to `Drawer`, not to the pane.
+- **`MembersPane.tsx`** — the pushed second level, holding `MembersPanel` and
+  `InvitesPanel` at the full 340. `Drawer` owns whether it is pushed, because
+  the Filter / Settings tabs go while it is; a household switch pops it.
+- **`RoleMenu.tsx`** — the role word is the trigger, cream when open, and the
+  menu is `DrawerMenu`'s surface with a crimson check on the current value and
+  *Remove from household* under a hairline. Nothing in it is disabled.
+- **`AccountMenu.tsx`** — one component in two places, the drawer's foot row and
+  the collapsed rail's account flyout. Identity row with a pencil that flips it
+  in place into the composer's field, a hairline, and *Sign out*. **This is
+  where the display name is edited**, which Phase 4.11 deliberately left out.
+- **`DrawerMenu.tsx` / `DrawerAvatar.tsx` / `useDismiss.ts`** — the menu box and
+  its hairline, the person on the drawer at five sizes, and the Escape +
+  outside-press pair the switcher already had inline. `useDismiss`'s ref wraps
+  the **trigger as well as the panel**, which is what keeps a press on the
+  trigger from closing and reopening in one gesture.
+- **`InvitesPanel.tsx`** is rebuilt: one card per invite with the role as its
+  heading and a countdown rather than a date, a full-width link field, *Copy
+  link* beside a ghost crimson *Revoke*, and the dashed *New invite* row that
+  drops the composer in below itself. All but the newest card collapses to its
+  header.
+- **`Theme.drawer` gained `menu` and `menuLine`**; `controlStyles` gained
+  `DRAWER_SUNK`, `DRAWER_SUNK_ON`, `DRAWER_CARD_ROW`, `DRAWER_MENU_ROW`,
+  `DRAWER_MENU_ROW_DANGER`, `DRAWER_PRIMARY`, `DRAWER_STEPPER` and
+  `DRAWER_CHIP_OUTLINE`, and lost `DRAWER_ICON_DANGER`, `DRAWER_CARD` and the
+  on-drawer form of `DRAWER_GHOST_DANGER` along with the surfaces they described.
+
+**Verified without a browser**: typecheck clean, 235 assertions, `sf dev` on
+`--port 4199` compiles and serves, and **every** class literal in the twelve
+touched files was checked against the live `/zero.css` by unescaping the sheet's
+selectors and diffing — printed, not hand-written. **Nobody has clicked it.**
+
 ### Published: v8, v9, v10 — 2026-08-27
 
 **v10** (`ver_0026484fd67c495b8d3b7d52b9215d67`) is live: the term composer's

@@ -599,6 +599,22 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const [openMembers, setOpenMembers] = useState(0);
 
 	/**
+	 * Renaming the account, from the menu at the foot of the drawer.
+	 *
+	 * `setDisplayName` upserts the profile row **and writes back through every
+	 * membership** the account holds, which is what a rename needs: skipping
+	 * that would show the new name to the person who typed it and the old one
+	 * to everybody else (D46).
+	 *
+	 * No toast. The row returns to read-only with the new name in it, which is
+	 * the whole confirmation — and a toast for a save you are looking at is the
+	 * noise the open plain-toast question is trying to avoid.
+	 */
+	function renameAccount(name: string) {
+		void profile.setDisplayName(name);
+	}
+
+	/**
 	 * A code from an invite link, captured in the entry before sign-in.
 	 *
 	 * Held in state as well as the stash so redeeming it re-renders; the stash
@@ -1599,7 +1615,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					households={api.households} currentHouseholdId={api.currentHouseholdId}
 					onSelectHousehold={setSelectedHousehold}
 					onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
-					accountName={accountName}
+					accountName={accountName} accountEmail={email} accountPicture={picture}
+					onSetDisplayName={renameAccount}
 					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
 					dark={dark}
 					/*
@@ -1625,16 +1642,18 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				households={api.households} currentHouseholdId={api.currentHouseholdId}
 				onSelectHousehold={setSelectedHousehold}
 				onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
-				accountName={accountName}
+				accountName={accountName} accountEmail={email} accountPicture={picture}
+				onSetDisplayName={renameAccount} onSignOut={onSignOut}
+				openMembers={openMembers}
 				settings={{
 					themeOverride, setThemeOverride,
 					householdName,
 					setHouseholdName: (v) => void api.updateHousehold({ name: v }),
 					householdInk,
 					setHouseholdInk: (v) => void api.updateHousehold({ ink: v }),
+					itemCount: items.length,
 					defaultThreshold,
 					setDefaultThreshold: (v) => void api.updateHousehold({ defaultThreshold: v }),
-					accountName, accountEmail: email, onSignOut,
 					members, invites,
 					me: { membershipId: myMembershipId, role: myRole },
 					onCreateInvite: api.createInvite,
@@ -1667,7 +1686,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					},
 					onLeaveHousehold: requestLeave,
 					leaveLabel: members.length <= 1 ? 'Delete household' : 'Leave household',
-					openMembers,
 				}}
 				onCreateTerm={(kind, name, ink) => taxonomy.create(kind, { name, ink })}
 				onRenameTerm={(kind, id, name) => { void taxonomy.update(kind, id, { name }); }}

@@ -1,20 +1,20 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ChevronUp, LogOut, Pencil } from 'lucide-preact';
+import { ChevronRight, LogOut, Minus, Pencil, Plus } from 'lucide-preact';
 
+import { DrawerAvatar } from './DrawerAvatar';
 import { HouseholdIdentity } from './HouseholdIdentity';
-import { HouseholdTile } from './HouseholdTile';
-import { MembersPanel } from './MembersPanel';
+import { MembersPane } from './MembersPane';
 import { TermPanel } from './TermPanel';
-import { InvitesPanel } from './InvitesPanel';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
-import { DRAWER_BUTTON, DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_GHOST_DANGER, DRAWER_ICON, DRAWER_INPUT } from '../lib/controlStyles';
+import {
+	DRAWER_CARD_ROW, DRAWER_CHIP_ON, DRAWER_GHOST_DANGER, DRAWER_STEPPER, DRAWER_SUNK,
+} from '../lib/controlStyles';
 import type { Invite, Member, ThemeOverride } from '../../shared/types';
 import type { Role } from '../../shared/roles';
 import { can } from '../../shared/roles';
-import { isQty } from '../../shared/qty';
-import { digitField } from '../lib/numericField';
+import { fromInt, toInt } from '../../shared/qty';
 
 const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
 	{ key: 'system', label: 'Auto' },
@@ -30,15 +30,14 @@ type Props = {
 	/** The household's colour token, already resolved by the server (D42). */
 	householdInk: string;
 	setHouseholdInk: (value: string) => void;
+	/** What the Household block reports in meta — the pantry's size, not a filter's. */
+	itemCount: number;
 	defaultThreshold: string;
 	setDefaultThreshold: (value: string) => void;
-	accountName: string;
-	accountEmail: string;
-	onSignOut: () => void;
 	members: Member[];
 	invites: Invite[];
 	me: { membershipId: string; role: Role };
-	onCreateInvite: (role: Role) => void;
+	onCreateInvite: (role: Role) => unknown;
 	onRevokeInvite: (inviteId: string) => void;
 	onChangeRole: (membershipId: string, role: Role) => void;
 	onRemoveMember: (membershipId: string) => void;
@@ -56,64 +55,37 @@ type Props = {
 	 * this screen could tell.
 	 */
 	leaveLabel: string;
-	/** Bumped to unfold Members — where a blocked "last owner" dialog sends you. */
-	openMembers: number;
+	/**
+	 * Whether the Members pane is pushed. Owned by `Drawer`, because the tab bar
+	 * has to go while it is — the pane is a level down, not a third tab.
+	 */
+	membersOpen: boolean;
+	setMembersOpen: (open: boolean) => void;
 	theme: Theme;
 };
 
 /**
- * A settings section: the label treatment the filter pane uses, and the same
- * chevron.
+ * A settings block: a micro-label header over content on the drawer's raised
+ * fill at radius 13.
  *
- * `collapsible` is opt-in. Account and Household are two lines each and folding
- * them would hide less than the control to unfold them; Members and Invites can
- * both run long, so those fold.
+ * Nothing folds any more. The pane had two collapsible sections when it held
+ * six of them and Members and Invites could each run long; both of those now
+ * live one level down, and what is left is three blocks that are shorter than
+ * the control to fold them.
+ *
+ * **The Filter tab deliberately does not share this.** Boxing its chip groups
+ * the same way was built and reverted: a settings block holds rows of one value
+ * each and earns an edge, while a filter group is a cloud of chips that already
+ * has one per chip. Three cards of chips read as clutter, and `drawer-raised`
+ * is what the chips are made of, so they lost their own edge to the card's.
  */
-function Section({
-	title, theme, collapsible = false, defaultOpen = true, openSignal, children,
-}: {
-	title: string;
-	theme: Theme;
-	collapsible?: boolean;
-	defaultOpen?: boolean;
-	/** Bumped to force this section open. A counter, so twice in a row still works. */
-	openSignal?: number;
-	children: ComponentChildren;
-}) {
-	const [open, setOpen] = useState(defaultOpen);
-	const d = theme.drawer;
-
-	// Skips the first run — a section that is already open does not need
-	// unfolding, and `defaultOpen` has had its say by then.
-	const seen = useRef(openSignal);
-
-	useEffect(() => {
-		if (openSignal === seen.current) return;
-
-		seen.current = openSignal;
-		setOpen(true);
-	}, [openSignal]);
-	const shown = ! collapsible || open;
-
+function Block({ title, theme, children }: { title: string; theme: Theme; children: ComponentChildren }) {
 	return (
 		<section class="flex flex-col gap-2.5">
-			<div class="flex items-center justify-between">
-				<p class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: d.label }}>{title}</p>
-				{collapsible && (
-					<button
-						onClick={() => setOpen((v) => ! v)}
-						class={`flex items-center justify-center w-7 h-7 ${DRAWER_ICON}`}
-						aria-expanded={open}
-						aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
-					>
-						<ChevronUp
-							size={14}
-							style={{ color: '#6E5F4B', transform: open ? 'none' : 'rotate(180deg)', transition: 'transform .15s' }}
-						/>
-					</button>
-				)}
-			</div>
-			{shown && children}
+			<p class="text-label font-bold uppercase tracking-[0.15em] pl-1" style={{ color: theme.drawer.label }}>
+				{title}
+			</p>
+			{children}
 		</section>
 	);
 }
@@ -121,22 +93,37 @@ function Section({
 /**
  * The Settings pane, inside the drawer.
  *
- * Order is fixed by the spec — Account, Household, Members, Appearance, Default
- * threshold, **Invites last** — because inviting someone is the one action here
- * that reaches another person, and it should not sit above the things you
- * change every week.
+ * **Redesigned 27 Aug.** It had six labelled sections and printed the same two
+ * facts three times over — you in Account, again in Members, again in the row at
+ * the foot; the household in the switcher and again under its own heading.
+ * Three rules replaced them:
  *
- * There is deliberately no terms block (they live in the Filter pane now) and
- * no shopping list — it is a mode of the content column, reached from the top
- * bar and nowhere else (D41).
+ * 1. **The household tile appears once**, in the switcher. Nothing here draws it.
+ * 2. **You appear once**, in the row at the foot of the drawer — which is the
+ *    `Drawer`'s, not this pane's. There is no Account block, and nothing says
+ *    whether you are signed in: if you are reading it, you are.
+ * 3. **Scope is in the label.** *Preferences* are yours and follow you between
+ *    households; *Pantry settings* belong to the household you are in.
+ *
+ * The threshold moved out of Preferences under rule 3. It is a fact about the
+ * pantry, not about the person looking at it — two people in one household who
+ * disagree about it are disagreeing about the household, which is what makes it
+ * a setting rather than a preference.
+ *
+ * Preferences sits above Pantry settings, which leaves Household and Pantry
+ * settings non-adjacent even though both are household-scoped. Ordered
+ * yours-first on purpose: Appearance is the one anyone actually changes.
+ *
+ * There is deliberately no terms block — they live in the Filter pane — and no
+ * shopping list, which is a mode of the content column reached from the top bar
+ * and nowhere else (D41).
  */
 export function DrawerSettings({
 	themeOverride, setThemeOverride, householdName, setHouseholdName,
-	householdInk, setHouseholdInk,
+	householdInk, setHouseholdInk, itemCount,
 	defaultThreshold, setDefaultThreshold,
-	accountName, accountEmail, onSignOut,
 	members, invites, me, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember,
-	onLeaveHousehold, leaveLabel, openMembers, theme,
+	onLeaveHousehold, leaveLabel, membersOpen, setMembersOpen, theme,
 }: Props) {
 	const d = theme.drawer;
 	/* Panels paint from a Theme; hand them one whose surfaces are the drawer's. */
@@ -145,15 +132,8 @@ export function DrawerSettings({
 	const [nameDraft, setNameDraft] = useState(householdName);
 	const [creatingInvite, setCreatingInvite] = useState(false);
 
-	/*
-	 * A draft, committed on blur — the same treatment the name gets, and for a
-	 * sharper reason. Writing on every keystroke sent the empty string the
-	 * moment you cleared the field to retype, and `normalizeQty('')` is "0": a
-	 * household whose new items all start out already low.
-	 */
-	const [thresholdDraft, setThresholdDraft] = useState(defaultThreshold);
-
-	useEffect(() => { setThresholdDraft(defaultThreshold); }, [defaultThreshold]);
+	/* An open rename does not belong to the household you switched to. */
+	useEffect(() => { setEditing(false); }, [householdName]);
 
 	/*
 	 * The household name and the default threshold are both `updateHousehold`,
@@ -172,18 +152,6 @@ export function DrawerSettings({
 		setCreatingInvite(false);
 	}
 
-	/** Anything that isn't a quantity snaps back rather than being clamped to 0. */
-	function commitThreshold() {
-		const next = thresholdDraft.trim();
-
-		if (! isQty(next)) {
-			setThresholdDraft(defaultThreshold);
-			return;
-		}
-
-		if (next !== defaultThreshold) setDefaultThreshold(next);
-	}
-
 	/**
 	 * *Done* closes the panel and writes the name. The colour has already been
 	 * written — a swatch press is a decision, and there is nothing to type after
@@ -199,142 +167,203 @@ export function DrawerSettings({
 		setEditing(false);
 	}
 
+	/**
+	 * A stepper, not a field.
+	 *
+	 * The field it replaced was committed on blur, because writing on every
+	 * keystroke sent the empty string the moment you cleared it to retype — and
+	 * `normalizeQty('')` is "0", a household whose new items all start out
+	 * already low. A stepper has no empty state to have that problem in.
+	 */
+	function stepThreshold(by: number) {
+		setDefaultThreshold(fromInt(toInt(defaultThreshold) + by));
+	}
+
+	if (membersOpen) {
+		return (
+			<MembersPane
+				householdName={householdName}
+				members={members}
+				invites={invites}
+				me={me}
+				onBack={() => setMembersOpen(false)}
+				onCreateInvite={createInvite}
+				onRevokeInvite={onRevokeInvite}
+				onChangeRole={onChangeRole}
+				onRemoveMember={onRemoveMember}
+				creatingInvite={creatingInvite}
+				theme={inner}
+			/>
+		);
+	}
+
+	const people = members.length === 1 ? '1 person' : `${members.length} people`;
+	const out = invites.length === 0
+		? ''
+		: invites.length === 1 ? ' · 1 invite out' : ` · ${invites.length} invites out`;
+
 	return (
-		<div class="flex flex-col gap-[26px] px-5 pt-6 pb-6">
-			<Section title="Account" theme={theme}>
-				<div class="flex items-center gap-3">
-					<span
-						class="flex items-center justify-center w-[46px] h-[46px] rounded-full font-disp text-[19px] font-bold shrink-0"
-						style={{ background: '#4A3E2E', boxShadow: 'inset 0 0 0 1px #63533E', color: '#E8DCC6' }}
+		<div class="flex flex-col gap-[18px] px-5 pt-5 pb-6">
+			<Block title="Household" theme={theme}>
+				<div class="flex flex-col rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
+					{/*
+					  * Read state with a pencil, not a live field. A text input that
+					  * is always armed invites an accidental rename of the one name
+					  * every member sees — and the same goes for the colour beside
+					  * it. The pencil flips this row into the Filter tab's editing
+					  * panel, one row deep (D42): no add row and no trash, because a
+					  * household is one row rather than a list.
+					  *
+					  * **`flush`, because the panel is inside a card rather than
+					  * inside a list.** In the Filter tab it floats in a column and
+					  * earns a rounded box with a ring; here that box sat inside the
+					  * Household card with the colour picker's well inside *it*, and
+					  * three nested outlines on one screen say nothing the innermost
+					  * one does not. So the fill runs edge to edge from the card's
+					  * top corners down to the hairline above Members, which is the
+					  * bottom edge it already had.
+					  *
+					  * **No tile preview.** The spec asks for one on the grounds that
+					  * the tile is somewhere else while you are in Settings. It is
+					  * not: the drawer's own switcher is directly above this pane and
+					  * carries it.
+					  */}
+					{editing && mayEditSettings ? (
+						<TermPanel label="Household" mode="editing" onDone={commitName} onDark flush theme={theme}>
+							<HouseholdIdentity
+								name={nameDraft}
+								ink={householdInk}
+								onName={setNameDraft}
+								onInk={setHouseholdInk}
+								onSubmit={commitName}
+								autoFocus
+								onDark
+								theme={theme}
+							/>
+						</TermPanel>
+					) : (
+						<div class="flex items-center gap-2.5 pl-3.5 pr-3 py-[11px]">
+							<span class="flex-1 min-w-0 flex flex-col gap-px">
+								<span class="text-body truncate" style={{ color: d.ink }}>
+									{householdName || 'Your household'}
+								</span>
+								<span class="text-meta" style={{ color: inner.textMuted }}>
+									{itemCount === 1 ? '1 item' : `${itemCount} items`}
+								</span>
+							</span>
+							{mayEditSettings && (
+								<button
+									onClick={() => { setNameDraft(householdName); setEditing(true); }}
+									class={`shrink-0 flex items-center justify-center w-8 h-8 rounded-[10px] ${DRAWER_SUNK}`}
+									aria-label="Edit household name and colour"
+								>
+									<Pencil size={15} />
+								</button>
+							)}
+						</div>
+					)}
+
+					<span class="block h-px" style={{ background: d.line }} />
+
+					{/*
+					  * Members is a row that pushes a pane, not a section. The three
+					  * stacked avatars are the fastest thing to read on this screen —
+					  * whether anyone else is in here at all — and the count says the
+					  * rest.
+					  */}
+					<button
+						onClick={() => setMembersOpen(true)}
+						class={`flex items-center gap-3 pl-3.5 pr-3 py-[11px] text-left ${DRAWER_CARD_ROW}`}
 					>
-						{(accountName || '?').charAt(0).toUpperCase()}
-					</span>
-					<span class="flex-1 min-w-0 flex flex-col gap-px">
-						<span class="font-disp text-[18px] font-semibold truncate" style={{ color: d.ink }}>{accountName || 'Account'}</span>
-						<span class="text-xs truncate" style={{ color: d.inkFaint }}>{accountEmail || 'Not signed in'}</span>
-					</span>
-				</div>
-				<button
-					onClick={onSignOut}
-					class={`self-start flex items-center gap-2 h-[38px] px-[15px] rounded-[11px] text-[13.5px] font-medium ${DRAWER_BUTTON}`}
-				>
-					<LogOut size={15} /> Sign out
-				</button>
-			</Section>
-
-			<Section title="Household" theme={theme}>
-				{/*
-				  * Read state with a pencil, not a live field. A text input that is
-				  * always armed invites an accidental rename of the one name every
-				  * member sees — and the same goes for the colour beside it.
-				  *
-				  * The pencil already existed and had nothing to edit but the name.
-				  * It now flips the section into the Filter tab's editing panel,
-				  * one row deep (D42): no add row and no trash, because a household
-				  * is one row rather than a list, and leaving is a different verb
-				  * with its own control below.
-				  *
-				  * **No tile preview.** The spec asks for one on the grounds that
-				  * the tile is somewhere else while you are in Settings. It is not:
-				  * the drawer's own household row is directly above this panel and
-				  * carries the tile, so a preview would be a second copy of a thing
-				  * already on screen.
-				  */}
-				{editing && mayEditSettings ? (
-					<TermPanel label="Household" mode="editing" onDone={commitName} onDark theme={theme}>
-						<HouseholdIdentity
-							name={nameDraft}
-							ink={householdInk}
-							onName={setNameDraft}
-							onInk={setHouseholdInk}
-							onSubmit={commitName}
-							autoFocus
-							onDark
-							theme={theme}
-						/>
-					</TermPanel>
-				) : (
-					<div class="flex items-center gap-2.5 pl-0.5 pr-1">
-						<HouseholdTile ink={householdInk} name={householdName} size={34} dark={theme.dark} />
-						<span class="flex-1 min-w-0 font-disp text-[19px] font-semibold truncate" style={{ color: d.ink }}>
-							{householdName || 'Your household'}
+						<span class="flex items-center shrink-0">
+							{members.slice(0, 3).map((m, i) => (
+								<span key={m.id} class="flex" style={i > 0 ? { marginLeft: '-9px' } : undefined}>
+									<DrawerAvatar name={m.displayName} size={28} stackRing={d.raised} />
+								</span>
+							))}
 						</span>
-						{mayEditSettings && (
-							<button
-								onClick={() => { setNameDraft(householdName); setEditing(true); }}
-								class={`shrink-0 flex items-center justify-center w-[34px] h-[34px] rounded-[10px] ${DRAWER_CHIP}`}
-								title="Edit name and colour"
-							>
-								<Pencil size={15} />
-							</button>
-						)}
-					</div>
-				)}
+						<span class="flex-1 min-w-0 flex flex-col gap-px">
+							<span class="text-body truncate" style={{ color: d.ink }}>Members</span>
+							<span class="text-meta truncate" style={{ color: inner.textMuted }}>{people}{out}</span>
+						</span>
+						<ChevronRight size={16} class="shrink-0" style={{ color: d.inkFaint }} />
+					</button>
 
-				{/*
-				  * Leaving lives here, at the foot of Household — not in a block of
-				  * its own after Invites, which would break *Invites last*.
-				  *
-				  * Ghost with crimson text: this is how a destructive action is
-				  * **offered**. Executing it is the dialog's ink/cream primary, and
-				  * crimson is never a button.
-				  */}
-				<button
-					onClick={onLeaveHousehold}
-					class={`self-start flex items-center gap-2 h-[38px] px-[15px] -ml-[15px] rounded-[11px] text-[13.5px] font-medium ${DRAWER_GHOST_DANGER}`}
-				>
-					<LogOut size={15} /> {leaveLabel}
-				</button>
-			</Section>
+					<span class="block h-px" style={{ background: d.line }} />
 
-			<Section title="Members" theme={theme} collapsible openSignal={openMembers}>
-				<MembersPanel
-					members={members} me={me}
-					onChangeRole={onChangeRole} onRemoveMember={onRemoveMember}
-					theme={inner}
-				/>
-			</Section>
-
-			<Section title="Appearance" theme={theme}>
-				<div class="grid grid-cols-3 gap-1 p-1 rounded-xl" style={{ background: d.well }}>
-					{THEME_OPTIONS.map((opt) => (
-						<button
-							key={opt.key}
-							onClick={() => setThemeOverride(opt.key)}
-							class={`h-[34px] rounded-[9px] text-[13.5px] ${themeOverride === opt.key ? DRAWER_CHIP_ON : 'transition-colors text-on-dark-faint font-medium hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
-						>
-							{opt.label}
-						</button>
-					))}
+					{/*
+					  * Leaving is contained by the block it belongs to, under a
+					  * hairline — rather than floating between two sections as a
+					  * crimson row two rows into the pane.
+					  *
+					  * Ghost with crimson text: this is how a destructive action is
+					  * **offered**. Executing it is the dialog's ink/cream primary,
+					  * and crimson is never a button (D36).
+					  */}
+					<button
+						onClick={onLeaveHousehold}
+						class={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-b-[12px] text-left text-[14.5px] ${DRAWER_GHOST_DANGER}`}
+					>
+						<LogOut size={15} class="shrink-0" /> {leaveLabel}
+					</button>
 				</div>
-			</Section>
+			</Block>
 
-			<Section title="Default low-stock threshold" theme={theme}>
-				{mayEditSettings ? (
-					<input
-						value={thresholdDraft}
-						{...digitField(setThresholdDraft)}
-						onBlur={commitThreshold}
-						onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-						class={`h-10 px-3 rounded-[10px] text-[15px] w-24 ${DRAWER_INPUT}`}
-						aria-label="Default low-stock threshold"
-					/>
-				) : (
-					<span class="font-disp text-[19px] font-semibold" style={{ color: d.ink }}>{defaultThreshold}</span>
+			<Block title="Preferences" theme={theme}>
+				<div class="flex flex-col gap-2.5 px-3 pt-3 pb-3.5 rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
+					<p class="text-[14.5px] pl-0.5" style={{ color: d.inkMuted }}>Appearance</p>
+					<div class="grid grid-cols-3 gap-1 p-1 rounded-[13px]" style={{ background: d.well }}>
+						{THEME_OPTIONS.map((opt) => (
+							<button
+								key={opt.key}
+								onClick={() => setThemeOverride(opt.key)}
+								class={`h-9 rounded-[10px] text-[14.5px] ${themeOverride === opt.key ? DRAWER_CHIP_ON : 'transition-colors text-on-dark-muted hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
+								aria-pressed={themeOverride === opt.key}
+							>
+								{opt.label}
+							</button>
+						))}
+					</div>
+				</div>
+			</Block>
+
+			{/* Anything pantry-wide lands here. Today that is one row. */}
+			<Block title="Pantry settings" theme={theme}>
+				<div class="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5 rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
+					<span class="flex-1 min-w-0 flex flex-col gap-px">
+						<span class="text-[14.5px]" style={{ color: d.inkMuted }}>New items are low at</span>
+						<span class="text-[12.5px]" style={{ color: inner.textFaint }}>Change it per item any time</span>
+					</span>
+					{mayEditSettings ? (
+						<span class="shrink-0 flex items-center gap-1 p-[3px] rounded-[10px]" style={{ background: d.well }}>
+							{/* Faint at zero and never disabled — the item card's
+							  * rule. The clamp is `fromInt`'s, and a disabled
+							  * control cannot explain itself (D36). */}
+							<button
+								onClick={() => stepThreshold(-1)}
+								class={`flex items-center justify-center w-[30px] h-[30px] ${DRAWER_STEPPER} ${toInt(defaultThreshold) === 0 ? 'text-on-dark-label hover:text-on-dark-label' : ''}`}
+								aria-label="Lower the default low-stock threshold"
+							>
+								<Minus size={14} strokeWidth={2} />
+							</button>
+							<span class="min-w-[22px] text-center text-body font-semibold tabular-nums" style={{ color: d.ink }}>
+								{defaultThreshold}
+							</span>
+							<button
+								onClick={() => stepThreshold(1)}
+								class={`flex items-center justify-center w-[30px] h-[30px] ${DRAWER_STEPPER}`}
+								aria-label="Raise the default low-stock threshold"
+							>
+								<Plus size={14} strokeWidth={2} />
+							</button>
+						</span>
+					) : (
+						<span class="shrink-0 text-body font-semibold tabular-nums" style={{ color: d.ink }}>
+							{defaultThreshold}
+						</span>
 				)}
-				<p class="text-[12.5px] leading-[1.45]" style={{ color: d.label }}>
-					What a new item starts at, until you change it on the item itself.
-				</p>
-			</Section>
-
-			{/* Invites last: the only thing here that reaches another person. */}
-			<Section title="Invites" theme={theme} collapsible>
-				<InvitesPanel
-					invites={invites} myRole={me.role}
-					onCreate={createInvite} onRevoke={onRevokeInvite} creating={creatingInvite}
-					theme={inner}
-				/>
-			</Section>
+				</div>
+			</Block>
 		</div>
 	);
 }

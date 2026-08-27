@@ -350,6 +350,16 @@ later:
   is a fourth option this list did not have: draw the picker's dots against the
   panel they open on. Still not worth settling until the eight are finished.
 
+- **The drawer now has three off-state chips, not two.** The Filter tab's chips
+  are `drawer-raised` with a coloured dot; the page's are surface-on-line; and
+  the invite composer's role chips, drawn 2026-08-27 and built as drawn
+  ([D49](decisions.md#d49-settings-is-three-blocks-and-members-are-a-level-down)),
+  are a `drawer-dashed` **outline with no fill at all**. All three read fine.
+  They are not the same idea, and the third is either the drawer's off-state
+  finally written down or a fourth thing to reconcile. The on-state agrees
+  everywhere — cream, in both themes — which is the half that was already
+  settled by the shopping list's tokens note.
+
 Four were opened by the applied filter bar (D45) and **three were settled the
 same day** — see D45 for what was built. One is left:
 

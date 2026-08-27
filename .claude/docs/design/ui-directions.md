@@ -13,13 +13,13 @@ Stack: Tailwind, SPA, one layout that flexes mobile ↔ desktop.
 ## Structure — one left drawer, two tabs
 340px, dark, **always on the left** — docked and collapsible on desktop, a 328px slide-over with a scrim on mobile. Mobile's menu button is **top-left**, the same side the drawer comes from.
 
-Above the tabs: wordmark, then the **household switcher** — a full-width button opening a popover of every household (name, role, item count, check on the current) plus *New household* and *Join with a link*. Bottom of the drawer: the account row (avatar, name, chevron into Settings).
+Above the tabs: wordmark, then the **household switcher** — a full-width button opening a popover of every household (name, role, item count, check on the current) plus *New household* and *Join with a link*. Bottom of the drawer: the account row — avatar, display name, email, chevron. **It opens a menu, not a section** — see *Settings tab → Your account*.
 
 **Filter tab** — Location, Store, Type. Each section header has a pencil + chevron; the pencil flips *that section only* into editing (`color swatch · name field · delete`, an "Add …" row, **Done** in the header). The swatch opens the 16-colour picker (8 × 2). A dashed `+ …` chip also ends each chip list. `Clear all filters` last.
 
 **The chips toggle, and several can be on at once** — OR inside a group, AND across groups; see *Applied filters*. `All items` is the *absence* of a selection rather than a member of it, so it lights when the group is empty. `Clear all filters` is the same action the top bar's `Clear filters` is, with the longer label it can afford: inside the Filter tab the word "all" has a list to refer to.
 
-**Settings tab**, in order: Account → Household (name **and colour** behind a pencil — see *Household colour*; switcher lives in the header) → Members → Appearance → Default low-stock threshold → **Invites last** (Owner / Editor / Viewer, 14-day expiry, copy, revoke). No terms block, no shopping list. Drawn and specced under *Settings tab*.
+**Settings tab** — three blocks and a row, redesigned 27 Aug: **Household** (name **and colour** behind a pencil — see *Household colour* — then a **Members** row that pushes a second-level pane, then *Leave household*) → **Preferences**, which are yours (Appearance) → **Pantry settings**, which are the household's (the default low-stock threshold) → the account row at the foot. Members **and** invites live in the pushed pane. No Account section, no terms block, no shopping list. Fully specced under *Settings tab*.
 
 **Add item** is a sheet: 480px from the right on desktop, a near-full-height bottom sheet with a grabber on mobile. Name → on-hand stepper + low-at → Location / Type / Store chip pickers (selected chip fills with its own term colour and takes ink text; unselected is neutral with a coloured dot; each group carries its `+ …` chip) → notes → sticky Cancel / Save item.
 
@@ -49,11 +49,13 @@ Rows 1 and 2 are recorded here from the build, because the document never descri
 | 5 | Type | tag | Flyout — quick filter |
 | 6 | Appearance | sun / crescent / half-disc | Flyout — Auto, Light, Dark |
 | 7 | Settings | sliders | Expands the drawer onto Settings |
-| 8 | Account | avatar, pinned to the bottom | Flyout — profile, sign out |
+| 8 | Account | avatar, pinned to the bottom | Flyout — **the account menu**, the same component the drawer's foot row opens |
 
 Dividers after 2 and after 5.
 
 **The rule: a pane expands the drawer, a menu flies out.** Filter groups and Settings need width, so they animate the rail 68px → 340px and the icon you pressed is the one lit on arrival. Household, Appearance and Account are menus — they fly out beside the rail, the rail does not move, and the button takes a cream ring to mark itself as the source. Escape or an outside click closes.
+
+> **Account is now one component in two places.** The rail's flyout and the menu above the drawer's foot row are the same 292px panel — identity row with a pencil, hairline, sign out. It is why the Settings pane no longer needs an Account section at all: the thing it held already had to exist for the rail. See *Settings tab → Your account*.
 
 **Quick filter ≠ the full set.** A flyout picks from one term list and nothing else: no pencil, no "+ Add", no clearing across groups. It ends with *Open full filters*, which expands the drawer to the whole pane.
 
@@ -263,6 +265,8 @@ The `+ Location / + Store / + Type` chip is a third, deliberately weaker form: d
 
 > **The applied-filter chip is the Off form with an `×`, and it does not contradict the rule above.** Inversion says "on" only where there is an off to contrast with. In the applied bar every chip is on by definition, so inversion would carry no information and would only make the row loud. See *Applied filters*.
 
+> **The role chips in the invite composer are the same component with no dot.** A role is not a term, so there is nothing for a dot to identify — but three mutually exclusive options with an on-state is exactly what the chip is, and the inversion carries over unchanged. On the drawer that inversion is the *cream* one, per the note under *Shopping list → Tokens*. See *Settings tab → Making an invite*.
+
 ## Edit item + inline term creation
 Same 480px sheet as Add, prefilled. Differences:
 
@@ -293,33 +297,119 @@ Creating a term from a sheet uses **the Filter tab's editing panel, re-skinned f
 
 The earlier design had this as a floating pill-shaped capsule with a popover — a shape that existed nowhere else in the app. It is gone.
 
+> **A third surface for the same panel: the invite composer.** *Settings tab → Making an invite* uses this construction on the drawer well, with role chips in place of the swatch-and-field row and a *Create* pill where the sheet has *Add*. Same header, same hairline, same drop-in-below-the-dashed-row rule.
+
 ## Settings tab
-Six sections in the order *Structure* lists them, on the drawer surface, in the same 340px column the Filter tab uses. Drawn — the boards are on the *Flows outside the shell* canvas, since the Account section is what the display name feeds.
 
-Every section is a micro-label header in drawer-meta over content on the **drawer raised** fill at radius 13. Only the sections that hold an editable value carry a pencil.
+**Redesigned 27 Aug.** The pane had six labelled sections in a 340px column and printed the same two facts three times over — you in Account, again in Members, again in the row at the foot; the household in the switcher and again under its own heading. The role controls were a segmented strip that appeared under whichever member you last tapped, anchored to nothing. What replaced it is three blocks, a pushed pane, and two menus.
 
-| Section | Content |
+Canvas — two pages, **Settled** and **Explorations**:
+https://claude.ai/code/artifact/3d0bd7d6-6659-4641-a5f3-434aa22b8f68
+
+### Three rules
+
+1. **The household tile appears once**, in the switcher. Nothing else in the pane draws it.
+2. **You appear once**, in the row at the foot. There is no Account section, and nothing anywhere says whether you are signed in — if you are reading it, you are.
+3. **Scope is in the label.** *Preferences* are yours and follow you between households; *Pantry settings* belong to the household you are in. The two words do not say which is which on their own, so the pane keeps them apart and names the second for what it governs.
+
+### The root pane
+
+| Block | Content |
 |---|---|
-| **Account** | Avatar + display name + email, pencil on the header. Below it, meta: *Your picture comes from Gravatar.* + **Manage** with a chevron, which leaves the app. |
-| **Household** | The identity row — name **and** colour — on a raised row with its own inline pencil (see *Household colour → Settings › Household*), then the ghost crimson *Leave household* row |
-| **Members** | One raised group, a row per member: avatar, name, role in meta. *Owner · You* marks your own row |
-| **Appearance** | Auto / Light / Dark, the segmented control the tabs already use — well fill, cream active |
-| **Default low-stock threshold** | *Low at* with a stepper. The same stepper the item card carries, at the drawer's smaller size |
-| **Invites** | A row per live invite (role, expiry, ghost *Copy*, ghost crimson *Revoke*), then a dashed *+ New invite* — the dashed `+ …` chip's shape, one rung wider |
+| **Household** | The identity row — name and colour behind a pencil, per *Household colour → Settings › Household* — with the item count in meta · a **Members** row: three stacked 28px avatars ringed in the card fill, *3 people · 1 invite out*, chevron · ghost crimson *Leave household*, inside the same card under a hairline |
+| **Preferences** | Appearance — Auto / Light / Dark, the segmented control the tabs already use, on the well fill with a cream active |
+| **Pantry settings** | *New items are low at* with the drawer-scale stepper, meta *Change it per item any time*. Anything pantry-wide lands here |
+| The account row | Avatar, display name, email, chevron, under a hairline at the foot. It opens a menu — see *Your account* |
 
-### Editing the display name
-**The pencil flips one section, exactly as the Filter tab does.** No modal, no separate profile screen, no second interaction to learn:
+Every block is still a micro-label header in drawer-meta over content on the **drawer raised** fill at radius 13. The construction did not change; there is less of it.
 
-1. The header becomes `ACCOUNT · EDITING` with a cream **Done** pill on the right — the drawer's primary, 26px at radius 9.
-2. The row's name and email are replaced by a **40px field at radius 11** beside the avatar, on the drawer well with the dashed hairline and the crimson focus halo. It is the composer's field, at drawer scale.
-3. The *Manage on Gravatar* line stays put underneath. It is not part of what you are editing.
-4. Done commits; Escape cancels. **No toast** — the row returning to read-only with the new name in it is the whole confirmation, and a toast for a save you can see is exactly the noise the open question about plain toasts is trying to avoid.
+**The threshold moved out of Preferences.** It is a fact about the pantry, not about the person looking at it — two people in one household who disagree about it are disagreeing about the household, which is what makes it a setting rather than a preference.
 
-> **Two names, two places, one idiom.** Display name is on the account and lives in Account; household name is on the household and lives in Household. They are never edited together, and they never edit differently — both are a read-only row with a pencil that flips its own section. The switcher in the drawer header is the only place a household is *chosen*; Settings is the only place either name is *changed*. The household row carries a colour as well, which the account row does not — see *Household colour* for why a person does not get a term colour.
+**Leave household is contained by the block it belongs to**, inside the Household card under a hairline, rather than floating between two sections as a crimson row two rows into the pane.
 
-The drawer's bottom account row (avatar, name, chevron) is the way in: its chevron opens Settings on Account, so the name you are looking at is the name you land next to. On the collapsed rail, the Account flyout's *Profile* does the same.
+> **Preferences sits above Pantry settings, which leaves Household and Pantry settings non-adjacent** even though both are household-scoped. Ordered yours-first on purpose — Appearance is the one anyone actually changes — and the labels are carrying the distinction rather than the grouping. The one place the new order costs something; worth a look on a real screen.
 
-**Mobile** is the same pane in the 328px slide-over. The header pencil and the Done pill both take a 44px hit area — the pencil's glyph stays 15px, its target does not.
+### The Members pane
+
+The chevron pushes a second-level pane: a 36px back button on drawer-raised, *Members* in Playfair 600 21 with the household name in meta beneath, the member list, then **Invites**.
+
+**Members and invites are one subject and get the full 340 together.** That closes the standing question about invite links being cramped — the link now has a field of its own to sit in before you copy it.
+
+Member rows are 58px inside one raised group, hairlines inset past the avatar: 36px avatar, name at body 15, then the role. Your own row reads *Owner · You* in meta and carries no control.
+
+**There is no overflow menu on a member row.** The role is the only thing an owner changes, and *Remove from household* already lives at the foot of the role menu. A `⋯` beside the role would be a second control opening a menu you can already reach.
+
+**The pane drops the Filter / Settings tabs while pushed**; back is the only way out. A decision rather than an oversight, and the first thing to revisit if it reads as a trap.
+
+### Changing a role
+
+**The role word is the trigger, and the menu is the drawer's own surface.** Owner only.
+
+- **Rest** — the role is a control on the row: `#3B3126` fill, `#DCD0BA` label at 13.5, radius 13, 30px, with a 13px chevron.
+- **Open** — the trigger takes the rail's documented open state (cream `#F2E9DA` fill, ink `#241E17` label, 600) and the menu drops **below** it, **right-aligned to the card's edge** — 224px inside the 340px pane, so it never asks for room the drawer does not have.
+- **Menu** — `#241E17` on `#4A4031`, radius 14, 6px padding, shadow `0 16px 40px rgba(10,8,5,.44)`. Rows 36px at radius 9, 14px. Owner / Editor / Viewer, the current one at 600 cream with a `#D4636B` check — **a check, not a fill**, the sort menu's rule, so a hovered row still reads. Hairline, then *Remove from household* in `#D4636B`.
+
+> **Two alternatives lost, and both are on the Explorations page.** Reusing the sort menu itself — a cream popover — was free and already consistent, and it broke rule 1 of *Theming*: the brightest thing on the screen opening over the darkest panel in the app. Putting everything behind a `⋯` kept the surface right but named the role twice, once on the row and once in the menu. What shipped is the second one's colours with the first one's mechanics.
+
+**Your own row has no trigger.** Demoting yourself while you are the only owner is the blocked dialog that already exists for leaving, not a disabled menu row.
+
+### Invites
+
+One card per live invite, then a dashed *+ New invite* row, both inside the Members pane.
+
+**Expiry is a countdown, not a date** — *Expires in 12 days*. It answers the question the date was standing in for, and needs no year, no locale and no format. And the role is the card's own heading — **Editor**, not *Joins as Editor*; the card is about one invite, so the sentence has nothing to disambiguate.
+
+| Card part | Treatment |
+|---|---|
+| Card | Drawer raised on `#3B3126`, radius 13, padding 14, 12px gaps |
+| Header row | Role at body 15 / 600 on the left, *Expires in N days* at meta 13 on the right |
+| Link | 40px row at radius 11 on the drawer well with a `#3B3126` edge, 13px monospace in meta, truncating |
+| Footer | *Copy link* — the drawer's primary, cream on ink, 36px at radius 11, flex-grown — beside a ghost crimson *Revoke* |
+
+**A card collapses to its header** once it is not the newest — one row per invite, expanded only for the one you just made. Four live invites is otherwise four link fields stacked in a 340px pane.
+
+### Making an invite
+
+**The dashed row drops the composer in below itself and stays put** — the Filter tab's term composer at drawer scale, so this is a component that already exists rather than a new interaction. No modal.
+
+1. **Panel** — drawer well on a 1px inset `#3B3126` hairline, radius 14.
+2. **Header** — `NEW INVITE` micro-label, a cream **Create** pill (30px at radius 10) and a 30px ghost `×` to abandon, with a hairline beneath. The hairline is what puts the panel at the same rhythm as the card above it.
+3. **Chips** — Owner / Editor / Viewer, 34px at radius 999, 8px apart. Off is a `#4A4031` outline with a `#DCD0BA` label; on is the drawer's cream primary. **Editor is preselected**, because it is the ordinary case.
+4. **A sentence that changes with the chip**, at 13.5 / 1.5 in meta: *Can add, edit and remove items. Can't invite anyone or rename the pantry.* Then, in faint: *The link will work for 14 days.* Three role names are meaningless words on their own, and Viewer is the one nobody can guess.
+5. **Create** closes the panel; the new invite lands at the top of the list with its link already showing.
+
+**No toast on create.** The row appearing with the thing you asked for in it is the confirmation, and you have to stay on the screen to copy the link anyway.
+
+### Your account
+
+The row at the foot **opens a menu above itself** — the same component the collapsed rail's Account flyout uses, so one thing serves both states of the drawer. 292px, `#241E17` on `#4A4031`, radius 14, the role menu's shadow. The avatar takes the 2px cream ring that marks it as what opened this.
+
+Two rows, and that is all:
+
+1. **Identity** — 38px avatar, display name, email, and a pencil. The pencil flips the row *inside the menu* into the composer's 40px field at radius 11 on the drawer well, with the crimson focus halo and a cream **Done** pill. No modal, no profile screen. Escape cancels. **No toast** — the row returning to read-only with the new name in it is the whole confirmation, which is the same argument the old Account section made.
+2. **Sign out**, under a hairline.
+
+> **Not in v1: *Change your picture*.** A third row handing off to Gravatar is drawn — its own block between identity and sign out, carrying the outbound arrow that means *this leaves the app* — **as a mockup only**, so the menu's proportions are known before there is somewhere to send people. It ships with two rows. The board marks it.
+
+> **Two names, two places, one idiom — restated.** The display name is on the account and is changed in the account menu; the household name is on the household and is changed in Settings › Household. Both are a read-only row with a pencil that flips it in place, and neither is a modal. The switcher is still the only place a household is *chosen*. What changed is that the account half is no longer a section of the Settings pane — it is where you already were.
+
+**Mobile** is the same pane and the same menus in the 328px slide-over. Every pencil, pill, chip and menu row takes a 44px hit area; the glyphs stay their drawn size.
+
+### Boards
+
+Two pages on the canvas above. **Settled** — five boards:
+
+1. The drawer — the root pane, three blocks and the account row
+2. Members pane — the list and Invites at full width
+3. Changing a role — at rest and open
+4. Making an invite — at rest, choosing the role, created
+5. Your account — at rest, the menu to build, and the planned variant, marked
+
+**Explorations** keeps the pane as it was, the two directions that lost (a tightened version of the old order, and one household card holding members and invites), and the option sheets the role menu and the account menu were chosen from. Nothing on that page is a spec.
+
+**Drawn in light theme only.** The drawer is dark in both, but its tokens still differ — `#2B2419 → #1F1A13` against `#15110B → #0F0C07` — so the dark counterparts are a hex-for-hex map away and have not been rendered. **The sample household is *Granny's* in brick**, not Calfee's terracotta, and the member names are invented.
+
+> **Board 10 on the *Flows outside the shell* canvas is superseded.** It draws Settings · Account, rest and editing — a section that no longer exists. The display-name flow it shows is intact; it just happens in a menu now.
 
 ## Household colour
 
@@ -370,11 +460,11 @@ This replaces the hard-coded `#A85E33 / #B96A3C / #98522B` in *Collapsed rail �
 
 ### Settings › Household
 
-The pencil already existed and had nothing to edit but the name. It now flips the section into the identity row — the Filter tab's editing panel, one row deep: same recessed fill on a hairline, same micro-label header (`HOUSEHOLD · EDITING`), same *Done* pill. No add row and no trash, because a household is one row rather than a list; **leaving is a different verb** and keeps its own ghost crimson row below, unchanged.
+The pencil already existed and had nothing to edit but the name. It now flips the section into the identity row — the Filter tab's editing panel, one row deep: same recessed fill on a hairline, same micro-label header (`HOUSEHOLD · EDITING`), same *Done* pill. No add row and no trash, because a household is one row rather than a list; **leaving is a different verb** and keeps its own ghost crimson row below, inside the same card under a hairline.
 
 **The panel carries a live 34px tile preview.** Every other picker in the app recolours something already on screen. The household tile lives on the rail and in the switcher, both of which are somewhere else while you are in Settings, so the panel shows the thing it is about to change.
 
-**Owners only**, the same rule the term pencils follow. An Editor sees the rest state and *Leave household*, and no pencil. Section order is unchanged — the colour lives inside Household, not in a new block.
+**Owners only**, the same rule the term pencils follow. An Editor sees the rest state and *Leave household*, and no pencil. The block order is unchanged — the colour lives inside Household, not in a new block.
 
 ### Creating a household
 
@@ -415,15 +505,16 @@ An action gets an **undo toast** when the record can be restored and you are the
 | Delete a term — unused | Undo toast | Restorable, and only reachable when nothing references it |
 | Delete a term — in use | Blocked dialog | Not a decision, a precondition |
 | Revoke an invite | Confirm modal | The link dies for someone else the moment you press it |
+| Remove a member | Confirm modal | Same reason, one rung up |
 | Leave household | Confirm modal | You lose access and can't put yourself back |
 | Leave — last owner, others remain | Blocked dialog | Would orphan the household |
 | Leave — last member | Confirm modal + typed name | This isn't leaving, it destroys the household |
 
-Removing a member inherits the invite pattern. Undo pressed on something another member has since changed is a concurrency problem, not a destructive-action one — it stays in the failure states.
+**Removing a member inherits the invite pattern**, and its trigger is *Remove from household* at the foot of the role menu — see *Settings tab → Changing a role*. Undo pressed on something another member has since changed is a concurrency problem, not a destructive-action one — it stays in the failure states.
 
 **Neither treatment reaches filters.** Removing a filter chip and pressing *Clear filters* change what you are looking at, not what exists — no toast, no confirm. The rule is about records.
 
-**Crimson is still never a button.** The confirm's primary control is the ordinary ink/cream primary. Destructiveness is carried by three things that cost nothing: the title asks the question, the body names what is lost, and the button says the verb — *Revoke invite*, *Leave household* — never *Confirm*, *OK* or *Yes*. Crimson appears once per dialog as the icon tint, which is the tag treatment applied to a glyph and comes free from the out tokens. Ghost + crimson text stays what it already is on the Edit sheet: the way a destructive action is **offered**, never the way it is **executed**.
+**Crimson is still never a button.** The confirm's primary control is the ordinary ink/cream primary. Destructiveness is carried by three things that cost nothing: the title asks the question, the body names what is lost, and the button says the verb — *Revoke invite*, *Leave household* — never *Confirm*, *OK* or *Yes*. Crimson appears once per dialog as the icon tint, which is the tag treatment applied to a glyph and comes free from the out tokens. Ghost + crimson text stays what it already is on the Edit sheet and on the invite card's *Revoke*: the way a destructive action is **offered**, never the way it is **executed**.
 
 ### Toast — one component, two variants
 
@@ -501,13 +592,19 @@ In use → blocked dialog.
 
 > **Delta from what's drawn:** the trash on a term row is **enabled in every case**. A disabled control cannot explain itself — it takes no hover on touch, screen readers skip it by default, and the reason is the one thing you want at that moment. The row also gains the item count in meta text between the field and the trash, so the outcome is predictable before you reach for it.
 
-**Revoke an invite.** Trigger is the small ghost crimson-text button already on the invite row.
+**Revoke an invite.** Trigger is the ghost crimson-text *Revoke* in the invite card's footer, in the Members pane.
 - Title: **Revoke this invite?**
 - Body: *The link stops working immediately. Anyone who hasn't accepted it yet will need a new one.*
 - Footer: Cancel · **Revoke invite**
-- After: the row leaves, plain toast *Invite revoked.* No undo — there is nothing to restore, only a new link to issue.
+- After: the card leaves, plain toast *Invite revoked.* No undo — there is nothing to restore, only a new link to issue.
 
-**Leave household.** Lives as a ghost row with crimson text at the foot of the **Household** section — not a new block after Invites, which would break *Invites last*. Three cases.
+**Remove a member.** Trigger is the last row of the role menu.
+- Title: **Remove Sarah Calfee?**
+- Body: *They lose access to this pantry immediately. You can invite them back with a new link.*
+- Footer: Cancel · **Remove member**
+- After: the row leaves, plain toast *Member removed.*
+
+**Leave household.** Lives as a ghost row with crimson text **inside the Household card**, under a hairline — contained by the block it belongs to rather than floating between two sections. Three cases.
 
 *Others can still own it:*
 - Title: **Leave Calfee Household?**
@@ -518,7 +615,7 @@ In use → blocked dialog.
 *You're the only owner and members remain* — blocked:
 - Title: **Make someone else an owner first**
 - Body: *You're the only owner of Calfee Household. Promote another member, then you can leave.*
-- Footer: Cancel · **Open Members**
+- Footer: Cancel · **Open Members** — which now pushes the Members pane rather than scrolling the Settings pane.
 
 *You're the only member* — the row itself relabels to **Delete household**, so it never promises something softer than it does.
 - Title: **Delete Calfee Household?**
@@ -542,6 +639,8 @@ https://claude.ai/code/artifact/90919b0d-9995-4153-b096-ee9bbb10cd40
 7. Mobile 390 — confirm at `100% − 32px`
 
 Kept separate from the 27-board app canvas because these are component states, not screens; the two mobile boards are the only ones that show them in place.
+
+> **Remove a member is specced above but not drawn.** It reuses the Revoke shell exactly — same width, same icon disc, same footer pair — so it is a copy rather than a design, and it can join board 2 when that canvas is next re-rendered.
 
 ## Flows outside the shell
 Everything before the app: the public page, sign-in, the display name, the first household, and the `?join=` landing. Drawn — canvas link under *Boards* at the end of the section. Owner and Editor only, as with destructive actions; what a Viewer sees on the invite landing stays under *Gaps*.
@@ -594,7 +693,7 @@ Body: *This is the name everyone else in your household sees — on invites, in 
 
 **The avatar fallback is initials on the neutral avatar fill**, not a term colour: `#4A3E2E` with the inset ring on the drawer, sunk-on-line on a cream surface. Term colours mean *term* everywhere else, and a person is not a term — the same argument that keeps the role out of a tag, and the reason the household tile gets a colour where the account row does not. Where Gravatar has an image, the image renders instead. The initial comes from the display name, or from the email local-part before one is set.
 
-Once set, the household name prefills from it — *Justin Tadlock* → *Justin's Household*.
+Once set, the household name prefills from it — *Justin Tadlock* → *Justin's Household*. **Changing it later happens in the account menu**, not in a Settings section — see *Settings tab → Your account*.
 
 ### First run — name it, then land in it
 Sign-in and the display name come first; there is no anonymous mode. A signed-in, named account with no household gets one screen, not a wizard.
@@ -638,6 +737,8 @@ The role is a **bold word in the sentence**, not a pill. A role is not a term, a
 | Already a member | **Stocked** disc + check, *You're already in Calfee Household*, *This invite is for a household you're already a member of, so there's nothing to accept.* | *Open Calfee Household* |
 
 > **Already-a-member is green, not amber.** It is the third rung of the same status ramp the item badges use — nothing is wrong, nothing is pending, the thing you wanted is already true. Amber would ask someone to fix a problem they don't have.
+
+> **This is the one place a date survives.** The Members pane now spells expiry as a countdown — *Expires in 12 days* — and this card still says *9 September*. Deliberate for now, and listed under *Open questions*: inside the app the countdown is plainly better, but on a link someone opens cold a date may be the thing they can act on.
 
 Revoked shares the expired screen with one line changed (*This invite is no longer valid.*). From outside the household, a revoked link and an expired one are the same event, and telling them apart would tell a stranger something about the household.
 
@@ -687,10 +788,10 @@ https://claude.ai/code/artifact/5c742401-cc59-44bc-9f49-2c9c1af8ee93
 7. First run · the seeded, empty app
 8. Invite · valid — signed out and signed in
 9. Invite · expired and already a member
-10. Settings · Account — rest and editing
+10. ~~Settings · Account — rest and editing~~ **superseded 27 Aug**
 11. Flows · 390 — sign-in, display name, name it, invite
 
-Board 10 is the Settings tab rather than a signed-out flow, and sits here because Account is where the display name ends up. Its other five sections are drawn from the text already in *Structure* — a rendering of what was written, not a fresh design, so they are the ones to argue with.
+> **Board 10 draws a section that no longer exists.** Account is not a block in the Settings pane any more; the display-name flow it shows is intact but happens inside the account menu. See *Settings tab → Your account*, and the board on that section's own canvas.
 
 > **Boards 6 and 7 were re-rendered on 27 Aug to catch up with the merge.** Board 6 now carries the identity row — `HOUSEHOLD NAME AND COLOUR`, the 26px swatch pre-picked at slate — instead of a bare name field. Board 7's top bar lost the title it never should have had: it is search + *Add item* over `Showing 0 of 0`, and the empty state no longer carries a second primary. The household tile on both is **slate**, not the hard-coded terracotta, because terracotta is Calfee's colour and these boards are a household being made.
 
@@ -723,6 +824,8 @@ Mobile keeps the same anchored popover (six rows don't earn a sheet) at 44px row
 **Deltas from the shipped markup:** 248px not 176px (`w-44` was clipping *Quantity · fewest first*), rows 14px not 12px, radius 14 not 6, check instead of `#F2EADC` fill, and the trigger names the sort.
 
 **The sort trigger is hidden at zero items** — see *Flows outside the shell*. It is also hidden in list mode — see *Shopping list*.
+
+> **The check-not-fill rule now has a second user.** The role menu in the Members pane takes the same construction on the drawer's surface — 6px padding, radius 9 rows, a crimson check on the current value — for the same reason: with a fill doing both jobs, a hovered row looks selected. See *Settings tab → Changing a role*.
 
 > **The trigger's own hover fill is `#F2EADC` on the ground, which is the case *Applied filters* found to be invisible out there.** It is the same sunk-is-the-ground problem, in a control that already shipped. Left as observed rather than quietly corrected; it belongs with the top-bar edge question under *Open questions*.
 
@@ -895,7 +998,7 @@ Each store card is a `<section>` labelled by its header (`<h3>`), holding a `<ul
 
 Status badges take the out and low tokens unchanged; the completion disc and the empty states take the stocked tokens unchanged. **No new colours.**
 
-> **A selected chip inside the drawer is cream-filled in both themes, not ink.** Drawn ink-on-dark first, per the chip table, and it vanished — the active *Costco* chip read as bare text. The chip table is written for chips on a light surface; the drawer is dark in both themes, so its selected chip takes the drawer's primary treatment exactly as the *Done* / *Add* pill and the toast's *Undo* already do. This settles half of the standing open question about drawer chips; the off-state half is still open.
+> **A selected chip inside the drawer is cream-filled in both themes, not ink.** Drawn ink-on-dark first, per the chip table, and it vanished — the active *Costco* chip read as bare text. The chip table is written for chips on a light surface; the drawer is dark in both themes, so its selected chip takes the drawer's primary treatment exactly as the *Done* / *Add* pill and the toast's *Undo* already do. This settles half of the standing open question about drawer chips; the off-state half is still open. **The invite composer's role chips follow it** — see *Settings tab → Making an invite*.
 
 > **The light row hairline is the sort menu's divider, not `line`.** At `#E2D5C0` a rule every 56px stripes the card into a ladder — the border is doing edge work and cannot also do interior work. Dark has the opposite problem and keeps `#3E3527`: anything softer disappears at that fill.
 
@@ -962,6 +1065,8 @@ Twenty items. Insertion order is the list order, so **Recently added** runs bott
 
 > **Knock-on:** items 9–20 are appended, and *Recently added* is newest-first, so they land at the **top** of the default grid. The app canvas's 27 boards were drawn against the original eight and would need a re-render to match. Nothing about their layout changes — only which rows appear — so this is a redraw, not a redesign. The marketing page's hero mock is unaffected: it shows items 1, 3 and 5, whose numbers did not change.
 
+> **The Settings boards use a different household on purpose.** *Granny's* in brick, with three invented members, because the settled Settings work needed a members list and an invite that the Calfee sample never carried. Nothing else on that canvas depends on the dataset.
+
 ## App icon
 **Oat** — ground `#E2D5C0`, L in ink `#241E17`, **Playfair Display roman 800 at 66% cap height**. 11.4:1.
 
@@ -989,13 +1094,13 @@ The L is a converted outline, not `<text>` — icons render without webfont acce
 ## Gaps — not yet designed
 
 ### Changes existing screens (decide before building more)
-- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision. **The shopping list adds two more:** a Viewer gets no checkboxes and no *Add item*, which leaves the list a pure read surface — worth confirming it is still worth reaching. **The applied bar survives the cut untouched** — filtering is reading, so a Viewer keeps every chip and the clear. **Settings** goes to Account + Appearance and little else.
+- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision. **Viewer is now issuable from a drawn control** — the invite composer offers it as a chip and the role menu as a row, and the composer's hint line already carries a short version of that wording — so the gap is narrower than it was, and more visible. **The shopping list adds two more:** a Viewer gets no checkboxes and no *Add item*, which leaves the list a pure read surface — worth confirming it is still worth reaching. **The applied bar survives the cut untouched** — filtering is reading, so a Viewer keeps every chip and the clear. **Settings** goes to the household identity without its pencil, a Members pane with no role triggers and no Invites, Preferences, and the account row.
 - **Restock — the flow the shopping-list footer reserves space for.** Checking a row means "it's in the cart"; the honest end of that sentence is setting the count when you unpack. That is a write to the item, so check state goes from local to shared, and the whole *checks expire* section is replaced by a trip that ends. The right half of the list footer is empty and waiting for it. Until it exists, coming home from the shop means stepping every item by hand — the actual chore the app leaves on the table.
 
 ### States an SPA hits constantly
 - Loading / skeleton on first paint; optimistic feedback on a stepper tap.
-- Failure: save failed, offline, and the concurrent-edit case — two household members changing one item, including Undo pressed on a removal someone else has since acted on. **A filter on a term another member has just deleted belongs here too** — the chip is in the bar and the term is gone.
-- Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise. Two are settled: filter changes get none, and the display-name save gets none.
+- Failure: save failed, offline, and the concurrent-edit case — two household members changing one item, including Undo pressed on a removal someone else has since acted on. **A filter on a term another member has just deleted belongs here too** — the chip is in the bar and the term is gone. **So does a role menu opened on a member another owner is removing at the same moment.**
+- Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise. Four are settled: filter changes get none, the display-name save gets none, creating an invite gets none, and changing a role gets none — in all four the thing you did is visible on the screen you are on.
 - **Session expiry.** What happens when the token dies with the app open — the sign-in card exists, but nothing says whether you get bounced to it, get it as a modal over your work, or keep reading a stale list until you touch something.
 
 ### The document has drifted from the build
@@ -1008,6 +1113,8 @@ Four more components are in the build and were never in this document, found the
 - **The drawer has a collapse button** beside the wordmark, which is how the rail is reached; the rail spec describes the return trip but not the outbound one.
 - **The Filter and Settings tabs carry icons**, and the item card's stepper is asymmetric — minus on the sunk fill, plus on the ink primary.
 
+**The Settings pane was a fifth**, and it is the reason that section was redesigned rather than corrected: the build had an Account block saying *Not signed in* above a *Sign out* button, a raw account id where a display name goes, and a role strip floating under whichever member you last tapped. What is drawn now is a design, not a record — treat *Settings tab* as decided and the build as behind it.
+
 The lesson is the one worth writing down: **anything not drawn on a canvas drifts out of this document silently.** Two turns of shopping-list work were specced against a top bar with a title that does not exist — and, on 27 Aug, three branches of this file each dropped the others' sections. See the merge note at the top. The reconciliation passes added a third lesson: **a union merge leaves the branches contradicting each other**, and the contradictions hide in the places two branches happened to describe the same screen — the marketing copy, the zero-items rule, and two boards.
 
 ### Flows outside the app shell
@@ -1017,28 +1124,33 @@ Specced and drawn — see *Flows outside the shell* and *The marketing page*. Wh
 - **A proof section for the marketing page** — the slot is left open between the benefits and the band.
 - **Privacy and terms have no home.** They are deliberately out of the footer and out of Settings, so if either page ever has to exist, where it is linked from is undecided.
 - **Wrong-account-on-invite.** Signed in as someone the invite wasn't issued to. Probably the *already a member* shell with a "switch accounts" action, but it isn't drawn.
-- Sign-out confirmation, if any. Currently a plain ghost action with nothing behind it.
-- **Display-name validation.** Length ceiling, whether two members may share a name, and what the field does with an empty-after-trim value. The button is drawn disabled on empty; nothing else is decided.
-- **Renaming propagation.** Changing the display name changes it everywhere it is rendered — Members, invites you issued, the drawer row. Whether that is instant for other members or arrives on their next load is a data question the UI currently doesn't acknowledge.
+- Sign-out confirmation, if any. Currently a plain ghost action in the account menu with nothing behind it.
+- **Display-name validation.** Length ceiling, whether two members may share a name, and what the field does with an empty-after-trim value. The button is drawn disabled on empty; nothing else is decided. The field is now the account menu's, which is 292px rather than the pane's 340 — one more reason a ceiling matters.
+- **Renaming propagation.** Changing the display name changes it everywhere it is rendered — the Members pane, invites you issued, the drawer row. Whether that is instant for other members or arrives on their next load is a data question the UI currently doesn't acknowledge.
+- **Change your picture.** Drawn as a mockup in the account menu and explicitly not in v1 — see *Settings tab → Your account*. What it hands off to, and what comes back, is undesigned.
 - **The marketing page has never mentioned the shopping list's best argument** — that you never write the list, because the pantry already knows. The third benefit card now says it; whether the hero should is untested, and the hero mock still shows the item grid rather than the list.
 
 ### Empty states
-Zero items in a new household is drawn (*Flows outside the shell*), and the shopping list's *scoped, nothing to buy* is drawn (*Shopping list*). Still open: no filter matches · a location with nothing in it · the shopping list's other empty, *Nothing to buy in this filter* — specced but not drawn, and near-identical to the one that is. **No search results** may already exist in the build; check before drawing it.
+Zero items in a new household is drawn (*Flows outside the shell*), and the shopping list's *scoped, nothing to buy* is drawn (*Shopping list*). Still open: no filter matches · a location with nothing in it · the shopping list's other empty, *Nothing to buy in this filter* — specced but not drawn, and near-identical to the one that is. **No search results** may already exist in the build; check before drawing it. **A household with no invites out** is a new one: the Members pane's Invites block is drawn with one card, and nothing says whether the label survives with only the dashed row under it.
 
 > **No filter matches now has its escape hatch without being drawn** — the applied bar is on screen above it with a clear in reach, so the screen only has to say what happened. It should take the item-grid empty state's form (Playfair italic 500 27px + meta + one secondary control), not the shopping list's disc: a disc would be the status ramp saying something about stock, and this is about the filters.
 
 ### Robustness
 - Tablet, 768–1024px. Only 1440 and 390 are drawn — for the app, the marketing page **and** the shopping list; the drawer's auto-collapse point, the grid's column count, whether the marketing hero's two columns stack before 1024, and which side of 720 the list row stops stacking are all undecided. **The applied bar adds one:** where it stops wrapping and starts scrolling.
-- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating. The list row sets `white-space: nowrap` on both the name and the counts, so a long name has no drawn behaviour either. **The applied chip does the same** — a very long term name has no drawn truncation, and on mobile one chip could fill the scroller.
-- Keyboard: focus trap in the drawer and sheets, Escape behaviour, and screen-reader labelling for the steppers — the app's primary control.
+- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating. The list row sets `white-space: nowrap` on both the name and the counts, so a long name has no drawn behaviour either. **The applied chip does the same** — a very long term name has no drawn truncation, and on mobile one chip could fill the scroller. **The Settings boards do truncate** — every name cell in the pane, the Members list and both menus is `min-width: 0` with an ellipsis, which at 340px with an avatar and a role trigger leaves a member's name about 105px before it clips.
+- **A household with a lot of members.** The Members pane is drawn with three and the root pane's stacked avatars with three; nothing says what six or twelve do to either.
+- Keyboard: focus trap in the drawer and sheets, Escape behaviour, and screen-reader labelling for the steppers — the app's primary control. **The two new menus need the same pass** — the role menu and the account menu are drawn but their focus, Escape and return-focus behaviour is only implied by the sort menu's.
 - Typing a quantity directly rather than stepping to it.
 
 ## Open questions
 - Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites. An earlier draft of the applied chip carried the group glyph beside the term name, which would have taught all three; it came off with the rest of the loud version.
-- Invite links are cramped at 340px.
-- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one. The shopping list raises the same question one level up — the mode itself is remembered across a reload but nothing says what a household switch does to it beyond clearing the checks. **Filters raise it a third time:** nothing says whether an applied set survives a household switch, and it cannot — the terms belong to the household you left.
+- ~~**Invite links are cramped at 340px.**~~ **Settled 27 Aug: they got a pane.** Members and invites moved behind a chevron into a second-level pane, where the link has a full-width field of its own. See *Settings tab → The Members pane*.
+- **The `?join=` landing still gives a date** — *This invite expires 9 September* — where the Members pane now gives a countdown. Inside the app the countdown is plainly better: no year, no locale, no format. On a link someone opens cold, a date may be the thing they can act on. It is the one place the two spellings coexist, and it is deliberate rather than missed.
+- **The household name still appears twice** — once in the switcher, once in the Settings household row. The second tile and the Playfair size are gone, so it is much quieter, and the argument for keeping it is that the switcher *chooses* a household while Settings *renames* one, which makes the second instance the target of an edit rather than a repeat. If that does not hold up, the fix is to drop the name from the row and show it only inside the rename field once the pencil is pressed.
+- **The Members pane drops the Filter / Settings tabs while pushed.** Back is the only way out. Cheap to change — the tabs could stay and switching could pop the pane — but a second-level pane that keeps a tab bar it does not belong to is its own kind of lie.
+- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one. The shopping list raises the same question one level up — the mode itself is remembered across a reload but nothing says what a household switch does to it beyond clearing the checks. **Filters raise it a third time:** nothing says whether an applied set survives a household switch, and it cannot — the terms belong to the household you left. **The Members pane raises a fourth:** switching households while pushed presumably pops it, since the members you were looking at are gone.
 - **Seeded stores are the weakest of the three groups.** Locations and types are near-universal; where someone shops is not, and Grocery / Warehouse / Market may just be three chips a new user deletes. Seeding no stores at all is defensible — the trade is that the Store filter then opens empty on day one, and that every item lands in the shopping list's `NO STORE` group until someone makes one.
-- **Off-state chips inside the drawer change brightness by theme, but the drawer doesn't.** Chip Off is surface-on-line, which maps to `#FDFAF4` in light and `#2C251B` in dark — yet the drawer is dark in both. Both read fine; they just aren't the same idea. First visible on the first-run board. Either the drawer gets its own chip pair, or the rule becomes "chips take the surface of the pane they sit in" and the light-mode drawer keeps its bright chips on purpose.
+- **Off-state chips inside the drawer change brightness by theme, but the drawer doesn't.** Chip Off is surface-on-line, which maps to `#FDFAF4` in light and `#2C251B` in dark — yet the drawer is dark in both. Both read fine; they just aren't the same idea. First visible on the first-run board. Either the drawer gets its own chip pair, or the rule becomes "chips take the surface of the pane they sit in" and the light-mode drawer keeps its bright chips on purpose. **The invite composer's role chips take a third answer** — a `#4A4031` outline with no fill at all — which is either the drawer's off-state finally written down, or a fourth thing to reconcile.
 - **Top-bar controls have almost no edge against the ground.** The sort trigger's open state (`#F2EADC` on `#CFBEA3`) separates from the ground at **1.00:1 fill / 1.53:1 border**, and *Back to items* at 1.14 / 1.53. The shopping-list trigger only escapes it by taking a 1.5px `low text` border. Either the whole top bar sits on its own surface, or every control in it borrows that trick. Left alone for now because nothing in the bar is hard to find once you know it is there — which is exactly the assumption that made the shopping list hard to find. **The applied chips now join this at rest** — surface on `line strong` is the same 1.53:1 — and it was the reason the first draft gave them a term-coloured edge. Their *active* state is fine, because it moves to `line`. The whole row now shares one answer instead of the chips being the exception, but it is still the open one.
 - ~~**Should the applied bar hide while the drawer is expanded?**~~ **Settled 27 Aug: it stays.** The alternative reflows the grid on a drawer toggle, for a reason unrelated to the toggle. The redundancy with the Filter tab is accepted.
 - **Four top-bar rows at 390 is a lot of chrome** — about 236px before the first card, on the screen with the least of it. The fallback if it bites is a single `Filters 6 ⌄` pill in row 3 that opens the same chips in a popover, which costs a tap and gets a row back.

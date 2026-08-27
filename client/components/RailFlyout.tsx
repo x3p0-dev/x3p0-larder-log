@@ -17,6 +17,12 @@ type Props = {
 	onClose: () => void;
 	label: string;
 	/**
+	 * How wide the panel is. 264 for the rail's own menus; the account menu asks
+	 * for 292, because it is the same panel the drawer's foot row opens and a
+	 * name beside an email needs the room.
+	 */
+	width?: number;
+	/**
 	 * The panel's own box, owned by the rail.
 	 *
 	 * Dismissal is the rail's job, not this component's — it is the thing that
@@ -37,7 +43,7 @@ type Props = {
  * click both close it, and focus moves inside on open so the keyboard can
  * reach the contents at all.
  */
-export function RailFlyout({ top, onClose, label, panelRef, children }: Props) {
+export function RailFlyout({ top, onClose, label, width = 264, panelRef, children }: Props) {
 	const ref = panelRef;
 	const [offset, setOffset] = useState(top);
 
@@ -98,8 +104,8 @@ export function RailFlyout({ top, onClose, label, panelRef, children }: Props) {
 			ref={ref}
 			role="dialog"
 			aria-label={label}
-			class="fixed left-[68px] z-50 w-[264px] max-h-[70vh] overflow-y-auto rounded-r-2xl rounded-bl-2xl p-2 bg-drawer-well border border-drawer-line shadow-2xl"
-			style={{ top: `${offset}px` }}
+			class="fixed left-[68px] z-50 max-h-[70vh] overflow-y-auto rounded-r-2xl rounded-bl-2xl p-2 bg-drawer-well border border-drawer-line shadow-2xl"
+			style={{ top: `${offset}px`, width: `${width}px` }}
 		>
 			{children}
 		</div>

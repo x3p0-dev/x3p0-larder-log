@@ -3,12 +3,14 @@ import {
 	ChevronRight, MapPin, Moon, PanelLeftOpen, SlidersHorizontal, Store as StoreIcon, Sun, Tag,
 } from 'lucide-preact';
 
+import { AccountMenu } from './AccountMenu';
+import { DrawerAvatar } from './DrawerAvatar';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { HouseholdTile } from './HouseholdTile';
 import { RailFlyout } from './RailFlyout';
 import type { Theme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
-import { chipDot } from '../lib/theme';
+import { chipDot, drawerTheme } from '../lib/theme';
 import type { HouseholdSummary, Term, ThemeOverride } from '../../shared/types';
 
 type Group = 'location' | 'store' | 'type';
@@ -48,6 +50,11 @@ type Props = {
 	onNewHousehold: () => void;
 	onJoinHousehold: (code: string) => Promise<string | null>;
 	accountName: string;
+	accountEmail: string;
+	/** The Gravatar image, where the account has one. */
+	accountPicture?: string;
+	/** Renames the account. Absent for the dev guest, who has no account row. */
+	onSetDisplayName?: (name: string) => void;
 	themeOverride: ThemeOverride;
 	setThemeOverride: (v: ThemeOverride) => void;
 	dark: boolean;
@@ -182,7 +189,8 @@ export function CollapsedRail({
 	locationFilter, storeFilter, typeFilter,
 	autoOnly, itemCount, locationCounts, householdName, householdInk,
 	households, currentHouseholdId, onSelectHousehold, onNewHousehold, onJoinHousehold,
-	accountName, themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
+	accountName, accountEmail, accountPicture, onSetDisplayName,
+	themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
 }: Props) {
 	const [menu, setMenu] = useState<Menu | null>(null);
 	const [menuTop, setMenuTop] = useState(0);
@@ -343,18 +351,19 @@ export function CollapsedRail({
 			<span class="flex-1" />
 
 			<Control id="account" label={accountName || 'Account'} on={menu === 'account'} tile chrome={chrome} onClick={(e) => toggle('account', e)}>
-				<span
-					class="flex items-center justify-center w-10 h-10 rounded-full font-disp text-[15px] font-bold transition-colors bg-[#4A3E2E] group-hover:bg-[#574934] group-active:bg-[#413628]"
-					style={{
-						// The open ring is on the circle, so it follows the avatar's
-						// shape instead of boxing it.
-						boxShadow: menu === 'account'
-							? 'inset 0 0 0 1px #63533E, 0 0 0 2px #F2E9DA'
-							: 'inset 0 0 0 1px #63533E',
-						color: '#E8DCC6',
-					}}
-				>
-					{(accountName || '?').charAt(0).toUpperCase()}
+				{/*
+				  * The open ring is on the circle, so it follows the avatar's shape
+				  * instead of boxing it — and hover moves the avatar's own fill
+				  * through `group-*`, because the button under a control that
+				  * carries its own fill paints none.
+				  */}
+				<span class="flex transition-[filter] group-hover:brightness-125 group-active:brightness-90">
+					<DrawerAvatar
+						name={accountName}
+						picture={accountPicture}
+						size={40}
+						ring={menu === 'account'}
+					/>
 				</span>
 			</Control>
 
@@ -448,22 +457,29 @@ export function CollapsedRail({
 				</RailFlyout>
 			)}
 
+			{/*
+			  * **The same menu the drawer's foot row opens**, which is why the
+			  * Settings pane no longer needs an Account section at all: the thing
+			  * that section held already had to exist for the rail.
+			  *
+			  * One deliberate difference from the boards. The panel keeps the
+			  * rail's own flyout surface rather than the drawer menu's, because
+			  * the household and appearance menus a few pixels above it are on
+			  * that surface, and one flyout in three wearing a different fill
+			  * reads as a different kind of thing. Only the width moves, to the
+			  * 292 the boards give it.
+			  */}
 			{menu === 'account' && (
-				<RailFlyout top={menuTop} onClose={() => setMenu(null)} label="Account" panelRef={panelRef}>
-					<p class="px-1.5 pt-1 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-on-dark-label">Account</p>
-					<p class="px-2 pb-2 text-[13px] text-on-dark truncate">{accountName || 'Account'}</p>
-					<button
-						onClick={() => { setMenu(null); onExpand('settings'); }}
-						class="flex items-center justify-between gap-2 w-full px-2 py-1.5 rounded-[9px] text-[12.5px] text-on-dark-muted hover:bg-drawer-raised"
-					>
-						Settings <ChevronRight size={14} />
-					</button>
-					<button
-						onClick={onSignOut}
-						class="flex items-center w-full px-2 py-1.5 rounded-[9px] text-[12.5px] text-[#D4636B] hover:bg-drawer-raised"
-					>
-						Sign out
-					</button>
+				<RailFlyout top={menuTop} onClose={() => setMenu(null)} label="Account" width={292} panelRef={panelRef}>
+					<AccountMenu
+						name={accountName}
+						email={accountEmail}
+						picture={accountPicture}
+						onRename={onSetDisplayName}
+						onSignOut={onSignOut}
+						onDone={() => setMenu(null)}
+						theme={drawerTheme(theme)}
+					/>
 				</RailFlyout>
 			)}
 		</aside>

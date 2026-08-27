@@ -2529,3 +2529,212 @@ This is the **fourth** knowing departure from the design documents, after D42's
 missing tile preview and removed collision caption and D47's provider-free
 button. The display-name boards draw two states, *had a name* and *didn't*, and
 the build now has one.
+
+## D49. Settings is three blocks, and members are a level down
+
+*2026-08-27, amending D30's Settings order and closing the invite-link
+complaint. Client only: no schema change, no new handler, nothing server-side
+moved.*
+
+**The Settings pane had six labelled sections and printed the same two facts
+three times over.** You appeared in Account, again in Members, and again in the
+row at the foot of the drawer; the household appeared in the switcher and again
+under its own heading. The role controls were a segmented strip that unfolded
+under whichever member you last tapped, anchored to nothing. What replaced it is
+**three blocks, a pushed pane, and two menus**, drawn on
+`.claude/docs/design/larderlogdrawerpreview.html` and specced under *Settings
+tab*.
+
+Three rules did the cutting:
+
+1. **The household tile appears once**, in the switcher. Nothing in the pane
+   draws it — which also retires the *no tile preview* departure D42 recorded,
+   since the switcher is directly above the rename panel either way.
+2. **You appear once**, in the row at the foot of the drawer. There is no
+   Account block, and nothing anywhere says whether you are signed in: if you
+   are reading it, you are. The build's version of that block was the worst
+   thing in the pane — an *Account* heading over *Not signed in* and a raw
+   account id where a display name goes.
+3. **Scope is in the label.** *Preferences* are yours and follow you between
+   households; *Pantry settings* belong to the household you are in.
+
+Rule 3 is what moved the default low-stock threshold out of Appearance's
+company. It is a fact about the pantry, not about the person looking at it —
+two people in one household who disagree about it are disagreeing about the
+*household*, which is exactly what makes it a setting rather than a preference.
+
+The cost is that *Preferences* sits between *Household* and *Pantry settings*,
+so the two household-scoped blocks are not adjacent. Ordered yours-first on
+purpose, because Appearance is the one anyone actually changes, and the labels
+carry the distinction rather than the grouping.
+
+*Leave household* moved **inside** the Household card, under a hairline, rather
+than floating between two sections as a crimson row two rows into the pane. It
+is contained by the block it belongs to.
+
+**The rename panel is flush with the card, not a box inside it.** `TermPanel`
+earns its rounded box and its ring in the Filter tab, where it floats in a
+column — but dropped into the Household card it put a box inside a box with the
+colour picker's own well inside *that*, three nested outlines on one screen and
+only the innermost one carrying information. So it gained a `flush` variant: the
+fill runs edge to edge from the card's top corners (12px, the card's radius less
+its 1px border) down to the hairline above *Members*, which is the bottom edge
+it already had. Same construction, same header, same *Done* pill — it just stops
+drawing an edge the card is already drawing.
+
+### Members and invites are one subject, and they get the full 340 together
+
+The chevron on the Members row pushes a second-level pane: a back button,
+*Members* in Playfair 21 with the household name beneath, the member list, then
+Invites.
+
+**This settles the standing complaint that invite links are cramped at 340px.**
+The link now has a full-width field of its own, which it could never have as a
+section competing with five others. It is a layout answer to a layout problem;
+nothing about the code changed.
+
+**The member rows are divided edge to edge**, where the spec's text says
+"hairlines inset past the avatar". At 340px with three rows the inset rule reads
+as a ragged edge rather than as a list, and the Household card two taps away
+divides its own rows full-bleed — so this is the drawer agreeing with itself.
+Inset rules survive where they belong, in the menus, whose rows are padded 6px
+inside the box and whose dividers match that padding.
+
+**The pane drops the Filter / Settings tabs while it is pushed**, and back is
+the only way out. A decision rather than an oversight — a second-level pane that
+keeps a tab bar it does not belong to offers a sideways exit from somewhere
+nobody arrived sideways — and the first thing to revisit if it reads as a trap.
+A household switch pops it, because the members you were looking at belong to
+the household you left.
+
+### The role word is the trigger, and the menu is the drawer's own surface
+
+**Owner only, and never on your own row.** A member row carries the role and
+nothing else: `Remove from household` is the last row of the same menu, so a
+`⋯` beside it would be a second control opening a menu you can already reach.
+
+- **Rest** is the hairline fill with a chevron; **open** takes the rail's
+  documented cream state, and the menu drops below, right-aligned, 224px inside
+  a 340px pane so it never asks for room the drawer does not have.
+- **Selection is a check, not a fill** — the sort menu's rule, and for the same
+  reason: with the fill doing both jobs a hovered row looks selected. This is
+  that rule's second user.
+- **Nothing in it is disabled.** Demoting the household's only owner is refused
+  server-side and is unreachable here anyway: you have to be an owner to see the
+  menu and it never appears on your own row, so the person in front of you is
+  never the last owner. The old panel disabled those rows, which is the thing
+  D36 already decided against — a disabled control cannot explain itself.
+- **Your own row has no trigger.** Demoting yourself while you are the only
+  owner is the blocked dialog that already exists for leaving.
+
+**Two alternatives lost.** Reusing the sort menu's cream popover was free and
+already consistent, and it broke the first rule of the theming section: the
+brightest thing on the screen opening over the darkest panel in the app. Putting
+everything behind a `⋯` kept the surface right and named the role twice, once on
+the row and once in the menu. What shipped is the second one's colours with the
+first one's mechanics.
+
+### The account row opens a menu, not a section
+
+The row at the foot of the drawer — avatar, display name, email, chevron — opens
+**the same component the collapsed rail's Account flyout opens**. That is why
+the pane needs no Account block at all: the thing it held already had to exist
+for the rail.
+
+Two rows, and that is all. The identity row's pencil flips it **in place** into
+the composer's field with a *Done* pill — no modal, no profile screen, Escape
+cancels, and **no toast**, because the row coming back read-only with the new
+name in it is the whole confirmation. That is the same argument the old Account
+section made (D46), moved to where you already were. Then a hairline, then
+*Sign out*.
+
+**Not in v1: *Change your picture*.** The board draws a third row handing off to
+Gravatar with the outbound arrow that means *this leaves the app*, and marks it
+a mockup. It is drawn so the menu's proportions are known before there is
+anywhere to send people; the build ships two rows.
+
+### Making an invite is the term composer again
+
+The dashed *New invite* row **stays put and drops the composer in below itself**
+— the Filter tab's editing panel at drawer scale, so this is a component that
+already exists rather than a new interaction. Header with a *Create* pill and a
+ghost `×`, a hairline, three role chips with *Editor* preselected, and a
+sentence that changes with the chip. Then *The link will work for 14 days.*
+
+Three role names are meaningless words on their own and *Viewer* is the one
+nobody can guess, which is what the sentence is for — and it is the same
+sentence the invite landing will need when the Viewer pass is designed, so the
+Gaps entry for that role is narrower than it was.
+
+**The board's sentence for Editor was wrong, and it shipped once.** *"Can add,
+edit and remove items. Can't invite anyone or rename the pantry."* — but
+`editor` holds `invite:create` and `invite:revoke`, and `invitableRoles` lets
+them mint Viewer invites (D21); it also holds `taxonomy:write`, which "items"
+omits. The rule is worth stating plainly: **copy that describes a permission is
+as wrong as code that gets it wrong, and it is the half nothing typechecks.**
+`ROLE_BLURBS` now carries the capability table it is claiming, in a comment,
+beside the sentences.
+
+**The link is not single-use, and the copy now says so.** `redeemInvite`
+neither consumes nor revokes the row, so a code works for everyone holding it
+until it expires or is revoked — which is what "bearer credential" means and
+what D21 and D43 already say. The first copy read *"It works once and expires
+in two weeks"*, wrong twice over; replacing it with the bare TTL fixed half.
+The number is interpolated from `INVITE_TTL_DAYS` rather than typed, so the
+sentence cannot drift from the rule the server enforces.
+
+The `?join=` landing's own role sentence is a **positive** list — what you will
+be able to do — so it omits rather than denies, and stays accurate. It is still
+worth a pass when the Viewer role is designed.
+
+**Expiry is a countdown, not a date** — *Expires in 12 days*. It answers the
+question the date was standing in for and needs no year, no locale and no
+format. The `?join=` landing still spells a date, and that is deliberate rather
+than missed: on a link someone opens cold, a date may be the thing they can act
+on. It is the one place the two spellings coexist.
+
+**A card collapses to its header once it is not the newest.** Four live invites
+is otherwise four link fields stacked in a 340px pane, and the one you are about
+to copy is the one you just made.
+
+### What this leaves unreconciled, on purpose
+
+- **The composer's role chips are a third answer to the drawer's off-state
+  chip.** The boards draw a `drawer-dashed` outline with no fill, where the
+  filter chips are `drawer-raised` and the page's are surface-on-line. Built as
+  drawn, and written up rather than quietly normalised — see *Product questions*
+  in `notes.md`.
+- **The household name still appears twice**, in the switcher and in the
+  Household row. Much quieter than before, since the second tile and the
+  Playfair size are gone, and the argument for keeping it is that the switcher
+  *chooses* a household while Settings *renames* one. If that does not hold up,
+  the fix is to drop the name from the row and show it only inside the field
+  once the pencil is pressed.
+
+### One knowing departure from the boards
+
+**The rail's account flyout keeps the rail's own flyout surface**, not the
+drawer menu's fill, and only its width moves to the 292 the boards give it. The
+household and appearance flyouts sit a few pixels above it on that surface, and
+one flyout in three wearing a different fill reads as a different kind of thing.
+The shared *component* is the contents — identity row, hairline, sign out —
+which is the arrangement `HouseholdSwitcher` already has, where each host owns
+its box and its own dismissal.
+
+### Rejected
+
+- **Keeping Members and Invites as folding sections.** They fold because they
+  run long, which is a symptom of a pane holding two subjects at once.
+- **A `⋯` overflow menu on the member row.** Above.
+- **Disabling the last-owner rows.** Above, and D36.
+- **A modal for the display name.** The Filter tab's pencil idiom already
+  exists, and a modal over a menu over a drawer is three surfaces deep.
+- **Boxing the Filter tab's chip groups the same way.** Built and reverted the
+  same day, on the reasoning that the two tabs should not read as two
+  interfaces. They should not, and this was the wrong lever: a settings block
+  holds rows of one value each and earns an edge, while a filter group is a
+  cloud of chips that already has an edge per chip — three cards of chips read
+  as clutter. It also cost the chips their own step, since `drawer-raised` is
+  what the card is made of, so they had to move to the hairline fill to have any
+  edge at all. **The tabs converge through the micro-label header and the
+  editing panel, not through the box.**

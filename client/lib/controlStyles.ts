@@ -33,7 +33,7 @@ export const DRAWER_CHIP =
 export const DRAWER_CHIP_ON =
 	'transition-colors bg-drawer-press text-drawer-press-ink font-semibold hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
 
-/** The dashed "add a term" chip. */
+/** The dashed "add a term" chip, and the dashed *New invite* row. */
 export const DRAWER_CHIP_ADD =
 	'transition-colors border border-dashed border-drawer-dashed text-on-dark-faint hover:border-on-dark-faint hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
 
@@ -46,18 +46,59 @@ export const DRAWER_ICON =
 	'transition-colors text-on-dark-label hover:text-on-dark hover:bg-drawer-raised rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
 
 /**
- * A destructive icon control. Red at rest so the consequence is legible.
+ * A control sunk into a raised card — the household pencil, the role trigger.
  *
- * **It sits on `drawer-raised`, not on the drawer** — the only place it appears
- * is the member row, which is a raised card. So the hover is
- * `drawer-raised-hover` and the ring offsets against `drawer-raised`: painted
- * with the drawer's own values it hovered to exactly the colour it was already
- * on and drew its focus gap in a dark that is nowhere near it. The crimson is a
- * class rather than an inline style for the same reason everything else here is
- * — an inline `color` outranks `hover:text-*` and leaves the control inert.
+ * `DRAWER_CHIP` is wrong here and looks right: its rest is `drawer-raised`,
+ * which *is* the card these sit on, so the control has no edge at all until
+ * you touch it. The hairline token is the step down that the boards draw.
  */
-export const DRAWER_ICON_DANGER =
-	'transition-colors text-drawer-danger hover:text-drawer-danger-hover hover:bg-drawer-raised-hover rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised disabled:opacity-40 disabled:pointer-events-none';
+export const DRAWER_SUNK =
+	'transition-colors bg-drawer-line text-on-dark-muted hover:bg-drawer-raised-hover hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/** The same control with its menu open — the rail's documented open state. */
+export const DRAWER_SUNK_ON =
+	'transition-opacity bg-drawer-press text-drawer-press-ink font-semibold hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/**
+ * A whole row inside a raised card that is itself the target — *Members*, and
+ * an invite card's header.
+ *
+ * `DRAWER_ROW` hovers to `drawer-raised`, which these already sit on. This one
+ * moves away from the card instead, which is the same rule the applied-filter
+ * chips wrote down for the page ground.
+ */
+export const DRAWER_CARD_ROW =
+	'transition-colors hover:bg-drawer-raised-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset';
+
+/**
+ * A row in one of the drawer's two menus — the role menu, the account menu.
+ *
+ * Selection is a **check, not a fill** (the sort menu's rule), so the fill is
+ * free to be the hover and a chosen row still reads under the pointer. The
+ * focus ring is inset because the menu's own fill is not a `theme.json` token,
+ * so there is nothing for a ring offset to resolve against.
+ */
+export const DRAWER_MENU_ROW =
+	'transition-colors text-on-dark-muted hover:bg-drawer-raised hover:text-on-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset';
+
+/** The same row, crimson — *Remove from household*. Offered, never executed here. */
+export const DRAWER_MENU_ROW_DANGER =
+	'transition-colors text-drawer-danger hover:bg-drawer-raised hover:text-drawer-danger-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-inset';
+
+/**
+ * The drawer's cream primary — *Done*, *Create*, *Copy link*.
+ *
+ * Its fill is `theme.drawer.ink`, set inline, so only the states live here.
+ * Disabled keeps a flat fill rather than dropping opacity, for the reason
+ * `Theme.disabledBg` exists: a translucent control looks like a rendering
+ * artefact rather than a control you cannot press.
+ */
+export const DRAWER_PRIMARY =
+	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer disabled:opacity-100 disabled:pointer-events-none';
+
+/** A stepper key on the drawer's well — the default-threshold pair. */
+export const DRAWER_STEPPER =
+	'transition-colors text-on-dark-muted hover:bg-drawer-raised hover:text-on-dark active:translate-y-px rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset disabled:opacity-40 disabled:pointer-events-none';
 
 /** A text field on the drawer. */
 export const DRAWER_INPUT =
@@ -66,16 +107,6 @@ export const DRAWER_INPUT =
 /** A whole row that is itself a target — the account row. */
 export const DRAWER_ROW =
 	'transition-colors hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset';
-
-/**
- * A card that is itself the target, edge to edge — an invite.
- *
- * Its own surface rather than `raised`, because it sits *on* the drawer body
- * and needs to lift away from it in both themes; `raised` is lighter than the
- * body in light and darker in dark, which would invert the hover.
- */
-export const DRAWER_CARD =
-	'transition-colors cursor-pointer bg-drawer-card border border-drawer-line hover:bg-drawer-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset';
 
 /* ---------- the page: cards, the header, the item sheet ---------- */
 
@@ -213,9 +244,30 @@ export const DRAWER_TRASH =
  * The way a destructive action is **offered**, never the way it is executed:
  * pressing one opens a dialog whose own primary is the ordinary ink/cream fill.
  * Crimson never carries a commit anywhere in this app.
+ *
+ * **It sits on a raised card in both places now**, since the 27 Aug redesign
+ * put *Leave household* inside the Household block and *Revoke* inside an
+ * invite card. So the hover is `drawer-raised-hover` and the ring offsets
+ * against `drawer-raised`: with the drawer's own values it hovered to exactly
+ * the colour it was already on and had no press feedback at all. It is the
+ * applied-filter bar's rule again — an interaction state moves *away* from its
+ * ground, not toward it.
  */
 export const DRAWER_GHOST_DANGER =
-	'transition-colors text-drawer-danger hover:bg-drawer-raised active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
+	'transition-colors text-drawer-danger hover:bg-drawer-raised-hover active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/**
+ * A chip that is off, inside the drawer — the invite composer's role chips, on
+ * the term composer's panel.
+ *
+ * A solid `drawer-dashed` outline with no fill, which is what the boards draw
+ * and a **third** answer to the standing question about off-state chips in the
+ * drawer: the filter chips are `drawer-raised`, the page's are surface-on-line.
+ * Built as drawn, and written up as unreconciled rather than quietly
+ * normalised — see the open question in the design spec.
+ */
+export const DRAWER_CHIP_OUTLINE =
+	'transition-colors border border-drawer-dashed text-on-dark-muted hover:bg-drawer-raised hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-well';
 
 /**
  * The composer field's focus halo, light theme.

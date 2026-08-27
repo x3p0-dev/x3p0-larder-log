@@ -2,11 +2,16 @@ import type { ComponentProps } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { ChevronRight, ChevronsUpDown, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
 
+import { AccountMenu } from './AccountMenu';
+import { DrawerAvatar } from './DrawerAvatar';
+import { DrawerMenu } from './DrawerMenu';
 import { FilterSection } from './DrawerFilters';
 import { DrawerSettings } from './DrawerSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { HouseholdTile } from './HouseholdTile';
+import { useDismiss } from '../hooks/useDismiss';
 import type { Theme } from '../lib/theme';
+import { drawerTheme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
 import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
 import type { HouseholdSummary, Item, Term, TermKind } from '../../shared/types';
@@ -55,9 +60,28 @@ type Props = {
 	householdInk: string;
 	onNewHousehold: () => void;
 	onJoinHousehold: (code: string) => Promise<string | null>;
+
+	/*
+	 * The account lives at the drawer's foot, not in the Settings pane — which
+	 * is why these four are the drawer's own props rather than part of
+	 * `settings`. There is no Account block any more: the row below is the one
+	 * place you appear, and it opens a menu.
+	 */
 	accountName: string;
+	accountEmail: string;
+	/** The Gravatar image, where the account has one. */
+	accountPicture?: string;
+	/** Renames the account. Absent for the dev guest, who has no account row. */
+	onSetDisplayName?: (name: string) => void;
+	onSignOut: () => void;
+
 	/** Everything the Settings pane needs, passed through untouched. */
-	settings: Omit<ComponentProps<typeof DrawerSettings>, 'theme'>;
+	settings: Omit<ComponentProps<typeof DrawerSettings>, 'theme' | 'membersOpen' | 'setMembersOpen'>;
+	/**
+	 * Bumped to push the Members pane — where a blocked "last owner" dialog
+	 * sends you. A counter, so twice in a row still works.
+	 */
+	openMembers: number;
 
 	onCreateTerm: (kind: 'location' | 'type' | 'store', name: string, ink: string) => Promise<string | null>;
 	onRenameTerm: (kind: 'location' | 'type' | 'store', id: string, name: string) => void;
@@ -91,41 +115,60 @@ export function Drawer({
 	tab, setTab, open, onClose, collapsed, onDismiss,
 	householdName, householdInk, households, currentHouseholdId,
 	onSelectHousehold, onNewHousehold, onJoinHousehold,
-	accountName, settings,
+	accountName, accountEmail, accountPicture, onSetDisplayName, onSignOut,
+	settings, openMembers,
 	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, canEditTaxonomy, closeEditing,
 	theme,
 }: Props) {
 	const d = theme.drawer;
 	const [switcherOpen, setSwitcherOpen] = useState(false);
-	const switcherRef = useRef<HTMLDivElement>(null);
+	const [accountOpen, setAccountOpen] = useState(false);
+
+	/*
+	 * Whether the Settings pane is one level down, in Members.
+	 *
+	 * It lives here rather than in `DrawerSettings` because the tab bar has to
+	 * go while it is pushed — a second-level pane that keeps a tab bar it does
+	 * not belong to is its own kind of lie — and the wordmark row is the only
+	 * chrome that survives.
+	 */
+	const [membersOpen, setMembersOpen] = useState(false);
 
 	/*
 	 * The same two dismissals `RailFlyout` gives the rail's menus, for the same
 	 * reason: a popover that only closes by choosing something traps whoever
-	 * opened it to look. `pointerdown` rather than `click` so a drag that starts
-	 * inside and ends outside — selecting the name in the create field — does
-	 * not close it mid-gesture.
+	 * opened it to look. Each ref wraps its **trigger as well as its panel**, so
+	 * a press on the trigger never reaches the handler and its own toggle does
+	 * the closing — see `useDismiss`.
 	 */
+	const switcherRef = useDismiss<HTMLDivElement>(switcherOpen, () => setSwitcherOpen(false));
+	const accountRef = useDismiss<HTMLDivElement>(accountOpen, () => setAccountOpen(false));
+
+	/*
+	 * Where the blocked "last owner" dialog sends you. Skips the first run: the
+	 * pane is closed on mount and has not been asked for.
+	 */
+	const seenOpenMembers = useRef(openMembers);
+
 	useEffect(() => {
-		if (! switcherOpen) return;
+		if (openMembers === seenOpenMembers.current) return;
 
-		function onKey(e: KeyboardEvent) {
-			if (e.key === 'Escape') { e.stopPropagation(); setSwitcherOpen(false); }
-		}
+		seenOpenMembers.current = openMembers;
+		setMembersOpen(true);
+	}, [openMembers]);
 
-		function onDown(e: PointerEvent) {
-			if (switcherRef.current?.contains(e.target as Node)) return;
-			setSwitcherOpen(false);
-		}
+	/*
+	 * A household switch pops the pane. The members you were looking at belong
+	 * to the household you left, and the pane has no header that could say so.
+	 */
+	useEffect(() => { setMembersOpen(false); }, [currentHouseholdId]);
 
-		document.addEventListener('keydown', onKey);
-		document.addEventListener('pointerdown', onDown);
-
-		return () => {
-			document.removeEventListener('keydown', onKey);
-			document.removeEventListener('pointerdown', onDown);
-		};
-	}, [switcherOpen]);
+	/*
+	 * Only pushed while Settings is the tab showing it. The rail's *Open full
+	 * filters* sets the tab from outside, and without this the Filter pane would
+	 * render under a hidden tab bar — a screen with no way off it.
+	 */
+	const pushed = membersOpen && tab === 'settings';
 
 	return (
 		<>
@@ -201,6 +244,7 @@ export function Drawer({
 				  * link* live, and hiding them until you already have two would
 				  * mean there was no way to get the second one.
 				  */}
+				{! pushed && (
 				<div class="relative mx-5 mt-3.5" ref={switcherRef}>
 					<button
 						onClick={() => setSwitcherOpen((v) => ! v)}
@@ -235,7 +279,14 @@ export function Drawer({
 						</div>
 					)}
 				</div>
+				)}
 
+				{/*
+				  * The tabs go while the Members pane is pushed. Back is the only way
+				  * out of a second-level pane, and leaving a tab bar over one would
+				  * offer a sideways exit from somewhere nobody arrived sideways.
+				  */}
+				{! pushed && (
 				<div class="grid grid-cols-2 gap-1 mx-5 mt-[18px] p-1 rounded-xl" style={{ background: d.well }}>
 					{([['filter', 'Filter', ListFilter], ['settings', 'Settings', Settings]] as const).map(([key, label, Icon]) => (
 						<button
@@ -247,6 +298,7 @@ export function Drawer({
 						</button>
 					))}
 				</div>
+				)}
 
 				<div class="flex-1 min-h-0 overflow-y-auto">
 					{tab === 'filter' ? (
@@ -293,21 +345,61 @@ export function Drawer({
 							)}
 						</div>
 					) : (
-						<DrawerSettings {...settings} theme={theme} />
+						<DrawerSettings {...settings} membersOpen={membersOpen} setMembersOpen={setMembersOpen} theme={theme} />
 					)}
 				</div>
 
-				<button
-					onClick={() => setTab('settings')}
-					class={`flex items-center gap-2.5 px-5 py-4 shrink-0 text-left ${DRAWER_ROW}`}
-					style={{ borderTop: `1px solid ${d.line}` }}
-				>
-					<span class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[13px] font-semibold" style={{ background: '#4A3E2E', color: d.inkMuted }}>
-						{(accountName || '?').charAt(0).toUpperCase()}
-					</span>
-					<span class="flex-1 min-w-0 text-sm truncate" style={{ color: d.inkMuted }}>{accountName || 'Account'}</span>
-					<ChevronRight size={16} style={{ color: d.inkFaint }} />
-				</button>
+				{/*
+				  * You, at the foot of the drawer — avatar, display name, email,
+				  * chevron. **It opens a menu, not a section**: the Settings pane it
+				  * used to walk into has no Account block any more, because the thing
+				  * that block held already had to exist for the collapsed rail. One
+				  * component, two states of the drawer.
+				  */}
+				<div class="relative shrink-0" ref={accountRef}>
+					{accountOpen && (
+						<DrawerMenu
+							label="Account"
+							role="dialog"
+							/* 292 as drawn, clamped: it does not fit inside the
+							 * 328px slide-over's gutters, and the gutter is the
+							 * pane's own — the menu lines up with everything else
+							 * in the column rather than with the row it opens from. */
+							width="min(292px, calc(100% - 40px))"
+							place="left-5 bottom-full mb-2"
+							theme={theme}
+						>
+							<AccountMenu
+								name={accountName}
+								email={accountEmail}
+								picture={accountPicture}
+								onRename={onSetDisplayName}
+								onSignOut={onSignOut}
+								onDone={() => setAccountOpen(false)}
+								theme={drawerTheme(theme)}
+							/>
+						</DrawerMenu>
+					)}
+					<button
+						onClick={() => setAccountOpen((v) => ! v)}
+						class={`flex items-center gap-[11px] w-full px-5 py-3.5 text-left ${DRAWER_ROW}`}
+						style={{ borderTop: `1px solid ${d.line}` }}
+						aria-haspopup="dialog"
+						aria-expanded={accountOpen}
+					>
+						{/* The cream ring marks the avatar as what opened the menu. */}
+						<DrawerAvatar name={accountName} picture={accountPicture} size={32} ring={accountOpen} />
+						<span class="flex-1 min-w-0 flex flex-col gap-px">
+							<span class="text-body truncate" style={{ color: d.ink }}>{accountName || 'Account'}</span>
+							{/* Absent, not blank. The dev guest has no email, and an
+							  * empty second line pushes the name off centre. */}
+							{accountEmail && (
+								<span class="text-meta truncate" style={{ color: d.label }}>{accountEmail}</span>
+							)}
+						</span>
+						<ChevronRight size={16} class="shrink-0" style={{ color: d.inkFaint }} />
+					</button>
+				</div>
 			</aside>
 		</>
 	);
