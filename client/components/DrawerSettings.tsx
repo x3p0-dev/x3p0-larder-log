@@ -255,7 +255,7 @@ export function DrawerSettings({
 								<button
 									onClick={() => { setNameDraft(householdName); setEditing(true); }}
 									class={`shrink-0 flex items-center justify-center w-8 h-8 rounded-[10px] ${DRAWER_SUNK}`}
-									aria-label="Edit household name and colour"
+									aria-label="Edit household name and color"
 								>
 									<Pencil size={15} />
 								</button>

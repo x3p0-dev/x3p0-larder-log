@@ -175,7 +175,7 @@ export function TermRow({
 							? `inset 0 0 0 1.5px ${s.panel}, 0 0 0 2.5px ${s.doneBg}`
 							: `inset 0 0 0 1.5px ${s.panel}, 0 0 0 1.5px ${swatch}`,
 					}}
-					aria-label="Change colour"
+					aria-label="Change color"
 					aria-expanded={pickerOpen}
 				/>
 

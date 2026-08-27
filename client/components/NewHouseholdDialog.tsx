@@ -87,7 +87,7 @@ export function NewHouseholdDialog({ open, taken, onCreate, onCancel, dark, them
 			</div>
 
 			<span class="block text-label font-bold uppercase tracking-[0.15em] mt-[18px] mb-[9px]" style={{ color: theme.textMuted }}>
-				Household name and colour
+				Household name and color
 			</span>
 
 			<HouseholdIdentity

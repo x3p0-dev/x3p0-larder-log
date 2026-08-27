@@ -65,7 +65,7 @@ export function HouseholdIdentity({
 							? `inset 0 0 0 1.5px ${s.panel}, 0 0 0 2.5px ${s.doneBg}`
 							: `inset 0 0 0 1.5px ${s.panel}, 0 0 0 1.5px ${swatch}`,
 					}}
-					aria-label={c ? `Household colour — ${c.name}` : 'Household colour'}
+					aria-label={c ? `Household color — ${c.name}` : 'Household color'}
 					aria-expanded={pickerOpen}
 				/>
 

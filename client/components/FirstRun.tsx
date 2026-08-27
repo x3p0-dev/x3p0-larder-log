@@ -81,7 +81,7 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 
 			<div class="mt-6" ref={field}>
 				<span class="block text-label font-bold uppercase tracking-[0.15em] mb-[9px]" style={{ color: theme.textMuted }}>
-					Household name and colour
+					Household name and color
 				</span>
 				{/*
 				  * The composer's row, on cream. The swatch is *part of* the field
@@ -102,7 +102,7 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 			</div>
 
 			<p class="text-[12.5px] leading-[1.5] mt-[9px]" style={{ color: theme.textMuted }}>
-				The colour is how you will tell it apart later.
+				The color is how you will tell it apart later.
 			</p>
 
 			<button

@@ -187,7 +187,7 @@ function dialogCopy(pending: Pending, facts: DialogFacts): DialogCopy {
 				tone: 'danger',
 				icon: UserMinus,
 				title: `Remove ${pending.name}?`,
-				body: `They lose access to ${name} straight away. You can invite them back with a new link.`,
+				body: `They lose access to ${name} right away. You can invite them back with a new link.`,
 				confirmLabel: 'Remove member',
 			};
 
@@ -263,7 +263,7 @@ type EmptyFilters = {
 const STATUS_EMPTY: Record<StatusKey, { title: string; body: string }> = {
 	ok: {
 		title: 'Nothing’s fully stocked.',
-		body: 'Everything in the larder is low or out. The shopping list has it grouped by the shop you buy it at.',
+		body: 'Everything in the larder is low or out. The shopping list has it grouped by the store you buy it at.',
 	},
 	low: {
 		title: 'Nothing’s running low.',
@@ -2120,7 +2120,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							{empty ? (
 								<EmptyState
 									title="Nothing in the larder yet."
-									body="Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like."
+									body="Add your first item. Your locations, stores and types are already set up in Filters — rename or recolor them whenever you like."
 									action={mayEditItems ? { label: 'Add item', icon: Plus, onClick: openAddForm } : undefined}
 									theme={theme}
 								>

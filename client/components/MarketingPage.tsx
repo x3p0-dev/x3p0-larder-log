@@ -174,7 +174,7 @@ const BENEFITS: { title: string; body: string }[] = [
 	},
 	{
 		title: 'The shopping list is a view, not a chore.',
-		body: 'Everything low or out, grouped by the shop you buy it at. Tick things off as you go — nothing to keep in sync, because it’s the same data, asked a different way.',
+		body: 'Everything low or out, grouped by the store you buy it at. Check things off as you go — nothing to keep in sync, because it’s the same data, asked a different way.',
 	},
 ];
 
@@ -386,8 +386,8 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 					  */}
 					<div class="pt-[18px] md:pt-[22px]" style={{ borderTop: `1px solid ${theme.border}` }}>
 						<p class="text-[13.5px] md:text-sm leading-[1.5]" style={{ color: theme.textMuted }}>
-							Sixteen colours, yours to name and assign.
-							<span class="hidden md:inline"> Rename, recolour or remove any of them whenever you like.</span>
+							Sixteen colors, yours to name and assign.
+							<span class="hidden md:inline"> Rename, recolor or remove any of them whenever you like.</span>
 						</p>
 					</div>
 				</div>
