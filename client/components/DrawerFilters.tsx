@@ -5,14 +5,14 @@ import { TermPanel, TermRow } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import { chipDot, proposeColor } from '../lib/theme';
 import { DRAWER_CHIP, DRAWER_CHIP_ADD, DRAWER_CHIP_ON, DRAWER_ICON } from '../lib/controlStyles';
+import type { TermFilter } from '../lib/actions';
 import type { Term } from '../../shared/types';
 
 type SectionProps = {
 	title: string;
 	entities: Term[];
-	/** A term **id**, or null for "no filter". */
-	active: string | null;
-	onSelect: (id: string | null) => void;
+	/** The group's selection — several terms at once, OR'd together (D45). */
+	filter: TermFilter;
 	countFor?: (id: string) => number;
 	leadingAll?: { label: string; count: number };
 	onCreate: (name: string, ink: string) => Promise<string | null>;
@@ -47,7 +47,7 @@ type SectionProps = {
  * term and fixing its name happen in the same place.
  */
 export function FilterSection({
-	title, entities, active, onSelect, countFor, leadingAll,
+	title, entities, filter, countFor, leadingAll,
 	onCreate, onRename, onRecolor, onDelete, canEdit, closeEditing, theme,
 }: SectionProps) {
 	const [open, setOpen] = useState(true);
@@ -56,6 +56,12 @@ export function FilterSection({
 	const [draft, setDraft] = useState('');
 	const [draftColor, setDraftColor] = useState<string | null>(null);
 	const d = theme.drawer;
+
+	/*
+	 * `All items` is the *absence* of a selection, not a member of it, so it
+	 * lights when the group is empty rather than tracking an id of its own.
+	 */
+	const none = filter.ids.length === 0;
 
 	const proposed = draftColor ?? proposeColor(entities.map((e) => e.ink));
 
@@ -118,22 +124,23 @@ export function FilterSection({
 					<div class="flex flex-wrap gap-[7px]">
 						{leadingAll && (
 							<button
-								onClick={() => onSelect(null)}
-								class={`flex items-center gap-[7px] h-[34px] px-[13px] rounded-full text-[13.5px] ${active === null ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
+								onClick={filter.clear}
+								class={`flex items-center gap-[7px] h-[34px] px-[13px] rounded-full text-[13.5px] ${none ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
 							>
 								{leadingAll.label}
-								<span style={{ color: active === null ? '#BE3346' : d.inkFaint }}>{leadingAll.count}</span>
+								<span style={{ color: none ? '#BE3346' : d.inkFaint }}>{leadingAll.count}</span>
 							</button>
 						)}
 
 						{entities.map((e) => {
-							const isActive = active === e.id;
+							const isActive = filter.ids.includes(e.id);
 							const count = countFor?.(e.id);
 
 							return (
 								<button
 									key={e.id}
-									onClick={() => onSelect(isActive ? null : e.id)}
+									onClick={() => filter.toggle(e.id)}
+									aria-pressed={isActive}
 									class={`flex items-center gap-[7px] h-[34px] px-[13px] rounded-full text-[13.5px] ${isActive ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
 								>
 									{/*

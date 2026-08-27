@@ -389,6 +389,104 @@ the row under it, a picker that snapped shut, and a chip that dropped its dot.
 **Compiling, curling and reading the artifact prove a build is coherent, not
 that it is usable.**
 
+### The applied filter bar (Phase 4.10) is built — 2026-08-27
+
+The spec's *Applied filters*, governed by
+[D45](../.docs/decisions.md#d45-the-applied-filters-are-a-row-of-the-top-bar-not-a-badge-on-the-drawer):
+**a filter you cannot see is a filter you cannot remove.** A third top-bar row —
+`Clear filters`, then one chip per active term — present only while at least one
+**term** filter is on, so most of the time the bar is still two rows. No schema
+change; nothing server-side moved.
+
+- **`AppliedFilters.tsx`** is the whole component. It takes resolved filters and
+  two callbacks and owns nothing but the 140ms exit. **A chip's key is
+  `kind:id`** — row ids are unique only within a table, and the hosted runtime
+  issues sequential integers, so a location and a store both holding `"4"` is
+  the normal state of a seeded household.
+- **Three new `PAGE_*` styles**, and the rule behind them generalises: **an
+  interaction state on the ground moves away from the ground, not toward it.**
+  The app's usual ghost hover is `surface-alt`, which *is* the ground gradient's
+  middle stop — a chip hovering to it goes from a step lighter than the ground
+  to exactly the ground and reads as disappearing. `line` moves the other way in
+  both themes at once. Controls on a **card** keep sinking to `surface-alt`,
+  where it is a real step.
+- **Hover, pressed and focus are one treatment, and there is no transform.** The
+  chip is leaving the moment you press it, so a separate press state has nothing
+  to report — and with the two merged a `scale()` would fire on *hover*. The
+  focus ring is crimson, not the page's ink: ink is what the chip is made of.
+- **The whole chip is the target.** The `×` is a glyph, not a second hit area.
+  Removal gets no toast — D36 is about records, and a filter is neither a record
+  that comes back nor one that does not.
+- **`Clear filters` takes every term *and* the status pill, never the search.**
+  Search has its own `×` and you can see it working. The drawer's
+  *Clear all filters* now calls the **same function**, and its visibility moved
+  with it: gated on terms-or-status rather than on "anything at all", or a
+  search alone would put a no-op button on the Filter tab. `clearAllFilters` —
+  search included — survives for the empty state, where the copy says the
+  filters *together* rule everything out.
+- **Desktop wraps; mobile scrolls, and that split is `md:`, not the measured
+  column.** This is **not** the mistake the row-2 note warns about. Row 2 asks
+  whether its labels fit, which a docked drawer changes without the viewport
+  moving. This row asks whether there is a **scroll gesture** — a mouse has
+  none, so a docked drawer at 1280 must still wrap. Different question,
+  different axis. At 390 the clear is pinned outside the scroller and the chips
+  bleed past the gutter with `pr-[18px] -mr-[18px]`, which cancels on desktop.
+- **`Clear filters` is padded symmetrically at every width, and the row has a
+  gap.** Both were the same 2px mistake, found on a phone. The boards give the
+  clear `padding: 0 12px 0 2px` so its label sits flush with the column edge —
+  but on touch the hover fill is the only press feedback there is, and 2px put
+  that fill hard against the *C*. At 12px the label lines up with the status
+  pills' labels one row above, which is the alignment that was actually wanted.
+  The chips' scroller keeps its `pl-1` **uncancelled** for the other half: those
+  4px plus the row's `gap-1` are the 8px the two boxes had none of.
+- **The mobile menu button carries the crimson total**, so the fact that
+  something is filtering survives scrolling past row 3. Same construction as the
+  rail badges, except the ring is the page ground and therefore follows the
+  theme where the rail's cannot.
+- **Row 3 stays in list mode.** The list obeys the same filters. Row 1 never
+  changes and row 2 swaps contents, which is what makes the switch read as the
+  content changing rather than the app changing.
+- **The live region is in `Pantry`, not in the bar** — the bar unmounts with its
+  last chip, so *Filters cleared* would be announced from a node that has just
+  been removed. It quotes **matching-of-household** (`Showing 12 of 20`), which
+  is the spec's own sentence; row 2's `Showing X of Y` is a different pair
+  (rendered-so-far of matching) and the two have always disagreed on screen.
+- **Under `prefers-reduced-motion` the chip still fades**, it only loses the 4px
+  rise — `motion-safe:-translate-y-1`. A chip that blinks out gives no sign the
+  press did anything, which is the one job the motion has.
+- **Focus moves to `Clear filters`** when a chip is removed and the bar
+  survives — the element that had focus is gone, and focus falling to the body
+  restarts a keyboard user at the top of the document. It paints no ring after a
+  mouse press, because a programmatic `focus()` matches `:focus-visible` only
+  when the interaction that led to it was keyboard-driven.
+
+**Filtering is multi-select now, and that is the other half of this** — OR
+inside a group, AND across groups. Each group holds a **list** of ids;
+`shared/filter.ts` owns the rule and is in `shared/` because an `every` where a
+`some` belongs still compiles, still runs, and hands back an empty grid.
+`npm test` is at 222 assertions.
+
+- `FilterSection` and the rail flyouts **toggle** and carry `aria-pressed`;
+  *All items* lights on an **empty** group rather than tracking an id.
+- **The rail's quick-filter flyout stays open on a pick**, alone among the
+  rail's menus: a group holds several terms, so closing after each one means
+  reopening the panel to add the second.
+- The rail badges count the group. `emptyCopy` counts **terms, not groups**, so
+  two locations land in the "anything else" branch — correctly, since with
+  *Pantry or Freezer* on and nothing showing neither name is the cause.
+- The add sheet prefills a location **only when the filter is unambiguous**, and
+  the shopping list names a store only when exactly one is on.
+- **The late paths use functional setters.** A chip's removal fires 140ms after
+  the press and `restoreTerm` fires after a round trip; either could otherwise
+  write back an array captured before something else touched the same group.
+
+**Verified without a browser**: typecheck clean, 222 assertions pass — fourteen
+of them new, covering the OR/AND rule including the case that separates it from
+OR-across — `sf dev` on `--port 4199` compiles and serves, and **every** new
+utility is in the live `/zero.css`, checked by *printing and unescaping the
+selectors*, including the `md:` variants' line numbers to prove each lands after
+the base rule it overrides. **Nobody has clicked any of it.**
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -805,12 +903,13 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D44, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes** |
+| `.docs/decisions.md` | D1–D45, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
 | `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
 | `.claude/docs/design/larderloghouseholdcolourboards.html` | **The 8 boards for the household colour** — four screens, light and dark |
+| `.claude/docs/design/appliedfilterbar.html` | **The applied filter bar** — a live page rather than boards: desktop, 390, and the state strip, in both themes |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
 | `.claude/docs/pantry-tracker-mockup.jsx` | The **superseded** design reference (see below) |
 | `.claude/docs/spacefast.md` | Running feedback log on the platform |
@@ -893,13 +992,15 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 198 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 222 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
-  invite-link parsing, the dev-guest bypass in `shared/identity.ts`, and D44's
-  stamp guards and A–Z term ordering. **Add to it** when you touch any of
-  those — that file is the app's only authorization test.
+  invite-link parsing, the dev-guest bypass in `shared/identity.ts`, D44's
+  stamp guards and A–Z term ordering, and D45's *OR inside a group, AND across
+  groups*. **Add to it** when you touch any of those — that file is the app's
+  only authorization test, and the only place the filter rule is checked at
+  all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
   the fastest way to catch string-encoded numbers used as numbers.
   **It will not catch a term id rendered where a name belongs** — both are

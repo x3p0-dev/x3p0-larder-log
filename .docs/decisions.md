@@ -2075,3 +2075,175 @@ an item's `changedAt` moves on `adjustQty` and again on `updateItem` while its
 **both** stamps byte-identical and a visibly newer `createdAt`; and a renamed
 store re-sorts alphabetically. The clamp and the fallbacks were driven the same
 way.
+
+---
+
+## D45. The applied filters are a row of the top bar, not a badge on the drawer
+
+**Decided:** 2026-08-27
+
+**A filter you cannot see is a filter you cannot remove.**
+
+With the drawer closed, the set of active term filters was invisible on mobile
+and merely *countable* on the collapsed rail: the rail's badges said `1` and `2`
+without saying which of sixteen terms they meant, and nothing cleared across
+groups from out there. The only route to either answer was to open the drawer,
+which on a phone means covering the thing you are filtering.
+
+Row 3 of the top bar closes it — `Clear filters`, then one chip per active term,
+present only while at least one **term** filter is on. Most of the time the bar
+is still two rows.
+
+**Nothing on the rail moves.** The badges still count per group; they were never
+wrong, only insufficient.
+
+### Filtering became multi-select, and that is the other half of this
+
+**OR inside a group, AND across groups.** Every group holds a *list* of term
+ids now, not one. *Pantry* and *Freezer* together widen — anything in either —
+while *Pantry* and *Protein* together narrow. That is the only reading under
+which picking a second location can add items to the screen and picking a type
+can never do so, which is what the two kinds of list are for: one names where a
+thing lives, the others name what it is.
+
+The app had always been single-select, and the applied bar is what made that
+untenable: a row whose whole argument is *see what is on and take one off*
+implies there can be more than one on. `shared/filter.ts` owns the rule, and it
+is in `shared/` for one reason — an `every` where a `some` belongs still
+compiles, still runs, and hands back an empty grid. `npm test` is the only thing
+that can see the difference.
+
+What moved with it:
+
+- **`FilterSection` and the rail flyouts toggle rather than select**, and both
+  carry `aria-pressed`. `All items` is the *absence* of a selection, not a
+  member of it, so it lights when the group is empty.
+- **The rail's quick-filter flyout stays open on a pick**, alone among the rail's
+  menus. A group holds several terms now, and closing after each one means
+  reopening the same panel to add the second — it is a list you work through,
+  not a choice you make once.
+- **The rail badges count the group**, where they used to count `1`.
+- **`emptyCopy` counts terms, not groups.** Two locations at once is two things
+  narrowing the screen, so it lands in the "anything else" branch — which is
+  right: with *Pantry or Freezer* on and nothing showing, neither name is the
+  cause on its own.
+- **The add sheet prefills a location only when the filter is unambiguous.**
+  With two on, picking one of them would be the app quietly choosing, and
+  choosing wrong is worse here than choosing nothing.
+- **The shopping list names a store only when exactly one is selected** — the
+  sentence it feeds is *Nothing to buy at Costco*, which two stores cannot
+  complete.
+
+### What the row does and does not answer for
+
+- **Term filters only.** Location, store, type, in the drawer's own order, so
+  the bar reads in a sequence someone has already learned. Within a group the
+  chips come out **A–Z**, because the bar walks the term list rather than the
+  selection — two people who picked the same three terms in different orders
+  see the same row.
+- **The status pill is not mirrored into it.** It is already on screen in row 2
+  and is already its own toggle; a second copy would be two controls for one
+  filter. The consequence is that `Clear filters` clears something that is not
+  in the row it sits in, which is exactly why it carries **no count** —
+  `Showing X of Y` is the count.
+- **Search is not touched.** It has its own `×` in the field, and you can see it
+  working. `clearAllFilters` — the one the empty state offers — still takes it,
+  because there the copy says the filters *together* rule everything out and the
+  search is part of "together".
+- **It is not conditional on the drawer.** The applied set is a fact about the
+  content column, not about the drawer, and appearing on collapse would reflow
+  the grid for a reason unrelated to what was pressed. Drawn open it is
+  redundant with the Filter tab, and harmless.
+- **It stays in list mode.** The shopping list obeys the same filters, so the
+  bar and its clear come with it. Row 1 never changes and row 2 swaps its
+  contents, which is what makes the switch read as the *content* changing rather
+  than the app changing.
+
+### The chip is the off chip with an `×`, and it is not inverted
+
+Surface fill, `line strong` edge, 7px term dot, `×` in faint. In a row where
+every chip is on by definition, inversion says nothing — and a row of ink fills
+would take *Add item*'s only-ink-on-screen rule apart.
+
+**One action, so one target.** The whole chip removes its term; the `×` is a
+glyph, not a second hit area. 30px desktop, 44px mobile.
+
+**Removal is neither undoable nor confirmed, and gets no toast.** Nothing is
+lost, the term is still in the drawer, and one tap puts it back. D36's rule is
+about *records*; a filter is neither a record that comes back nor one that does
+not.
+
+### The interaction state moves away from the ground
+
+Hover, pressed and focus share one treatment, because the chip is on its way out
+the moment you press it and a separate press state has nothing left to report.
+**No transform** for the same reason: with the two merged, a `scale()` would
+fire on hover, and a chip that flinches when you point at it is worse than no
+press feedback.
+
+The active fill is **`line` in both themes** — `#E2D5C0` light, `#3E3527` dark —
+and that is the finding worth keeping. The app's usual ghost hover is
+`surface-alt`, which *is* the ground gradient's own middle stop; out here a chip
+hovering to it goes from a step lighter than the ground to exactly the ground,
+and the hover reads as the chip disappearing. The general rule, which now sits
+with the three theming rules in the spec: **an interaction state on the ground
+moves away from the ground, not toward it** — darker on the cream, lighter on
+the dark. Controls on a *card* keep sinking to `surface-alt`, because there it
+is a real step.
+
+The focus ring is crimson rather than the page's usual ink: ink is what this
+row's chips are made of, so an ink ring on an ink label reads as a thicker
+border.
+
+### Rejected
+
+- **A coloured chip.** The first draft gave each chip a 1.5px border in its
+  term's *text* colour, which solved the ground-contrast problem outright and
+  made the dot redundant. Sixteen possible hues shouting at rest made the row
+  the busiest thing on the screen. The neutral edge puts the chips at the same
+  weight as the sort trigger beside them.
+- **Hiding the bar while the drawer is expanded.** The alternative reflows the
+  grid on a drawer toggle, for a reason unrelated to the toggle. The redundancy
+  with the Filter tab is accepted: **settled 2026-08-27**, leave it visible.
+- **A step *down* in both themes** for the active fill, which is how it was
+  drawn first and is exactly why the dark states came out indistinguishable
+  from rest.
+
+### Built here, not in the spec
+
+- **`Desktop wraps; mobile scrolls` is `md:`, not the measured content column.**
+  Row 2 sizes off a `ResizeObserver` because its question is whether its labels
+  fit, and a docked drawer costs 340px without the viewport moving. This row's
+  question is different: whether there is a **scroll gesture** at all. A mouse
+  has none, so a docked drawer on a 1280 screen must still wrap even though its
+  column is as cramped as a phone's. Different question, different axis — this
+  is not the mistake the row-2 note warns about.
+- **The drawer's `Clear all filters` is now the same function**, and its
+  visibility moved with it: it used to appear whenever *anything* narrowed the
+  grid, search included, which would now put a button on screen that does
+  nothing when a search is the only filter on.
+- **The announcement quotes matching-of-household**, `Showing 12 of 20` — which
+  is what the sentence means to someone who cannot see the grid, and what the
+  spec's boards draw. Row 2's own `Showing X of Y` is a different pair: items
+  rendered so far, of items matching, because it sits above a list that is still
+  growing as you scroll. The two disagree on screen today and always did.
+- **The live region lives in `Pantry`, not in the bar.** The bar unmounts with
+  its last chip, so announcing *Filters cleared* from inside it would be
+  announcing from a node that has just been removed.
+- **Focus moves to `Clear filters`** when a chip is removed and the bar
+  survives. The element that held focus is gone, and focus falling to the body
+  means a keyboard user starts tabbing from the top of the document again. It
+  paints no ring after a mouse press: a programmatic `focus()` matches
+  `:focus-visible` only when the interaction that led to it was itself
+  keyboard-driven, so the ring appears exactly when someone is looking for it.
+- **`Clear filters` is padded symmetrically at every width.** It was drawn with
+  2px on the left so its label would sit flush with the column edge; on a phone,
+  where the hover fill is the only press feedback there is, that put the fill
+  hard against the *C*. At 12px the label lines up with the status pills' labels
+  one row above, which is the alignment that was actually wanted — and the
+  scroller beside it keeps its `pl-1` uncancelled, because those 4px are half
+  the gap the two boxes had none of.
+- **A chip's key is `kind:id`.** Row ids are only unique within a table, and the
+  hosted runtime issues sequential integers — a location and a store both
+  holding `"4"` is the normal state of a freshly seeded household, not a
+  hypothetical.

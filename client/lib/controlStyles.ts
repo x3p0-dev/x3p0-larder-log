@@ -351,3 +351,51 @@ export const LIST_GHOST =
  */
 export const LIST_GHOST_ON_CARD =
 	'transition-colors text-ink-body hover:bg-surface-alt hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/* ---------- the applied filter bar, row 3 of the top bar ---------- */
+
+/*
+ * These three are the only page controls whose active fill is `line`, and the
+ * reason generalises: **an interaction state on the ground has to move away
+ * from the ground, not toward it.**
+ *
+ * Everywhere else on the page a ghost hover sinks to `surface-alt` — but
+ * `surface-alt` *is* the ground gradient's middle stop, so out here a chip
+ * hovering to it goes from a step lighter than the ground to exactly the
+ * ground, and the hover reads as the chip vanishing. `line` moves the other
+ * way in both themes at once: `#E2D5C0` is darker than the cream ground,
+ * `#3E3527` is lighter than the dark one. One token, mirrored.
+ *
+ * Controls sitting on a *card* keep hovering to `surface-alt`, because there it
+ * is a real step. This is a ground rule, not a replacement.
+ */
+
+/**
+ * An applied-filter chip — the drawer's off chip with an `×` on it.
+ *
+ * Hover, press and focus share one treatment on purpose: the chip is on its way
+ * out the moment you press it, so a distinct press state has nothing left to
+ * report. **No transform** for the same reason — with the two merged, a
+ * `scale()` or a `translate` would fire on hover, and a chip that flinches when
+ * you point at it is worse than no press feedback at all.
+ *
+ * The focus ring is crimson rather than ink: ink is what this row's chips are
+ * *made of*, so an ink ring on an ink label reads as a thicker border.
+ */
+export const PAGE_CHIP_APPLIED =
+	'group transition-[background-color,border-color,color,opacity,transform] duration-150 bg-surface border border-line-strong text-ink hover:bg-line hover:border-ink-faint active:bg-line active:border-ink-faint focus-visible:bg-line focus-visible:border-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+
+/** The `×` inside that chip. Faint until the chip is touched, then ink. */
+export const PAGE_CHIP_APPLIED_X =
+	'transition-colors text-ink-faint group-hover:text-ink group-active:text-ink group-focus-visible:text-ink';
+
+/**
+ * *Clear filters*, which leads the row.
+ *
+ * Ghost at rest — no fill, no edge — and it takes the chips' active treatment
+ * exactly, so the row reads as one thing rather than a button and some chips.
+ * Its border is declared transparent rather than absent so nothing shifts by a
+ * pixel when the hover paints one.
+ */
+export const PAGE_BUTTON_CLEAR =
+	'transition-[background-color,border-color,color] duration-150 bg-transparent border border-transparent text-ink-body hover:bg-line hover:border-ink-faint hover:text-ink active:bg-line active:border-ink-faint active:text-ink focus-visible:bg-line focus-visible:border-ink-faint focus-visible:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';

@@ -4,6 +4,8 @@ Canvas: https://claude.ai/code/artifact/9921008e-ee6c-4075-9379-6bf265cc1683
 Pages: **Light** (14 artboards) · **Dark** (13 generated counterparts). 27 boards total. The early exploration boards have been removed.
 Stack: Tailwind, SPA, one layout that flexes mobile ↔ desktop.
 
+> **Merge note, 27 Aug.** This document briefly forked: one branch added *Settings tab* and *First run — the display name*, the other added *Household colour*, *Shopping list*, the twenty-item dataset and *Applied filters*, and each was written from a base that predated the other. This is the union of both. Where they disagreed the later decision won — the household row carries **name and colour**, the top bar has **no title**, and the sample set is **twenty items**. The lesson under *Gaps* about anything undrawn drifting silently now has a sibling: **anything rewritten wholesale can drop a section without anyone noticing.** Edit sections, not the file.
+
 ## Structure — one left drawer, two tabs
 340px, dark, **always on the left** — docked and collapsible on desktop, a 328px slide-over with a scrim on mobile. Mobile's menu button is **top-left**, the same side the drawer comes from.
 
@@ -11,21 +13,25 @@ Above the tabs: wordmark, then the **household switcher** — a full-width butto
 
 **Filter tab** — Location, Store, Type. Each section header has a pencil + chevron; the pencil flips *that section only* into editing (`color swatch · name field · delete`, an "Add …" row, **Done** in the header). The swatch opens the 16-colour picker (8 × 2). A dashed `+ …` chip also ends each chip list. `Clear all filters` last.
 
-**Settings tab**, in order: Account → Household (name **and colour** behind a pencil — see *Household colour*; switcher lives in the header) → Members → Appearance → Default low-stock threshold → **Invites last** (Owner / Editor / Viewer, 14-day expiry, copy, revoke). No terms block, no shopping list.
+**The chips toggle, and several can be on at once** — OR inside a group, AND across groups; see *Applied filters*. `All items` is the *absence* of a selection rather than a member of it, so it lights when the group is empty. `Clear all filters` is the same action the top bar's `Clear filters` is, with the longer label it can afford: inside the Filter tab the word "all" has a list to refer to.
+
+**Settings tab**, in order: Account → Household (name **and colour** behind a pencil — see *Household colour*; switcher lives in the header) → Members → Appearance → Default low-stock threshold → **Invites last** (Owner / Editor / Viewer, 14-day expiry, copy, revoke). No terms block, no shopping list. Drawn and specced under *Settings tab*.
 
 **Add item** is a sheet: 480px from the right on desktop, a near-full-height bottom sheet with a grabber on mobile. Name → on-hand stepper + low-at → Location / Type / Store chip pickers (selected chip fills with its own term colour and takes ink text; unselected is neutral with a coloured dot; each group carries its `+ …` chip) → notes → sticky Cancel / Save item.
 
-**The shopping list is a mode, not a surface.** A control in the top bar swaps the content column for the list, grouped by store — see *Shopping list*.
+**The shopping list is a mode, not a surface.** A control in the top bar swaps the content column for the list, grouped by store — see *Shopping list*. (An earlier line here said it was a store-filtered banner and modal. That design is gone; the reasons are recorded in *Shopping list*.)
 
-### The top bar — two rows
+### The top bar — three rows
 
-Recorded here from the build, because the document never described it and had drifted into describing something else.
+Rows 1 and 2 are recorded here from the build, because the document never described them and had drifted into describing something else. Row 3 is designed — see *Applied filters*.
 
 **Row 1** is search and the primary, and it is the same in every mode: a full-width **search field** — 52px, radius 16, surface fill on `line`, a 20px search glyph in meta, placeholder *What are you looking for?* at Karla 400 16px meta — with **Add item** at the same 52px height beside it. At 390 the primary drops its label and becomes a 52px square.
 
 **Row 2** is the state of what you are looking at. In the item grid: three **status pills** (`9 in stock` · `6 running low` · `5 out` — status tint, border, text and dot, 40px, radius 999, and each one filters), then the shopping-list control, then `Showing 20 of 20` and the sort trigger pushed right.
 
-> **There is no title in the right pane, and there never was.** The zero-items rule below used to say the top bar "keeps the title and the count", which described a component that does not exist — the count lives in `Showing X of Y` on row 2. Corrected in both places.
+**Row 3 is the applied filters** — `Clear filters`, then one chip per active term. It exists only while a term filter is on, so most of the time the bar is still two rows. Full spec under *Applied filters*.
+
+> **There is no title in the right pane, and there never was.** The zero-items rule under *Flows outside the shell* used to say the top bar "keeps the title and the count", which described a component that does not exist — the count lives in `Showing X of Y` on row 2. Corrected in both places, twice now.
 
 ## Collapsed rail
 68px. Eight controls in three groups, `aria-label` on every one and a tooltip to the right after ~400 ms.
@@ -47,9 +53,13 @@ Dividers after 2 and after 5.
 
 **Quick filter ≠ the full set.** A flyout picks from one term list and nothing else: no pencil, no "+ Add", no clearing across groups. It ends with *Open full filters*, which expands the drawer to the whole pane.
 
+**It is the one menu that stays open on a pick.** Household, Appearance and Account each close on the choice, because each is a choice made once. A filter group holds several terms, so closing after the first would mean reopening the same panel to add the second — the panel is a list you work through. Escape, an outside press, or the rail button itself still closes it.
+
 **Appearance** opens the same three choices the Settings pane shows rather than cycling, so there is one source of truth. Its icon renders whatever the theme currently resolves to, making it a status indicator as well as a control.
 
 **Badges** count active filters *in that group only*, sitting top-right of the icon: `#BE3346` fill, `#FDFAF4` text, 2px ring in the rail colour. Collapsed is the one place crimson touches the rail, and always as a badge, never a fill.
+
+> **The badges are no longer the only answer, and the rail is unchanged because of it.** They still count per group. What they never did was say *which* term, or clear anything across groups — you had to expand the drawer for both. That is now row 3 of the top bar. Nothing on the rail moves.
 
 ### Control states
 | State | Icon buttons | Household tile | Avatar |
@@ -66,6 +76,100 @@ Expand is the exception — it carries `#332B22` at rest (hover `#3D3429`, press
 
 Desktop only: expanding reflows the content column rather than covering it, so nothing overlaps the grid.
 
+## Applied filters
+
+**The rule: a filter you cannot see is a filter you cannot remove.** With the drawer closed the applied set was invisible on mobile and merely countable on the collapsed rail — the badges said *1* and *2* without saying which, and nothing cleared across groups from out there. A third top-bar row closes it.
+
+**Filtering is OR inside a group, AND across groups.** This document had never written that down, and every count below assumes it. **Nor did the app do it** — every group was single-select until this row was built, so the boards below drew a state the build could not reach. That was the right way round in the end: a row whose whole argument is *see what is on and take one off* implies there can be more than one on. Multi-select landed with it on 27 Aug, and the rule now lives in `shared/filter.ts` where `npm test` can see it. See [D45](../../../.docs/decisions.md).
+
+### Where it lives
+
+Last row of the top bar, full width of the content column, present only while at least one **term** filter is on.
+
+**It is not conditional on the drawer.** The applied set is a fact about the content column, not about the drawer, and appearing on collapse would reflow the grid for a reason unrelated to what you pressed. It is drawn with the drawer expanded on purpose, redundant with the Filter tab and harmless.
+
+**`Clear filters` leads, chips follow.** Reading order gives you the escape before the list, and on mobile it means the clear never scrolls away.
+
+**Desktop wraps; mobile scrolls.** Vertical room is cheap on desktop and there is no scroll gesture, so the chips wrap to a second line — thirteen filters is past what anyone will set and two lines is the ceiling in practice. At 390 the clear is pinned, the chips scroll past the right edge with **no gutter on that side**, which is what says there is more.
+
+**The mobile menu button takes the crimson badge**, carrying the total across all three groups, so the fact that something is filtering survives scrolling past the row. Same construction as the rail badges — crimson fill, `#FDFAF4` text, 2px ring — but the ring is in the **ground**, so it changes with the theme where the rail's does not.
+
+### The chip
+
+**It is the Filter tab's off chip with an `×` on it.** Surface fill, `line strong` edge, 7px term dot, label at Karla 500 13.5, `×` in faint. Nothing new.
+
+Not inverted: in a row where every chip is on by definition, inversion says nothing, and a row of ink fills would take *Add item*'s only-ink-on-screen rule apart.
+
+**One action, so one target.** The whole chip removes its term; there is no separate `×` hit area. 30px desktop, 44px mobile.
+
+Group order — location, store, type — so the bar reads in the order the drawer sets them.
+
+> **The coloured version is gone, and why is worth keeping.** The first draft gave each chip a 1.5px border in its term's *text* colour, which solved the ground-contrast problem outright and made the dot redundant. It read as too loud — sixteen possible hues in one row, all shouting at rest, and the row became the busiest thing on the screen. The neutral edge is quieter and puts the chips at the same weight as the sort trigger beside them, at the price recorded under *Open questions*.
+
+### States
+
+**Hover, pressed and focus share one treatment.** The chip is on its way out the moment you press it, so a separate press state has nothing left to report. **No transform either**: with hover and press merged, a `scale()` would fire on hover, and a chip that flinches when you point at it is worse than no press feedback.
+
+| Part | Rest | Hover · pressed · focus |
+|---|---|---|
+| Chip fill | `surface` | **`line`** |
+| Chip edge | `line strong` | `faint` |
+| Chip label / dot | ink / term base | unchanged |
+| Chip `×` | `faint` | ink |
+| Clear | ghost, body label, no edge | `line` fill, `faint` edge, ink label |
+| Focus adds | — | 2px crimson, 2px offset in the ground |
+
+Both controls take the same active treatment, so the row reads as one thing rather than a button and some chips. Borders are declared transparent at rest on `border-box`, so nothing shifts when one appears.
+
+> **The active fill is `line` in both themes, and that is the whole finding.** The app's usual ghost hover is the sunk fill — and sunk is the ground gradient's own middle stop, so a chip hovering to sunk goes from slightly lighter than the ground to *exactly* the ground, and the hover reads as the chip disappearing. Out here the state has to move **away** from the ground: darker on the cream, lighter on the dark. `line` does both — `#E2D5C0` light, `#3E3527` dark. One token, mirrored. Drawn first as a step *down* in both, which is exactly why the dark states came out indistinguishable from rest.
+
+**On touch there is no hover**, so this same treatment is the only thing that happens between finger-down and the chip going. That is the argument for the fill being a full step off the ground rather than a whisper.
+
+**Removal is neither undoable nor confirmed.** Nothing is lost, the term is still in the drawer, and one tap puts it back. It gets no toast: *undo what comes back, confirm what doesn't* is about records, and a filter is neither.
+
+### What `Clear filters` clears
+
+Every term chip **and the active status pill** — everything narrowing the grid invisibly. **Search is not touched**: it has its own `×` in the field, and you can see it working.
+
+**The status pill is not mirrored into the bar.** It is already on screen in row 2 and already its own toggle; a second copy would be two controls for one filter. The consequence is that `Clear filters` clears something that is not in the row it sits in, which is why it carries **no count** — `Showing X of Y` is the count.
+
+The drawer's own `Clear all filters` keeps its longer label and its place at the foot of the Filter tab. It is the same action from inside, where the word "all" has a list to refer to.
+
+### Motion, keyboard and screen readers
+
+Chip out 140ms — fade plus a 4px rise; the row reflows in 160ms and collapses when the last chip goes. Under `prefers-reduced-motion` it is a fade and the row reflows instantly.
+
+The bar is a group labelled *Applied filters*; each chip is a real `<button>` with `aria-label` *"Remove filter Pantry"*. Removing announces `Pantry filter removed. Showing 12 of 20.` through the existing polite region; clearing announces `Filters cleared. Showing 20 of 20.`
+
+### As built — 27 Aug
+
+Four places the implementation is not what this section says, and one it could not have said.
+
+**`Clear filters` is padded symmetrically at every width.** The live page gives it `padding: 0 12px 0 2px` on mobile so the label sits flush with the column edge. On a phone the hover fill is the only press feedback there is, and 2px put that fill hard against the *C*. At 12px the label lines up with the status pills' labels one row above, which is the alignment that was actually wanted. The chips beside it keep 4px of their own, uncancelled, because the two boxes otherwise touch — the live page's outer `gap: 8px` was lost in translation and both bugs were found in the same pass.
+
+**The row does not reflow in 160ms.** The chip's own 140ms fade-and-rise is there; its neighbours snap into place rather than sliding. That needs FLIP or measured widths, and the live page does not do it either.
+
+**Desktop-wraps / mobile-scrolls is a `md:` breakpoint, not the measured content column.** Row 2 sizes off a `ResizeObserver` because its question is whether its labels fit, and a docked drawer costs 340px without the viewport moving. This row's question is different — whether there is a **scroll gesture** at all. A mouse has none, so a docked drawer on a 1280 screen must still wrap even though its column is as cramped as a phone's. Different question, different axis.
+
+**Focus moves to `Clear filters`** when a chip is removed and the row survives. Nothing here specified it and the live page does the same as the build originally did — nothing — which drops focus to the body and restarts a keyboard user at the top of the document. It paints no ring after a mouse press: a programmatic `focus()` matches `:focus-visible` only when the interaction that led to it was itself keyboard-driven.
+
+**There was no "existing polite region" to announce through.** The one this section names belongs to the shopping list, which is a different mode; the grid had none. It lives in `Pantry` rather than in the bar, because the bar unmounts with its last chip and *Filters cleared* announced from a removed node is silence.
+
+> **A fifth thing this section did not know it was answering.** *Open questions* asks whether the status pills should recount under a filter, and notes the boards keep them at household totals. **The build has always recounted them** — they count everything the term filters and the search admit, and only the status filter itself is excluded, so that picking *out* cannot collapse the other two to zero. So row 2 and row 3 already agree, and the question is settled by observation rather than by decision. Worth checking on a real screen before closing it.
+
+### Boards
+
+Own canvas — the states board carries both themes; the top-bar views are paired light over dark:
+https://claude.ai/code/artifact/17c200fa-f8b1-437a-9996-48b36c5f1b35
+
+1. Chip and clear — rest, active, focus, on the real ground in both themes
+2. Desktop 1372 — three filters, one of them active
+3. Desktop 1372 — thirteen filters, wrapped
+4. Mobile 390 — six filters, chips scrolling under the pinned clear
+5. Mobile 390 — two filters, fitting
+
+**Right pane only, top bar only** — no rail, no drawer, nothing below the bar. The boards are deliberately 1372 rather than 1440: that is the content column at 1440 with the rail collapsed.
+
 ## Theming
 Three rules hold in both themes:
 1. **The drawer is the darkest surface** — in dark mode it drops *below* the content ground rather than inverting.
@@ -73,6 +177,8 @@ Three rules hold in both themes:
 3. **Near-black ink is the only thing you press** — in dark mode the primary button flips to cream `#EFE3CE` with ink text, still the single lightest control on screen. **Crimson is brand-and-out, never a button.**
 
 The general form of rule 3, which the drawer and the toast both need: **the primary control is the lightest thing on a dark surface and the darkest thing on a light one.** So the drawer's *Done* / *Add* pill and the toast's *Undo* are cream-filled with ink labels in **both** themes — the drawer is dark in both, and an ink-filled pill on it would vanish. It is the rail's Open / active treatment, one step up.
+
+A fourth rule the applied filters made explicit, and it generalises: **an interaction state on the ground moves away from the ground, not toward it.** Darker on the cream, lighter on the dark. Controls that sit on a *card* can keep hovering to `sunk`, because there the sunk fill is a real step; controls on the ground cannot, because sunk *is* the ground.
 
 Type, spacing, radii and layout are identical across themes; only the tokens below change. The dark artboards were generated from the light ones by a hex-for-hex map, so any visual difference is a token difference.
 
@@ -151,6 +257,8 @@ The rule behind it: **the colour identifies the term, inversion says it is on.**
 
 The `+ Location / + Store / + Type` chip is a third, deliberately weaker form: dashed `#C9B79B` border, no fill, muted label. It reads as an affordance rather than a term.
 
+> **The applied-filter chip is the Off form with an `×`, and it does not contradict the rule above.** Inversion says "on" only where there is an off to contrast with. In the applied bar every chip is on by definition, so inversion would carry no information and would only make the row loud. See *Applied filters*.
+
 ## Edit item + inline term creation
 Same 480px sheet as Add, prefilled. Differences:
 
@@ -181,11 +289,41 @@ Creating a term from a sheet uses **the Filter tab's editing panel, re-skinned f
 
 The earlier design had this as a floating pill-shaped capsule with a popover — a shape that existed nowhere else in the app. It is gone.
 
+## Settings tab
+Six sections in the order *Structure* lists them, on the drawer surface, in the same 340px column the Filter tab uses. Drawn — the boards are on the *Flows outside the shell* canvas, since the Account section is what the display name feeds.
+
+Every section is a micro-label header in drawer-meta over content on the **drawer raised** fill at radius 13. Only the sections that hold an editable value carry a pencil.
+
+| Section | Content |
+|---|---|
+| **Account** | Avatar + display name + email, pencil on the header. Below it, meta: *Your picture comes from Gravatar.* + **Manage** with a chevron, which leaves the app. |
+| **Household** | The identity row — name **and** colour — on a raised row with its own inline pencil (see *Household colour → Settings › Household*), then the ghost crimson *Leave household* row |
+| **Members** | One raised group, a row per member: avatar, name, role in meta. *Owner · You* marks your own row |
+| **Appearance** | Auto / Light / Dark, the segmented control the tabs already use — well fill, cream active |
+| **Default low-stock threshold** | *Low at* with a stepper. The same stepper the item card carries, at the drawer's smaller size |
+| **Invites** | A row per live invite (role, expiry, ghost *Copy*, ghost crimson *Revoke*), then a dashed *+ New invite* — the dashed `+ …` chip's shape, one rung wider |
+
+### Editing the display name
+**The pencil flips one section, exactly as the Filter tab does.** No modal, no separate profile screen, no second interaction to learn:
+
+1. The header becomes `ACCOUNT · EDITING` with a cream **Done** pill on the right — the drawer's primary, 26px at radius 9.
+2. The row's name and email are replaced by a **40px field at radius 11** beside the avatar, on the drawer well with the dashed hairline and the crimson focus halo. It is the composer's field, at drawer scale.
+3. The *Manage on Gravatar* line stays put underneath. It is not part of what you are editing.
+4. Done commits; Escape cancels. **No toast** — the row returning to read-only with the new name in it is the whole confirmation, and a toast for a save you can see is exactly the noise the open question about plain toasts is trying to avoid.
+
+> **Two names, two places, one idiom.** Display name is on the account and lives in Account; household name is on the household and lives in Household. They are never edited together, and they never edit differently — both are a read-only row with a pencil that flips its own section. The switcher in the drawer header is the only place a household is *chosen*; Settings is the only place either name is *changed*. The household row carries a colour as well, which the account row does not — see *Household colour* for why a person does not get a term colour.
+
+The drawer's bottom account row (avatar, name, chevron) is the way in: its chevron opens Settings on Account, so the name you are looking at is the name you land next to. On the collapsed rail, the Account flyout's *Profile* does the same.
+
+**Mobile** is the same pane in the 328px slide-over. The header pencil and the Done pill both take a 44px hit area — the pencil's glyph stays 15px, its target does not.
+
 ## Household colour
 
 Every household carries one of the sixteen term colours. It is not decoration: on the 68px rail the tile is the **only** thing naming which household you are in, and four households called *The Tadlock House*, *The Lake Cabin*, *Mom's Pantry* and *Apartment 4B* are told apart by hue long before anyone reads them.
 
 The rail, the switcher and the invite landing all drew that tile already. Nothing set it. This closes that.
+
+> **A household gets a term colour; a person does not.** The member avatar falls back to initials on the neutral avatar fill — see *Flows outside the shell → First run — the display name*. Term colours mean *term* everywhere else in the app, a household is a named thing you filter and switch between, and a person is not. Same argument that keeps the role out of a tag on the invite card.
 
 ### The identity row
 
@@ -279,6 +417,8 @@ An action gets an **undo toast** when the record can be restored and you are the
 
 Removing a member inherits the invite pattern. Undo pressed on something another member has since changed is a concurrency problem, not a destructive-action one — it stays in the failure states.
 
+**Neither treatment reaches filters.** Removing a filter chip and pressing *Clear filters* change what you are looking at, not what exists — no toast, no confirm. The rule is about records.
+
 **Crimson is still never a button.** The confirm's primary control is the ordinary ink/cream primary. Destructiveness is carried by three things that cost nothing: the title asks the question, the body names what is lost, and the button says the verb — *Revoke invite*, *Leave household* — never *Confirm*, *OK* or *Yes*. Crimson appears once per dialog as the icon tint, which is the tag treatment applied to a glyph and comes free from the out tokens. Ghost + crimson text stays what it already is on the Edit sheet: the way a destructive action is **offered**, never the way it is **executed**.
 
 ### Toast — one component, two variants
@@ -348,7 +488,7 @@ The focus ring uses the **dark-mode** crimson in both themes, for the same reaso
 
 > **Undo has to restore position, not just the record.** There are no timestamps, so *Recently added* sorts on insertion order. An undo that appends puts the item back in the wrong place and silently reorders the list — which is worse than not undoing, because nobody will notice.
 
-**Delete a term.** Unused → deletes on press, toast *Deleted **Condiment**.* · Undo, restoring name, colour and position in the chip list. If that term was an active filter, deleting clears the filter and undo restores it too.
+**Delete a term.** Unused → deletes on press, toast *Deleted **Condiment**.* · Undo, restoring name, colour and position in the chip list. If that term was an active filter, deleting clears the filter and undo restores it too — which now also means its chip leaves the applied bar and comes back.
 
 In use → blocked dialog.
 - Title: **Move these 3 items first**
@@ -400,7 +540,7 @@ https://claude.ai/code/artifact/90919b0d-9995-4153-b096-ee9bbb10cd40
 Kept separate from the 27-board app canvas because these are component states, not screens; the two mobile boards are the only ones that show them in place.
 
 ## Flows outside the shell
-Everything before the app: the public page, sign-in, the first household, and the `?join=` landing. Drawn — canvas link under *Boards* at the end of the section. Owner and Editor only, as with destructive actions; what a Viewer sees on the invite landing stays under *Gaps*.
+Everything before the app: the public page, sign-in, the display name, the first household, and the `?join=` landing. Drawn — canvas link under *Boards* at the end of the section. Owner and Editor only, as with destructive actions; what a Viewer sees on the invite landing stays under *Gaps*.
 
 **The rule: the signed-out surface is two pages, not one.** `/` is a marketing page for someone who has never heard of Larder Log. Any other URL, hit while signed out, is a bounce — it shows the sign-in card, and the card's eyebrow says why. Collapsing them into one page makes the front door either a wall for visitors or a sales pitch for someone who only wanted their pantry.
 
@@ -432,13 +572,33 @@ Gravatar, and nothing else. No password field, so no sign-up form, no forgot-pas
 
 The failure card is left-aligned where the sign-in card is centred: it is a message with a body to read, and the confirm modal's icon → title → body → action order already exists for exactly that shape.
 
+### First run — the display name
+**The account carries a name; the household does not carry it for them.** Gravatar is the identity provider, but a lot of accounts arrive through the my.spacefast.com signup with no profile name on them — so the name cannot be assumed to exist. Larder Log collects its own **display name**, stored on the account.
+
+**It is its own step, before the fork.** Someone accepting an invite never sees *Name your household*, and they are exactly the person whose name other people need to see. So the display name is asked once, immediately after first sign-in, before the path splits into create-a-household and accept-an-invite.
+
+**The card.** 440px, left-aligned. Eyebrow `NEW ACCOUNT` → a 52px avatar beside the email and *Signed in with Gravatar* → title Playfair 600 26 *What should we call you?* → body → `DISPLAY NAME` micro-label → field → hint → *Continue*.
+
+Body: *This is the name everyone else in your household sees — on invites, in Members, and beside anything you change. It belongs to your account, not to one household.* The second sentence is doing real work: it is the answer to "do I have to do this again for the next household".
+
+| State | Field | Hint | Continue |
+|---|---|---|---|
+| Gravatar had a name | Prefilled, selected | *From your Gravatar profile. Change it if you'd rather be called something else.* | Enabled |
+| It didn't | Empty, focused, **no placeholder** | *Gravatar didn't have a name for you. Pick one — it's the only thing the rest of your household will see.* | **Disabled** until something is typed |
+
+> **Required, not skippable.** A blank display name puts an unnamed row in Members and an unsigned change in a shared list, and the only fallbacks are an email address (which is not a name, and exposes one) or a generated label nobody recognises. It is one field, once, and it is the single thing the rest of the household sees. The alternative — optional, falling back to the email local-part — is one line to change if the friction proves worse than the ambiguity.
+
+**The avatar fallback is initials on the neutral avatar fill**, not a term colour: `#4A3E2E` with the inset ring on the drawer, sunk-on-line on a cream surface. Term colours mean *term* everywhere else, and a person is not a term — the same argument that keeps the role out of a tag, and the reason the household tile gets a colour where the account row does not. Where Gravatar has an image, the image renders instead. The initial comes from the display name, or from the email local-part before one is set.
+
+Once set, the household name prefills from it — *Justin Tadlock* → *Justin's Household*.
+
 ### First run — name it, then land in it
-Sign-in comes first; there is no anonymous mode. A signed-in account with no household gets one screen, not a wizard.
+Sign-in and the display name come first; there is no anonymous mode. A signed-in, named account with no household gets one screen, not a wizard.
 
 **The card.** 440px, the same width as every other card outside the shell. Left-aligned. Eyebrow `NEW HOUSEHOLD` → title Playfair 600 26 *Name your household* → body → `HOUSEHOLD NAME AND COLOUR` micro-label → the identity row (swatch + field) → hint → *Create household* → the signed-in row.
 
-- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the Gravatar display name plus *'s Household*, selected, so Enter alone finishes the screen. The swatch beside it arrives pre-picked with the first colour unused across your households — see *Household colour*.
-- **Hint**, meta 12.5: *Taken from your Gravatar name — change it to whatever you call the place.*
+- **Field**: the composer's field — 44px, radius 11, focused on arrival with the crimson halo. Prefilled with the display name plus *'s Household*, selected, so Enter alone finishes the screen. The swatch beside it arrives pre-picked with the first colour unused across your households — see *Household colour*.
+- **Hint**, meta 12.5: *Built from your display name — change it to whatever you call the place.*
 - **Signed-in row** under a hairline: avatar, name, email in meta, ghost *Sign out*. It answers "which account am I attaching this to" before the household exists rather than after.
 
 **One field, one button, nothing else.** An earlier draft previewed the seeded terms here in a recessed panel — fifteen chips explaining what a household is before you had made one. It is gone. The screen asks for a name; the terms explain themselves in the drawer a second later, where they are also editable. The colour swatch that now sits in the field row is not a counter-example: it is part of the field, not a second question.
@@ -457,7 +617,7 @@ Creating drops straight into the app, seeds already in the drawer, no items.
 Types are the existing assignments from *Term colours*, unchanged. Locations and stores are new and generic on purpose — the sample data's Meat Freezer, Calfee Cattle and Publix are one household's vocabulary, not a default.
 
 - **Empty state**, centred in the content column: Playfair **italic 500 27px** *Nothing in the larder yet.* + meta *Add your first item. Your locations, stores and types are already set up in Filters — rename or recolour them whenever you like.* + a single *Add item* primary.
-- **At zero items the top bar carries neither the sort trigger nor an Add item button.** Sorting nothing is a control that can only disappoint, and two *Add item* buttons on one screen is one too many. The top bar keeps search and the `Showing X of Y` count; the empty state owns the screen's only primary. Both come back with the first item.
+- **At zero items the top bar carries neither the sort trigger nor an Add item button.** Sorting nothing is a control that can only disappoint, and two *Add item* buttons on one screen is one too many. The top bar keeps search and the `Showing X of Y` count; the empty state owns the screen's only primary. Both come back with the first item. The applied-filter row cannot appear here either — with no items there is nothing to have filtered.
 
 ### Invite accept — the `?join=` landing
 Four cases, all on the 440px card, all left-aligned. The header is shared: eyebrow `INVITATION` → 44px household tile (the initial on the household's term colour, exactly as the collapsed rail draws it) → *Join Calfee Household* → the role sentence.
@@ -475,7 +635,7 @@ The role is a **bold word in the sentence**, not a pill. A role is not a term, a
 
 Revoked shares the expired screen with one line changed (*This invite is no longer valid.*). From outside the household, a revoked link and an expired one are the same event, and telling them apart would tell a stranger something about the household.
 
-Signed out on a valid invite, **signing in is the accept** — the join applies on return rather than showing the same card a second time.
+Signed out on a valid invite, **signing in is the accept** — the join applies on return rather than showing the same card a second time. The display-name step comes first if the account is new, since the household is about to see that name.
 
 ### Mobile
 Same cards at `100% − 32px`, centred — the confirm modal's mobile width. Buttons go to 48–50px and every affordance inside a card clears 44px, *Sign out* included: at 13.5px text it was an 18px target.
@@ -506,18 +666,24 @@ Public, at `/`. One offer, one call to action, repeated three times — nav, her
 At 390 the page stacks, the hero mock uses the **mobile item-card ramp** (names 18.5, quantities 28) and 44px steppers, and the band's three columns become three stacked blocks.
 
 ### Boards
-Own canvas — nine boards, each with its dark counterpart, 18 total, on **Light** and **Dark** pages:
+Own canvas — eleven boards, each with its dark counterpart, 22 total, on **Light** and **Dark** pages:
 https://claude.ai/code/artifact/5c742401-cc59-44bc-9f49-2c9c1af8ee93
 
 1. Marketing · desktop 1440
 2. Marketing · 390
 3. Sign-in required
 4. Gravatar handoff — pressed, returning, didn't come back
-5. First run · name it, with the seeded panel
-6. First run · the seeded, empty app
-7. Invite · valid — signed out and signed in
-8. Invite · expired and already a member
-9. Flows · 390 — sign-in, name it, invite
+5. First run · display name — Gravatar had a name, and it didn't
+6. First run · name it
+7. First run · the seeded, empty app
+8. Invite · valid — signed out and signed in
+9. Invite · expired and already a member
+10. Settings · Account — rest and editing
+11. Flows · 390 — sign-in, display name, name it, invite
+
+Board 10 is the Settings tab rather than a signed-out flow, and sits here because Account is where the display name ends up. Its other five sections are drawn from the text already in *Structure* — a rendering of what was written, not a fresh design, so they are the ones to argue with.
+
+> **Board 6 predates *Household colour*.** It shows a bare `HOUSEHOLD NAME` field with no swatch. The current design is the identity row; re-render it with the boards listed under *Household colour*.
 
 ## Sort menu
 The trigger names the active sort — `⇅ Sort  Recently added ⌄` — so the menu is only opened to change it. Ghost at rest; `#FDFAF4` + `#E2D5C0` on hover; `#F2EADC` + `#CFBEA3` when open; crimson focus ring.
@@ -548,6 +714,8 @@ Mobile keeps the same anchored popover (six rows don't earn a sheet) at 44px row
 **Deltas from the shipped markup:** 248px not 176px (`w-44` was clipping *Quantity · fewest first*), rows 14px not 12px, radius 14 not 6, check instead of `#F2EADC` fill, and the trigger names the sort.
 
 **The sort trigger is hidden at zero items** — see *Flows outside the shell*. It is also hidden in list mode — see *Shopping list*.
+
+> **The trigger's own hover fill is `#F2EADC` on the ground, which is the case *Applied filters* found to be invisible out there.** It is the same sunk-is-the-ground problem, in a control that already shipped. Left as observed rather than quietly corrected; it belongs with the top-bar edge question under *Open questions*.
 
 ## Shopping list
 
@@ -584,6 +752,8 @@ The control sits on **row 2, immediately after the three status pills**, and it 
 
 **Row 2 empties out and re-fills.** The three status pills go — you are already filtered to low and out, so `9 in stock` has nothing to say. The sort trigger goes, because the list has one fixed order and offering to change it would be a lie. What is left is `‹ Back to items` on the left and `11 to buy · 4 stores · 3 in the cart` pushed right, in the slot `Showing X of Y` occupies in the grid.
 
+**Row 3 stays.** The list obeys the same filters, so the applied bar and its clear come with you into list mode unchanged — see *The list obeys the filters*, and *Applied filters* for the component.
+
 **Search persists and narrows the cards.** It is the one row-1 element that could have gone either way; keeping it costs nothing, and a household with forty items low needs it more than the grid does.
 
 **Escape returns to the grid** when focus is inside the list and no sheet or dialog is open. The mode is not an overlay, so nothing else claims the key.
@@ -591,6 +761,8 @@ The control sits on **row 2, immediately after the three status pills**, and it 
 ### The list obeys the filters
 
 It is a view of the same filtered set, narrowed to low and out. A Type filter of *Produce* gives you the produce run; a Store filter collapses it to that one card. When any filter is hiding something, the count says so — `6 of 11 to buy` — rather than quietly showing you a short list.
+
+The scoped empty state's ghost *Clear the store filter* and *Clear all filters* now have a visible partner in row 3 — the same actions, one of them a chip away.
 
 ### The grid
 
@@ -676,6 +848,8 @@ The grid collapses to one column at 16px gutters, cards 16px apart, rows stacked
 **The trigger drops its label and keeps the glyph and the count** — a shopping-cart SVG at 20px in ink, then the same inverted ink count pill, in the same surface-on-`line strong` shell. 74px instead of 165. It is the only element on that row with a fixed cost, and *Shopping list* is the most expendable word on the screen when the pill already says 11 and the icon already says what kind of 11.
 
 **The top bar takes three rows in grid mode**, because row 2's desktop contents cannot share 358px: search + *Add* (label dropped, a 52px square), then the status pills, then the cart trigger with `20 of 20` and a shortened `Sort · Recent` pushed right. In list mode it is back to two — search + *Add*, then `‹ Back to items` with the count — because the pills and the sort are both gone. **`‹ Back to items` keeps its words on mobile**: it is the exit, and an unlabelled back arrow on a screen with no title is a guess.
+
+> **With a term filter applied it is four rows in grid mode, and three in list.** The applied bar lands last either way — about 236px of chrome before the first card in the grid. It only appears while you are filtering, which is the moment you care; the cost is recorded under *Open questions* rather than designed around.
 
 > **The status pills tighten rather than truncate.** At desktop padding the three of them measure 368px against 358 available and wrap onto two lines each, which looks broken rather than tight. Padding 16 → 13, gap 9 → 7, label 14 → 13.5 brings them to 332 with room. Shortening the copy was the other option and it is worse — *running low* is the phrase, and *low* is a different, vaguer claim.
 
@@ -773,6 +947,8 @@ Twenty items. Insertion order is the list order, so **Recently added** runs bott
 | Publix | Black Beans · Tortillas · Coffee |
 | `NO STORE` | Baking Soda |
 
+**Filter sets used on the applied-filter boards**, so the counts can be checked: `Pantry + Grain + Condiment` gives 6 of 20; `Pantry + Upright Freezer + Publix + Costco + Protein + Dairy` gives 5 of 20; the thirteen-chip board gives 15 of 20. Filtering is **OR inside a group, AND across groups**.
+
 > **Why it grew from eight.** Every store in the old set had at most one low or out item, so the shopping list was five groups of one row and there was nothing to judge — no grouping to test, no scroll, no reason to hide checked rows, and the one flow that most needed sample data was the one the data couldn't exercise. The extension also gets a store with two *out* and two *low* (Costco) so within-group ordering is visible, and one storeless item so `NO STORE` is drawn rather than described.
 
 > **Knock-on:** items 9–20 are appended, and *Recently added* is newest-first, so they land at the **top** of the default grid. The app canvas's 27 boards were drawn against the original eight and would need a re-render to match. Nothing about their layout changes — only which rows appear — so this is a redraw, not a redesign.
@@ -804,26 +980,26 @@ The L is a converted outline, not `<text>` — icons render without webfont acce
 ## Gaps — not yet designed
 
 ### Changes existing screens (decide before building more)
-- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision. **The shopping list adds two more:** a Viewer gets no checkboxes and no *Add item*, which leaves the list a pure read surface — worth confirming it is still worth reaching.
+- **Viewer role.** Invites can issue Viewer, but no read-only variant exists. Steppers, Add item, the term pencils, the `+ …` chips, Edit/Remove and the whole Invites block all have to disappear or disable. This is a modifier on every screen, not a new one — cheapest to settle now. Parked for the current test round, which is Owner / Editor only. The invite landing's role sentence is written for Editor; the Viewer wording ("you'll be able to see everything, and nothing you do changes it") comes with that decision. **The shopping list adds two more:** a Viewer gets no checkboxes and no *Add item*, which leaves the list a pure read surface — worth confirming it is still worth reaching. **The applied bar survives the cut untouched** — filtering is reading, so a Viewer keeps every chip and the clear. **Settings** goes to Account + Appearance and little else.
 - **Restock — the flow the shopping-list footer reserves space for.** Checking a row means "it's in the cart"; the honest end of that sentence is setting the count when you unpack. That is a write to the item, so check state goes from local to shared, and the whole *checks expire* section is replaced by a trip that ends. The right half of the list footer is empty and waiting for it. Until it exists, coming home from the shop means stepping every item by hand — the actual chore the app leaves on the table.
 
 ### States an SPA hits constantly
 - Loading / skeleton on first paint; optimistic feedback on a stepper tap.
-- Failure: save failed, offline, and the concurrent-edit case — two household members changing one item, including Undo pressed on a removal someone else has since acted on.
-- Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise.
+- Failure: save failed, offline, and the concurrent-edit case — two household members changing one item, including Undo pressed on a removal someone else has since acted on. **A filter on a term another member has just deleted belongs here too** — the chip is in the bar and the term is gone.
+- Which non-destructive events earn a **plain toast**. The component is specced under *Destructive actions*; the trigger list (saved, copied, invite sent, term added) is not settled, and a toast on every save would be noise. Two are settled: filter changes get none, and the display-name save gets none.
 - **Session expiry.** What happens when the token dies with the app open — the sign-in card exists, but nothing says whether you get bounced to it, get it as a modal over your work, or keep reading a stale list until you touch something.
 
 ### The document has drifted from the build
-Search **is** built — it is row 1 of the top bar — and this document simply never recorded it. It is written down now under *The top bar*, from a screenshot rather than from the canvas, so treat the numbers there as observed and not as decided. Still open on it: the focus state, what it matches (name only, or tags too), whether it is debounced, the no-results screen, and whether it reaches the term lists in the drawer.
+Search **is** built — it is row 1 of the top bar — and this document simply never recorded it. It is written down now under *The top bar*, from a screenshot rather than from the canvas, so treat the numbers there as observed and not as decided. Still open on it: the focus state, what it matches (name only, or tags too), whether it is debounced, the no-results screen, and whether it reaches the term lists in the drawer. **`Clear filters` deliberately does not touch it** — see *Applied filters*.
 
 Four more components are in the build and were never in this document, found the same way. They are listed rather than specced, because one screenshot is not a spec:
 
-- **Filter chips carry counts** — `Pantry 10`, `Snack 0` — including zeroes.
-- **A leading `All items 20` chip** heads the Location group, selected, acting as that group's clear.
+- **Filter chips carry counts** — `Pantry 10`, `Snack 0` — including zeroes. The applied chips do **not**: out there the count would be the count before this filter, or after it, and both are wrong.
+- **A leading `All items 20` chip** heads the Location group, selected, acting as that group's clear. How it interacts with `Clear filters` is undecided — clearing from row 3 presumably re-selects it.
 - **The drawer has a collapse button** beside the wordmark, which is how the rail is reached; the rail spec describes the return trip but not the outbound one.
 - **The Filter and Settings tabs carry icons**, and the item card's stepper is asymmetric — minus on the sunk fill, plus on the ink primary.
 
-The lesson is the one worth writing down: **anything not drawn on a canvas drifts out of this document silently.** Two turns of shopping-list work were specced against a top bar with a title that does not exist.
+The lesson is the one worth writing down: **anything not drawn on a canvas drifts out of this document silently.** Two turns of shopping-list work were specced against a top bar with a title that does not exist — and, on 27 Aug, two branches of this file each dropped the other's sections. See the merge note at the top.
 
 ### Flows outside the app shell
 Specced and drawn — see *Flows outside the shell* and *The marketing page*. What is left in that area:
@@ -833,22 +1009,30 @@ Specced and drawn — see *Flows outside the shell* and *The marketing page*. Wh
 - **Privacy and terms have no home.** They are deliberately out of the footer and out of Settings, so if either page ever has to exist, where it is linked from is undecided.
 - **Wrong-account-on-invite.** Signed in as someone the invite wasn't issued to. Probably the *already a member* shell with a "switch accounts" action, but it isn't drawn.
 - Sign-out confirmation, if any. Currently a plain ghost action with nothing behind it.
+- **Display-name validation.** Length ceiling, whether two members may share a name, and what the field does with an empty-after-trim value. The button is drawn disabled on empty; nothing else is decided.
+- **Renaming propagation.** Changing the display name changes it everywhere it is rendered — Members, invites you issued, the drawer row. Whether that is instant for other members or arrives on their next load is a data question the UI currently doesn't acknowledge.
 
 ### Empty states
 Zero items in a new household is drawn (*Flows outside the shell*), and the shopping list's *scoped, nothing to buy* is drawn (*Shopping list*). Still open: no filter matches · a location with nothing in it · the shopping list's other empty, *Nothing to buy in this filter* — specced but not drawn, and near-identical to the one that is. **No search results** may already exist in the build; check before drawing it.
 
+> **No filter matches now has its escape hatch without being drawn** — the applied bar is on screen above it with a clear in reach, so the screen only has to say what happened. It should take the item-grid empty state's form (Playfair italic 500 27px + meta + one secondary control), not the shopping list's disc: a disc would be the status ramp saying something about stock, and this is about the filters.
+
 ### Robustness
-- Tablet, 768–1024px. Only 1440 and 390 are drawn — for the app, the marketing page **and** the shopping list; the drawer's auto-collapse point, the grid's column count, whether the marketing hero's two columns stack before 1024, and which side of 720 the list row stops stacking are all undecided.
-- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating. The list row sets `white-space: nowrap` on both the name and the counts, so a long name has no drawn behaviour either.
+- Tablet, 768–1024px. Only 1440 and 390 are drawn — for the app, the marketing page **and** the shopping list; the drawer's auto-collapse point, the grid's column count, whether the marketing hero's two columns stack before 1024, and which side of 720 the list row stops stacking are all undecided. **The applied bar adds one:** where it stops wrapping and starts scrolling.
+- Long content: long item and household names, 20+ terms in one group, four-digit quantities. The first-run field takes a long household name and the invite card takes a long inviter name — neither is drawn truncating. The list row sets `white-space: nowrap` on both the name and the counts, so a long name has no drawn behaviour either. **The applied chip does the same** — a very long term name has no drawn truncation, and on mobile one chip could fill the scroller.
 - Keyboard: focus trap in the drawer and sheets, Escape behaviour, and screen-reader labelling for the steppers — the app's primary control.
 - Typing a quantity directly rather than stepping to it.
 
 ## Open questions
-- Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites.
+- Three filter glyphs (pin / storefront / tag) are not self-evident until hovered once. Reverting to a single funnel that always expands is the cheaper alternative if the learning cost bites. An earlier draft of the applied chip carried the group glyph beside the term name, which would have taught all three; it came off with the rest of the loud version.
 - Invite links are cramped at 340px.
-- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one. The shopping list raises the same question one level up — the mode itself is remembered across a reload but nothing says what a household switch does to it beyond clearing the checks.
+- Does the undo toast survive a route change or a household switch? Committing on navigation is the simpler rule; holding it across is the kinder one. The shopping list raises the same question one level up — the mode itself is remembered across a reload but nothing says what a household switch does to it beyond clearing the checks. **Filters raise it a third time:** nothing says whether an applied set survives a household switch, and it cannot — the terms belong to the household you left.
 - **Seeded stores are the weakest of the three groups.** Locations and types are near-universal; where someone shops is not, and Grocery / Warehouse / Market may just be three chips a new user deletes. Seeding no stores at all is defensible — the trade is that the Store filter then opens empty on day one, and that every item lands in the shopping list's `NO STORE` group until someone makes one.
 - **Off-state chips inside the drawer change brightness by theme, but the drawer doesn't.** Chip Off is surface-on-line, which maps to `#FDFAF4` in light and `#2C251B` in dark — yet the drawer is dark in both. Both read fine; they just aren't the same idea. First visible on the first-run board. Either the drawer gets its own chip pair, or the rule becomes "chips take the surface of the pane they sit in" and the light-mode drawer keeps its bright chips on purpose.
-- **Top-bar controls have almost no edge against the ground.** The sort trigger's open state (`#F2EADC` on `#CFBEA3`) separates from the ground at **1.00:1 fill / 1.53:1 border**, and *Back to items* at 1.14 / 1.53. The shopping-list trigger only escapes it by taking a 1.5px `low text` border. Either the whole top bar sits on its own surface, or every control in it borrows that trick. Left alone for now because nothing in the bar is hard to find once you know it is there — which is exactly the assumption that made the shopping list hard to find.
+- **Top-bar controls have almost no edge against the ground.** The sort trigger's open state (`#F2EADC` on `#CFBEA3`) separates from the ground at **1.00:1 fill / 1.53:1 border**, and *Back to items* at 1.14 / 1.53. The shopping-list trigger only escapes it by taking a 1.5px `low text` border. Either the whole top bar sits on its own surface, or every control in it borrows that trick. Left alone for now because nothing in the bar is hard to find once you know it is there — which is exactly the assumption that made the shopping list hard to find. **The applied chips now join this at rest** — surface on `line strong` is the same 1.53:1 — and it was the reason the first draft gave them a term-coloured edge. Their *active* state is fine, because it moves to `line`. The whole row now shares one answer instead of the chips being the exception, but it is still the open one.
+- ~~**Should the applied bar hide while the drawer is expanded?**~~ **Settled 27 Aug: it stays.** The alternative reflows the grid on a drawer toggle, for a reason unrelated to the toggle. The redundancy with the Filter tab is accepted.
+- **Four top-bar rows at 390 is a lot of chrome** — about 236px before the first card, on the screen with the least of it. The fallback if it bites is a single `Filters 6 ⌄` pill in row 3 that opens the same chips in a popover, which costs a tap and gets a row back.
+- **`Clear filters` keeps its full label on mobile**, at about 110px of a 390 screen, which leaves roughly one and a half chips visible at rest. Shortening it to `Clear` buys back ~48px. The sort trigger already shortens to *Recent* at that width, so there is precedent either way.
+- ~~**Do the status pills recount under a filter?**~~ **Answered by the build, 27 Aug — they always have.** The boards keep them at household totals, but the app counts everything the term filters and the search admit, excluding only the status filter itself so that picking *out* cannot collapse the other two to zero. So row 2 and row 3 already agree. What the question was really weighing is still live and is now a question about the boards rather than the code: a pill reading `0 out` is a control that can only disappoint, and nobody has looked at one on a real screen.
 - **What does `/` do for someone already signed in?** Straight through to the app is the obvious answer; showing them the marketing page is the one that lets them find the pitch again to send to someone.
 - **Twenty-four hours is a guess.** It is the interval that clears a stale shopping-list check, picked because a trip does not last a day. Nothing has tested it, and the failure mode is silent: a tick that vanishes while you are still in the shop.

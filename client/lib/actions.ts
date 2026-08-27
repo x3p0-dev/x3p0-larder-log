@@ -23,3 +23,21 @@ export type TaxonomyActions = {
 	remove: (kind: TermKind, id: string) => Promise<boolean>;
 };
 
+
+/**
+ * One taxonomy's filter, as the drawer and the rail receive it.
+ *
+ * Three props rather than the six a `value` / `setValue` pair per group would
+ * cost, and it names the two things a filter surface can actually do: toggle
+ * one term, or drop the group. **There is no "set to exactly this"** — that is
+ * a third verb neither surface needs and the one that would quietly reintroduce
+ * single-select.
+ */
+export type TermFilter = {
+	/** Selected term ids. Empty means this group filters nothing. */
+	ids: readonly string[];
+	/** Adds the term if it is off, removes it if it is on. */
+	toggle: (id: string) => void;
+	/** Drops every term in this group — what the *All items* chip does. */
+	clear: () => void;
+};

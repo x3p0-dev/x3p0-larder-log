@@ -30,6 +30,9 @@ import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
 import { sha256, sha256Hex } from '../shared/sha256';
+import {
+	countTermFilters, matchesTermFilters, NO_TERM_FILTERS, pruneTermFilter, toggleTermFilter,
+} from '../shared/filter';
 import type { Item, Term } from '../shared/types';
 
 let fail = 0;
@@ -616,6 +619,74 @@ check('terms come back A–Z', byName(UNSORTED).map((t) => t.name), ['Freezer', 
 // that would have gone unnoticed: sorting has to be someone's job.
 check('the input is not mutated', UNSORTED.map((t) => t.name), ['Refrigerator', 'Pantry', 'Freezer']);
 check('an empty list is fine', byName([]), []);
+
+// --- term filters: OR inside a group, AND across groups (D45) ---
+//
+// The rule nothing on screen states and everything depends on. An `every` where
+// a `some` belongs still compiles, still runs, and hands back an empty grid.
+
+function filterable(id: string, locationId: string, typeIds: string[], storeIds: string[]): Item {
+	return {
+		id, name: id, locationId, typeIds, storeIds,
+		qty: '1', threshold: '1', notes: '', createdAt: '', addedAt: '', changedAt: '',
+	};
+}
+
+const PANTRY_GRAIN = filterable('a', 'l-pantry', ['t-grain'], ['s-aldi']);
+const FREEZER_MEAT = filterable('b', 'l-freezer', ['t-protein'], ['s-costco']);
+const PANTRY_MULTI = filterable('c', 'l-pantry', ['t-grain', 't-protein'], ['s-aldi', 's-costco']);
+
+check('no filters matches everything', matchesTermFilters(FREEZER_MEAT, NO_TERM_FILTERS), true);
+
+// OR inside a group: a second location *widens*.
+check(
+	'one location excludes the others',
+	[PANTRY_GRAIN, FREEZER_MEAT].map((i) => matchesTermFilters(i, { ...NO_TERM_FILTERS, locations: ['l-pantry'] })),
+	[true, false]
+);
+check(
+	'two locations admit both',
+	[PANTRY_GRAIN, FREEZER_MEAT].map((i) => matchesTermFilters(i, { ...NO_TERM_FILTERS, locations: ['l-pantry', 'l-freezer'] })),
+	[true, true]
+);
+check(
+	'two types admit an item carrying either',
+	matchesTermFilters(PANTRY_GRAIN, { ...NO_TERM_FILTERS, types: ['t-grain', 't-dairy'] }),
+	true
+);
+
+// AND across groups: a type *narrows* what a location admitted.
+check(
+	'location AND type both have to hold',
+	matchesTermFilters(PANTRY_GRAIN, { locations: ['l-pantry'], types: ['t-protein'], stores: [] }),
+	false
+);
+check(
+	'an item carrying both types survives both groups',
+	matchesTermFilters(PANTRY_MULTI, { locations: ['l-pantry'], types: ['t-protein'], stores: ['s-aldi'] }),
+	true
+);
+// The case that separates OR-across from AND-across: two groups whose union
+// would admit it and whose intersection does not.
+check(
+	'a wide OR in one group cannot rescue a failed group',
+	matchesTermFilters(FREEZER_MEAT, { locations: ['l-pantry'], types: ['t-protein', 't-grain'], stores: [] }),
+	false
+);
+
+// --- toggling, counting, pruning ---
+check('toggle adds an absent id', toggleTermFilter(['a'], 'b'), ['a', 'b']);
+check('toggle removes a present id', toggleTermFilter(['a', 'b'], 'a'), ['b']);
+check('toggle does not mutate its input', (() => { const ids = ['a']; toggleTermFilter(ids, 'b'); return ids; })(), ['a']);
+check('count spans all three groups', countTermFilters({ locations: ['a'], types: ['b', 'c'], stores: [] }), 3);
+check('nothing selected counts zero', countTermFilters(NO_TERM_FILTERS), 0);
+
+// A filter pointing at a term another device just deleted hides every item, so
+// the prune returns the *same reference* when nothing went — that is what lets
+// the caller use it as a setState guard without looping forever.
+const LIVE = ['a', 'b'];
+check('prune keeps the reference when nothing is stale', pruneTermFilter(LIVE, () => true) === LIVE, true);
+check('prune drops a vanished term', pruneTermFilter(LIVE, (id) => id !== 'b'), ['a']);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

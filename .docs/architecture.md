@@ -18,7 +18,7 @@ larder-log/
   client/
     index.tsx          # exports App: the sign-in gate and nothing else
     Pantry.tsx         # the signed-in application
-    components/        # 29 files; the shell, the surfaces, the dialogs
+    components/        # 30 files; the shell, the surfaces, the dialogs
     hooks/
       usePantryData.ts # the ONLY module importing @spacefast/zero/client
       usePersistentState.ts  # the three localStorage keys — D25, D33, D41
@@ -31,7 +31,7 @@ larder-log/
       controlStyles.ts # hover/active/focus class names — DRAWER_* and PAGE_*
       fonts.ts         # the Google Fonts <link>, injected at boot (D31)
       appIcon.ts       # title, favicons and theme-color, injected at boot
-      actions.ts       # the taxonomy action shape
+      actions.ts       # the taxonomy action shape, and one group's TermFilter
       pendingInvite.ts # holds an invite code across sign-in (D28, D38)
       signInAttempt.ts # remembers an abandoned sign-in, for the bounce (D37)
       devMembers.ts    # `?members`: stand-in rows, loopback only. Goes with D14
@@ -52,10 +52,11 @@ larder-log/
     term.ts            # name/ink validation, and the A-Z term order (D44)
     stamp.ts           # addedAt / changedAt, and their fallbacks (D44)
     shoppingList.ts    # grouping items by store, and both orderings (D41)
+    filter.ts          # OR inside a group, AND across groups (D45)
     seed.ts            # starter taxonomies for a new household (D40)
     qty.ts             # the string <-> integer boundary (D4)
     status.ts          # out / low / ok derivation (D9)
-  tests/shared.test.ts # 198 assertions; `npm test`, no runner
+  tests/shared.test.ts # 222 assertions; `npm test`, no runner
   icons/               # favicons and PWA icons; served at /icons/ in production
   sf.jsonc             # runtime config. JSONC — comments allowed here
   theme.json           # the palette and type scale, as light-dark() pairs.
@@ -74,6 +75,13 @@ of a second copy of the rule that drifts from it. It is also the only part of
 the app that is directly testable, which is why the authorization matrix, the
 one-household rule, the last-owner guard, and the dev-guest bypass all live
 there rather than in `server/`.
+
+**`filter.ts` is there for the same reason and it is worth naming**, because it
+is the one module in `shared/` the capsule does *not* use — filtering is
+entirely client-side. It lives there anyway: *OR inside a group, AND across
+groups* (D45) is a rule that is invisible when it is wrong, since an `every`
+where a `some` belongs still compiles, still runs, and hands back an empty grid.
+`shared/` is what `npm test` can reach, and that is the whole argument.
 
 `client/hooks/usePantryData.ts` is the other boundary worth protecting: it is
 the only module that imports `@spacefast/zero/client`. Components take plain

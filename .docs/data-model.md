@@ -382,3 +382,10 @@ mutation checks a capability from [Roles](#roles) before it writes.
 `pantry` returning one denormalized payload keeps the client to a single live
 subscription. Whether that stays practical as the item count grows is an
 [open question](notes.md).
+
+**Filtering never reaches the server.** `pantry` hands over the household's
+whole set and the client narrows it, which is why multi-select term filters
+([D45](decisions.md#d45-the-applied-filters-are-a-row-of-the-top-bar-not-a-badge-on-the-drawer))
+needed no query change, no argument, and no index. The rule they apply lives in
+`shared/filter.ts`. The same trade-off as above applies: it is the item count,
+not the filter, that would eventually force a server-side query.

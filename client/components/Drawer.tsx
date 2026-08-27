@@ -7,6 +7,7 @@ import { DrawerSettings } from './DrawerSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { HouseholdTile } from './HouseholdTile';
 import type { Theme } from '../lib/theme';
+import type { TermFilter } from '../lib/actions';
 import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
 import type { HouseholdSummary, Item, Term, TermKind } from '../../shared/types';
 
@@ -17,12 +18,9 @@ type Props = {
 	locations: Term[];
 	types: Term[];
 	stores: Term[];
-	activeLocation: string | null;
-	setActiveLocation: (id: string | null) => void;
-	activeType: string | null;
-	setActiveType: (id: string | null) => void;
-	activeStore: string | null;
-	setActiveStore: (id: string | null) => void;
+	locationFilter: TermFilter;
+	typeFilter: TermFilter;
+	storeFilter: TermFilter;
 	/**
 	 * How many items reference a term, for the chips and the editing rows.
 	 *
@@ -88,7 +86,7 @@ type Props = {
  */
 export function Drawer({
 	items, locations, types, stores,
-	activeLocation, setActiveLocation, activeType, setActiveType, activeStore, setActiveStore,
+	locationFilter, typeFilter, storeFilter,
 	countFor, anyFilterActive, onClearAll,
 	tab, setTab, open, onClose, collapsed, onDismiss,
 	householdName, householdInk, households, currentHouseholdId,
@@ -255,7 +253,7 @@ export function Drawer({
 						<div class="flex flex-col gap-[17px] px-5 pt-5 pb-5">
 							<FilterSection
 								title="Location" entities={locations}
-								active={activeLocation} onSelect={setActiveLocation}
+								filter={locationFilter}
 								leadingAll={{ label: 'All items', count: items.length }}
 								countFor={(id) => countFor('location', id)}
 								onCreate={(n, ink) => onCreateTerm('location', n, ink)}
@@ -266,7 +264,7 @@ export function Drawer({
 							/>
 							<FilterSection
 								title="Store" entities={stores}
-								active={activeStore} onSelect={setActiveStore}
+								filter={storeFilter}
 								countFor={(id) => countFor('store', id)}
 								onCreate={(n, ink) => onCreateTerm('store', n, ink)}
 								onRename={(id, n) => onRenameTerm('store', id, n)}
@@ -276,7 +274,7 @@ export function Drawer({
 							/>
 							<FilterSection
 								title="Type" entities={types}
-								active={activeType} onSelect={setActiveType}
+								filter={typeFilter}
 								countFor={(id) => countFor('type', id)}
 								onCreate={(n, ink) => onCreateTerm('type', n, ink)}
 								onRename={(id, n) => onRenameTerm('type', id, n)}

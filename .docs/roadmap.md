@@ -638,6 +638,53 @@ real session on a phone and with a second person, which found six things
 compiling and curling could not — see *Real-device testing* below. Treat the
 "nobody has clicked" line above as the state at the time of writing, not now.
 
+### Phase 4.10 — The applied filter bar ✅ (2026-08-27)
+
+`.claude/docs/design/ui-directions.md` § *Applied filters*, drawn as a live page
+on `.claude/docs/design/appliedfilterbar.html` rather than as boards. Governed by
+[D45](decisions.md#d45-the-applied-filters-are-a-row-of-the-top-bar-not-a-badge-on-the-drawer):
+**a filter you cannot see is a filter you cannot remove.**
+
+**No schema change and nothing server-side.** One new component, three new
+control styles, and about ninety lines in `Pantry`.
+
+- **`AppliedFilters.tsx`** — row 3 of the top bar: `Clear filters`, then one
+  chip per active term, in the drawer's order (location, store, type). Present
+  only while a term filter is on, and **not** conditional on the drawer. It
+  stays in list mode, because the list obeys the same filters.
+- **Three `PAGE_*` styles**, and the rule they encode is now the fourth theming
+  rule in the spec: **an interaction state on the ground moves away from the
+  ground, not toward it.** `surface-alt` — the app's usual ghost hover — is the
+  ground gradient's own middle stop, so out here it reads as the control
+  vanishing. `line` moves the right way in both themes at once.
+- **`clearFilters()`** takes every term *and* the status pill, never the search.
+  The drawer's *Clear all filters* now calls it, and its visibility moved from
+  "anything at all" to terms-or-status so a lone search cannot leave a no-op
+  button on the Filter tab. `clearAllFilters()` — search included — stays for
+  the empty state.
+- **The mobile menu button carries the crimson total**, so the fact that
+  something is filtering survives scrolling past row 3.
+- **A live region in `Pantry`**, not in the bar: the bar unmounts with its last
+  chip, and *Filters cleared* announced from a removed node is silence.
+
+- **Focus moves to `Clear filters`** when a chip goes and the bar survives.
+- **Two mobile fixes from the same 2px**: the clear is padded symmetrically at
+  every width (the boards' 2px left padding put the hover fill against the *C*),
+  and the row gained the 8px gap between the clear and the first chip that the
+  boards have and the first build lost.
+
+**Filtering became multi-select with it** — OR inside a group, AND across
+groups. `shared/filter.ts` owns the rule; the drawer's sections and the rail's
+flyouts toggle rather than select, the rail's badges count the group, and the
+quick-filter flyout now stays open on a pick because a group holds more than one
+term. `npm test` is at 222 assertions, fourteen of them new.
+
+**Verified without a browser**: typecheck clean, 222 assertions, `sf dev` on
+`--port 4199` compiles and serves, and every new utility is in the live
+`/zero.css` — checked by printing and unescaping the selectors, with the `md:`
+variants' line numbers compared against their base rules. **Nobody has clicked
+it.**
+
 ### Published: v8, v9, v10 — 2026-08-27
 
 **v10** (`ver_0026484fd67c495b8d3b7d52b9215d67`) is live: the term composer's

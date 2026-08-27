@@ -7,6 +7,7 @@ import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { HouseholdTile } from './HouseholdTile';
 import { RailFlyout } from './RailFlyout';
 import type { Theme } from '../lib/theme';
+import type { TermFilter } from '../lib/actions';
 import { chipDot } from '../lib/theme';
 import type { HouseholdSummary, Term, ThemeOverride } from '../../shared/types';
 
@@ -17,12 +18,9 @@ type Props = {
 	locations: Term[];
 	stores: Term[];
 	types: Term[];
-	activeLocation: string | null;
-	setActiveLocation: (id: string | null) => void;
-	activeStore: string | null;
-	setActiveStore: (id: string | null) => void;
-	activeType: string | null;
-	setActiveType: (id: string | null) => void;
+	locationFilter: TermFilter;
+	storeFilter: TermFilter;
+	typeFilter: TermFilter;
 	/**
 	 * True while the drawer is only *auto*-collapsed by width, not by choice.
 	 *
@@ -181,7 +179,7 @@ function Control({
  */
 export function CollapsedRail({
 	locations, stores, types,
-	activeLocation, setActiveLocation, activeStore, setActiveStore, activeType, setActiveType,
+	locationFilter, storeFilter, typeFilter,
 	autoOnly, itemCount, locationCounts, householdName, householdInk,
 	households, currentHouseholdId, onSelectHousehold, onNewHousehold, onJoinHousehold,
 	accountName, themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
@@ -258,10 +256,10 @@ export function CollapsedRail({
 
 	const chrome: RailChrome = { hovered, dark, onEnter: enter, onLeave: leave };
 
-	const groups: { key: Group; label: string; Icon: typeof MapPin; terms: Term[]; active: string | null; set: (id: string | null) => void }[] = [
-		{ key: 'location', label: 'Filter by location', Icon: MapPin, terms: locations, active: activeLocation, set: setActiveLocation },
-		{ key: 'store', label: 'Filter by store', Icon: StoreIcon, terms: stores, active: activeStore, set: setActiveStore },
-		{ key: 'type', label: 'Filter by type', Icon: Tag, terms: types, active: activeType, set: setActiveType },
+	const groups: { key: Group; label: string; Icon: typeof MapPin; terms: Term[]; filter: TermFilter }[] = [
+		{ key: 'location', label: 'Filter by location', Icon: MapPin, terms: locations, filter: locationFilter },
+		{ key: 'store', label: 'Filter by store', Icon: StoreIcon, terms: stores, filter: storeFilter },
+		{ key: 'type', label: 'Filter by type', Icon: Tag, terms: types, filter: typeFilter },
 	];
 
 	return (
@@ -316,14 +314,14 @@ export function CollapsedRail({
 
 			<span class="w-6 h-px bg-drawer-line" />
 
-			{groups.map(({ key, label, Icon, active }) => (
+			{groups.map(({ key, label, Icon, filter }) => (
 				<Control
 					key={key}
 					id={key}
 					label={label}
 					on={menu === key}
 					chrome={chrome}
-					count={active ? 1 : 0}
+					count={filter.ids.length}
 					onClick={(e) => toggle(key, e)}
 				>
 					<Icon size={18} />
@@ -367,20 +365,29 @@ export function CollapsedRail({
 					<RailFlyout top={menuTop} onClose={() => setMenu(null)} label={g.label} panelRef={panelRef}>
 						<p class="px-1.5 pt-1 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-on-dark-label">{g.key}</p>
 						<div class="flex flex-wrap gap-1.5 px-1">
+							{/*
+							  * The flyout **stays open** on a pick, unlike every other
+							  * menu on the rail. A group holds several terms now, and
+							  * closing after each one would mean reopening the same
+							  * panel to add the second — the panel is a list you work
+							  * through, not a choice you make once. Escape, an outside
+							  * press, or the rail button itself still closes it.
+							  */}
 							<button
-								onClick={() => { g.set(null); setMenu(null); }}
-								class={`flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] ${g.active === null ? 'bg-drawer-press text-drawer-press-ink font-semibold' : 'bg-drawer-raised text-on-dark-muted hover:bg-drawer-card-hover'}`}
+								onClick={g.filter.clear}
+								class={`flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] ${g.filter.ids.length === 0 ? 'bg-drawer-press text-drawer-press-ink font-semibold' : 'bg-drawer-raised text-on-dark-muted hover:bg-drawer-card-hover'}`}
 							>
-								All items <span class={g.active === null ? 'text-accent' : 'text-on-dark-faint'}>{itemCount}</span>
+								All items <span class={g.filter.ids.length === 0 ? 'text-accent' : 'text-on-dark-faint'}>{itemCount}</span>
 							</button>
 							{g.terms.map((t) => {
-								const on = g.active === t.id;
+								const on = g.filter.ids.includes(t.id);
 								const n = g.key === 'location' ? locationCounts[t.id] || 0 : undefined;
 
 								return (
 									<button
 										key={t.id}
-										onClick={() => { g.set(on ? null : t.id); setMenu(null); }}
+										onClick={() => g.filter.toggle(t.id)}
+										aria-pressed={on}
 										class={`flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] ${on ? 'bg-drawer-press text-drawer-press-ink font-semibold' : 'bg-drawer-raised text-on-dark-muted hover:bg-drawer-card-hover'}`}
 									>
 										{/* Cream-filled when selected, so the dot swaps to the light base. */}

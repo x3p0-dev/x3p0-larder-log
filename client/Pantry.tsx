@@ -10,6 +10,8 @@ import { SortMenu } from './components/SortMenu';
 import type { SortKey } from './components/SortMenu';
 import { ItemSheet } from './components/ItemSheet';
 import { PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_BUTTON_QUIET, PAGE_CHIP_ADD, PAGE_FOCUS, PAGE_INPUT } from './lib/controlStyles';
+import { AppliedFilters } from './components/AppliedFilters';
+import type { AppliedFilter } from './components/AppliedFilters';
 import { ItemCard } from './components/ItemCard';
 import { EmptyState } from './components/EmptyState';
 import { FirstRun } from './components/FirstRun';
@@ -30,9 +32,9 @@ import { addedAtOf, changedAtOf } from '../shared/stamp';
 import { useToasts } from './hooks/useToasts';
 import { useTripChecks } from './hooks/useTripChecks';
 
-import { getTheme, statusFor, termNameFor } from './lib/theme';
+import { entityColorFor, getTheme, statusFor, termNameFor } from './lib/theme';
 import { clearInviteAccepted, clearPendingInvite, inviteAccepted, pendingInvite } from './lib/pendingInvite';
-import type { TaxonomyActions } from './lib/actions';
+import type { TaxonomyActions, TermFilter } from './lib/actions';
 
 import { normalizeCode } from '../shared/invite';
 import { wouldStrandHousehold } from '../shared/membership';
@@ -43,10 +45,25 @@ import { DEFAULT_ROLE, can } from '../shared/roles';
 import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
+import { countTermFilters, matchesTermFilters, pruneTermFilter, toggleTermFilter } from '../shared/filter';
+import type { TermFilters } from '../shared/filter';
 import type { TermBlock } from '../shared/term';
 import { termBlock, termUsageCount } from '../shared/term';
 
 const PAGE_SIZE = 20;
+
+/**
+ * Visually hidden, but read.
+ *
+ * An inline style rather than a utility class, for the same reason
+ * `ShoppingList` writes its own: this is the one thing on screen whose failure
+ * mode is silence, and a class that did not compile would look identical to one
+ * that did.
+ */
+const SR_ONLY = {
+	position: 'absolute', width: '1px', height: '1px',
+	overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap',
+} as const;
 
 /**
  * The width the drawer docks at.
@@ -234,9 +251,10 @@ function dialogCopy(pending: Pending, facts: DialogFacts): DialogCopy {
  */
 type EmptyFilters = {
 	search: string;
-	locationName: string | null;
-	typeName: string | null;
-	storeName: string | null;
+	/** The selected terms' names, per group. Several is the common case now. */
+	locationNames: string[];
+	typeNames: string[];
+	storeNames: string[];
 	status: StatusKey | null;
 };
 
@@ -256,33 +274,39 @@ const STATUS_EMPTY: Record<StatusKey, { title: string; body: string }> = {
 };
 
 function emptyCopy(f: EmptyFilters): { title: string; body: string; clear: 'none' | 'one' | 'all'; label?: string } {
-	const named = [f.locationName, f.typeName, f.storeName].filter(Boolean).length;
+	/*
+	 * Every *term* counts, not every group. Two locations at once is two
+	 * things narrowing the screen, so it lands in the "anything else" branch
+	 * below — which is right: with `Pantry or Freezer` on and nothing showing,
+	 * neither name is the cause on its own.
+	 */
+	const named = f.locationNames.length + f.typeNames.length + f.storeNames.length;
 	const searching = Boolean(f.search.trim());
 	const only = named + (searching ? 1 : 0) + (f.status ? 1 : 0) === 1;
 
 	if (f.status && only) return { ...STATUS_EMPTY[f.status], clear: 'none' };
 
-	if (only && f.locationName) {
+	if (only && f.locationNames.length === 1) {
 		return {
-			title: `Nothing in ${f.locationName}.`,
+			title: `Nothing in ${f.locationNames[0]}.`,
 			body: 'This location is empty right now — nothing you’re tracking lives here.',
 			clear: 'one',
 			label: 'Clear the location filter',
 		};
 	}
 
-	if (only && f.storeName) {
+	if (only && f.storeNames.length === 1) {
 		return {
-			title: `Nothing from ${f.storeName}.`,
+			title: `Nothing from ${f.storeNames[0]}.`,
 			body: 'No item names this store yet. Open any item and add it to its Store list.',
 			clear: 'one',
 			label: 'Clear the store filter',
 		};
 	}
 
-	if (only && f.typeName) {
+	if (only && f.typeNames.length === 1) {
 		return {
-			title: `Nothing tagged ${f.typeName}.`,
+			title: `Nothing tagged ${f.typeNames[0]}.`,
 			body: 'No item carries this type yet. Open any item and add it to its Type list.',
 			clear: 'one',
 			label: 'Clear the type filter',
@@ -401,9 +425,13 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	}, [api.households, api.currentHouseholdId, selectedHousehold, setSelectedHousehold]);
 
 	// Filters and view state are all client-side; none of it is data.
-	const [activeLocation, setActiveLocation] = useState<string | null>(null);
-	const [activeType, setActiveType] = useState<string | null>(null);
-	const [activeStore, setActiveStore] = useState<string | null>(null);
+	/*
+	 * Each group holds a **list** of term ids, not one: OR inside a group, AND
+	 * across groups (D45). Empty means the group filters nothing.
+	 */
+	const [activeLocations, setActiveLocations] = useState<string[]>([]);
+	const [activeTypes, setActiveTypes] = useState<string[]>([]);
+	const [activeStores, setActiveStores] = useState<string[]>([]);
 	const [activeStatus, setActiveStatus] = useState<StatusKey | null>(null);
 	const [search, setSearch] = useState('');
 
@@ -681,13 +709,39 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 	// Location/type/store/search only — the status chips count against this set
 	// so their numbers don't collapse to zero once a status is picked.
-	const preStatusFiltered = useMemo(() => items.filter((it) => {
-		const matchesLocation = ! activeLocation || it.locationId === activeLocation;
-		const matchesType = ! activeType || it.typeIds.includes(activeType);
-		const matchesStore = ! activeStore || it.storeIds.includes(activeStore);
-		const matchesSearch = it.name.toLowerCase().includes(search.toLowerCase());
-		return matchesLocation && matchesType && matchesStore && matchesSearch;
-	}), [items, activeLocation, activeType, activeStore, search]);
+	/*
+	 * One object per group for the drawer and the rail, so neither has to know
+	 * there are three separate pieces of state behind them. Memoised on the ids
+	 * alone: the two setters are stable, so a filter object only changes when
+	 * its selection does.
+	 */
+	const locationFilter = useMemo<TermFilter>(() => ({
+		ids: activeLocations,
+		toggle: (id) => setActiveLocations((prev) => toggleTermFilter(prev, id)),
+		clear: () => setActiveLocations([]),
+	}), [activeLocations]);
+
+	const typeFilter = useMemo<TermFilter>(() => ({
+		ids: activeTypes,
+		toggle: (id) => setActiveTypes((prev) => toggleTermFilter(prev, id)),
+		clear: () => setActiveTypes([]),
+	}), [activeTypes]);
+
+	const storeFilter = useMemo<TermFilter>(() => ({
+		ids: activeStores,
+		toggle: (id) => setActiveStores((prev) => toggleTermFilter(prev, id)),
+		clear: () => setActiveStores([]),
+	}), [activeStores]);
+
+	const termFilters = useMemo<TermFilters>(
+		() => ({ locations: activeLocations, types: activeTypes, stores: activeStores }),
+		[activeLocations, activeTypes, activeStores]
+	);
+
+	const preStatusFiltered = useMemo(() => items.filter((it) => (
+		matchesTermFilters(it, termFilters)
+			&& it.name.toLowerCase().includes(search.toLowerCase())
+	)), [items, termFilters, search]);
 
 	const statusCounts = useMemo(() => {
 		const counts: Record<StatusKey, number> = { ok: 0, low: 0, out: 0 };
@@ -763,12 +817,90 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		[items]
 	);
 
-	const anyFilterActive = Boolean(
-		activeLocation || activeType || activeStore || activeStatus || search.trim()
-	);
+	/**
+	 * What *Clear filters* would actually clear — terms and the status pill.
+	 *
+	 * Deliberately **not** "any filter at all", which would count the search
+	 * field. The clear does not touch search (it has its own `×`), so the wider
+	 * test would put a button on screen that does nothing whenever a search is
+	 * the only thing narrowing the grid.
+	 */
+	const anyClearableFilter = countTermFilters(termFilters) > 0 || Boolean(activeStatus);
+
+	/**
+	 * The term filters currently on, in the drawer's own order.
+	 *
+	 * **Location, store, type** — the same sequence the Filter tab sets them in,
+	 * so the bar reads in an order someone has already learned. Status is not
+	 * here on purpose: it is already on screen in row 2 as its own toggle, and a
+	 * second copy would be two controls for one filter.
+	 *
+	 * The colour is resolved here rather than in the component because
+	 * `entityColorFor` handles both forms a stored `ink` can take — a colour
+	 * token, or a legacy `#rrggbb` from before D32 — and a screen that resolves
+	 * only the token half draws those terms as blank space.
+	 */
+	const appliedFilters = useMemo<AppliedFilter[]>(() => {
+		/*
+		 * Walks the *term list*, not the selection, so a group's chips come out
+		 * A–Z rather than in the order they were clicked. Two people who picked
+		 * the same three terms in different orders see the same row.
+		 */
+		const group = (kind: TermKind, ids: readonly string[], list: Term[]): AppliedFilter[] => (
+			list
+				.filter((t) => ids.includes(t.id))
+				.map((t) => ({ kind, id: t.id, name: t.name, dot: entityColorFor(t.id, list, dark).dot }))
+		);
+
+		return [
+			...group('location', activeLocations, locations),
+			...group('store', activeStores, stores),
+			...group('type', activeTypes, types),
+		];
+	}, [activeLocations, activeStores, activeTypes, locations, stores, types, dark]);
+
+	/**
+	 * The total the mobile menu button wears as a crimson badge.
+	 *
+	 * Term filters only, and it counts the same set the bar draws — the badge
+	 * exists so the *fact* that something is filtering survives scrolling past
+	 * row 3, and a number that disagreed with the chips above it would be worse
+	 * than no number.
+	 */
+	const termFilterCount = appliedFilters.length;
+
+	/**
+	 * What a screen reader hears when a filter goes.
+	 *
+	 * Two states rather than one, because the sentence cannot be written at the
+	 * moment of the press: the counts it quotes belong to the render *after* the
+	 * filter comes off. The request carries a nonce so the effect fires on every
+	 * press — including two removals that happen to leave the same sentence
+	 * behind — and reads the freshly derived counts on the way through.
+	 *
+	 * It quotes matching-of-household, which is what the sentence means to
+	 * someone who cannot see the grid. Row 2's own `Showing X of Y` is a
+	 * different pair — items rendered so far, of items matching — because it
+	 * sits directly above a list that is still growing as you scroll.
+	 */
+	const [filterAnnounce, setFilterAnnounce] = useState<{ nonce: number; prefix: string } | null>(null);
+	const [filterAnnouncement, setFilterAnnouncement] = useState('');
+
+	function announceFilters(prefix: string) {
+		setFilterAnnounce((prev) => ({ nonce: (prev?.nonce ?? 0) + 1, prefix }));
+	}
+
+	useEffect(() => {
+		if (! filterAnnounce) return;
+
+		setFilterAnnouncement(`${filterAnnounce.prefix} Showing ${sorted.length} of ${items.length}.`);
+		// Deliberately keyed on the request alone: the counts are read here
+		// rather than depended on, so a live query landing an item from another
+		// device cannot re-announce a filter nobody just touched.
+	}, [filterAnnounce]);
 
 	// Reset pagination whenever the active filter set changes.
-	useEffect(() => { setVisibleCount(PAGE_SIZE); }, [activeLocation, activeType, activeStore, activeStatus, search]);
+	useEffect(() => { setVisibleCount(PAGE_SIZE); }, [termFilters, activeStatus, search]);
 
 	// Infinite scroll: grow visibleCount when the sentinel enters the viewport.
 	useEffect(() => {
@@ -788,10 +920,22 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * every item. Live queries make that a real race, not a hypothetical.
 	 */
 	useEffect(() => {
-		if (activeLocation && ! locations.some((l) => l.id === activeLocation)) setActiveLocation(null);
-		if (activeType && ! types.some((t) => t.id === activeType)) setActiveType(null);
-		if (activeStore && ! stores.some((s) => s.id === activeStore)) setActiveStore(null);
-	}, [locations, types, stores, activeLocation, activeType, activeStore]);
+		const prune = (
+			ids: string[],
+			list: Term[],
+			set: (next: string[]) => void
+		) => {
+			// `pruneTermFilter` hands back the *same array* when nothing was
+			// stale, which is what stops this effect from setting state on every
+			// pass and re-running itself forever.
+			const kept = pruneTermFilter(ids, (id) => list.some((t) => t.id === id));
+			if (kept !== ids) set(kept as string[]);
+		};
+
+		prune(activeLocations, locations, setActiveLocations);
+		prune(activeTypes, types, setActiveTypes);
+		prune(activeStores, stores, setActiveStores);
+	}, [locations, types, stores, activeLocations, activeTypes, activeStores]);
 
 	/*
 	 * The shopping list is a **view of the filtered items**, not a thing anyone
@@ -837,7 +981,12 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 */
 	const listMode = trip.listMode && toBuyTotal > 0;
 
-	const storeFilterName = activeStore ? termNameFor(activeStore, stores) : null;
+	/*
+	 * Only named when the Store filter is a *single* store — the sentence it
+	 * feeds is "Nothing to buy at Costco", which two stores cannot complete.
+	 * With several on, the list falls back to its generic empty copy.
+	 */
+	const storeFilterName = activeStores.length === 1 ? termNameFor(activeStores[0]!, stores) : null;
 
 	/**
 	 * What the meta line says in list mode, at both widths.
@@ -885,10 +1034,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * state. Multi-store items count as elsewhere only if they are not also here.
 	 */
 	const elsewhereCount = useMemo(() => (
-		activeStore
-			? items.filter((it) => needsBuying(it) && ! it.storeIds.includes(activeStore)).length
+		activeStores.length
+			? items.filter((it) => needsBuying(it) && ! activeStores.some((id) => it.storeIds.includes(id))).length
 			: 0
-	), [items, activeStore]);
+	), [items, activeStores]);
 
 	/*
 	 * Escape leaves the mode. It is not an overlay, so nothing else claims the
@@ -920,11 +1069,11 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 */
 	const noMatch = useMemo(() => emptyCopy({
 		search,
-		locationName: activeLocation ? termNameFor(activeLocation, locations) : null,
-		typeName: activeType ? termNameFor(activeType, types) : null,
-		storeName: activeStore ? termNameFor(activeStore, stores) : null,
+		locationNames: activeLocations.map((id) => termNameFor(id, locations)),
+		typeNames: activeTypes.map((id) => termNameFor(id, types)),
+		storeNames: activeStores.map((id) => termNameFor(id, stores)),
 		status: activeStatus,
-	}), [search, activeLocation, activeType, activeStore, activeStatus, locations, types, stores]);
+	}), [search, activeLocations, activeTypes, activeStores, activeStatus, locations, types, stores]);
 
 	/**
 	 * Clears the single filter the copy named.
@@ -933,16 +1082,44 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * cannot clear the wrong thing — it clears whichever one is set.
 	 */
 	function clearOneFilter() {
-		if (activeLocation) setActiveLocation(null);
-		else if (activeType) setActiveType(null);
-		else if (activeStore) setActiveStore(null);
+		if (activeLocations.length) setActiveLocations([]);
+		else if (activeTypes.length) setActiveTypes([]);
+		else if (activeStores.length) setActiveStores([]);
 		else if (activeStatus) setActiveStatus(null);
 		else setSearch('');
 	}
 
 	function clearAllFilters() {
-		setActiveLocation(null); setActiveType(null); setActiveStore(null);
+		setActiveLocations([]); setActiveTypes([]); setActiveStores([]);
 		setActiveStatus(null); setSearch('');
+	}
+
+	/**
+	 * What *Clear filters* clears: every term chip **and the active status
+	 * pill** — everything narrowing the grid invisibly.
+	 *
+	 * **Search is deliberately untouched.** It has its own `×` in the field and
+	 * you can see it working, so clearing it from here would empty a control the
+	 * visitor is looking at for reasons they cannot connect to the button they
+	 * pressed. `clearAllFilters` above *does* take it, and is the one the empty
+	 * state offers — there the copy says the filters together rule everything
+	 * out, and the search is part of "together".
+	 *
+	 * The drawer's own *Clear all filters* calls this same function. Same
+	 * action, longer label, because inside the Filter tab the word "all" has a
+	 * list to refer to.
+	 */
+	function clearFilters() {
+		setActiveLocations([]); setActiveTypes([]); setActiveStores([]);
+		setActiveStatus(null);
+		announceFilters('Filters cleared.');
+	}
+
+	function removeTermFilter(kind: TermKind, id: string) {
+		const name = termNameFor(id, termsOf(kind));
+
+		updateActiveIds(kind, (prev) => prev.filter((x) => x !== id));
+		announceFilters(`${name} filter removed.`);
 	}
 
 	function toggleOpen(id: string) {
@@ -990,14 +1167,22 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		return kind === 'location' ? locations : kind === 'type' ? types : stores;
 	}
 
-	function activeTermOf(kind: TermKind): string | null {
-		return kind === 'location' ? activeLocation : kind === 'type' ? activeType : activeStore;
+	function activeIdsOf(kind: TermKind): string[] {
+		return kind === 'location' ? activeLocations : kind === 'type' ? activeTypes : activeStores;
 	}
 
-	function setActiveTerm(kind: TermKind, id: string | null) {
-		if (kind === 'location') setActiveLocation(id);
-		else if (kind === 'type') setActiveType(id);
-		else setActiveStore(id);
+	/**
+	 * A group's selection, updated from its own previous value.
+	 *
+	 * Functional rather than a plain `set(next)` because both callers are
+	 * **late**: a chip's removal fires 140ms after the press, and `restoreTerm`
+	 * fires after a round trip to the server. Either could otherwise write back
+	 * an array captured before something else touched the same group.
+	 */
+	function updateActiveIds(kind: TermKind, next: (prev: string[]) => string[]) {
+		if (kind === 'location') setActiveLocations(next);
+		else if (kind === 'type') setActiveTypes(next);
+		else setActiveStores(next);
 	}
 
 	/**
@@ -1026,7 +1211,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		 * Captured before the delete, because the effect that heals a filter
 		 * pointing at a vanished term will have cleared it by the time undo runs.
 		 */
-		const wasActive = activeTermOf(kind) === id;
+		const wasActive = activeIdsOf(kind).includes(id);
 
 		if (! await api.deleteTerm(kind, id)) return;
 
@@ -1053,7 +1238,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			{ addedAt: addedAtOf(term), changedAt: changedAtOf(term) }
 		);
 
-		if (id && wasActive) setActiveTerm(kind, id);
+		if (id && wasActive) updateActiveIds(kind, (prev) => [...prev, id]);
 	}
 
 	/**
@@ -1118,7 +1303,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 			case 'term-blocked':
 				clearAllFilters();
-				setActiveTerm(action.termKind, action.termId);
+				// The *only* filter, deliberately: you pressed "show me the items
+				// that are using this", so anything else still narrowing would
+				// answer a different question.
+				updateActiveIds(action.termKind, () => [action.termId]);
 				setCloseEditing((n) => n + 1);
 				return;
 		}
@@ -1127,7 +1315,12 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	function emptyDraft(): ItemDraft {
 		return {
 			name: '',
-			locationId: activeLocation ?? locations[0]?.id ?? '',
+			/*
+			 * Prefilled only when the Location filter is unambiguous. With two
+			 * on, picking one of them would be the app quietly choosing — and
+			 * choosing the wrong one is worse here than choosing nothing.
+			 */
+			locationId: (activeLocations.length === 1 ? activeLocations[0] : locations[0]?.id) ?? '',
 			typeIds: [],
 			storeIds: [],
 			qty: '1',
@@ -1308,9 +1501,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				<CollapsedRail
 					autoOnly={! drawerCollapsed}
 					locations={locations} stores={stores} types={types}
-					activeLocation={activeLocation} setActiveLocation={setActiveLocation}
-					activeStore={activeStore} setActiveStore={setActiveStore}
-					activeType={activeType} setActiveType={setActiveType}
+					locationFilter={locationFilter} storeFilter={storeFilter} typeFilter={typeFilter}
 					itemCount={items.length} locationCounts={locationCounts}
 					householdName={householdName} householdInk={householdInk}
 					households={api.households} currentHouseholdId={api.currentHouseholdId}
@@ -1332,10 +1523,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 			<Drawer
 				items={items} locations={locations} types={types} stores={stores}
-				activeLocation={activeLocation} setActiveLocation={setActiveLocation}
-				activeType={activeType} setActiveType={setActiveType}
-				activeStore={activeStore} setActiveStore={setActiveStore}
-				countFor={countFor} anyFilterActive={anyFilterActive} onClearAll={clearAllFilters}
+				locationFilter={locationFilter} typeFilter={typeFilter} storeFilter={storeFilter}
+				countFor={countFor} anyFilterActive={anyClearableFilter} onClearAll={clearFilters}
 				tab={drawerTab} setTab={setDrawerTab}
 				open={drawerOpen} onClose={() => setDrawerOpen(false)}
 				collapsed={drawerCollapsed}
@@ -1402,13 +1591,33 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			<header class="md:hidden">
 				<div class="flex items-center gap-[13px] px-5 pt-4 pb-3">
 					{/* Left, the same side the drawer comes from. */}
-					<button
-						onClick={() => { setDrawerOpen(true); setDrawerCollapsed(false); }}
-						class={`shrink-0 flex items-center justify-center w-11 h-11 rounded-[13px] ${PAGE_BUTTON_OUTLINE}`}
-						aria-label="Open menu"
-					>
-						<Menu size={19} />
-					</button>
+					<span class="relative shrink-0 inline-flex">
+						<button
+							onClick={() => { setDrawerOpen(true); setDrawerCollapsed(false); }}
+							class={`flex items-center justify-center w-11 h-11 rounded-[13px] ${PAGE_BUTTON_OUTLINE}`}
+							aria-label={termFilterCount ? `Open menu, ${plural(termFilterCount, 'filter')} applied` : 'Open menu'}
+						>
+							<Menu size={19} />
+						</button>
+						{/*
+						  * The total across all three groups, so the *fact* that
+						  * something is filtering survives scrolling past row 3 —
+						  * which on a phone is the first thing to go.
+						  *
+						  * Same construction as the rail's badges, with one
+						  * difference that matters: the ring is drawn in the page
+						  * ground rather than the rail's fixed dark, so it follows
+						  * the theme where the rail's cannot.
+						  */}
+						{termFilterCount > 0 && (
+							<span
+								class="absolute -top-[5px] -right-[5px] flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full text-[10.5px] font-bold bg-accent text-surface pointer-events-none"
+								style={{ boxShadow: `0 0 0 2px ${theme.ground}` }}
+							>
+								{termFilterCount}
+							</span>
+						)}
+					</span>
 
 					<div class="min-w-0 flex flex-col">
 						<h1
@@ -1691,6 +1900,33 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					)}
 
 					{/*
+					  * The one thing on this screen whose failure mode is silence.
+					  *
+					  * It lives out here rather than inside `AppliedFilters` because
+					  * the bar unmounts with its last chip — announcing *Filters
+					  * cleared* from inside it would mean announcing from a node
+					  * that has just been removed, which is exactly nothing.
+					  */}
+					<span role="status" aria-live="polite" style={SR_ONLY}>{filterAnnouncement}</span>
+
+					{/*
+					  * **Row 3 — the applied filters.** Present only while a term
+					  * filter is on, so most of the time the bar is still two rows.
+					  *
+					  * It stays in list mode. The list obeys the same filters, so the
+					  * bar and its clear come with you: row 1 never changes and row 2
+					  * swaps its contents, which is what makes the switch read as the
+					  * content changing rather than the app changing.
+					  */}
+					{! empty && (
+						<AppliedFilters
+							filters={appliedFilters}
+							onRemove={removeTermFilter}
+							onClear={clearFilters}
+						/>
+					)}
+
+					{/*
 					  * The shopping list **replaces** the content column rather than
 					  * covering it. A modal is a question — centred, focus-trapped,
 					  * dismissed to continue — and a shopping list is a reference you
@@ -1709,7 +1945,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							onBack={() => trip.setListMode(false)}
 							storeFilterName={storeFilterName}
 							elsewhereCount={elsewhereCount}
-							onClearStoreFilter={() => setActiveStore(null)}
+							onClearStoreFilter={() => setActiveStores([])}
 							onClearFilters={clearAllFilters}
 							dark={dark}
 							theme={theme}

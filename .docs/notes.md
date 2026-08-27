@@ -347,6 +347,22 @@ later:
   is a fourth option this list did not have: draw the picker's dots against the
   panel they open on. Still not worth settling until the eight are finished.
 
+Four were opened by the applied filter bar (D45) and **three were settled the
+same day** — see D45 for what was built. One is left:
+
+- **`Showing X of Y` means two different things.** Row 2 says
+  rendered-so-far of matching, because it sits above a grid that grows as you
+  scroll: at 42 matches it reads `Showing 20 of 42` and becomes `Showing 40 of
+  42` without anything being filtered. The design boards — and the bar's
+  screen-reader announcement, which follows them — say matching of household:
+  `Showing 12 of 20`, where 20 never moves. Both are useful and they are not the
+  same sentence. Nothing has decided which one row 2 should say, or whether it
+  needs two.
+
+Settled: filtering is **multi-select** (OR inside a group, AND across groups);
+the bar **stays visible** with the drawer open; and focus moves to
+**`Clear filters`** when a chip is removed.
+
 ## Paid off in Phase 2
 
 Both of the costs this section used to track are gone.

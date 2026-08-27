@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — applied filter bar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Karla:wght@400;500;600;700&display=swap">
+<style>
+/* ---------------------------------------------------------------
+   Tokens — lifted from ui-designs.md. Light on :root, dark swapped
+   under prefers-color-scheme and overridable with [data-theme].
+   --------------------------------------------------------------- */
+:root {
+  --ground-1:#F9F3E9; --ground-2:#F3EADC; --ground-3:#EADFCD;
+  --surface:#FDFAF4; --sunk:#F2EADC;
+  --line:#E2D5C0; --line-strong:#CFBEA3; --divider:#EEE4D2;
+  --ink:#241E17; --body:#4C4237; --meta:#6F6049; --faint:#9B8B75;
+  --primary-fill:#241E17; --primary-label:#F2E9DA;
+  --crimson:#BE3346;
+  --out-tint:#F6E2DD;  --out-border:#EBCFC5;  --out-text:#9A2E3B;  --out-dot:#9A2E3B;
+  --low-tint:#F7EEDA;  --low-border:#E9DAB9;  --low-text:#855A0F;  --low-dot:#C4901F;
+  --ok-tint:#EDEFE1;   --ok-border:#DCE0CB;   --ok-text:#47592F;   --ok-dot:#5F7546;
+
+  --term-olive:#5F7542;   --term-slate:#456B80;  --term-teal:#3E6D68;
+  --term-clay:#87694C;    --term-brick:#A03B36;  --term-terracotta:#A85E33;
+  --term-ochre:#A5791D;   --term-plum:#6D4A69;   --term-mulberry:#8E4468;
+  --term-denim:#42618F;   --term-mustard:#8C7C22;
+
+  --page:#F1EBE0; --page-ink:#241E17; --page-meta:#6F6049; --page-line:#DFD3BE;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground-1:#241E16; --ground-2:#1F1912; --ground-3:#191410;
+    --surface:#2C251B; --sunk:#221C14;
+    --line:#3E3527; --line-strong:#544737; --divider:#3E3527;
+    --ink:#F2E9DA; --body:#DCD0BA; --meta:#A5937A; --faint:#7E6E58;
+    --primary-fill:#EFE3CE; --primary-label:#241E17;
+    --crimson:#D4636B;
+    --out-tint:#31201E;  --out-border:#4E2E2C;  --out-text:#E5878D;  --out-dot:#E5878D;
+    --low-tint:#2E2614;  --low-border:#4B3E1E;  --low-text:#E2B85E;  --low-dot:#D8A63F;
+    --ok-tint:#232A1B;   --ok-border:#39482C;   --ok-text:#A9C486;   --ok-dot:#8FAE6D;
+
+    --term-olive:#7A935A;   --term-slate:#6A92A7;  --term-teal:#5C948E;
+    --term-clay:#A28467;    --term-brick:#C77773;  --term-terracotta:#BF7A52;
+    --term-ochre:#AE842B;   --term-plum:#A37F9F;   --term-mulberry:#B67796;
+    --term-denim:#708CB5;   --term-mustard:#9C8C31;
+  }
+}
+:root[data-theme="dark"] {
+  --ground-1:#241E16; --ground-2:#1F1912; --ground-3:#191410;
+  --surface:#2C251B; --sunk:#221C14;
+  --line:#3E3527; --line-strong:#544737; --divider:#3E3527;
+  --ink:#F2E9DA; --body:#DCD0BA; --meta:#A5937A; --faint:#7E6E58;
+  --primary-fill:#EFE3CE; --primary-label:#241E17;
+  --crimson:#D4636B;
+  --out-tint:#31201E;  --out-border:#4E2E2C;  --out-text:#E5878D;  --out-dot:#E5878D;
+  --low-tint:#2E2614;  --low-border:#4B3E1E;  --low-text:#E2B85E;  --low-dot:#D8A63F;
+  --ok-tint:#232A1B;   --ok-border:#39482C;   --ok-text:#A9C486;   --ok-dot:#8FAE6D;
+
+  --term-olive:#7A935A;   --term-slate:#6A92A7;  --term-teal:#5C948E;
+  --term-clay:#A28467;    --term-brick:#C77773;  --term-terracotta:#BF7A52;
+  --term-ochre:#AE842B;   --term-plum:#A37F9F;   --term-mulberry:#B67796;
+  --term-denim:#708CB5;   --term-mustard:#9C8C31;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--page-ink);
+  font-family: 'Karla', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1500px; margin: 0 auto; padding: 40px 32px 72px; }
+h1 { font-family: 'Playfair Display', Georgia, serif; font-weight: 600; font-size: 27px; margin: 0 0 6px; }
+.lede { font-size: 14px; line-height: 1.6; color: var(--page-meta); max-width: 62ch; margin: 0; }
+.eyebrow { font-weight: 700; font-size: 10.5px; letter-spacing: .15em; text-transform: uppercase; color: var(--page-meta); }
+.sect { margin-top: 40px; }
+.sect > .eyebrow { display: block; margin-bottom: 12px; }
+.frame { border: 1px solid var(--page-line); border-radius: 20px; overflow: hidden; }
+.frame.phone { width: 390px; border-radius: 26px; }
+.rows { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+.tools { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+.tools button {
+  font: 600 13px 'Karla', Arial, sans-serif; color: var(--page-ink);
+  background: transparent; border: 1px solid var(--page-line); border-radius: 11px;
+  height: 32px; padding: 0 12px; cursor: pointer;
+}
+.tools button:hover { background: rgba(0,0,0,.05); }
+.note { font-size: 12.5px; line-height: 1.6; color: var(--page-meta); margin: 10px 0 0; max-width: 66ch; }
+.note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+
+/* ---------------------------------------------------------------
+   The top bar. Ground gradient, the app's own.
+   --------------------------------------------------------------- */
+.topbar {
+  background: radial-gradient(135% 105% at 10% -12%, var(--ground-1) 0%, var(--ground-2) 52%, var(--ground-3) 100%);
+  padding: 22px 32px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.row { display: flex; align-items: center; gap: 10px; }
+.spacer { flex: 1 1 auto; }
+
+.search {
+  flex: 1 1 auto; min-width: 0; height: 52px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--line);
+  display: flex; align-items: center; gap: 11px; padding: 0 18px;
+  font-size: 16px; color: var(--meta);
+}
+.primary {
+  height: 52px; border-radius: 15px; border: 0; cursor: pointer;
+  background: var(--primary-fill); color: var(--primary-label);
+  display: flex; align-items: center; gap: 9px; padding: 0 22px;
+  font: 600 16px 'Karla', Arial, sans-serif;
+}
+.statpill {
+  height: 40px; border-radius: 999px; padding: 0 16px; border: 1px solid;
+  display: flex; align-items: center; gap: 9px;
+  font: 600 14px 'Karla', Arial, sans-serif; background: none; cursor: pointer;
+}
+.statpill .dot { width: 7px; height: 7px; border-radius: 999px; }
+.statpill.ok  { background: var(--ok-tint);  border-color: var(--ok-border);  color: var(--ok-text); }
+.statpill.low { background: var(--low-tint); border-color: var(--low-border); color: var(--low-text); }
+.statpill.out { background: var(--out-tint); border-color: var(--out-border); color: var(--out-text); }
+.cart {
+  height: 40px; border-radius: 999px; padding: 0 12px 0 15px; cursor: pointer;
+  background: var(--low-tint); border: 1.5px solid var(--low-text); color: var(--low-text);
+  display: flex; align-items: center; gap: 9px; font: 600 14px 'Karla', Arial, sans-serif;
+  margin-left: 6px;
+}
+.cart .count {
+  height: 22px; min-width: 22px; padding: 0 7px; border-radius: 999px;
+  background: var(--low-text); color: var(--low-tint);
+  display: flex; align-items: center; justify-content: center; font: 700 12.5px 'Karla', Arial, sans-serif;
+}
+.showing { font-size: 13px; color: var(--meta); white-space: nowrap; }
+.sort {
+  height: 40px; border-radius: 13px; padding: 0 13px; border: 0; background: none; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; font: 600 14px 'Karla', Arial, sans-serif; color: var(--body);
+}
+.sort .val { font-weight: 400; color: var(--meta); }
+
+/* ---------------------------------------------------------------
+   THE APPLIED FILTER BAR
+   Clear leads; chips follow. Hidden entirely when nothing is on.
+   --------------------------------------------------------------- */
+.applied { display: flex; align-items: flex-start; gap: 8px; }
+.applied[hidden] { display: none; }
+.applied .chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+
+.chip, .clear {
+  font-family: 'Karla', Arial, sans-serif;
+  border: 1px solid transparent;   /* border-box, so nothing shifts on hover */
+  background: none; cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  height: 30px; padding: 0 9px 0 11px; border-radius: 999px;
+  background: var(--surface); border-color: var(--line-strong);
+  font-size: 13.5px; font-weight: 500; color: var(--ink);
+  white-space: nowrap;
+}
+.chip .term { width: 7px; height: 7px; border-radius: 999px; background: var(--term); flex-shrink: 0; }
+.chip .x { color: var(--faint); display: flex; transition: color 120ms ease-out; }
+
+.clear {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  height: 30px; padding: 0 12px; border-radius: 13px;
+  font-size: 13.5px; font-weight: 600; color: var(--body);
+  margin-right: 8px;
+}
+
+/* One active treatment for hover, press and focus. The fill is `line`
+   in BOTH themes — a step away from the ground either way. No transform. */
+.chip:hover, .chip:active, .chip:focus-visible,
+.clear:hover, .clear:active, .clear:focus-visible {
+  background: var(--line);
+  border-color: var(--faint);
+  color: var(--ink);
+}
+.chip:hover .x, .chip:active .x, .chip:focus-visible .x { color: var(--ink); }
+
+.chip:focus-visible, .clear:focus-visible {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
+/* Removal: the row reflows, the chip does not slide anything sideways. */
+.chip.going { opacity: 0; transform: translateY(-4px); transition: opacity 140ms ease-out, transform 140ms ease-out; }
+
+/* ---------------------------------------------------------------
+   Compact — in the app these live under @media (max-width: 640px).
+   Scoped to a class here only so the phone frame renders at any
+   window width.
+   --------------------------------------------------------------- */
+.is-compact.topbar { padding: 14px 0; gap: 10px; }
+.is-compact .row { padding: 0 16px; gap: 7px; }
+.is-compact .search { height: 52px; border-radius: 16px; padding: 0 14px; font-size: 15px; }
+.is-compact .primary { width: 52px; height: 52px; padding: 0; justify-content: center; }
+.is-compact .primary .label { display: none; }
+.is-compact .statpill { padding: 0 13px; gap: 7px; font-size: 13.5px; }
+.is-compact .cart { margin-left: 0; padding: 0 10px 0 12px; }
+.is-compact .sort { padding: 0 10px; gap: 6px; font-size: 13.5px; }
+
+.is-compact .applied {
+  padding: 0 0 0 16px;
+  flex-wrap: nowrap;          /* mobile scrolls rather than wrapping */
+}
+.is-compact .applied .chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-right: 16px;        /* trailing breath inside the scroller */
+}
+.is-compact .applied .chips::-webkit-scrollbar { display: none; }
+.is-compact .chip { height: 44px; padding: 0 11px 0 13px; font-size: 14.5px; }
+.is-compact .clear { height: 44px; font-size: 14.5px; padding: 0 12px 0 2px; margin-right: 0; }
+
+/* The drawer button, with the crimson total-filter badge. */
+.menu {
+  position: relative; width: 52px; height: 52px; flex-shrink: 0;
+  border-radius: 15px; background: var(--surface); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink);
+}
+.menu .badge {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 19px; height: 19px; padding: 0 4px; border-radius: 999px;
+  background: var(--crimson); color: #FDFAF4;
+  border: 2px solid var(--ground-1);
+  display: flex; align-items: center; justify-content: center;
+  font: 700 10.5px 'Karla', Arial, sans-serif;
+}
+.menu .badge[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chip, .clear, .chip .x, .chip.going { transition-duration: 1ms; }
+  .chip.going { transform: none; }
+}
+
+/* State reference strip */
+.states { display: flex; gap: 34px; flex-wrap: wrap; padding: 22px 32px;
+  background: radial-gradient(135% 105% at 10% -12%, var(--ground-1) 0%, var(--ground-2) 52%, var(--ground-3) 100%); }
+.states .col { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.states .cap { font-size: 11.5px; color: var(--meta); }
+.states .chip.demo-active { background: var(--line); border-color: var(--faint); color: var(--ink); }
+.states .chip.demo-active .x { color: var(--ink); }
+.states .clear.demo-active { background: var(--line); border-color: var(--faint); color: var(--ink); }
+.states .demo-focus { outline: 2px solid var(--crimson); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Applied filter bar</h1>
+  <p class="lede">The row that lets you drop one filter or all of them without opening the drawer. Everything below is live — point at a chip, tab into one, press it. Reset restores the set.</p>
+
+  <div class="tools">
+    <button type="button" id="theme">Toggle dark</button>
+    <button type="button" id="reset">Reset filters</button>
+  </div>
+
+  <!-- DESKTOP ------------------------------------------------------ -->
+  <div class="sect">
+    <span class="eyebrow">Right pane · desktop</span>
+    <div class="frame">
+      <div class="topbar" data-bar="desk">
+        <div class="row">
+          <div class="search">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.6"/><path d="M13.2 13.2 17 17"/></svg>
+            <span>What are you looking for?</span>
+          </div>
+          <button class="primary" type="button">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>
+            <span class="label">Add item</span>
+          </button>
+        </div>
+
+        <div class="row">
+          <button class="statpill ok" type="button"><span class="dot" style="background:var(--ok-dot)"></span>9 in stock</button>
+          <button class="statpill low" type="button"><span class="dot" style="background:var(--low-dot)"></span>6 running low</button>
+          <button class="statpill out" type="button"><span class="dot" style="background:var(--out-dot)"></span>5 out</button>
+          <button class="cart" type="button">Shopping list <span class="count">11</span></button>
+          <span class="spacer"></span>
+          <span class="showing" data-showing>Showing 6 of 20</span>
+          <button class="sort" type="button">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5v13M6 3.5 3.4 6.4M6 3.5 8.6 6.4M14 16.5v-13M14 16.5l2.6-2.9M14 16.5l-2.6-2.9"/></svg>
+            Sort <span class="val">Recently added</span>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l5 5 5-5"/></svg>
+          </button>
+        </div>
+
+        <div class="applied" role="group" aria-label="Applied filters" data-applied>
+          <button class="clear" type="button" data-clear>Clear filters</button>
+          <div class="chips" data-chips></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Chips wrap here rather than scroll — vertical room is cheap on desktop and there is no scroll gesture. Remove enough of them and the whole row goes with the last one.</p>
+  </div>
+
+  <!-- MOBILE ------------------------------------------------------- -->
+  <div class="sect">
+    <span class="eyebrow">Right pane · 390</span>
+    <div class="rows">
+      <div>
+        <div class="frame phone">
+          <div class="topbar is-compact" data-bar="phone">
+            <div class="row">
+              <button class="menu" type="button">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/></svg>
+                <span class="badge" data-badge>6</span>
+              </button>
+              <div class="search">
+                <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.6"/><path d="M13.2 13.2 17 17"/></svg>
+                <span>What are you looking for?</span>
+              </div>
+              <button class="primary" type="button">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>
+                <span class="label">Add item</span>
+              </button>
+            </div>
+
+            <div class="row">
+              <button class="statpill ok" type="button"><span class="dot" style="background:var(--ok-dot)"></span>9 in stock</button>
+              <button class="statpill low" type="button"><span class="dot" style="background:var(--low-dot)"></span>6 running low</button>
+              <button class="statpill out" type="button"><span class="dot" style="background:var(--out-dot)"></span>5 out</button>
+            </div>
+
+            <div class="row">
+              <button class="cart" type="button">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 3h2.1l1.9 8.4h8l1.8-6.2H6.1"/><circle cx="8" cy="15.6" r="1.3"/><circle cx="14.2" cy="15.6" r="1.3"/></svg>
+                <span class="count">11</span>
+              </button>
+              <span class="spacer"></span>
+              <span class="showing" data-showing>5 of 20</span>
+              <button class="sort" type="button">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5v13M6 3.5 3.4 6.4M6 3.5 8.6 6.4M14 16.5v-13M14 16.5l2.6-2.9M14 16.5l-2.6-2.9"/></svg>
+                Recent
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l5 5 5-5"/></svg>
+              </button>
+            </div>
+
+            <div class="applied" role="group" aria-label="Applied filters" data-applied>
+              <button class="clear" type="button" data-clear>Clear filters</button>
+              <div class="chips" data-chips></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note" style="flex:1 1 320px">Clear filters is pinned and the chips scroll past the right edge — no gutter on that side, which is what says there is more. It costs about 110px of a 390 screen permanently, so roughly one and a half chips are visible at rest.<br><br>The menu button carries the crimson total so the fact that something is filtering survives scrolling past this row.</p>
+    </div>
+  </div>
+
+  <!-- STATES ------------------------------------------------------- -->
+  <div class="sect">
+    <span class="eyebrow">States · one treatment for hover, press and focus</span>
+    <div class="frame">
+      <div class="states">
+        <div class="col">
+          <span class="chip" style="--term:var(--term-olive)"><span class="term"></span>Pantry<span class="x"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l8 8M14 6l-8 8"/></svg></span></span>
+          <span class="clear">Clear filters</span>
+          <span class="cap">Rest</span>
+        </div>
+        <div class="col">
+          <span class="chip demo-active" style="--term:var(--term-olive)"><span class="term"></span>Pantry<span class="x"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l8 8M14 6l-8 8"/></svg></span></span>
+          <span class="clear demo-active">Clear filters</span>
+          <span class="cap">Hover &amp; pressed</span>
+        </div>
+        <div class="col">
+          <span class="chip demo-active demo-focus" style="--term:var(--term-olive)"><span class="term"></span>Pantry<span class="x"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l8 8M14 6l-8 8"/></svg></span></span>
+          <span class="clear demo-active demo-focus">Clear filters</span>
+          <span class="cap">Focus-visible</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">Active fill is <code>--line</code> in both themes — <code>#E2D5C0</code> light, <code>#3E3527</code> dark — a step away from the ground in each direction. Edge goes to <code>--faint</code>. No transform: with hover and press sharing a treatment, a <code>scale()</code> would fire on hover. Focus adds <code>outline: 2px var(--crimson)</code> at <code>2px</code> offset and changes nothing else.</p>
+  </div>
+
+</div>
+
+<script>
+/* The real twenty. Filtering is OR inside a group, AND across groups. */
+const ITEMS = [
+  ['Ground Beef','Meat Freezer','Calfee Cattle','Protein'],
+  ['Ribeye','Meat Freezer','Calfee Cattle','Protein'],
+  ['Chicken Thighs','Upright Freezer','Aldi','Protein'],
+  ['Butter','Upright Freezer','Costco','Dairy'],
+  ['Black Beans','Pantry','Publix','Protein'],
+  ['Jasmine Rice','Pantry','Costco','Grain'],
+  ['Frozen Peaches','Chest Freezer',null,'Produce'],
+  ['Marinara','Pantry',null,'Condiment'],
+  ['Olive Oil','Pantry','Costco','Condiment'],
+  ['Bacon','Upright Freezer','Costco','Protein'],
+  ['Chicken Breast','Upright Freezer','Costco','Protein'],
+  ['Coffee','Pantry','Publix','Beverage'],
+  ['Tortillas','Pantry','Publix','Grain'],
+  ['Peanut Butter','Pantry','Publix','Condiment'],
+  ['Frozen Corn','Chest Freezer','Aldi','Produce'],
+  ['Pasta','Pantry','Aldi','Grain'],
+  ['Ground Chuck','Meat Freezer','Calfee Cattle','Protein'],
+  ['Shredded Cheese','Upright Freezer','Costco','Dairy'],
+  ['Baking Soda','Pantry',null,'Baking'],
+  ['Cinnamon','Pantry',null,'Spice'],
+];
+
+const TERM_COLOUR = {
+  'Pantry':'olive','Meat Freezer':'terracotta','Upright Freezer':'slate','Chest Freezer':'teal',
+  'Calfee Cattle':'brick','Costco':'olive','Publix':'slate','Aldi':'clay',
+  'Produce':'olive','Dairy':'slate','Protein':'brick','Grain':'ochre','Condiment':'plum',
+  'Beverage':'teal','Snack':'clay','Baking':'terracotta','Spice':'mulberry',
+};
+
+/* group order is the drawer's: location, store, type */
+const START = {
+  desk:  [['location','Pantry'],['type','Grain'],['type','Condiment']],
+  phone: [['location','Pantry'],['location','Upright Freezer'],['store','Publix'],
+          ['store','Costco'],['type','Protein'],['type','Dairy']],
+};
+const GROUP_INDEX = { location: 1, store: 2, type: 3 };
+
+const X_SVG = '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l8 8M14 6l-8 8"/></svg>';
+
+const state = { desk: [], phone: [] };
+
+function matches(item, filters) {
+  for (const group of ['location', 'store', 'type']) {
+    const wanted = filters.filter(f => f[0] === group).map(f => f[1]);
+    if (wanted.length && !wanted.includes(item[GROUP_INDEX[group]])) return false;
+  }
+  return true;
+}
+
+function render(key) {
+  const bar = document.querySelector(`[data-bar="${key}"]`);
+  const filters = state[key];
+  const chips = bar.querySelector('[data-chips]');
+  const applied = bar.querySelector('[data-applied]');
+
+  chips.innerHTML = '';
+  for (const [group, term] of filters) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.style.setProperty('--term', `var(--term-${TERM_COLOUR[term] || 'stone'})`);
+    b.setAttribute('aria-label', `Remove filter ${term}`);
+    b.innerHTML = `<span class="term"></span>${term}<span class="x">${X_SVG}</span>`;
+    b.addEventListener('click', () => remove(key, group, term, b));
+    chips.appendChild(b);
+  }
+  applied.hidden = filters.length === 0;
+
+  const shown = ITEMS.filter(i => matches(i, filters)).length;
+  const label = bar.querySelector('[data-showing]');
+  label.textContent = key === 'phone' ? `${shown} of 20` : `Showing ${shown} of 20`;
+
+  const badge = bar.querySelector('[data-badge]');
+  if (badge) { badge.textContent = String(filters.length); badge.hidden = filters.length === 0; }
+}
+
+function remove(key, group, term, el) {
+  el.classList.add('going');
+  const done = () => {
+    state[key] = state[key].filter(f => !(f[0] === group && f[1] === term));
+    render(key);
+  };
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  reduced ? done() : setTimeout(done, 140);
+}
+
+function reset() {
+  state.desk = START.desk.map(f => [...f]);
+  state.phone = START.phone.map(f => [...f]);
+  render('desk'); render('phone');
+}
+
+for (const key of ['desk', 'phone']) {
+  document.querySelector(`[data-bar="${key}"] [data-clear]`)
+    .addEventListener('click', () => { state[key] = []; render(key); });
+}
+document.getElementById('reset').addEventListener('click', reset);
+document.getElementById('theme').addEventListener('click', () => {
+  const root = document.documentElement;
+  const dark = root.getAttribute('data-theme') === 'dark'
+    || (!root.hasAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  root.setAttribute('data-theme', dark ? 'light' : 'dark');
+});
+
+reset();
+</script>
+</body>
+</html>
