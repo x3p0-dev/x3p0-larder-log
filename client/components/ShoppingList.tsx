@@ -52,7 +52,7 @@ type Props = {
  * One card per store, `auto-fill` rather than `auto-fit`: with a single store
  * card left after a filter, `auto-fit` would stretch it across the whole
  * screen. The 460px floor is measured rather than chosen — below it a long name
- * and its badge collide with the counts on the right, so the row stacks instead.
+ * and its badge crowd the counts on the right, and the row wraps.
  */
 export function ShoppingList(props: Props) {
 	const { groups, checked, onToggle, onOpenItem, onBack, dark, theme } = props;
@@ -265,9 +265,18 @@ function ListRow({ item, first, checked, onToggle, onOpenItem, dark, theme }: Ro
 		</span>
 	);
 
+	/*
+	 * `top-px` is an optical correction, not a layout one.
+	 *
+	 * Playfair's ascent is tall enough that a 17px line box centres about a
+	 * pixel above the middle of the letterforms themselves, so a badge centred
+	 * on the box reads as sitting high beside the name. Everything else in the
+	 * row is centred on the box and looks right; only the thing sitting *next
+	 * to* display type needs the nudge.
+	 */
 	const badge = (
 		<span
-			class="inline-flex items-center h-[18px] px-[7px] rounded-full font-bold text-[9.5px] uppercase tracking-[0.1em] shrink-0"
+			class="relative top-px inline-flex items-center h-[18px] px-[7px] rounded-full font-bold text-[9.5px] uppercase tracking-[0.1em] shrink-0"
 			style={{
 				background: status.bg,
 				border: `1px solid ${status.ring}`,
@@ -281,12 +290,36 @@ function ListRow({ item, first, checked, onToggle, onOpenItem, dark, theme }: Ro
 
 	const meta = (
 		<span
-			class="text-[13px] whitespace-nowrap md:ml-auto md:pr-5"
+			class="text-[13px] whitespace-nowrap md:pr-5"
 			style={{ color: theme.textMuted }}
 		>
 			{counts}
 		</span>
 	);
+
+	/*
+	 * One line where one line fits, and only then two.
+	 *
+	 * This was `flex-col md:flex-row` — a stack below `md` whatever the widths
+	 * were, which broke twice over. The counts dropped to a second line on a
+	 * phone even when there was room beside the name, and a column inside a
+	 * `self-stretch` target starts at the top, so the name butted against the
+	 * row's upper edge with the whole 64px sitting empty underneath it.
+	 *
+	 * A wrapping row fixes both. The name group holds a 10rem floor and grows
+	 * past it, so the counts stay on the line while they fit and wrap beneath
+	 * only once the name would be squeezed under a readable width — which is
+	 * the collision the stack was guarding against, now detected rather than
+	 * assumed. `content-center` centres the line box, one line or two.
+	 */
+	const body = (
+		<>
+			<span class="flex items-center gap-2 md:gap-2.5 min-w-0 grow shrink-0 basis-[10rem]">{name}{badge}</span>
+			{meta}
+		</>
+	);
+
+	const bodyClass = 'flex-1 min-w-0 flex flex-wrap items-center content-center gap-x-2.5 gap-y-0.5';
 
 	return (
 		<li
@@ -307,24 +340,15 @@ function ListRow({ item, first, checked, onToggle, onOpenItem, dark, theme }: Ro
 				)}
 			</div>
 
-			{/*
-			  * Below `md` the row stacks — name and badge above, counts below —
-			  * because a 460px card cannot hold "Shredded Cheese OUT" and
-			  * "have 0 · low at 2" on one line without them colliding.
-			  */}
 			{onOpenItem ? (
 				<button
 					onClick={() => onOpenItem(item)}
-					class={`flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2.5 self-stretch pr-4 md:pr-0 text-left rounded-[10px] ${LIST_TARGET}`}
+					class={`${bodyClass} self-stretch pr-4 md:pr-0 text-left rounded-[10px] ${LIST_TARGET}`}
 				>
-					<span class="flex items-center gap-2 md:gap-2.5 min-w-0">{name}{badge}</span>
-					{meta}
+					{body}
 				</button>
 			) : (
-				<div class="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2.5 pr-4 md:pr-0">
-					<span class="flex items-center gap-2 md:gap-2.5 min-w-0">{name}{badge}</span>
-					{meta}
-				</div>
+				<div class={`${bodyClass} pr-4 md:pr-0`}>{body}</div>
 			)}
 		</li>
 	);

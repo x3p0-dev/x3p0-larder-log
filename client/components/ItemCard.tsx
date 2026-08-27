@@ -78,7 +78,22 @@ export function ItemCard({
 				{item.name}
 			</span>
 
-			<span class="flex items-center gap-2 shrink-0">
+			{/*
+			  * Centred on the name's *first line*, not on the row.
+			  *
+			  * The row is `items-start` because a name can wrap and the status
+			  * belongs beside its first line rather than halfway down two — but
+			  * `start` aligned the cluster to the top of that line's box, and a
+			  * 17px chevron against a 21px line reads as riding high. The floor
+			  * is the line box (18.5px and 21px at `leading-[1.15]`), so the
+			  * cluster centres inside exactly the band the first line occupies
+			  * and still sits at the top when the name runs to two.
+			  *
+			  * `top-px` on top of that is optical: Playfair's ascent puts the
+			  * middle of the letterforms about a pixel below the middle of the
+			  * box that holds them, so geometric centring still reads high.
+			  */}
+			<span class="relative top-px flex items-center gap-2 shrink-0 min-h-[21px] sm:min-h-[24px]">
 				{/*
 				  * In stock is a dot; low and out get the word. A badge on every
 				  * card would make the healthy majority as loud as the problems.
