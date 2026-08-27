@@ -222,7 +222,26 @@ store banner above the grid are **deleted**; the Store filter is a filter again.
   It was amber for one round, which put it a gap away from `6 running low` —
   already amber, and meaning something else. Hidden when nothing is low or out.
   **Its count is the household's, never the filtered one.** When space is short
-  it drops its label for a cart glyph; *Back to items* keeps its words.
+  it drops its label for a cart glyph.
+- **The trigger is a toggle that stays put** (2026-08-27, amending D41). It was
+  a pair — *Shopping list* going in, `‹ Back to items` coming out — and below
+  `md` the two lived in **different rows**, so a press moved the thing under
+  your finger. Now it holds its slot at every width, keeps its label, and wears
+  the **low tint** when the mode is on — `low.bg` filled, `low.ink` for border
+  and label, count pill inverted, `aria-pressed` — which is what the first
+  boards drew for it. **Amber is still rejected at rest** and the reason is why
+  it works here: in list mode the status pills are not on screen, so nothing
+  else in the row is amber. Its border is the low *text* colour, never the
+  border token, per the contrast note above.
+- **Row 2's left slot holds its width in both modes.** The pills go
+  `invisible` rather than unmounting and *Back to items* is laid over them
+  absolutely, because unmounting them slid the trigger a third of the way across
+  a 1440 screen on every press. `visibility: hidden` keeps the geometry *and*
+  drops the pills from the tab order, which `opacity-0` would not.
+- **The exit is quiet now** — chevron plus bold words on nothing, resolving
+  under the pointer. Its resting half is `PAGE_BUTTON_QUIET` in
+  `controlStyles`, **shared with the sort trigger**, which is the other quiet
+  control in that row.
 - **Row 2 sizes off the measured content column, not the viewport.** A
   `ResizeObserver` on `<main>` sets `compact` below `ROW2_FULL_PX` (910, derived
   from the parts), which is what the pills, the trigger and the sort all read.
@@ -231,8 +250,9 @@ store banner above the grid are **deleted**; the Store filter is a filter again.
   breakpoint.**
 - **Below `md` the trigger lives in the mobile header**, squared up with the
   wordmark opposite the menu button — it is chrome, and moving it there is what
-  lets the status pills and the sort share one line at 390. The *exit* stays in
-  row 2 with the list it exits. Row 2 drops `Showing X of Y` when compact.
+  lets the status pills and the sort share one line at 390. **It stays there in
+  list mode too**, tinted. The *exit* stays in row 2 with the list it exits. Row
+  2 drops `Showing X of Y` when compact.
 - **`useTripChecks.ts`** — checks in `localStorage`, the **third** thing there
   after the theme (D25) and the household (D33). Cleared when the item leaves
   the list, after 24 hours with no ticking, or on a household switch. The
@@ -244,9 +264,11 @@ store banner above the grid are **deleted**; the Store filter is a filter again.
   dark fill.
 - **Row 2 empties out and re-fills in list mode** — the status pills go (you are
   already filtered to low and out) and so does the sort trigger (the list has
-  one fixed order). *Back to items* takes the left, `11 to buy · 4 stores · 3 in
-  the cart` the right. **Row 1 never changes**, so the switch reads as the
-  content changing rather than the app changing.
+  one fixed order). *Back to items* takes the left, over the pills' reserved
+  width; the trigger stays exactly where it was and tints; and
+  `11 to buy · 4 stores · 3 in the cart` takes the right. **Row 1 never
+  changes**, so the switch reads as the content changing rather than the app
+  changing.
 - **The status pills tighten at 390 rather than truncating** — padding 16 → 13,
   gap 9 → 7, label 14 → 13.5 — which is what makes room for the trigger's row.
 

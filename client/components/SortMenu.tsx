@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { ArrowUpDown, Check, ChevronDown } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
-import { PAGE_FOCUS } from '../lib/controlStyles';
+import { PAGE_BUTTON_QUIET, PAGE_FOCUS } from '../lib/controlStyles';
 
 export type SortKey = 'default' | 'restock' | 'name-asc' | 'name-desc' | 'qty-asc' | 'qty-desc';
 
@@ -22,9 +22,13 @@ export type SortKey = 'default' | 'restock' | 'name-asc' | 'name-desc' | 'qty-as
  * while every other button on the page ground did. The hover destination is
  * `PAGE_BUTTON_OUTLINE`'s, one border step short of it — open keeps
  * `line-strong` to itself, and the chevron's flip carries the rest.
+ *
+ * The resting half is shared with row 2's other quiet control, *Back to items*,
+ * and lives in `controlStyles` — two controls a gap apart wearing the same
+ * rest and two different hovers is exactly the kind of drift this app writes
+ * down once.
  */
-const TRIGGER =
-	'bg-transparent border-transparent text-ink-body hover:bg-surface-alt hover:border-line hover:text-ink';
+const TRIGGER = PAGE_BUTTON_QUIET;
 const TRIGGER_ON =
 	'bg-surface-alt border-line-strong text-ink';
 

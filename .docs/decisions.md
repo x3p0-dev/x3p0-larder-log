@@ -1603,9 +1603,53 @@ the low border 1.16:1. Anything that wants to be amber out there needs the low
 **When space is short it drops its label** for a 20px cart glyph and keeps the
 count pill — 74px instead of 165. It is the only element on that row with a
 fixed cost, and *Shopping list* is the most expendable phrase on the screen once
-the pill says 11 and the glyph says what kind of 11. **`‹ Back to items` keeps
-its words**: it is the exit, and an unlabelled back arrow on a screen with no
-title is a guess.
+the pill says 11 and the glyph says what kind of 11.
+
+#### Amended 2026-08-27: the trigger is a toggle that stays put, and it goes amber
+
+**The trigger does not move and does not change its label.** In list mode it is
+the same `Shopping list` + count control, in the same slot, wearing the low
+tint and `aria-pressed`; pressing it again is a way out. *Back to items* is
+still there — it is the **quiet** control at the row's left now, where the
+status pills were.
+
+**The pair was worse than it looked on the boards.** Swapping one label for the
+other meant the control changed width, glyph and words at the same moment the
+whole content column changed — two things to re-read where there should have
+been one. Below `md` it was worse than that: the two labels lived in
+**different rows**, the way in in the mobile header and the exit in row 2, so a
+press made the thing under your finger vanish and put its replacement somewhere
+else on screen.
+
+**Holding its x costs one line of layout, and it is worth it.** Row 2's left
+slot keeps its width in both modes: the pills go `invisible` rather than
+unmounting, and *Back to items* is laid over them absolutely. Unmounting them
+slid the trigger a third of the way across a 1440 screen on every press — and
+you look back to where you pressed to find out what happened. `visibility:
+hidden` is the right hammer over `opacity-0`: it keeps the geometry *and*
+takes the pills out of the tab order and the a11y tree.
+
+**Active is the low tint** — `low.bg` filled, `low.ink` for the border and the
+label, the count pill inverted onto it — which is what the first boards drew
+for this control. Amber was rejected **at rest** and stays rejected there: on
+row 2 in grid mode it lands a gap away from `6 running low`, already amber and
+meaning something else. That objection is void in list mode, because **the
+pills are not on screen**. The only amber in the row is the trigger, and what
+it means there is *you are shopping*.
+
+The border is the low **text** colour rather than the border token, for the
+reason this decision already records: these tints were drawn to sit on a card,
+and out on the page ground the low fill reads 1.03:1 and the low border 1.16:1
+while `low.ink` is 5.08 light and 9.33 dark.
+
+**The exit is quiet, and it is the sort menu's resting treatment** — a chevron
+and bold words on nothing, resolving to `surface-alt` on `line` under the
+pointer. That rest is one literal, `PAGE_BUTTON_QUIET`, shared with the sort
+trigger: two controls in the same row wearing the same rest and two different
+hovers is exactly the kind of drift this app writes down once. It keeps its
+words at every width, which is the original argument unchanged — an unlabelled
+back arrow on a screen with no title is a guess. Escape and the ghost on the
+everything-is-checked card are still the other two ways out.
 
 ### Row 2 sizes off the column, not the viewport — 2026-08-26
 
@@ -1629,9 +1673,11 @@ too much room.
 menu button — it is chrome, a standing fact about the household rather than a
 fact about the screen you are on. That is what buys the status pills and the
 sort room to share one line again at 390, which they could not do with a third
-control between them. **The exit does not move**: `‹ Back to items` stays in row
-2 with the list it exits, where it can keep its words; beside a 27px wordmark at
-390 neither would have room.
+control between them. Below `md` it stays in the header **in list mode too**,
+wearing the low tint (amended 2026-08-27), so it is one control in one place at
+each width rather than a control that relocates on press. **The exit does not
+move either**: *Back to items* stays in row 2 with the list it exits, where it
+can keep its words; beside a 27px wordmark at 390 neither would have room.
 
 Row 2 gives up **`Showing X of Y`** first when compact — the pills already carry
 the counts that matter and the grid is directly below. The list's trip line

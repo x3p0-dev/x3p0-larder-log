@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Archive, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
+import { Archive, ChevronLeft, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
 import type { LucideIcon } from 'lucide-preact';
 
 import { CollapsedRail } from './components/CollapsedRail';
@@ -9,7 +9,7 @@ import { StatusChip } from './components/StatusChip';
 import { SortMenu } from './components/SortMenu';
 import type { SortKey } from './components/SortMenu';
 import { ItemSheet } from './components/ItemSheet';
-import { PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_CHIP_ADD, PAGE_INPUT } from './lib/controlStyles';
+import { PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_BUTTON_QUIET, PAGE_CHIP_ADD, PAGE_FOCUS, PAGE_INPUT } from './lib/controlStyles';
 import { ItemCard } from './components/ItemCard';
 import { EmptyState } from './components/EmptyState';
 import { FirstRun } from './components/FirstRun';
@@ -873,10 +873,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		const short = parts.join(' · ');
 
 		/*
-		 * **The cart clause is the one that goes at 390.** The line shares its
-		 * row with *Back to items*, which keeps its words, and how many are
-		 * checked is the half a glance can spare — the trip bar below already
-		 * says it, next to the control that acts on it.
+		 * **The cart clause is the one that goes at 390.** How many are checked
+		 * is the half a glance can spare — the trip bar below already says it,
+		 * next to the control that acts on it.
 		 */
 		return { short, full: inCart > 0 ? `${short} · ${inCart} in the cart` : short };
 	}, [storeFilterName, toBuyHere, toBuyTotal, shoppingGroupsForView, inCart]);
@@ -1429,23 +1428,25 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					</div>
 
 					{/*
-					  * The way *in* to the shopping list, on mobile only, squared up
-					  * with the wordmark opposite the menu button. It is chrome — a
-					  * standing fact about the household rather than a fact about the
-					  * screen you are on — and up here it costs row 2 nothing, which
-					  * is what lets the pills and the sort share one line again.
+					  * The shopping list's toggle, on mobile only, squared up with the
+					  * wordmark opposite the menu button. It is chrome — a standing
+					  * fact about the household rather than a fact about the screen
+					  * you are on — and up here it costs row 2 nothing, which is what
+					  * lets the pills and the sort share one line again.
 					  *
-					  * The way *out* stays in row 2 with the list it exits, where it
-					  * can keep its words. `‹ Back to items` beside a 27px wordmark at
-					  * 390 would leave neither of them room.
+					  * **It stays here in list mode too**, wearing its active fill.
+					  * The way out used to be a different control in a different row,
+					  * so a press moved the thing you had just pressed; now the way in
+					  * and the way out are one button that never leaves its slot.
 					  */}
-					{! empty && ! listMode && toBuyTotal > 0 && (
+					{! empty && toBuyTotal > 0 && (
 						<span class="ml-auto shrink-0">
 							<ShoppingListTrigger
-								listMode={false}
+								active={listMode}
 								count={toBuyTotal}
-								onToggle={() => setListMode(true)}
+								onToggle={() => setListMode(! listMode)}
 								compact
+								dark={dark}
 								theme={theme}
 							/>
 						</span>
@@ -1528,18 +1529,37 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  *
 					  * **List:** the pills go, because you are already filtered to low
 					  * and out and `9 in stock` has nothing to say; the sort goes,
-					  * because the list has one fixed order. What is left is
-					  * *Back to items* on the left and the trip count on the right,
-					  * in the slot `Showing X of Y` occupies.
+					  * because the list has one fixed order. The trigger stays exactly
+					  * where it was and fills in, and the trip count takes the slot
+					  * `Showing X of Y` occupies.
 					  *
 					  * **It is one line at every width.** The trigger moves into the
-					  * mobile header below `md`, which is exactly what buys the pills
-					  * and the sort room to share a row again at 390.
+					  * mobile header below `md` — in both modes — which is exactly
+					  * what buys the pills and the sort room to share a row again at
+					  * 390.
 					  */}
 					{! empty && (
 					<div class={`flex items-center pt-6 pb-4 px-0.5 ${compact ? 'gap-2' : 'gap-3.5'}`}>
-						{! listMode && (
-							/*
+						{/*
+						  * The row's left slot, and it is **the same width in both
+						  * modes**. In list mode the pills go `invisible` rather than
+						  * unmounting, and *Back to items* is laid over them.
+						  *
+						  * That is the whole reason for the wrapper: the trigger sits
+						  * immediately after this slot, and unmounting the pills slid it
+						  * a third of the way across the screen on every press. A
+						  * control that moves when you press it is the one thing this
+						  * row cannot do — you look back to where you pressed to see
+						  * what happened. `visibility: hidden` keeps the geometry and
+						  * takes the pills out of the tab order and the a11y tree, which
+						  * `opacity-0` would not.
+						  *
+						  * The overlay is absolute rather than a second flex child for
+						  * the same reason: in flow it would add its own width to the
+						  * slot. It sits outside the pills' scroll port, which clips.
+						  */}
+						<div class={compact ? 'relative flex-1 min-w-0 flex items-center' : 'relative flex items-center'}>
+							{/*
 							 * When space is short the pills take the row's slack and
 							 * scroll inside it, so three counts can never wrap onto
 							 * three lines or shove the sort off the end. With room they
@@ -1553,11 +1573,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							 * left of the first one. The padding gives the ring room
 							 * inside the scroll port; the negative margin gives the row
 							 * back the width it cost.
-							 */
+							 */}
 							<div class={
 								compact
-									? 'flex-1 min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1'
-									: 'flex items-center gap-3.5 flex-wrap'
+									? (listMode
+										? 'invisible w-full min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1'
+										: 'w-full min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1')
+									: (listMode
+										? 'invisible flex items-center gap-3.5 flex-wrap'
+										: 'flex items-center gap-3.5 flex-wrap')
 							}>
 								{STATUS_CHIPS.map(({ key, label, short }) => (
 									<StatusChip
@@ -1580,24 +1604,45 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 									</span>
 								)}
 							</div>
-						)}
+
+							{/*
+							  * The exit, and it is **quiet**. The trigger is the loud
+							  * half of this pair now — filled while the mode is on — so
+							  * the way out is the sort menu's resting treatment: a
+							  * chevron and its words on nothing, resolving under the
+							  * pointer. Two filled controls a gap apart would both be
+							  * asking to be pressed.
+							  */}
+							{listMode && (
+								<button
+									onClick={() => setListMode(false)}
+									class={`absolute left-0 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 whitespace-nowrap ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
+								>
+									<ChevronLeft size={16} strokeWidth={2.4} />
+									Back to items
+								</button>
+							)}
+						</div>
 
 						{/*
-						  * The trigger. In grid mode it is here from `md` up and in the
-						  * mobile header below it — one control, two homes, never both.
-						  * In list mode it is *Back to items* and belongs here at every
-						  * width, because it is the exit from what is on screen.
+						  * The trigger, in **both** modes. One control with two homes —
+						  * here from `md` up, the mobile header below it — and never
+						  * both at once. It does not move when the mode changes: same
+						  * slot, same x, wearing its active fill, and pressing it again
+						  * is the way out.
 						  *
 						  * `ml-0.5` is the 2px the boards set it off the last pill by,
-						  * on top of the row's own gap.
+						  * on top of the row's own gap — and it is measured off the same
+						  * slot in list mode, because the slot holds its width.
 						  */}
 						{toBuyTotal > 0 && (
-							<span class={listMode ? 'shrink-0' : 'hidden md:inline-flex md:ml-0.5 shrink-0'}>
+							<span class="hidden md:inline-flex md:ml-0.5 shrink-0">
 								<ShoppingListTrigger
-									listMode={listMode}
+									active={listMode}
 									count={toBuyTotal}
 									onToggle={() => setListMode(! listMode)}
 									compact={compact}
+									dark={dark}
 									theme={theme}
 								/>
 							</span>

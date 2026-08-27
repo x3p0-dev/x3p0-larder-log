@@ -126,6 +126,20 @@ export const PAGE_BUTTON_SECONDARY =
 	'transition-colors bg-surface border border-line-strong text-ink hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
 /**
+ * The quiet end of the page's controls — the sort trigger, and *Back to items*.
+ *
+ * Nothing at rest but its label: no fill, no border, body ink. It resolves
+ * under the pointer to one border step short of `PAGE_BUTTON_OUTLINE`, which
+ * leaves `line-strong` to the controls that have to be *found*.
+ *
+ * Resting colours only. Each caller brings its own shell — `border`,
+ * `transition-colors`, `active:translate-y-px` and `PAGE_FOCUS` — because the
+ * sort trigger pairs this with an *open* state that needs the same box.
+ */
+export const PAGE_BUTTON_QUIET =
+	'bg-transparent border-transparent text-ink-body hover:bg-surface-alt hover:border-line hover:text-ink';
+
+/**
  * A bordered icon control on the page ground — the mobile header's menu button.
  *
  * Its resting fill and border have to be classes rather than an inline style:
