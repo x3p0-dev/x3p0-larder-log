@@ -1,0 +1,1540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — Add / Edit item sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Karla:wght@300..800&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Karla', system-ui, -apple-system, sans-serif;
+    background: #F3EADC;
+    color: #241E17;
+    -webkit-font-smoothing: antialiased;
+  }
+  .pf { font-family: 'Playfair Display', Georgia, serif; }
+  .kr { font-family: 'Karla', system-ui, -apple-system, sans-serif; }
+  em { font-style: italic; }
+  a { color: #BE3346; }
+  a:hover { color: #9A2E3B; }
+
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.doc { margin-bottom: 46px; }
+  header.doc h1 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 44px; font-weight: 600; letter-spacing: -0.015em;
+    margin: 0 0 10px; line-height: 1.1;
+  }
+  header.doc h1 .accent { font-style: italic; font-weight: 600; color: #BE3346; }
+  header.doc p { margin: 0; font-size: 16px; line-height: 1.6; color: #4C4237; max-width: 62ch; }
+  header.doc .meta { margin-top: 14px; font-size: 13px; color: #6F6049; }
+
+  nav.toc {
+    margin: 34px 0 0; padding: 22px 24px;
+    background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px;
+  }
+  nav.toc h2 {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;
+    color: #6F6049; margin: 0 0 12px;
+  }
+  nav.toc ul {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 24px;
+  }
+  nav.toc a {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 5px 0; font-size: 14.5px; color: #241E17; text-decoration: none;
+  }
+  nav.toc a:hover { color: #BE3346; }
+  .n {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #9B8B75;
+    font-variant-numeric: tabular-nums;
+  }
+
+  section.board { margin-top: 52px; scroll-margin-top: 20px; }
+  .eyebrow {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;
+    color: #6F6049;
+  }
+  .frame {
+    overflow-x: auto;
+    width: fit-content; max-width: 100%;
+    border-radius: 20px; border: 1px solid #E2D5C0;
+    box-shadow: 0 10px 30px rgba(36,30,23,.07);
+  }
+
+  footer.doc {
+    margin-top: 72px; padding-top: 24px; border-top: 1px solid #E2D5C0;
+    font-size: 13px; color: #6F6049; line-height: 1.6;
+  }
+
+  @media print {
+    body { background: #fff; }
+    nav.toc { display: none; }
+    section.board { break-inside: avoid; page-break-inside: avoid; }
+    .frame { box-shadow: none; overflow: visible; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <h1>Larder <span class="accent">Log</span> — add / edit item</h1>
+    <p>The item sheet redesigned into four labelled sections, with <em>Low at</em> promoted to a stepper of its own, an optional size on the item, and a drawn-but-undecided way to keep something off the shopping list.</p>
+    <div class="meta">28 August 2026 · nine boards, light and dark · static mockups, not a working prototype</div>
+  </header>
+
+  <nav class="toc">
+    <h2>Boards</h2>
+    <ul>
+      <li><a href="#b1"><span class="n">01</span>Add an item — light</a></li>
+      <li><a href="#b2"><span class="n">02</span>Add an item — dark</a></li>
+      <li><a href="#b3"><span class="n">03</span>Edit item — light</a></li>
+      <li><a href="#b4"><span class="n">04</span>Edit item — dark</a></li>
+      <li><a href="#b5"><span class="n">05</span>The size row</a></li>
+      <li><a href="#b6"><span class="n">06</span>On hand and low at</a></li>
+      <li><a href="#b7"><span class="n">07</span>Where the size shows</a></li>
+      <li><a href="#b8"><span class="n">08</span>Add an item at 390</a></li>
+      <li><a href="#b9"><span class="n">09</span>Keeping an item off the list</a></li>
+    </ul>
+  </nav>
+
+  <section id="b1" class="board">
+    <div class="eyebrow"><span class="n">01</span>Add an item — light</div>
+    <div class="frame"><div class="kr" style="width: 560px; min-height: 1270px; box-sizing: border-box; padding: 28px 40px 40px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Add an item — desktop 480 · light</div>
+
+  <!-- ============ SHEET ============ -->
+  <div style="width: 480px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; box-shadow: 0 24px 60px rgba(36,30,23,.14); overflow: hidden; display: flex; flex-direction: column;">
+
+    <!-- header -->
+    <div style="height: 68px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #EEE4D2; box-sizing: border-box;">
+      <div class="pf" style="font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em;">Add an item</div>
+      <div style="width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #6F6049;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <!-- body -->
+    <div style="padding: 20px; display: flex; flex-direction: column;">
+
+      <!-- ITEM -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Item</div>
+
+      <div style="height: 48px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: center; padding: 0 14px; box-sizing: border-box;">
+        <div style="width: 1.5px; height: 20px; background: #241E17;"></div>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="width: 76px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #6F6049;">1</div>
+        <div style="width: 140px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;">
+          <span style="font-size: 15px; color: #6F6049;">Unit</span>
+          <span style="color: #6F6049; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+
+      <div style="font-size: 12.5px; color: #6F6049; margin-top: 6px; line-height: 1.45;">Optional — it shows with the name on cards and in the shopping list.</div>
+
+      <!-- divider -->
+      <div style="height: 1px; background: #EEE4D2; margin: 22px 0 20px;"></div>
+
+      <!-- COUNT -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Count</div>
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <div style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></div>
+          <span style="font-size: 13px; font-weight: 500; color: #855A0F;">Running low</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">On hand</div>
+          <div style="height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #241E17;">1</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">Low at</div>
+          <div style="height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #241E17;">2</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <div style="font-size: 12.5px; color: #6F6049; margin-top: 6px;">Household default.</div>
+        </div>
+      </div>
+
+
+      <div style="display: flex; align-items: flex-start; gap: 11px; margin-top: 18px;">
+        <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box; flex: none; margin-top: 1px;"></div>
+        <div>
+          <div style="font-size: 15px; color: #4C4237;">Keep off the shopping list</div>
+          <div style="font-size: 12.5px; color: #6F6049; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div>
+        </div>
+      </div>
+      <!-- divider -->
+      <div style="height: 1px; background: #EEE4D2; margin: 22px 0 20px;"></div>
+
+      <!-- LOCATION -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Location</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Pantry</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A85E33;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Meat Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Upright Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Chest Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #6F6049;">+ Location</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- STORE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Store</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A03B36;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Calfee Cattle</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Costco</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Publix</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #87694C;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Aldi</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #6F6049;">+ Store</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- TYPE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Type</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Produce</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Dairy</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A03B36;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Protein</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A5791D;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Grain</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6D4A69;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Condiment</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Beverage</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #87694C;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Snack</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A85E33;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Baking</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #8E4468;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Spice</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #6F6049;">+ Type</span></div>
+      </div>
+
+      <!-- divider -->
+      <div style="height: 1px; background: #EEE4D2; margin: 22px 0 20px;"></div>
+
+      <!-- NOTES -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Notes</div>
+      <div style="height: 88px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049;"></div>
+
+    </div>
+
+    <!-- footer -->
+    <div style="height: 76px; padding: 0 20px; border-top: 1px solid #EEE4D2; display: flex; align-items: center; justify-content: flex-end; gap: 10px; box-sizing: border-box;">
+      <div style="height: 44px; border-radius: 13px; display: flex; align-items: center; padding: 0 18px; font-size: 15px; font-weight: 600; color: #4C4237;">Cancel</div>
+      <div style="height: 44px; border-radius: 13px; background: #241E17; display: flex; align-items: center; padding: 0 20px; font-size: 15px; font-weight: 600; color: #F2E9DA;">Save item</div>
+    </div>
+
+  </div>
+</div></div>
+  </section>
+  <section id="b2" class="board">
+    <div class="eyebrow"><span class="n">02</span>Add an item — dark</div>
+    <div class="frame"><div class="kr" style="width: 560px; min-height: 1270px; box-sizing: border-box; padding: 28px 40px 40px; background: radial-gradient(135% 105% at 10% -12%, #241E16, #1F1912 55%, #191410); display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Add an item — desktop 480 · dark</div>
+
+  <!-- ============ SHEET ============ -->
+  <div style="width: 480px; background: #2C251B; border: 1px solid #544737; border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.55); overflow: hidden; display: flex; flex-direction: column;">
+
+    <!-- header -->
+    <div style="height: 68px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3E3527; box-sizing: border-box;">
+      <div class="pf" style="font-size: 21px; font-weight: 600; color: #F2E9DA; letter-spacing: -0.01em;">Add an item</div>
+      <div style="width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #A5937A;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <!-- body -->
+    <div style="padding: 20px; display: flex; flex-direction: column;">
+
+      <!-- ITEM -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Item</div>
+
+      <div style="height: 48px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; box-shadow: 0 0 0 3px rgba(212,99,107,.18); display: flex; align-items: center; padding: 0 14px; box-sizing: border-box;">
+        <div style="width: 1.5px; height: 20px; background: #F2E9DA;"></div>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="width: 76px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #A5937A;">1</div>
+        <div style="width: 140px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;">
+          <span style="font-size: 15px; color: #A5937A;">Unit</span>
+          <span style="color: #A5937A; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+
+      <div style="font-size: 12.5px; color: #A5937A; margin-top: 6px; line-height: 1.45;">Optional — it shows with the name on cards and in the shopping list.</div>
+
+      <!-- divider -->
+      <div style="height: 1px; background: #3E3527; margin: 22px 0 20px;"></div>
+
+      <!-- COUNT -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Count</div>
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <div style="width: 7px; height: 7px; border-radius: 999px; background: #D8A63F;"></div>
+          <span style="font-size: 13px; font-weight: 500; color: #E2B85E;">Running low</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">On hand</div>
+          <div style="height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #F2E9DA;">1</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">Low at</div>
+          <div style="height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #F2E9DA;">2</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <div style="font-size: 12.5px; color: #A5937A; margin-top: 6px;">Household default.</div>
+        </div>
+      </div>
+
+
+      <div style="display: flex; align-items: flex-start; gap: 11px; margin-top: 18px;">
+        <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box; flex: none; margin-top: 1px;"></div>
+        <div>
+          <div style="font-size: 15px; color: #DCD0BA;">Keep off the shopping list</div>
+          <div style="font-size: 12.5px; color: #A5937A; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div>
+        </div>
+      </div>
+      <!-- divider -->
+      <div style="height: 1px; background: #3E3527; margin: 22px 0 20px;"></div>
+
+      <!-- LOCATION -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Location</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Pantry</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #BF7A52;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Meat Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6A92A7;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Upright Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5C948E;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Chest Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #544737; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #A5937A;">+ Location</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- STORE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Store</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #C77773;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Calfee Cattle</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Costco</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6A92A7;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Publix</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A28467;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Aldi</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #544737; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #A5937A;">+ Store</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- TYPE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Type</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Produce</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6A92A7;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Dairy</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #C77773;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Protein</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #AE842B;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Grain</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A37F9F;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Condiment</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5C948E;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Beverage</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A28467;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Snack</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #BF7A52;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Baking</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #B67796;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Spice</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #544737; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #A5937A;">+ Type</span></div>
+      </div>
+
+      <!-- divider -->
+      <div style="height: 1px; background: #3E3527; margin: 22px 0 20px;"></div>
+
+      <!-- NOTES -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Notes</div>
+      <div style="height: 88px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A;"></div>
+
+    </div>
+
+    <!-- footer -->
+    <div style="height: 76px; padding: 0 20px; border-top: 1px solid #3E3527; display: flex; align-items: center; justify-content: flex-end; gap: 10px; box-sizing: border-box;">
+      <div style="height: 44px; border-radius: 13px; display: flex; align-items: center; padding: 0 18px; font-size: 15px; font-weight: 600; color: #DCD0BA;">Cancel</div>
+      <div style="height: 44px; border-radius: 13px; background: #EFE3CE; display: flex; align-items: center; padding: 0 20px; font-size: 15px; font-weight: 600; color: #241E17;">Save item</div>
+    </div>
+
+  </div>
+</div></div>
+  </section>
+  <section id="b3" class="board">
+    <div class="eyebrow"><span class="n">03</span>Edit item — light</div>
+    <div class="frame"><div class="kr" style="width: 560px; min-height: 1270px; box-sizing: border-box; padding: 28px 40px 40px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Edit item — desktop 480 · light</div>
+
+  <div style="width: 480px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; box-shadow: 0 24px 60px rgba(36,30,23,.14); overflow: hidden; display: flex; flex-direction: column;">
+
+    <!-- header: name + live size preview -->
+    <div style="height: 68px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #EEE4D2; box-sizing: border-box;">
+      <div style="display: flex; align-items: baseline; gap: 9px; min-width: 0;">
+        <div class="pf" style="font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Olive Oil</div>
+        <div style="font-size: 13px; color: #6F6049; white-space: nowrap;">1 qt</div>
+      </div>
+      <div style="width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #6F6049; flex: none;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div style="padding: 20px; display: flex; flex-direction: column;">
+
+      <!-- ITEM -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Item</div>
+
+      <div style="height: 48px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #241E17;">Olive Oil</div>
+
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="width: 76px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #241E17;">1</div>
+        <div style="width: 140px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;">
+          <span style="font-size: 15px; color: #241E17;">Quart</span>
+          <span style="color: #6F6049; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+
+      <div style="font-size: 12.5px; color: #6F6049; margin-top: 6px; line-height: 1.45;">Optional — it shows with the name on cards and in the shopping list.</div>
+
+      <div style="height: 1px; background: #EEE4D2; margin: 22px 0 20px;"></div>
+
+      <!-- COUNT -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Count</div>
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <div style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></div>
+          <span style="font-size: 13px; font-weight: 500; color: #855A0F;">Running low</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">On hand</div>
+          <div style="height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #241E17;">1</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">Low at</div>
+          <div style="height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #241E17;">2</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div style="display: flex; align-items: flex-start; gap: 11px; margin-top: 18px;">
+        <div style="width: 22px; height: 22px; border-radius: 7px; background: #241E17; display: flex; align-items: center; justify-content: center; box-sizing: border-box; flex: none; margin-top: 1px; color: #F2E9DA;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div>
+          <div style="font-size: 15px; color: #4C4237;">Keep off the shopping list</div>
+          <div style="font-size: 12.5px; color: #6F6049; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div>
+        </div>
+      </div>
+      <div style="height: 1px; background: #EEE4D2; margin: 22px 0 20px;"></div>
+
+      <!-- LOCATION -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Location</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #241E17; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 600; color: #F2E9DA;">Pantry</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A85E33;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Meat Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Upright Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Chest Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #6F6049;">+ Location</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- STORE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Store</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A03B36;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Calfee Cattle</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #241E17; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 600; color: #F2E9DA;">Costco</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Publix</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #87694C;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Aldi</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #6F6049;">+ Store</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- TYPE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Type</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Produce</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Dairy</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A03B36;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Protein</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A5791D;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Grain</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #241E17; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 600; color: #F2E9DA;">Condiment</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Beverage</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #87694C;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Snack</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A85E33;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Baking</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #8E4468;"></span><span style="font-size: 13.5px; font-weight: 500; color: #241E17;">Spice</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #6F6049;">+ Type</span></div>
+      </div>
+
+      <div style="height: 1px; background: #EEE4D2; margin: 22px 0 20px;"></div>
+
+      <!-- NOTES -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Notes</div>
+      <div style="height: 88px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; padding: 12px 14px; box-sizing: border-box; font-size: 15px; color: #4C4237; line-height: 1.5;">The big tin from the warehouse run — decant into the small bottle.</div>
+
+    </div>
+
+    <!-- footer: Remove far left -->
+    <div style="height: 76px; padding: 0 20px; border-top: 1px solid #EEE4D2; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;">
+      <div style="height: 44px; border-radius: 13px; display: flex; align-items: center; padding: 0 14px; font-size: 15px; font-weight: 600; color: #BE3346;">Remove item</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="height: 44px; border-radius: 13px; display: flex; align-items: center; padding: 0 18px; font-size: 15px; font-weight: 600; color: #4C4237;">Cancel</div>
+        <div style="height: 44px; border-radius: 13px; background: #241E17; display: flex; align-items: center; padding: 0 20px; font-size: 15px; font-weight: 600; color: #F2E9DA;">Save changes</div>
+      </div>
+    </div>
+
+  </div>
+</div></div>
+  </section>
+  <section id="b4" class="board">
+    <div class="eyebrow"><span class="n">04</span>Edit item — dark</div>
+    <div class="frame"><div class="kr" style="width: 560px; min-height: 1270px; box-sizing: border-box; padding: 28px 40px 40px; background: radial-gradient(135% 105% at 10% -12%, #241E16, #1F1912 55%, #191410); display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Edit item — desktop 480 · dark</div>
+
+  <div style="width: 480px; background: #2C251B; border: 1px solid #544737; border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.55); overflow: hidden; display: flex; flex-direction: column;">
+
+    <!-- header: name + live size preview -->
+    <div style="height: 68px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3E3527; box-sizing: border-box;">
+      <div style="display: flex; align-items: baseline; gap: 9px; min-width: 0;">
+        <div class="pf" style="font-size: 21px; font-weight: 600; color: #F2E9DA; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Olive Oil</div>
+        <div style="font-size: 13px; color: #A5937A; white-space: nowrap;">1 qt</div>
+      </div>
+      <div style="width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #A5937A; flex: none;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <div style="padding: 20px; display: flex; flex-direction: column;">
+
+      <!-- ITEM -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Item</div>
+
+      <div style="height: 48px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #F2E9DA;">Olive Oil</div>
+
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="width: 76px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #F2E9DA;">1</div>
+        <div style="width: 140px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;">
+          <span style="font-size: 15px; color: #F2E9DA;">Quart</span>
+          <span style="color: #A5937A; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+
+      <div style="font-size: 12.5px; color: #A5937A; margin-top: 6px; line-height: 1.45;">Optional — it shows with the name on cards and in the shopping list.</div>
+
+      <div style="height: 1px; background: #3E3527; margin: 22px 0 20px;"></div>
+
+      <!-- COUNT -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Count</div>
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <div style="width: 7px; height: 7px; border-radius: 999px; background: #D8A63F;"></div>
+          <span style="font-size: 13px; font-weight: 500; color: #E2B85E;">Running low</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">On hand</div>
+          <div style="height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #F2E9DA;">1</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0;">
+          <div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">Low at</div>
+          <div style="height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;">
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #F2E9DA;">2</div>
+            <div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div style="display: flex; align-items: flex-start; gap: 11px; margin-top: 18px;">
+        <div style="width: 22px; height: 22px; border-radius: 7px; background: #EFE3CE; display: flex; align-items: center; justify-content: center; box-sizing: border-box; flex: none; margin-top: 1px; color: #241E17;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div>
+          <div style="font-size: 15px; color: #DCD0BA;">Keep off the shopping list</div>
+          <div style="font-size: 12.5px; color: #A5937A; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div>
+        </div>
+      </div>
+      <div style="height: 1px; background: #3E3527; margin: 22px 0 20px;"></div>
+
+      <!-- LOCATION -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Location</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 600; color: #241E17;">Pantry</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #BF7A52;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Meat Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6A92A7;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Upright Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5C948E;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Chest Freezer</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #544737; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #A5937A;">+ Location</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- STORE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Store</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #C77773;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Calfee Cattle</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 600; color: #241E17;">Costco</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6A92A7;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Publix</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A28467;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Aldi</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #544737; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #A5937A;">+ Store</span></div>
+      </div>
+
+      <div style="height: 16px;"></div>
+
+      <!-- TYPE -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Type</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Produce</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #6A92A7;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Dairy</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #C77773;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Protein</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #AE842B;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Grain</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 600; color: #241E17;">Condiment</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5C948E;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Beverage</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A28467;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Snack</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #BF7A52;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Baking</span></div>
+        <div style="height: 32px; border-radius: 999px; background: #2C251B; border: 1px solid #3E3527; display: flex; align-items: center; gap: 7px; padding: 0 13px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #B67796;"></span><span style="font-size: 13.5px; font-weight: 500; color: #F2E9DA;">Spice</span></div>
+        <div style="height: 32px; border-radius: 999px; border: 1px dashed #544737; display: flex; align-items: center; padding: 0 13px; box-sizing: border-box;"><span style="font-size: 13.5px; font-weight: 500; color: #A5937A;">+ Type</span></div>
+      </div>
+
+      <div style="height: 1px; background: #3E3527; margin: 22px 0 20px;"></div>
+
+      <!-- NOTES -->
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A; margin-bottom: 10px;">Notes</div>
+      <div style="height: 88px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; padding: 12px 14px; box-sizing: border-box; font-size: 15px; color: #DCD0BA; line-height: 1.5;">The big tin from the warehouse run — decant into the small bottle.</div>
+
+    </div>
+
+    <!-- footer: Remove far left -->
+    <div style="height: 76px; padding: 0 20px; border-top: 1px solid #3E3527; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;">
+      <div style="height: 44px; border-radius: 13px; display: flex; align-items: center; padding: 0 14px; font-size: 15px; font-weight: 600; color: #D4636B;">Remove item</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="height: 44px; border-radius: 13px; display: flex; align-items: center; padding: 0 18px; font-size: 15px; font-weight: 600; color: #DCD0BA;">Cancel</div>
+        <div style="height: 44px; border-radius: 13px; background: #EFE3CE; display: flex; align-items: center; padding: 0 20px; font-size: 15px; font-weight: 600; color: #241E17;">Save changes</div>
+      </div>
+    </div>
+
+  </div>
+</div></div>
+  </section>
+  <section id="b5" class="board">
+    <div class="eyebrow"><span class="n">05</span>The size row</div>
+    <div class="frame"><div style="font-family: 'Karla', system-ui, sans-serif; width: 1000px; box-sizing: border-box; padding: 32px; background: #F3EADC; display: flex; flex-direction: column; gap: 20px;">
+  <div>
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 600; color: #241E17;">The size row</div>
+    <div style="font-size: 13px; color: #6F6049; margin-top: 5px;">A number and a unit, under the name field. Optional, and never half-set.</div>
+  </div>
+  <div style="display: flex; gap: 20px; align-items: flex-start;">
+  <div style="flex: 1 1 0; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #241E17;">Light</div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">At rest — no size set</div>
+      <div style="display: flex; gap: 8px;"><div style="width: 76px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #6F6049;">1</div><div style="width: 140px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;"><span style="font-size: 15px; color: #6F6049;">Unit</span><span style="color: #6F6049; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+      <div style="font-size: 12.5px; color: #6F6049; line-height: 1.45;">The number placeholder and the word <em>Unit</em> are both meta, not faint — faint reads 3.18:1 light and 3.07:1 dark on this surface.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Set</div>
+      <div style="display: flex; gap: 8px;"><div style="width: 76px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #241E17;">1</div><div style="width: 140px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;"><span style="font-size: 15px; color: #241E17;">Quart</span><span style="color: #6F6049; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+      <div style="font-size: 12.5px; color: #6F6049; line-height: 1.45;">Both halves filled, or neither. Picking a unit against an empty number fills it with 1.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Choosing a unit</div>
+      <div style="display: flex; gap: 8px;"><div style="width: 76px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #241E17;">1</div><div style="width: 140px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;"><span style="font-size: 15px; color: #241E17;">Quart</span><span style="color: #6F6049; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 9.5L8 5.5L12 9.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+      <div style="margin-top: 2px;"><div style="width: 200px; border-radius: 14px; background: #FDFAF4; border: 1px solid #E2D5C0; box-shadow: 0 14px 30px rgba(36,30,23,.20); padding: 6px; box-sizing: border-box;"><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">No size</span></div><div style="height: 1px; background: #EEE4D2; margin: 6px 10px;"></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Pack</span><span style="font-size: 12.5px; color: #6F6049;">pack</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Dozen</span><span style="font-size: 12.5px; color: #6F6049;">dz</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Count</span><span style="font-size: 12.5px; color: #6F6049;">ct</span></div><div style="height: 1px; background: #EEE4D2; margin: 6px 10px;"></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Ounce</span><span style="font-size: 12.5px; color: #6F6049;">oz</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Pound</span><span style="font-size: 12.5px; color: #6F6049;">lb</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Gram</span><span style="font-size: 12.5px; color: #6F6049;">g</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Kilogram</span><span style="font-size: 12.5px; color: #6F6049;">kg</span></div><div style="height: 1px; background: #EEE4D2; margin: 6px 10px;"></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Fluid ounce</span><span style="font-size: 12.5px; color: #6F6049;">fl oz</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Half pint</span><span style="font-size: 12.5px; color: #6F6049;">cup</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Pint</span><span style="font-size: 12.5px; color: #6F6049;">pt</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 600; color: #241E17;">Quart</span><span style="color: #BE3346; display: flex;"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Gallon</span><span style="font-size: 12.5px; color: #6F6049;">gal</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Millilitre</span><span style="font-size: 12.5px; color: #6F6049;">ml</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #4C4237;">Litre</span><span style="font-size: 12.5px; color: #6F6049;">L</span></div></div></div>
+      <div style="font-size: 12.5px; color: #6F6049; line-height: 1.45;">The sort menu's construction — 6px padding, 36px rows at radius 9, a crimson check on the current value, never a fill. <strong>No size</strong> clears both halves, which is why the row needs no separate clear. The menu says the word; the abbreviation on its right is what the card and the shopping list print, and the check replaces it on the current row. On screen the menu caps at 320px and scrolls to the current unit.</div>
+    </div>
+  </div>
+  <div style="flex: 1 1 0; background: radial-gradient(135% 105% at 10% -12%, #241E16, #1F1912 55%, #191410); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #F2E9DA;">Dark</div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">At rest — no size set</div>
+      <div style="display: flex; gap: 8px;"><div style="width: 76px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #A5937A;">1</div><div style="width: 140px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;"><span style="font-size: 15px; color: #A5937A;">Unit</span><span style="color: #A5937A; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+      <div style="font-size: 12.5px; color: #A5937A; line-height: 1.45;">The number placeholder and the word <em>Unit</em> are both meta, not faint — faint reads 3.18:1 light and 3.07:1 dark on this surface.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Set</div>
+      <div style="display: flex; gap: 8px;"><div style="width: 76px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #F2E9DA;">1</div><div style="width: 140px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;"><span style="font-size: 15px; color: #F2E9DA;">Quart</span><span style="color: #A5937A; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+      <div style="font-size: 12.5px; color: #A5937A; line-height: 1.45;">Both halves filled, or neither. Picking a unit against an empty number fills it with 1.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Choosing a unit</div>
+      <div style="display: flex; gap: 8px;"><div style="width: 76px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #F2E9DA;">1</div><div style="width: 140px; height: 44px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; box-shadow: 0 0 0 3px rgba(212,99,107,.18); display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;"><span style="font-size: 15px; color: #F2E9DA;">Quart</span><span style="color: #A5937A; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 9.5L8 5.5L12 9.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+      <div style="margin-top: 2px;"><div style="width: 200px; border-radius: 14px; background: #2C251B; border: 1px solid #3E3527; box-shadow: 0 14px 30px rgba(0,0,0,.55); padding: 6px; box-sizing: border-box;"><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">No size</span></div><div style="height: 1px; background: #3E3527; margin: 6px 10px;"></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Pack</span><span style="font-size: 12.5px; color: #A5937A;">pack</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Dozen</span><span style="font-size: 12.5px; color: #A5937A;">dz</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Count</span><span style="font-size: 12.5px; color: #A5937A;">ct</span></div><div style="height: 1px; background: #3E3527; margin: 6px 10px;"></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Ounce</span><span style="font-size: 12.5px; color: #A5937A;">oz</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Pound</span><span style="font-size: 12.5px; color: #A5937A;">lb</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Gram</span><span style="font-size: 12.5px; color: #A5937A;">g</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Kilogram</span><span style="font-size: 12.5px; color: #A5937A;">kg</span></div><div style="height: 1px; background: #3E3527; margin: 6px 10px;"></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Fluid ounce</span><span style="font-size: 12.5px; color: #A5937A;">fl oz</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Half pint</span><span style="font-size: 12.5px; color: #A5937A;">cup</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Pint</span><span style="font-size: 12.5px; color: #A5937A;">pt</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 600; color: #F2E9DA;">Quart</span><span style="color: #D4636B; display: flex;"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Gallon</span><span style="font-size: 12.5px; color: #A5937A;">gal</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Millilitre</span><span style="font-size: 12.5px; color: #A5937A;">ml</span></div><div style="height: 36px; border-radius: 9px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; font-weight: 400; color: #DCD0BA;">Litre</span><span style="font-size: 12.5px; color: #A5937A;">L</span></div></div></div>
+      <div style="font-size: 12.5px; color: #A5937A; line-height: 1.45;">The sort menu's construction — 6px padding, 36px rows at radius 9, a crimson check on the current value, never a fill. <strong>No size</strong> clears both halves, which is why the row needs no separate clear. The menu says the word; the abbreviation on its right is what the card and the shopping list print, and the check replaces it on the current row. On screen the menu caps at 320px and scrolls to the current unit.</div>
+    </div>
+  </div></div>
+</div></div>
+  </section>
+  <section id="b6" class="board">
+    <div class="eyebrow"><span class="n">06</span>On hand and low at</div>
+    <div class="frame"><div style="font-family: 'Karla', system-ui, sans-serif; width: 1060px; box-sizing: border-box; padding: 32px; background: #F3EADC; display: flex; flex-direction: column; gap: 20px;">
+  <div>
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 600; color: #241E17;">On hand and low at</div>
+    <div style="font-size: 13px; color: #6F6049; margin-top: 5px;">Two steppers of equal weight, and the status they add up to.</div>
+  </div>
+  <div style="display: flex; gap: 20px; align-items: flex-start;">
+  <div style="flex: 1 1 0; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #241E17;">Light</div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 440px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Count</div>
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></div><span style="font-size: 13px; font-weight: 500; color: #855A0F;">Running low</span></div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div><div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">On hand</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #241E17; ">1</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+        <div><div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">Low at</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #241E17; ">2</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+      </div>
+      <div style="font-size: 12.5px; color: #6F6049; line-height: 1.5;">Two matched steppers, equal weight. Neither carries the ink fill the item card's plus does — the sheet already has one ink control, and that is <em>Save</em>.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">The numeral is a field</div>
+      <div style="display: flex; gap: 12px;">
+        <div><div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">On hand</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #241E17; background: rgba(190,51,70,.18); border-radius: 5px; padding: 0 6px;">75</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+        <div><div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">Low at</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #241E17; ">15</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+      </div>
+      <div style="font-size: 12.5px; color: #6F6049; line-height: 1.5;">Tap the number and type it. Stepping from 2 to 15 is thirteen taps; press-and-hold on either button accelerates after 400ms, and typing skips it entirely.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">The live status line</div>
+      <div style="display: flex; gap: 26px; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #5F7546;"></div><span style="font-size: 13px; font-weight: 500; color: #47592F;">In stock</span></div>
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></div><span style="font-size: 13px; font-weight: 500; color: #855A0F;">Running low</span></div>
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #9A2E3B;"></div><span style="font-size: 13px; font-weight: 500; color: #9A2E3B;">Out</span></div>
+      </div>
+      <div style="font-size: 12.5px; color: #6F6049; line-height: 1.5;">Right of the <strong>Count</strong> label, updating as either stepper moves — so the low threshold is set against its consequence rather than in the dark. Same words as the top bar's status pills, same three tints. Nothing new.</div>
+    </div>
+  </div>
+  <div style="flex: 1 1 0; background: radial-gradient(135% 105% at 10% -12%, #241E16, #1F1912 55%, #191410); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #F2E9DA;">Dark</div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 440px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Count</div>
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #D8A63F;"></div><span style="font-size: 13px; font-weight: 500; color: #E2B85E;">Running low</span></div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div><div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">On hand</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #F2E9DA; ">1</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+        <div><div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">Low at</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #F2E9DA; ">2</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+      </div>
+      <div style="font-size: 12.5px; color: #A5937A; line-height: 1.5;">Two matched steppers, equal weight. Neither carries the ink fill the item card's plus does — the sheet already has one ink control, and that is <em>Save</em>.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">The numeral is a field</div>
+      <div style="display: flex; gap: 12px;">
+        <div><div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">On hand</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; box-shadow: 0 0 0 3px rgba(212,99,107,.18); display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #F2E9DA; background: rgba(212,99,107,.22); border-radius: 5px; padding: 0 6px;">75</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+        <div><div style="font-size: 13px; color: #A5937A; margin-bottom: 6px;">Low at</div><div style="width: 214px; height: 56px; border-radius: 13px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: stretch; overflow: hidden;"><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-right: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div><div style="flex: 1 1 0; display: flex; align-items: center; justify-content: center;"><span style="font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #F2E9DA; ">15</span></div><div style="width: 44px; display: flex; align-items: center; justify-content: center; color: #DCD0BA; border-left: 1px solid #3E3527;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div></div></div>
+      </div>
+      <div style="font-size: 12.5px; color: #A5937A; line-height: 1.5;">Tap the number and type it. Stepping from 2 to 15 is thirteen taps; press-and-hold on either button accelerates after 400ms, and typing skips it entirely.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">The live status line</div>
+      <div style="display: flex; gap: 26px; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #8FAE6D;"></div><span style="font-size: 13px; font-weight: 500; color: #A9C486;">In stock</span></div>
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #D8A63F;"></div><span style="font-size: 13px; font-weight: 500; color: #E2B85E;">Running low</span></div>
+        <div style="display: flex; align-items: center; gap: 7px;"><div style="width: 7px; height: 7px; border-radius: 999px; background: #E5878D;"></div><span style="font-size: 13px; font-weight: 500; color: #E5878D;">Out</span></div>
+      </div>
+      <div style="font-size: 12.5px; color: #A5937A; line-height: 1.5;">Right of the <strong>Count</strong> label, updating as either stepper moves — so the low threshold is set against its consequence rather than in the dark. Same words as the top bar's status pills, same three tints. Nothing new.</div>
+    </div>
+  </div></div>
+  
+  <div style="background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 24px 28px; box-sizing: border-box;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #241E17; margin-bottom: 6px;">One field border, all four cases</div>
+    <div style="font-size: 13.5px; color: #4C4237; line-height: 1.6; max-width: 900px; margin-bottom: 20px;">The composer&rsquo;s field border is <strong>#9B8B75</strong> light and <strong>#6E5F4B</strong> dark. Measured against the surfaces those fields actually sit on, <strong>three of the four miss the 3:1 a control outline needs</strong> &mdash; and the dark sheet case is the same 2.45:1 the shopping-list checkbox already rejected #6E5F4B for. <strong>Meta</strong> clears all four, in both themes, on both surfaces.</div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 34px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Sheet surface &middot; light</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #6F6049;">#9B8B75 &mdash; 3.18:1 &middot; passes, barely</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #FDFAF4; border: 1px solid #9B8B75; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #241E17;">Olive Oil</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #6F6049;">#6F6049 &mdash; 5.85:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #241E17;">Olive Oil</div>
+          </div>
+        </div>
+      </div><div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Sheet surface &middot; dark</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #9A2E3B;">#6E5F4B &mdash; 2.45:1 &middot; fails 3:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #2C251B; border: 1px solid #6E5F4B; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #F2E9DA;">Olive Oil</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #6F6049;">#A5937A &mdash; 5.08:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #2C251B; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #F2E9DA;">Olive Oil</div>
+          </div>
+        </div>
+      </div><div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Composer panel &middot; light</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #9A2E3B;">#9B8B75 &mdash; 2.80:1 &middot; fails 3:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #F3EBDD; border: 1px solid #9B8B75; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #241E17;">Condiment</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #6F6049;">#6F6049 &mdash; 5.15:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #F3EBDD; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #241E17;">Condiment</div>
+          </div>
+        </div>
+      </div><div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Composer panel &middot; dark</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #9A2E3B;">#6E5F4B &mdash; 2.73:1 &middot; fails 3:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #221C14; border: 1px solid #6E5F4B; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #F2E9DA;">Condiment</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: #6F6049;">#A5937A &mdash; 5.67:1</div>
+            <div style="width: 190px; height: 46px; border-radius: 11px; background: #221C14; border: 1px solid #A5937A; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15px; color: #F2E9DA;">Condiment</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+  </section>
+  <section id="b7" class="board">
+    <div class="eyebrow"><span class="n">07</span>Where the size shows</div>
+    <div class="frame"><div style="font-family: 'Karla', system-ui, sans-serif; width: 1120px; box-sizing: border-box; padding: 32px; background: #F3EADC; display: flex; flex-direction: column; gap: 20px;">
+  <div>
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 600; color: #241E17;">Where the size shows</div>
+    <div style="font-size: 13px; color: #6F6049; margin-top: 5px;">Two places, two different answers about where it sits.</div>
+  </div>
+  <div style="background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #241E17;">Light</div>
+    <div style="display: flex; gap: 22px; align-items: flex-start;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Item card — today</div><div style="width: 300px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em;">Olive Oil</div>
+          
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #C4901F;"></div>
+          <span style="color: #6F6049; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #EEEAEE; border: 1px solid #DCD3DB; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #6D4A69;"></span><span style="font-size: 12.5px; font-weight: 500; color: #6D4A69;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #241E17; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; justify-content: center; color: #4C4237;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #241E17; display: flex; align-items: center; justify-content: center; color: #F2E9DA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Item card — with a size</div><div style="width: 300px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em;">Olive Oil</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 2px;">1 qt</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #C4901F;"></div>
+          <span style="color: #6F6049; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #EEEAEE; border: 1px solid #DCD3DB; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #6D4A69;"></span><span style="font-size: 12.5px; font-weight: 500; color: #6D4A69;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #241E17; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; justify-content: center; color: #4C4237;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #241E17; display: flex; align-items: center; justify-content: center; color: #F2E9DA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="flex: 1 1 0; font-size: 12.5px; color: #6F6049; line-height: 1.6; padding-top: 26px;">Beneath the name, not beside it. Names are long and the list row's own 460px collision is already on record — under the name is safe at any card width.</div>
+    </div>
+    <div style="display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Shopping list — today</div><div style="width: 460px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #ECEFE9; border-bottom: 1px solid #D8DED1; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #5F7542;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">3</span>
+      </div>
+      <div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Bacon</span>
+          
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F6E2DD; border: 1px solid #EBCFC5; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #9A2E3B;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Butter</span>
+          
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Olive Oil</span>
+          
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 1 · low at 2</div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Shopping list — with sizes</div><div style="width: 460px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #ECEFE9; border-bottom: 1px solid #D8DED1; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #5F7542;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">3</span>
+      </div>
+      <div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Bacon</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">12 oz</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F6E2DD; border: 1px solid #EBCFC5; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #9A2E3B;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Butter</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">1 lb</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Olive Oil</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">1 qt</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 1 · low at 2</div>
+      </div>
+    </div></div>
+    </div>
+    <div style="font-size: 12.5px; color: #6F6049; line-height: 1.6; max-width: 940px;">Here the size rides <em>with</em> the name, before the badge — at the shelf &ldquo;Butter, 1 lb&rdquo; is one phrase, and splitting it across the row to sit with the counts would be worse. The name truncates; the size does not.</div>
+  </div>
+  <div style="background: radial-gradient(135% 105% at 10% -12%, #241E16, #1F1912 55%, #191410); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #F2E9DA;">Dark</div>
+    <div style="display: flex; gap: 22px; align-items: flex-start;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Item card — today</div><div style="width: 300px; background: #2C251B; border: 1px solid #544737; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #F2E9DA; letter-spacing: -0.01em;">Olive Oil</div>
+          
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #D8A63F;"></div>
+          <span style="color: #A5937A; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #362B27; border: 1px solid #453339; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #A37F9F;"></span><span style="font-size: 12.5px; font-weight: 500; color: #AD8CAA;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #F2E9DA; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #221C14; border: 1px solid #3E3527; display: flex; align-items: center; justify-content: center; color: #DCD0BA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; justify-content: center; color: #241E17;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Item card — with a size</div><div style="width: 300px; background: #2C251B; border: 1px solid #544737; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #F2E9DA; letter-spacing: -0.01em;">Olive Oil</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 2px;">1 qt</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #D8A63F;"></div>
+          <span style="color: #A5937A; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #362B27; border: 1px solid #453339; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #A37F9F;"></span><span style="font-size: 12.5px; font-weight: 500; color: #AD8CAA;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #F2E9DA; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #221C14; border: 1px solid #3E3527; display: flex; align-items: center; justify-content: center; color: #DCD0BA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; justify-content: center; color: #241E17;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="flex: 1 1 0; font-size: 12.5px; color: #A5937A; line-height: 1.6; padding-top: 26px;">Beneath the name, not beside it. Names are long and the list row's own 460px collision is already on record — under the name is safe at any card width.</div>
+    </div>
+    <div style="display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Shopping list — today</div><div style="width: 460px; background: #2C251B; border: 1px solid #544737; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #343221; border-bottom: 1px solid #3F432A; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #7A935A;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">3</span>
+      </div>
+      <div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Bacon</span>
+          
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #31201E; border: 1px solid #4E2E2C; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E5878D;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Butter</span>
+          
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Olive Oil</span>
+          
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 1 · low at 2</div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Shopping list — with sizes</div><div style="width: 460px; background: #2C251B; border: 1px solid #544737; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #343221; border-bottom: 1px solid #3F432A; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #7A935A;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">3</span>
+      </div>
+      <div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Bacon</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">12 oz</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #31201E; border: 1px solid #4E2E2C; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E5878D;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Butter</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">1 lb</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Olive Oil</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">1 qt</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 1 · low at 2</div>
+      </div>
+    </div></div>
+    </div>
+    <div style="font-size: 12.5px; color: #A5937A; line-height: 1.6; max-width: 940px;">Here the size rides <em>with</em> the name, before the badge — at the shelf &ldquo;Butter, 1 lb&rdquo; is one phrase, and splitting it across the row to sit with the counts would be worse. The name truncates; the size does not.</div>
+  </div>
+</div></div>
+  </section>
+  <section id="b8" class="board">
+    <div class="eyebrow"><span class="n">08</span>Add an item at 390</div>
+    <div class="frame"><div style="font-family: 'Karla', system-ui, sans-serif; width: 500px; box-sizing: border-box; padding: 30px 32px 36px; background: #F3EADC; display: flex; flex-direction: column; gap: 14px;">
+
+  <div>
+    <div class="pf" style="font-size: 24px; font-weight: 600; color: #241E17;">Add an item at 390</div>
+    <div style="font-size: 13px; color: #6F6049; margin-top: 5px;">Near-full-height bottom sheet. The two steppers stay side by side.</div>
+  </div>
+
+  <!-- phone -->
+  <div style="position: relative; width: 390px; height: 844px; border-radius: 26px; overflow: hidden; border: 1px solid #CFBEA3; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD);">
+
+    <!-- scrim over the app -->
+    <div style="position: absolute; inset: 0; background: rgba(36,30,23,.44);"></div>
+
+    <!-- sheet -->
+    <div style="position: absolute; left: 0; right: 0; top: 84px; bottom: 0; background: #FDFAF4; border-radius: 20px 20px 0 0; overflow: hidden; display: flex; flex-direction: column;">
+
+      <!-- grabber -->
+      <div style="height: 20px; display: flex; align-items: center; justify-content: center; flex: none;">
+        <div style="width: 36px; height: 4px; border-radius: 999px; background: #E2D5C0;"></div>
+      </div>
+
+      <!-- header -->
+      <div style="height: 58px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #EEE4D2; box-sizing: border-box; flex: none;">
+        <div class="pf" style="font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em;">Add an item</div>
+        <div style="width: 44px; height: 44px; margin-right: -12px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #6F6049;">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+
+      <!-- body -->
+      <div style="flex: 1 1 0; overflow: hidden; padding: 16px; box-sizing: border-box;">
+
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Item</div>
+
+        <div style="height: 48px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: center; padding: 0 14px; box-sizing: border-box;">
+          <div style="width: 1.5px; height: 20px; background: #241E17;"></div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <div style="width: 76px; height: 46px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; font-size: 15.5px; color: #6F6049;">1</div>
+          <div style="width: 148px; height: 46px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 14px; box-sizing: border-box;">
+            <span style="font-size: 15px; color: #6F6049;">Unit</span>
+            <span style="color: #6F6049; display: flex;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+        </div>
+
+        <div style="font-size: 12.5px; color: #6F6049; margin-top: 6px; line-height: 1.45;">Optional — it shows with the name on cards and in the shopping list.</div>
+
+        <div style="height: 1px; background: #EEE4D2; margin: 20px 0 18px;"></div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Count</div>
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></div>
+            <span style="font-size: 13px; font-weight: 500; color: #855A0F;">Running low</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+          <div style="flex: 1 1 0; min-width: 0;">
+            <div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">On hand</div>
+            <div style="height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;">
+              <div style="width: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+              <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #241E17;">1</div>
+              <div style="width: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+            </div>
+          </div>
+          <div style="flex: 1 1 0; min-width: 0;">
+            <div style="font-size: 13px; color: #6F6049; margin-bottom: 6px;">Low at</div>
+            <div style="height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: stretch; overflow: hidden;">
+              <div style="width: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: #4C4237; border-right: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+              <div class="pf" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #241E17;">2</div>
+              <div style="width: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: #4C4237; border-left: 1px solid #EEE4D2;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+            </div>
+            <div style="font-size: 12.5px; color: #6F6049; margin-top: 6px;">Household default.</div>
+          </div>
+        </div>
+
+
+        <div style="display: flex; align-items: flex-start; gap: 11px; margin-top: 16px;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box; flex: none; margin-top: 1px;"></div>
+          <div>
+            <div style="font-size: 15px; color: #4C4237;">Keep off the shopping list</div>
+            <div style="font-size: 12.5px; color: #6F6049; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div>
+          </div>
+        </div>
+        <div style="height: 1px; background: #EEE4D2; margin: 20px 0 18px;"></div>
+
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 10px;">Location</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <div style="height: 44px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 15px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 14px; font-weight: 500; color: #241E17;">Pantry</span></div>
+          <div style="height: 44px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 15px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #A85E33;"></span><span style="font-size: 14px; font-weight: 500; color: #241E17;">Meat Freezer</span></div>
+          <div style="height: 44px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 15px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #456B80;"></span><span style="font-size: 14px; font-weight: 500; color: #241E17;">Upright Freezer</span></div>
+          <div style="height: 44px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 7px; padding: 0 15px; box-sizing: border-box;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3E6D68;"></span><span style="font-size: 14px; font-weight: 500; color: #241E17;">Chest Freezer</span></div>
+          <div style="height: 44px; border-radius: 999px; border: 1px dashed #C9B79B; display: flex; align-items: center; padding: 0 15px; box-sizing: border-box;"><span style="font-size: 14px; font-weight: 500; color: #6F6049;">+ Location</span></div>
+        </div>
+      </div>
+
+      <!-- sticky footer -->
+      <div style="height: 80px; flex: none; padding: 0 16px; border-top: 1px solid #EEE4D2; background: #FDFAF4; display: flex; align-items: center; gap: 10px; box-sizing: border-box;">
+        <div style="flex: 1 1 0; height: 48px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 15.5px; font-weight: 600; color: #4C4237;">Cancel</div>
+        <div style="flex: 1.4 1 0; height: 48px; border-radius: 13px; background: #241E17; display: flex; align-items: center; justify-content: center; font-size: 15.5px; font-weight: 600; color: #F2E9DA;">Save item</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="font-size: 12.5px; color: #6F6049; line-height: 1.6; max-width: 390px;">Two steppers in 358px: 173 each, two 44px buttons and an 85px numeral cell. Playfair 700 at <strong>26px</strong> here rather than the desktop 28, which holds four digits with 6.6px to spare. <strong>Four is the ceiling</strong> — a fifth does not fit, and the field should refuse it rather than let it collide. Chips go to 44px; the number and unit fields to 46.</div>
+</div></div>
+  </section>
+  <section id="b9" class="board">
+    <div class="eyebrow"><span class="n">09</span>Keeping an item off the list</div>
+    <div class="frame"><div style="font-family: 'Karla', system-ui, sans-serif; width: 1060px; box-sizing: border-box; padding: 32px; background: #F3EADC; display: flex; flex-direction: column; gap: 20px;">
+  <div>
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 600; color: #241E17;">Keeping an item off the shopping list</div>
+    <div style="font-size: 13px; color: #6F6049; margin-top: 5px;">Mockup only &mdash; not specced as decided. One checkbox, and the two places its consequence shows.</div>
+  </div>
+  <div style="background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC 55%, #EADFCD); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #241E17;">Light</div>
+
+    <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 12px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">Off</div><div style="display: flex; align-items: flex-start; gap: 11px;"><div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box; flex: none; margin-top: 1px;"></div><div><div style="font-size: 15px; color: #4C4237;">Keep off the shopping list</div><div style="font-size: 12.5px; color: #6F6049; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div></div></div></div>
+      <div style="display: flex; flex-direction: column; gap: 12px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">On</div><div style="display: flex; align-items: flex-start; gap: 11px;"><div style="width: 22px; height: 22px; border-radius: 7px; background: #241E17; display: flex; align-items: center; justify-content: center; flex: none; margin-top: 1px; color: #F2E9DA;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div style="font-size: 15px; color: #4C4237;">Keep off the shopping list</div><div style="font-size: 12.5px; color: #6F6049; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div></div></div></div>
+    </div>
+    <div style="font-size: 12.5px; color: #6F6049; line-height: 1.55; max-width: 940px;">Last row of <strong>Count</strong>, under the two steppers &mdash; not a section of its own. Low-at says <em>put this on the list when I am down to N</em>; this says <em>&hellip; except don&rsquo;t</em>. It modifies the threshold, so it lives where the threshold is set. The 22px box is the shopping list&rsquo;s own checkbox at its own size, inverting exactly as every selected control in the app does.</div>
+
+    <div style="display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">On the card — on the list</div><div style="width: 300px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em;">Olive Oil</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 2px;">1 qt</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #C4901F;"></div>
+          <span style="color: #6F6049; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #EEEAEE; border: 1px solid #DCD3DB; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #6D4A69;"></span><span style="font-size: 12.5px; font-weight: 500; color: #6D4A69;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #241E17; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; justify-content: center; color: #4C4237;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #241E17; display: flex; align-items: center; justify-content: center; color: #F2E9DA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">On the card — kept off</div><div style="width: 300px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #241E17; letter-spacing: -0.01em;">Olive Oil</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 2px;">1 qt</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <span style="color: #6F6049; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.6 2.2h1.7l1.5 6.9h6.4l1.3-4.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.1" cy="12.4" r="1.05" fill="currentColor"/><circle cx="10.7" cy="12.4" r="1.05" fill="currentColor"/><path d="M2.2 14.2L14.2 2.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span><div style="width: 8px; height: 8px; border-radius: 999px; background: #C4901F;"></div>
+          <span style="color: #6F6049; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #ECEFE9; border: 1px solid #D8DED1; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #5F7542;"></span><span style="font-size: 12.5px; font-weight: 500; color: #5B703F;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #EEEAEE; border: 1px solid #DCD3DB; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #6D4A69;"></span><span style="font-size: 12.5px; font-weight: 500; color: #6D4A69;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #241E17; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #6F6049; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; justify-content: center; color: #4C4237;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #241E17; display: flex; align-items: center; justify-content: center; color: #F2E9DA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="flex: 1 1 260px; padding-top: 26px;"><div style="font-size: 12.5px; color: #6F6049; line-height: 1.55; max-width: 300px;">The status is <strong>unchanged</strong> &mdash; the dot still says running low, because the count still is. A struck cart in meta, left of the dot, is the only difference. Without it, &ldquo;why isn&rsquo;t the olive oil on my list&rdquo; has no answer anywhere in the grid. It is the least settled part of this: a glyph nobody has been taught.</div></div>
+    </div>
+
+    <div style="display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">The list — before</div><div style="width: 440px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #ECEFE9; border-bottom: 1px solid #D8DED1; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #5F7542;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">3</span>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap;">Bacon</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">12 oz</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F6E2DD; border: 1px solid #EBCFC5; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #9A2E3B;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap;">Butter</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">1 lb</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap;">Olive Oil</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">1 qt</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 1 · low at 2</div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049;">The list — after</div><div style="width: 440px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #ECEFE9; border-bottom: 1px solid #D8DED1; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #5F7542;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #5B703F;">2</span>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #EEE4D2;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap;">Bacon</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">12 oz</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F6E2DD; border: 1px solid #EBCFC5; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #9A2E3B;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #FDFAF4; border: 2px solid #6F6049; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #241E17; white-space: nowrap;">Butter</span>
+          <span style="font-size: 13px; color: #6F6049; white-space: nowrap;">1 lb</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #F7EEDA; border: 1px solid #E9DAB9; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #855A0F;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #6F6049; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div>
+    </div></div>
+    </div>
+    <div style="font-size: 12.5px; color: #6F6049; line-height: 1.55; max-width: 940px;">The row leaves and the store card&rsquo;s count goes with it, as does the top bar&rsquo;s cart count. The three status pills do <strong>not</strong> move: they count stock, and the olive oil is still low. That split is the whole idea &mdash; this hides an item from one <em>view</em>, it does not change what is true about it.</div>
+  </div>
+  <div style="background: radial-gradient(135% 105% at 10% -12%, #241E16, #1F1912 55%, #191410); border-radius: 18px; padding: 26px 28px 30px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+    <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 19px; font-weight: 600; color: #F2E9DA;">Dark</div>
+
+    <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 12px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">Off</div><div style="display: flex; align-items: flex-start; gap: 11px;"><div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box; flex: none; margin-top: 1px;"></div><div><div style="font-size: 15px; color: #DCD0BA;">Keep off the shopping list</div><div style="font-size: 12.5px; color: #A5937A; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div></div></div></div>
+      <div style="display: flex; flex-direction: column; gap: 12px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">On</div><div style="display: flex; align-items: flex-start; gap: 11px;"><div style="width: 22px; height: 22px; border-radius: 7px; background: #EFE3CE; display: flex; align-items: center; justify-content: center; flex: none; margin-top: 1px; color: #241E17;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div style="font-size: 15px; color: #DCD0BA;">Keep off the shopping list</div><div style="font-size: 12.5px; color: #A5937A; margin-top: 3px; line-height: 1.45;">It still shows as low or out on its card &mdash; it just never joins the list.</div></div></div></div>
+    </div>
+    <div style="font-size: 12.5px; color: #A5937A; line-height: 1.55; max-width: 940px;">Last row of <strong>Count</strong>, under the two steppers &mdash; not a section of its own. Low-at says <em>put this on the list when I am down to N</em>; this says <em>&hellip; except don&rsquo;t</em>. It modifies the threshold, so it lives where the threshold is set. The 22px box is the shopping list&rsquo;s own checkbox at its own size, inverting exactly as every selected control in the app does.</div>
+
+    <div style="display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">On the card — on the list</div><div style="width: 300px; background: #2C251B; border: 1px solid #544737; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #F2E9DA; letter-spacing: -0.01em;">Olive Oil</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 2px;">1 qt</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #D8A63F;"></div>
+          <span style="color: #A5937A; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #362B27; border: 1px solid #453339; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #A37F9F;"></span><span style="font-size: 12.5px; font-weight: 500; color: #AD8CAA;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #F2E9DA; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #221C14; border: 1px solid #3E3527; display: flex; align-items: center; justify-content: center; color: #DCD0BA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; justify-content: center; color: #241E17;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">On the card — kept off</div><div style="width: 300px; background: #2C251B; border: 1px solid #544737; border-radius: 18px; padding: 16px; box-sizing: border-box;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 21px; font-weight: 600; color: #F2E9DA; letter-spacing: -0.01em;">Olive Oil</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 2px;">1 qt</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-top: 6px;">
+          <span style="color: #A5937A; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1.6 2.2h1.7l1.5 6.9h6.4l1.3-4.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.1" cy="12.4" r="1.05" fill="currentColor"/><circle cx="10.7" cy="12.4" r="1.05" fill="currentColor"/><path d="M2.2 14.2L14.2 2.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span><div style="width: 8px; height: 8px; border-radius: 999px; background: #D8A63F;"></div>
+          <span style="color: #A5937A; display: flex;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;"><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Pantry</span></div><div style="height: 26px; border-radius: 999px; background: #343221; border: 1px solid #3F432A; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #7A935A;"></span><span style="font-size: 12.5px; font-weight: 500; color: #8AA467;">Costco</span></div><div style="height: 26px; border-radius: 999px; background: #362B27; border: 1px solid #453339; display: flex; align-items: center; gap: 6px; padding: 0 10px; box-sizing: border-box;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #A37F9F;"></span><span style="font-size: 12.5px; font-weight: 500; color: #AD8CAA;">Condiment</span></div></div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 16px;">
+        <div>
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 42px; font-weight: 700; color: #F2E9DA; line-height: 1;">1</div>
+          <div style="font-size: 13px; color: #A5937A; margin-top: 4px;">low at 2</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #221C14; border: 1px solid #3E3527; display: flex; align-items: center; justify-content: center; color: #DCD0BA;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #EFE3CE; display: flex; align-items: center; justify-content: center; color: #241E17;"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        </div>
+      </div>
+    </div></div>
+      <div style="flex: 1 1 260px; padding-top: 26px;"><div style="font-size: 12.5px; color: #A5937A; line-height: 1.55; max-width: 300px;">The status is <strong>unchanged</strong> &mdash; the dot still says running low, because the count still is. A struck cart in meta, left of the dot, is the only difference. Without it, &ldquo;why isn&rsquo;t the olive oil on my list&rdquo; has no answer anywhere in the grid. It is the least settled part of this: a glyph nobody has been taught.</div></div>
+    </div>
+
+    <div style="display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">The list — before</div><div style="width: 440px; background: #2C251B; border: 1px solid #544737; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #343221; border-bottom: 1px solid #3F432A; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #7A935A;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">3</span>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap;">Bacon</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">12 oz</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #31201E; border: 1px solid #4E2E2C; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E5878D;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap;">Butter</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">1 lb</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap;">Olive Oil</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">1 qt</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 1 · low at 2</div>
+      </div>
+    </div></div>
+      <div style="display: flex; flex-direction: column; gap: 10px;"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #A5937A;">The list — after</div><div style="width: 440px; background: #2C251B; border: 1px solid #544737; border-radius: 20px; overflow: hidden;">
+      <div style="height: 38px; background: #343221; border-bottom: 1px solid #3F432A; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #7A935A;"></span>
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">COSTCO</span>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: #8AA467;">2</span>
+      </div><div style="height: 56px; display: flex; align-items: center; border-bottom: 1px solid #3E3527;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap;">Bacon</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">12 oz</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #31201E; border: 1px solid #4E2E2C; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E5878D;">OUT</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 0 · low at 2</div>
+      </div><div style="height: 56px; display: flex; align-items: center;">
+        <div style="width: 56px; display: flex; align-items: center; justify-content: center; flex: none;">
+          <div style="width: 22px; height: 22px; border-radius: 7px; background: #2C251B; border: 2px solid #A5937A; box-sizing: border-box;"></div>
+        </div>
+        <div style="flex: 1 1 0; min-width: 0; display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 17px; font-weight: 600; color: #F2E9DA; white-space: nowrap;">Butter</span>
+          <span style="font-size: 13px; color: #A5937A; white-space: nowrap;">1 lb</span>
+          <span style="flex: none; align-self: center;"><div style="height: 19px; border-radius: 999px; background: #2E2614; border: 1px solid #4B3E1E; display: flex; align-items: center; padding: 0 7px; box-sizing: border-box;"><span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: #E2B85E;">LOW</span></div></span>
+        </div>
+        <div style="font-size: 13px; color: #A5937A; padding-right: 16px; white-space: nowrap; flex: none;">have 2 · low at 4</div>
+      </div>
+    </div></div>
+    </div>
+    <div style="font-size: 12.5px; color: #A5937A; line-height: 1.55; max-width: 940px;">The row leaves and the store card&rsquo;s count goes with it, as does the top bar&rsquo;s cart count. The three status pills do <strong>not</strong> move: they count stock, and the olive oil is still low. That split is the whole idea &mdash; this hides an item from one <em>view</em>, it does not change what is true about it.</div>
+  </div>
+</div></div>
+  </section>
+
+  <footer class="doc">
+    Drawn against the tokens in <strong>ui-designs.md</strong>; the written spec is <strong>add-edit-item.md</strong>. Board 9 is a mockup only — nothing on it is specced as decided.
+  </footer>
+
+</div>
+</body>
+</html>

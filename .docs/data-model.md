@@ -244,6 +244,10 @@ items: table({
   locationId: id("locations"),
   qty: string(),                    // non-negative integer, as a string
   threshold: string(),              // non-negative integer, as a string
+  size: string().default(""),       // how big ONE of them is — D52
+  unit: string().default(""),       // its unit KEY, a slug: "quart", not "qt"
+  offShoppingList: boolean().default(false),
+                                    // never joins the shopping list — D53
   notes: string().default(""),
   addedAt: string().default(""),    // when the ITEM entered the pantry — D44
   changedAt: string().default(""),  // bumped by updateItem AND adjustQty — D44
@@ -258,6 +262,19 @@ see**, `adjustQty` included — a quantity is information about the item, and th
 hot path being hot is not a reason for it to lie. **Nothing reads it yet**, and
 that is deliberate: a row written without one never gets one, so the column has
 to exist before the rows do.
+
+`size` and `unit` are **one value in two columns** and are never half-set
+([D52](decisions.md#d52-an-item-has-a-size-and-a-size-is-a-pair-that-is-never-half-set)).
+`normalizeSize` in `shared/size.ts` is the only thing that writes either, and
+both `addItem` and `updateItem` go through it — a unit with no number becomes
+`1`, and a number with no unit becomes neither. `unit` holds a **slug**, so what
+a household stored survives us changing what it prints.
+
+`offShoppingList` is read by **exactly one function**, `needsBuying`
+([D53](decisions.md#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item)).
+`statusKeyFor` does not see it, so an excluded item still reads *Out* on its card
+and still counts toward the status pills; only the shopping list and its counts
+drop it.
 
 Note what is **absent**:
 

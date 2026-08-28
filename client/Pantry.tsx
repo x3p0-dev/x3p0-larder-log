@@ -1282,6 +1282,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					storeIds: item.storeIds,
 					qty: item.qty,
 					threshold: item.threshold,
+					size: item.size,
+					unit: item.unit,
+					offShoppingList: item.offShoppingList,
 					notes: item.notes,
 				}, { addedAt: addedAtOf(item), changedAt: changedAtOf(item) });
 			},
@@ -1476,6 +1479,12 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			storeIds: [],
 			qty: '1',
 			threshold: defaultThreshold,
+			// Both halves of the size, or neither — see `shared/size.ts`. A new
+			// item starts with neither: most things in a pantry are counted rather
+			// than packaged, and a prefilled unit is a guess about the wrong half.
+			size: '',
+			unit: '',
+			offShoppingList: false,
 			notes: '',
 		};
 	}
@@ -1529,6 +1538,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			storeIds: [...item.storeIds],
 			qty: item.qty,
 			threshold: item.threshold,
+			size: item.size,
+			unit: item.unit,
+			offShoppingList: item.offShoppingList,
 			notes: item.notes,
 		});
 	}

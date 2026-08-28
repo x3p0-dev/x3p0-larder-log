@@ -4,10 +4,12 @@ import { Check, Eye, EyeOff, RotateCcw } from 'lucide-preact';
 import type { Theme } from '../lib/theme';
 import { statusColor, statusFor, themed } from '../lib/theme';
 import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET } from '../lib/controlStyles';
+import { CheckBox } from './CheckBox';
 
 import type { ShoppingGroup } from '../../shared/shoppingList';
 import type { Item } from '../../shared/types';
 import { toInt } from '../../shared/qty';
+import { formatSize } from '../../shared/size';
 
 /**
  * Visually hidden, but read.
@@ -283,7 +285,7 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	 */
 	const badge = (
 		<span
-			class="relative top-px inline-flex items-center h-[18px] px-[7px] rounded-full font-bold text-[9.5px] uppercase tracking-[0.1em] shrink-0"
+			class="relative top-px self-center inline-flex items-center h-[18px] px-[7px] rounded-full font-bold text-[9.5px] uppercase tracking-[0.1em] shrink-0"
 			style={{
 				background: status.bg,
 				border: `1px solid ${status.ring}`,
@@ -319,9 +321,27 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	 * the collision the stack was guarding against, now detected rather than
 	 * assumed. `content-center` centres the line box, one line or two.
 	 */
+	/*
+	 * The size rides **with the name**, before the badge — at the shelf
+	 * *"Butter, 1 lb"* is one phrase, and moving it across the row to sit with
+	 * `have 2 · low at 4` would take that phrase apart to save a measurement.
+	 * It is `shrink-0`: the name truncates inside the `min-width: 0` flex and
+	 * the size does not, because half a unit is worse than no unit.
+	 */
+	const size = formatSize(item.size, item.unit);
+
+	const sizeLabel = size && (
+		<span
+			class="text-[13px] whitespace-nowrap shrink-0"
+			style={{ color: theme.textMuted, opacity: checked ? 0.55 : 1 }}
+		>
+			{size}
+		</span>
+	);
+
 	const body = (
 		<>
-			<span class="flex items-center gap-2 md:gap-2.5 min-w-0 grow shrink-0 basis-[10rem]">{name}{badge}</span>
+			<span class="flex items-baseline gap-2 md:gap-2.5 min-w-0 grow shrink-0 basis-[10rem]">{name}{sizeLabel}{badge}</span>
 			{meta}
 		</>
 	);
@@ -338,7 +358,7 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	const inner = (
 		<>
 			<span class="w-[52px] md:w-14 shrink-0 flex items-center justify-center self-stretch">
-				<Box checked={checked} theme={theme} />
+				<CheckBox checked={checked} theme={theme} />
 			</span>
 			<span class={`${bodyClass} pr-4 md:pr-0`}>{body}</span>
 		</>
@@ -365,29 +385,6 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 				</button>
 			) : inner}
 		</li>
-	);
-}
-
-/**
- * The box itself — the chip rule at 22px.
- *
- * Off is the surface on a 2px `textMuted` border; on is the inversion every
- * selected control in this app uses. `textMuted` rather than the composer
- * field's border is a contrast finding: `#6E5F4B` is the strongest border in
- * the dark palette, but it was measured on the *ground*. On the card surface it
- * falls to 2.45:1 — under the 3:1 a control outline needs — and an unchecked
- * box you cannot see is the worst possible failure in this component.
- */
-function Box({ checked, theme }: { checked: boolean; theme: Theme }) {
-	return (
-		<span
-			class="flex items-center justify-center w-[22px] h-[22px] rounded-[7px] shrink-0"
-			style={checked
-				? { background: theme.inkBg }
-				: { background: theme.surface, border: `2px solid ${theme.textMuted}` }}
-		>
-			{checked && <Check size={13} strokeWidth={3.2} style={{ color: theme.inkText }} />}
-		</span>
 	);
 }
 

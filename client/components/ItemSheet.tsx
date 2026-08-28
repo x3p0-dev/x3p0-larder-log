@@ -2,14 +2,25 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Check, Minus, Plus, Trash2, X } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
-import { entityColorFor, proposeColor } from '../lib/theme';
+import { entityColorFor, proposeColor, statusFor } from '../lib/theme';
+import { CheckBox } from './CheckBox';
 import { TermPanel, TermRow } from './TermPanel';
+import { UnitMenu } from './UnitMenu';
 import { digitField } from '../lib/numericField';
+import { useHoldRepeat } from '../hooks/useHoldRepeat';
 import type { ItemDraft, Term } from '../../shared/types';
 import type { TaxonomyActions } from '../lib/actions';
+import { toInt } from '../../shared/qty';
+import { formatSize, MAX_SIZE_DIGITS } from '../../shared/size';
+import { STATUS_PHRASE } from '../../shared/status';
 import {
-	PAGE_BUTTON, PAGE_BUTTON_PRIMARY, PAGE_CHIP, PAGE_CHIP_ADD, PAGE_CHIP_ON, PAGE_ICON, PAGE_INPUT,
+	PAGE_BUTTON_PRIMARY, PAGE_CHECKBOX_ROW, PAGE_CHIP, PAGE_CHIP_ADD, PAGE_CHIP_ON,
+	PAGE_FIELD, PAGE_FIELD_HALO_WITHIN, PAGE_FIELD_HALO_WITHIN_DARK, PAGE_ICON,
+	PAGE_STEPPER_CELL, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK,
 } from '../lib/controlStyles';
+
+/** Four digits, for the reason `MAX_SIZE_DIGITS` gives: an 85px cell at 390. */
+const MAX_COUNT_DIGITS = 4;
 
 type Props = {
 	open: boolean;
@@ -26,6 +37,7 @@ type Props = {
 	stores: Term[];
 	taxonomy: TaxonomyActions;
 	canCreateTerms: boolean;
+	/** The household's low-stock default, for the *Low at* note. See below. */
 	defaultThreshold: string;
 	saving: boolean;
 	onSave: () => void;
@@ -34,10 +46,32 @@ type Props = {
 	theme: Theme;
 };
 
-/** The section label used throughout the sheet. */
+/** The micro-label over each section. */
 function Label({ children, theme }: { children: preact.ComponentChildren; theme: Theme }) {
 	return (
-		<p class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: theme.textFaint }}>{children}</p>
+		<p class="text-label font-bold uppercase tracking-[0.15em]" style={{ color: theme.textMuted }}>{children}</p>
+	);
+}
+
+/**
+ * The full-width hairline between sections.
+ *
+ * **The grouping is done with labels and rules, never with a fill.** The
+ * Settings pane groups with a raised fill on the drawer and the obvious move was
+ * to borrow it — but on this sheet a recessed panel already *means* "you are
+ * editing something": it is the inline composer, which drops in below a `+ …`
+ * chip. A second recessed thing that only grouped would make the composer stop
+ * meaning anything.
+ */
+function Rule({ theme }: { theme: Theme }) {
+	return <span class="block h-px mt-[18px] mb-[18px] md:mt-[22px] md:mb-5" style={{ background: theme.divider }} />;
+}
+
+/** A hint under its own control — the size row's one line, and only that. */
+function Hint({ children, theme }: { children: preact.ComponentChildren; theme: Theme }) {
+	return (
+		/* Meta, never faint: faint measures 3.18:1 light and 3.07:1 dark here. */
+		<p class="text-[12.5px] leading-[1.45] pt-1.5" style={{ color: theme.textMuted }}>{children}</p>
 	);
 }
 
@@ -80,7 +114,7 @@ function ChipRow({
 
 	return (
 		<div class="flex flex-col gap-2.5">
-			<div class="flex flex-wrap gap-[7px]">
+			<div class="flex flex-wrap gap-2">
 				{terms.map((t) => {
 					const on = selected.includes(t.id);
 					/*
@@ -99,7 +133,7 @@ function ChipRow({
 							type="button"
 							onClick={() => onToggle(t.id)}
 							aria-pressed={on}
-							class={`flex items-center gap-[7px] h-9 px-3.5 rounded-full text-[13.5px] ${on ? PAGE_CHIP_ON : PAGE_CHIP}`}
+							class={`flex items-center gap-[7px] h-11 md:h-8 px-3.5 rounded-full text-[13.5px] font-medium ${on ? PAGE_CHIP_ON : PAGE_CHIP}`}
 							style={on ? { background: theme.inkBg, color: theme.inkText, fontWeight: 600, border: '1px solid transparent' } : undefined}
 						>
 							{/*
@@ -120,7 +154,7 @@ function ChipRow({
 					<button
 						type="button"
 						onClick={open}
-						class={`flex items-center gap-1.5 h-9 px-3.5 rounded-full text-[13.5px] ${PAGE_CHIP_ADD}`}
+						class={`flex items-center gap-1.5 h-11 md:h-8 px-3.5 rounded-full text-[13.5px] font-medium ${PAGE_CHIP_ADD}`}
 					>
 						<Plus size={13} strokeWidth={2.4} /> {label}
 					</button>
@@ -143,12 +177,124 @@ function ChipRow({
 }
 
 /**
+ * One of the two matched steppers.
+ *
+ * **`Low at` is a peer of `On hand`, not a footnote hanging off it.** It used to
+ * sit inside the on-hand control as a `default 2` caption, which is most of why
+ * changing a threshold was the hardest thing on the sheet.
+ *
+ * Both are symmetric and neutral — `−` and `+` as equal cells inside the field,
+ * hairlines between the three. **The numeral is a text field**: stepping a
+ * low-at from 2 to 15 is thirteen taps and typing is one gesture. Press-and-hold
+ * repeats for anyone who does not find that.
+ */
+function Stepper({ label, value, onValue, note, dark, theme }: {
+	label: string;
+	value: string;
+	onValue: (next: string) => void;
+	/**
+	 * A qualifier on the sub-label rather than a line under the field.
+	 *
+	 * *Household default* is about the number the field arrived holding, so it
+	 * belongs beside the field's name — and a line of its own under one of two
+	 * side-by-side steppers made them unequal heights for a sentence that is
+	 * true of neither of them for long.
+	 */
+	note?: string;
+	dark: boolean;
+	theme: Theme;
+}) {
+	const n = toInt(value);
+
+	function step(by: number) {
+		onValue(String(Math.max(0, toInt(value) + by)));
+	}
+
+	const down = useHoldRepeat(() => step(-1));
+	const up = useHoldRepeat(() => step(1));
+
+	const cell = 'flex items-center justify-center w-11 shrink-0 ' + PAGE_STEPPER_CELL;
+
+	/*
+	 * Two complete literals rather than a `dark:` variant. Tailwind's `dark:`
+	 * follows `prefers-color-scheme`, and this app's theme stops being the OS's
+	 * the moment a device overrides it (D25) — so the variant would paint the
+	 * selection the wrong colour for exactly the people who chose one.
+	 */
+	const selection = dark
+		? 'selection:bg-[rgba(212,99,107,0.22)]'
+		: 'selection:bg-[rgba(190,51,70,0.18)]';
+
+	return (
+		<div class="flex-1 min-w-0 flex flex-col gap-1.5">
+			<span class="flex items-baseline gap-1.5 text-[13px] min-w-0" style={{ color: theme.textMuted }}>
+				<span class="shrink-0">{label}</span>
+				{/* Truncates rather than wraps: at 390 the pair is 156px inside 173. */}
+				{note && <span class="truncate">· {note}</span>}
+			</span>
+
+			<div
+				role="group"
+				aria-label={label}
+				class={`flex items-stretch h-14 rounded-[13px] overflow-hidden ${PAGE_FIELD} ${dark ? PAGE_FIELD_HALO_WITHIN_DARK : PAGE_FIELD_HALO_WITHIN}`}
+			>
+				{/*
+				  * At zero the minus stays faint and live, never disabled — the item
+				  * card's rule, and D36's reason: a disabled control cannot explain
+				  * itself. It just stops promising a change it will not make.
+				  */}
+				<button
+					type="button"
+					onClick={() => step(-1)}
+					{...down}
+					class={`${cell} ${n <= 0 ? 'text-ink-faint' : 'text-ink-body hover:text-ink'}`}
+					style={{ borderRight: `1px solid ${theme.divider}` }}
+					aria-label="Remove one"
+				>
+					<Minus size={16} strokeWidth={2.2} />
+				</button>
+
+				<input
+					value={value}
+					{...digitField(onValue, MAX_COUNT_DIGITS)}
+					role="spinbutton"
+					aria-valuenow={n}
+					aria-valuemin={0}
+					aria-label={label}
+					class={`flex-1 min-w-0 bg-transparent text-center font-disp text-[26px] md:text-[28px] font-bold outline-none ${selection}`}
+					style={{ color: theme.textStrong }}
+				/>
+
+				<button
+					type="button"
+					onClick={() => step(1)}
+					{...up}
+					class={`${cell} text-ink-body hover:text-ink`}
+					style={{ borderLeft: `1px solid ${theme.divider}` }}
+					aria-label="Add one"
+				>
+					<Plus size={16} strokeWidth={2.2} />
+				</button>
+			</div>
+
+		</div>
+	);
+}
+
+/**
  * Adding *and editing* an item is a sheet, not a form wedged into the page.
  *
  * One component at both sizes: 480px in from the right on desktop, a
  * near-full-height bottom sheet with a grabber below `md`. The old inline form
  * pushed the whole pantry down the page every time you reached for it, which
  * made adding two things in a row feel like the list was running away.
+ *
+ * **It reads as four sections rather than one stack** — Item, Count, the three
+ * taxonomies, Notes — each a micro-label over its content, separated by a
+ * full-width hairline. The old flat run gave every field the same weight, and
+ * adding a fifth would only have made that worse. Location, Store and Type are
+ * three labelled groups under *one* rule and not three sections: they are one
+ * question — where and what — asked three times.
  */
 export function ItemSheet({
 	open, mode, title, onRemove,
@@ -158,6 +304,17 @@ export function ItemSheet({
 	const editing = mode === 'edit';
 	const nameRef = useRef<HTMLInputElement>(null);
 	const sheetRef = useRef<HTMLElement>(null);
+
+	const [unitOpen, setUnitOpen] = useState(false);
+
+	/*
+	 * The unit menu owns Escape while it is open. Read through a ref rather than
+	 * a dependency so the listener is not torn down and rebuilt every time the
+	 * menu opens — and because the sheet's own handler already has one
+	 * re-registration too many.
+	 */
+	const unitOpenRef = useRef(false);
+	unitOpenRef.current = unitOpen;
 
 	/*
 	 * Focus is an *opening* effect and nothing else. Folded in with the Escape
@@ -179,6 +336,8 @@ export function ItemSheet({
 	useEffect(() => {
 		if (! open) return;
 
+		setUnitOpen(false);
+
 		if (editing) sheetRef.current?.focus();
 		else nameRef.current?.focus();
 	}, [open, editing]);
@@ -187,7 +346,10 @@ export function ItemSheet({
 		if (! open) return;
 
 		function onKey(e: KeyboardEvent) {
-			if (e.key === 'Escape') onClose();
+			// The menu closes to its own trigger first. Two document-level
+			// listeners on the same node both run whatever either one stops, so
+			// this is a guard rather than a `stopPropagation` on the other side.
+			if (e.key === 'Escape' && ! unitOpenRef.current) onClose();
 		}
 		document.addEventListener('keydown', onKey);
 		return () => document.removeEventListener('keydown', onKey);
@@ -195,11 +357,8 @@ export function ItemSheet({
 
 	if (! open) return null;
 
-	const qty = Number(value.qty) || 0;
-
-	function step(by: number) {
-		onChange({ ...value, qty: String(Math.max(0, qty + by)) });
-	}
+	const status = statusFor(value.qty, value.threshold, dark);
+	const sizePreview = formatSize(value.size, value.unit);
 
 	async function addTerm(kind: 'location' | 'type' | 'store', name: string, ink: string) {
 		const id = await taxonomy.create(kind, { name, ink });
@@ -208,6 +367,20 @@ export function ItemSheet({
 		if (kind === 'location') onChange({ ...value, locationId: id });
 		else if (kind === 'type') onChange({ ...value, typeIds: [...value.typeIds, id] });
 		else onChange({ ...value, storeIds: [...value.storeIds, id] });
+	}
+
+	/**
+	 * The size is a pair, and this is where it is kept whole.
+	 *
+	 * *No size* clears both halves — which is why the row carries no separate
+	 * `×`, one control already does it — and picking a unit against an empty
+	 * number fills the number with 1, so *1 pint* is a single tap and that is the
+	 * commonest size there is. `shared/size.ts` enforces the same two rules on
+	 * the way into the database, for a client that never came through here.
+	 */
+	function setUnit(key: string) {
+		if (! key) onChange({ ...value, size: '', unit: '' });
+		else onChange({ ...value, size: value.size || '1', unit: key });
 	}
 
 	return (
@@ -240,91 +413,154 @@ export function ItemSheet({
 				}}
 			>
 				{/* Mobile grabber. On desktop the sheet has an edge and does not need one. */}
-				<span class="md:hidden mx-auto mt-2.5 mb-1 w-10 h-1 rounded-full shrink-0" style={{ background: theme.borderStrong }} />
+				<span class="md:hidden mx-auto mt-2 mb-1 w-9 h-1 rounded-full shrink-0" style={{ background: theme.border }} />
 
-				<div class="flex items-start justify-between gap-4 px-[26px] pt-5 md:pt-[26px]">
+				<div
+					class="flex items-center justify-between gap-3 shrink-0 h-[58px] md:h-[68px] px-4 md:px-5"
+					style={{ borderBottom: `1px solid ${theme.divider}` }}
+				>
 					{/*
-					  * Editing puts the item's name here, at the one size nothing else
-					  * uses — so there is no doubt which row you opened.
+					  * Editing puts the item's name here, and the size beside it —
+					  * so there is no doubt which row you opened, and the size you
+					  * are setting is visible while you are two sections below it.
+					  * The name is the *stored* one; only the size previews live.
 					  */}
-					<div class="flex flex-col gap-0.5 min-w-0">
-						<Label theme={theme}>{editing ? 'Edit' : 'New'}</Label>
-						<span class="font-disp text-[27px] font-bold leading-[1.1] truncate" style={{ color: theme.textStrong }}>
+					<div class="flex items-baseline gap-2.5 min-w-0">
+						<span class="font-disp text-[21px] font-semibold tracking-[-0.01em] truncate" style={{ color: theme.textStrong }}>
 							{editing ? (title || 'Item') : 'Add an item'}
 						</span>
+						{sizePreview && (
+							<span class="text-[13px] whitespace-nowrap shrink-0" style={{ color: theme.textMuted }}>{sizePreview}</span>
+						)}
 					</div>
 					<button
 						onClick={onClose}
-						class={`flex items-center justify-center w-10 h-10 -mt-0.5 -mr-1 ${PAGE_ICON}`}
+						class={`flex items-center justify-center w-11 h-11 -mr-2.5 shrink-0 ${PAGE_ICON}`}
 						aria-label="Close"
 					>
-						<X size={20} />
+						<X size={19} />
 					</button>
 				</div>
 
-				<div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5 px-[26px] pt-[22px] pb-6">
-					<div class="flex flex-col gap-2.5">
-						<Label theme={theme}>Item</Label>
+				<div class="flex-1 min-h-0 overflow-y-auto p-4 md:p-5">
+					{/* ---------- Item ---------- */}
+					<Label theme={theme}>Item</Label>
+
+					<input
+						ref={nameRef}
+						value={value.name}
+						onInput={(e) => onChange({ ...value, name: e.currentTarget.value })}
+						placeholder="Sourdough starter"
+						class={`w-full h-12 px-3.5 mt-2.5 rounded-[11px] text-[15.5px] ${PAGE_FIELD} ${dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO}`}
+						style={error ? { borderColor: theme.dangerText } : undefined}
+						aria-label="Item name"
+					/>
+					{error && <p class="text-[13px] pt-1.5" style={{ color: theme.dangerText }}>{error}</p>}
+
+					{/*
+					  * The size of **one** of the thing, which is what makes it
+					  * different from the count: you have three of them and each one
+					  * is a quart.
+					  */}
+					<div class="flex gap-2 pt-2">
 						<input
-							ref={nameRef}
-							value={value.name}
-							onInput={(e) => onChange({ ...value, name: e.currentTarget.value })}
-							placeholder="Sourdough starter"
-							class={`h-[54px] px-4 rounded-[14px] font-disp text-xl font-semibold border-line-strong ${PAGE_INPUT}`}
-							style={error ? { borderColor: theme.dangerText } : undefined}
-							aria-label="Item name"
+							value={value.size}
+							{...digitField((size) => onChange({ ...value, size }), MAX_SIZE_DIGITS)}
+							onBlur={() => {
+								// Emptying the number while a unit is set returns it to
+								// 1 rather than leaving half a size behind.
+								if (value.unit && ! value.size) onChange({ ...value, size: '1' });
+							}}
+							placeholder="1"
+							class={`w-[76px] h-[46px] md:h-11 px-3.5 rounded-[11px] text-[15.5px] shrink-0 ${PAGE_FIELD} ${dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO}`}
+							aria-label="Size"
 						/>
-						{error && <p class="text-[13px]" style={{ color: theme.dangerText }}>{error}</p>}
+						<UnitMenu value={value.unit} onChange={setUnit} open={unitOpen} setOpen={setUnitOpen} dark={dark} theme={theme} />
 					</div>
 
-					<div class="grid grid-cols-2 gap-3.5">
-						<div class="flex flex-col gap-2.5">
-							<Label theme={theme}>On hand</Label>
-							<div class="flex items-center gap-2">
-								<button
-									type="button"
-									onClick={() => step(-1)}
-									class={`flex items-center justify-center w-11 h-12 rounded-[13px] shrink-0 ${PAGE_BUTTON}`}
-									style={qty <= 0 ? { color: theme.textFaint } : undefined}
-									aria-label="Decrease"
-								>
-									<Minus size={17} strokeWidth={2.4} />
-								</button>
-								<input
-									value={value.qty}
-									{...digitField((qty) => onChange({ ...value, qty }))}
-									class={`flex-1 min-w-0 h-12 rounded-[13px] text-center font-disp text-[22px] font-bold ${PAGE_INPUT}`}
-									aria-label="Quantity on hand"
-								/>
-								<button
-									type="button"
-									onClick={() => step(1)}
-									class={`flex items-center justify-center w-11 h-12 rounded-[13px] shrink-0 ${PAGE_BUTTON_PRIMARY}`}
-									style={{ background: theme.inkBg, color: theme.inkText }}
-									aria-label="Increase"
-								>
-									<Plus size={17} strokeWidth={2.4} />
-								</button>
-							</div>
-						</div>
+					{/* *With*, not *beside*: it sits beneath the name on a card and beside it in the list. */}
+					<Hint theme={theme}>Optional — it shows with the name on cards and in the shopping list.</Hint>
 
-						<div class="flex flex-col gap-2.5">
-							<Label theme={theme}>Low at</Label>
-							<div class={`flex items-center justify-between h-12 px-4 rounded-[13px] ${PAGE_INPUT} focus-within:border-ink-muted`}>
-								<input
-									value={value.threshold}
-									{...digitField((threshold) => onChange({ ...value, threshold }))}
-									class="min-w-0 flex-1 bg-transparent font-disp text-[22px] font-bold outline-none"
-									style={{ color: theme.textStrong }}
-									aria-label="Low-stock threshold"
-								/>
-								<span class="text-xs shrink-0 pl-2" style={{ color: theme.textFaint }}>default {defaultThreshold}</span>
-							</div>
-						</div>
+					<Rule theme={theme} />
+
+					{/* ---------- Count ---------- */}
+					<div class="flex items-center justify-between gap-3">
+						<Label theme={theme}>Count</Label>
+
+						{/*
+						  * The live status, right of the label and updating as either
+						  * stepper moves. **This is what makes the threshold easy
+						  * rather than merely bigger**: a threshold is an abstraction
+						  * until you can watch what it does to the item in front of
+						  * you. It costs no vertical space — the label row was half
+						  * empty.
+						  */}
+						<span class="flex items-center gap-[7px]" aria-live="polite" aria-atomic="true">
+							<span class="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: status.dot }} />
+							<span class="text-[13px] font-medium" style={{ color: status.ink }}>{STATUS_PHRASE[status.key]}</span>
+						</span>
 					</div>
 
-					<div class="flex flex-col gap-2.5">
-						<Label theme={theme}>Location</Label>
+					<div class="flex gap-3 pt-3">
+						<Stepper
+							label="On hand"
+							value={value.qty}
+							onValue={(qty) => onChange({ ...value, qty })}
+							dark={dark} theme={theme}
+						/>
+						<Stepper
+							label="Low at"
+							value={value.threshold}
+							onValue={(threshold) => onChange({ ...value, threshold })}
+							/*
+							 * **A statement about the number, not about whether you have
+							 * touched it.** It answers the question the number raises —
+							 * *why 2, and did somebody choose that?* — so it is true
+							 * exactly while the number is still the household's, and it
+							 * comes back if you step or type your way back to it. A
+							 * one-way "touched" flag was built first and is the wrong
+							 * shape: it left the sheet saying nothing about a value that
+							 * *was* the default, which is the only thing the line is for.
+							 *
+							 * Compared through `toInt` so an empty field and a leading
+							 * zero read as the numbers they are. Add sheet only: on an
+							 * edit the number is the item's, whatever it happens to equal.
+							 */
+							note={! editing && toInt(value.threshold) === toInt(defaultThreshold) ? 'Household default' : undefined}
+							dark={dark} theme={theme}
+						/>
+					</div>
+
+					{/*
+					  * **In Count rather than in a section of its own.** *Low at* is
+					  * the sentence *put this on the list when I am down to N*; this
+					  * is *…except don't*. It modifies the threshold, so it sits where
+					  * the threshold is set.
+					  *
+					  * The whole row is the target. A 22px box is the hit area this
+					  * app already corrected once, on the shopping list's own rows.
+					  */}
+					<button
+						type="button"
+						role="checkbox"
+						aria-checked={value.offShoppingList}
+						onClick={() => onChange({ ...value, offShoppingList: ! value.offShoppingList })}
+						class={`flex items-start gap-[11px] mt-3.5 -mx-2 px-2 py-2 ${PAGE_CHECKBOX_ROW}`}
+					>
+						<span class="pt-px shrink-0"><CheckBox checked={value.offShoppingList} theme={theme} /></span>
+						<span class="min-w-0">
+							<span class="block text-[15px]" style={{ color: theme.text }}>Keep off the shopping list</span>
+							<span class="block text-[12.5px] leading-[1.45] pt-[3px]" style={{ color: theme.textMuted }}>
+								It still shows as low or out on its card — it just never joins the list.
+							</span>
+						</span>
+					</button>
+
+					<Rule theme={theme} />
+
+					{/* ---------- Location / Store / Type ---------- */}
+					<Label theme={theme}>Location</Label>
+					<div class="pt-2.5">
 						<ChipRow
 							terms={locations}
 							selected={value.locationId ? [value.locationId] : []}
@@ -334,24 +570,10 @@ export function ItemSheet({
 						/>
 					</div>
 
-					<div class="flex flex-col gap-2.5">
-						<Label theme={theme}>Type</Label>
-						<ChipRow
-							terms={types}
-							selected={value.typeIds}
-							onToggle={(id) => onChange({
-								...value,
-								typeIds: value.typeIds.includes(id)
-									? value.typeIds.filter((t) => t !== id)
-									: [...value.typeIds, id],
-							})}
-							onAdd={(n, ink) => void addTerm('type', n, ink)}
-							canAdd={canCreateTerms} label="Type" dark={dark} theme={theme}
-						/>
-					</div>
-
-					<div class="flex flex-col gap-2.5">
+					<div class="pt-4">
 						<Label theme={theme}>Store</Label>
+					</div>
+					<div class="pt-2.5">
 						<ChipRow
 							terms={stores}
 							selected={value.storeIds}
@@ -366,24 +588,43 @@ export function ItemSheet({
 						/>
 					</div>
 
-					<div class="flex flex-col gap-2.5">
-						<Label theme={theme}>
-							Notes <span class="font-normal normal-case tracking-normal" style={{ color: theme.textFaint }}>optional</span>
-						</Label>
-						<textarea
-							value={value.notes}
-							onInput={(e) => onChange({ ...value, notes: e.currentTarget.value })}
-							placeholder="Fed on Sundays. Discard goes in the pancakes."
-							class={`h-[84px] px-4 py-[13px] rounded-[14px] text-[14.5px] resize-none ${PAGE_INPUT}`}
-							aria-label="Notes"
+					<div class="pt-4">
+						<Label theme={theme}>Type</Label>
+					</div>
+					<div class="pt-2.5">
+						<ChipRow
+							terms={types}
+							selected={value.typeIds}
+							onToggle={(id) => onChange({
+								...value,
+								typeIds: value.typeIds.includes(id)
+									? value.typeIds.filter((t) => t !== id)
+									: [...value.typeIds, id],
+							})}
+							onAdd={(n, ink) => void addTerm('type', n, ink)}
+							canAdd={canCreateTerms} label="Type" dark={dark} theme={theme}
 						/>
 					</div>
+
+					<Rule theme={theme} />
+
+					{/* ---------- Notes ---------- */}
+					<Label theme={theme}>
+						Notes <span class="font-normal normal-case tracking-normal" style={{ color: theme.textMuted }}>optional</span>
+					</Label>
+					<textarea
+						value={value.notes}
+						onInput={(e) => onChange({ ...value, notes: e.currentTarget.value })}
+						placeholder="Fed on Sundays. Discard goes in the pancakes."
+						class={`w-full h-[88px] px-3.5 py-3 mt-2.5 rounded-[11px] text-[15px] resize-none ${PAGE_FIELD} ${dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO}`}
+						aria-label="Notes"
+					/>
 				</div>
 
 				{/* Sticky: the sheet scrolls, the decision does not. */}
 				<div
-					class="mt-auto shrink-0 flex items-center justify-between gap-3 pl-4 pr-5 py-3.5"
-					style={{ borderTop: `1px solid ${theme.border}`, background: theme.surfaceAlt }}
+					class="mt-auto shrink-0 flex items-center justify-between gap-3 h-20 md:h-[76px] px-4 md:px-5"
+					style={{ borderTop: `1px solid ${theme.divider}` }}
 				>
 					{/*
 					  * Remove sits the width of the footer away from Save, reachable
@@ -394,7 +635,7 @@ export function ItemSheet({
 					{editing && onRemove ? (
 						<button
 							onClick={onRemove}
-							class={`flex items-center gap-2 h-11 px-3.5 rounded-xl text-sm ${PAGE_ICON}`}
+							class={`flex items-center gap-2 h-11 px-3 rounded-[13px] text-[15px] font-semibold ${PAGE_ICON}`}
 							style={{ color: theme.dangerText }}
 						>
 							<Trash2 size={16} /> Remove item
@@ -402,11 +643,11 @@ export function ItemSheet({
 					) : <span />}
 
 					<div class="flex items-center gap-2.5">
-						<button onClick={onClose} class={`h-[46px] px-[18px] rounded-[14px] text-[15px] ${PAGE_ICON}`}>Cancel</button>
+						<button onClick={onClose} class={`h-11 px-[18px] rounded-[13px] text-[15px] font-semibold ${PAGE_ICON}`}>Cancel</button>
 						<button
 							onClick={onSave}
 							disabled={saving}
-							class={`flex items-center gap-2.5 h-[46px] px-5 rounded-[14px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY}`}
+							class={`flex items-center gap-2.5 h-11 px-5 rounded-[13px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY}`}
 							style={{ background: theme.inkBg, color: theme.inkText }}
 						>
 							<Check size={17} strokeWidth={2.4} /> {saving ? 'Saving…' : editing ? 'Save changes' : 'Save item'}

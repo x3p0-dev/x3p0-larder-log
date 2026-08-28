@@ -7,6 +7,7 @@ import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCap
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
+import { normalizeSize } from '../shared/size';
 import { normalizeStamp, stampFrom } from '../shared/stamp';
 import { byName, normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
 import { CODE_BYTES, PENDING_CODE, codeFromBytes, codeFromSeed, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
@@ -228,6 +229,16 @@ export const schema = {
 		locationId: id('locations'),
 		qty: string(),
 		threshold: string(),
+		// How big *one* of the thing is, and in what unit — a pair that is never
+		// half-set (`shared/size.ts`). `unit` holds a slug, never an
+		// abbreviation, for the reason D32 gives about term colours: what is
+		// stored must survive us changing what it prints.
+		size: string().default(''),
+		unit: string().default(''),
+		// Never joins the shopping list, however low it gets — the things a
+		// household grows rather than buys. It hides an item from one view and
+		// changes nothing about its status; see `needsBuying`.
+		offShoppingList: boolean().default(false),
 		notes: string().default(''),
 		addedAt: string().default(''),
 		changedAt: string().default(''),
@@ -466,6 +477,9 @@ export default capsule({
 					locationId: item.locationId,
 					qty: item.qty,
 					threshold: item.threshold,
+					size: item.size,
+					unit: item.unit,
+					offShoppingList: item.offShoppingList,
 					notes: item.notes,
 					typeIds: typesByItem.get(item.id) ?? [],
 					storeIds: storesByItem.get(item.id) ?? [],
@@ -720,6 +734,9 @@ export default capsule({
 					locationId: string;
 					qty: string;
 					threshold: string;
+					size?: string;
+					unit?: string;
+					offShoppingList?: boolean;
 					notes?: string;
 					typeIds?: string[];
 					storeIds?: string[];
@@ -748,12 +765,19 @@ export default capsule({
 				// so nothing beneath this line would catch a bogus reference.
 				assertInHousehold(await ctx.db.locations.get(draft.locationId), membership, 'That location');
 
+				// One place makes the pair whole, and it is the same one the sheet
+				// calls — a client that sends a number with no unit stores neither.
+				const size = normalizeSize(draft.size, draft.unit);
+
 				const item = await ctx.db.items.insert({
 					householdId: membership.householdId,
 					name: normalizeName(draft.name),
 					locationId: draft.locationId,
 					qty: normalizeQty(draft.qty),
 					threshold: normalizeQty(draft.threshold),
+					size: size.size,
+					unit: size.unit,
+					offShoppingList: draft.offShoppingList === true,
 					notes: normalizeNotes(draft.notes),
 					addedAt: normalizeStamp(draft.addedAt, now),
 					changedAt: normalizeStamp(draft.changedAt, now),
@@ -780,6 +804,9 @@ export default capsule({
 					locationId?: string;
 					qty?: string;
 					threshold?: string;
+					size?: string;
+					unit?: string;
+					offShoppingList?: boolean;
 					notes?: string;
 					typeIds?: string[];
 					storeIds?: string[];
@@ -792,7 +819,7 @@ export default capsule({
 				// Unconditional: this mutation is only reached by someone pressing
 				// Save, and the join rows below can change without a single column
 				// in `next` doing so.
-				const next: Record<string, string> = { changedAt: stampFrom(Date.now()) };
+				const next: Record<string, string | boolean> = { changedAt: stampFrom(Date.now()) };
 
 				if (patch.name !== undefined) {
 					if (! isValidName(patch.name)) throw new AccessError('An item needs a name.');
@@ -807,6 +834,21 @@ export default capsule({
 				if (patch.qty !== undefined) next.qty = normalizeQty(patch.qty);
 				if (patch.threshold !== undefined) next.threshold = normalizeQty(patch.threshold);
 				if (patch.notes !== undefined) next.notes = normalizeNotes(patch.notes);
+				if (patch.offShoppingList !== undefined) next.offShoppingList = patch.offShoppingList === true;
+
+				// The two halves move together or not at all. A patch naming only
+				// one of them could otherwise leave the pair half-set, which is the
+				// single state `shared/size.ts` exists to prevent — so the other
+				// half is read off the stored row and the two are normalized
+				// together.
+				if (patch.size !== undefined || patch.unit !== undefined) {
+					const size = normalizeSize(
+						patch.size !== undefined ? patch.size : item.size,
+						patch.unit !== undefined ? patch.unit : item.unit
+					);
+					next.size = size.size;
+					next.unit = size.unit;
+				}
 
 				await ctx.db.items.update(item.id, next);
 

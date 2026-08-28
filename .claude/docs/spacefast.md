@@ -3323,3 +3323,49 @@ malformed codes to a bare `{"state":"invalid"}` (D39), `pantry` refusing with
 `no-household` rather than leaking, and `profile` returning an empty name. That
 it works identically in production and under `sf dev` is genuinely valuable.
 It deserves to be documented rather than folklore.
+
+---
+
+## 2026-08-28 — a fourth additive migration, and a boolean this time
+
+Three columns added to `items` in one edit — `size: string().default('')`,
+`unit: string().default('')`, `offShoppingList: boolean().default(false)` — for the
+add/edit item redesign (D52, D53).
+
+### 👍 The additive path stays boring, and `boolean()` is no different
+
+`npx sf publish --dry-run` picked up all three from the schema literal, with
+their defaults intact, on the first run:
+
+```json
+{ "name": "offShoppingList", "type": "boolean", "nullable": false, "default": false }
+```
+
+`server.schema` still shows ten tables, `server.queries` five and
+`server.mutations` seventeen, and `db.migrations` is `[]`. This is the fourth
+additive change since Phase 2 and the first to add a **boolean** rather than a
+string — worth recording only because `invites.revoked` was, for one wrong guess
+during the v5–v7 probe rounds, suspected of being the thing the hosted runtime
+choked on. It was not, and a second boolean column compiles identically.
+
+### 👍 `POST /__spacefast/zero/run` is still the whole verification story
+
+Five `addItem` calls and four `updateItem` calls through the real handlers on a
+throwaway `sf dev --port 4199`, then one `pantry` read to see what landed. That
+is the entire test for a schema change plus its normalization rules, and it
+needed no browser and no throwaway endpoint. Nine mutations and two queries over
+plain HTTP, in one shell command.
+
+The bootstrap dance is still the only friction: the `Origin` header requirement
+on `/__spacefast/zero/bootstrap` is undocumented, and the cookie name is
+port-derived (`spacefast_zero_dev_4199`), which is not stated anywhere either.
+Both are easy once known and both cost a round trip the first time.
+
+### 🤔 `sf dev` still has no local sign-in, so the sheet cannot be clicked here
+
+Everything in this change is press-time behaviour — a hold that repeats, a
+status line that updates as you step, a menu that opens scrolled to its current
+row. Compiling it, curling `/zero.css` for every class literal and driving the
+handlers over `run` proves the build is coherent. It does not prove it is
+usable, which is the lesson this file recorded on 2026-08-27 and has no way to
+act on without a browser.

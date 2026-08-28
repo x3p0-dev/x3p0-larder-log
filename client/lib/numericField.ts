@@ -23,12 +23,17 @@ type Field = JSX.TargetedInputEvent<HTMLInputElement>;
 /**
  * Props for a text input that only ever holds digits. Spread it in place of
  * `onInput` — `value` stays the caller's, so the field is still controlled.
+ *
+ * `maxDigits` is a *field* cap, not a storage rule. The sheet's steppers stop
+ * at four because a five-digit numeral overflows an 85px cell at 390 and a
+ * pantry does not hold 10,000 of anything; the storage ceiling stays where
+ * `toInt` can still parse it.
  */
-export function digitField(onValue: (next: string) => void) {
+export function digitField(onValue: (next: string) => void, maxDigits: number = MAX_QTY_DIGITS) {
 	return {
 		inputMode: 'numeric' as const,
 		autocomplete: 'off',
-		maxLength: MAX_QTY_DIGITS,
+		maxLength: maxDigits,
 
 		onBeforeInput: (e: Field) => {
 			const data = e.data;
@@ -41,7 +46,7 @@ export function digitField(onValue: (next: string) => void) {
 
 		onInput: (e: Field) => {
 			const el = e.currentTarget;
-			const clean = digitsOnly(el.value).slice(0, MAX_QTY_DIGITS);
+			const clean = digitsOnly(el.value).slice(0, maxDigits);
 
 			if (clean !== el.value) {
 				// Count the digits the user had already passed, so the caret

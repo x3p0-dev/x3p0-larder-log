@@ -350,6 +350,34 @@ later:
   is a fourth option this list did not have: draw the picker's dots against the
   panel they open on. Still not worth settling until the eight are finished.
 
+Three more were opened by the add/edit item redesign
+([D52](decisions.md#d52-an-item-has-a-size-and-a-size-is-a-pair-that-is-never-half-set),
+[D53](decisions.md#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item))
+and left open on purpose:
+
+- **Is *size* the right word?** The ask called it an *amount*, and the design
+  rejected that because *amount* collides with the on-hand count. It is a
+  one-word change if *size* reads wrong on a real screen. Related: nothing about
+  the size is shared vocabulary, so two people can enter *1 qt* and *32 fl oz*
+  for the same bottle and the app will never notice. That is the price of not
+  making units terms, and it is the right price — until the shopping list is
+  asked *how much olive oil do we have*, at which point D52 is the decision to
+  revisit first.
+- **The struck cart on a card is a glyph nobody has been taught.** It is the one
+  place an excluded item explains itself in the grid, and it sits on a card that
+  otherwise carries no icons beside the name. The design document drew it as a
+  mockup and said so; **it is the first thing to challenge.** Two questions ride
+  with it: whether an excluded item should still be *counted* somewhere — a
+  household could quietly exclude half its pantry and the shopping trigger would
+  go quiet with it — and whether the exclusion is the household's or yours. It is
+  the household's today, because every other property of an item is.
+- **The shopping-list row's stacking floor is still 460, and the size probably
+  moves it.** The design derives roughly **520** by scaling off the recorded 460,
+  and says in as many words that it is derived rather than measured. The build
+  left it at 460: the row already wraps on measured content rather than at a hard
+  breakpoint, and 520 changes the grid's `minmax()` and so the column count at
+  1440. **Wants one look on a real screen, with a long name and a size.**
+
 - **The drawer now has three off-state chips, not two.** The Filter tab's chips
   are `drawer-raised` with a coloured dot; the page's are surface-on-line; and
   the invite composer's role chips, drawn 2026-08-27 and built as drawn

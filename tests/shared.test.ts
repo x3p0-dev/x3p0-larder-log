@@ -30,6 +30,8 @@ import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
+import { formatSize, hasSize, MAX_SIZE_DIGITS, normalizeSize, UNITS, unitFor } from '../shared/size';
+import { STATUS_PHRASE, statusKeyFor } from '../shared/status';
 import { sha256, sha256Hex } from '../shared/sha256';
 import {
 	countTermFilters, matchesTermFilters, NO_TERM_FILTERS, pruneTermFilter, toggleTermFilter,
@@ -500,10 +502,11 @@ const STORES: Term[] = [
 	term('s-aldi', 'Aldi', 'color-14'),
 ];
 
-function item(name: string, qty: string, threshold: string, storeIds: string[]): Item {
+function item(name: string, qty: string, threshold: string, storeIds: string[], offShoppingList = false): Item {
 	return {
 		id: `i-${name}`, name, locationId: 'l-1', typeIds: [], storeIds,
-		qty, threshold, notes: '', createdAt: '2026-08-26T00:00:00.000Z', addedAt: '', changedAt: '',
+		qty, threshold, size: '', unit: '', offShoppingList, notes: '',
+		createdAt: '2026-08-26T00:00:00.000Z', addedAt: '', changedAt: '',
 	};
 }
 
@@ -674,7 +677,8 @@ check('an empty list is fine', byName([]), []);
 function filterable(id: string, locationId: string, typeIds: string[], storeIds: string[]): Item {
 	return {
 		id, name: id, locationId, typeIds, storeIds,
-		qty: '1', threshold: '1', notes: '', createdAt: '', addedAt: '', changedAt: '',
+		qty: '1', threshold: '1', size: '', unit: '', offShoppingList: false, notes: '',
+		createdAt: '', addedAt: '', changedAt: '',
 	};
 }
 
@@ -753,6 +757,74 @@ check('a blank link is skipped, not returned', pickDisplayName('', '   ', 'Grava
 check('nothing anywhere is empty, not a placeholder', pickDisplayName('', '', ''), '');
 check('no candidates at all is empty', pickDisplayName(), '');
 check('the chain normalizes what it picks', pickDisplayName('  Sedge   Miller  '), 'Sedge Miller');
+
+// --- the size, and the pair that is never half-set ---
+//
+// Two rules and no invalid state between them, which is the whole reason this
+// lives in `shared/` — the sheet enforces them at the field and the server
+// enforces the same two on the way in, for a client that never came through it.
+
+check('a unit with no number becomes one of it', normalizeSize('', 'quart'), { size: '1', unit: 'quart' });
+check('a number with no unit is not a size', normalizeSize('12', ''), { size: '', unit: '' });
+check('an unknown unit clears both halves', normalizeSize('12', 'furlong'), { size: '', unit: '' });
+check('a whole pair survives', normalizeSize('12', 'ounce'), { size: '12', unit: 'ounce' });
+// "0 quart" is the same statement as an empty field, and both mean one.
+check('a zeroed number is not a size either', normalizeSize('0', 'pint'), { size: '1', unit: 'pint' });
+check('junk in the number is stripped', normalizeSize('1.5kg', 'kilogram'), { size: '15', unit: 'kilogram' });
+check('leading zeros go', normalizeSize('007', 'gram'), { size: '7', unit: 'gram' });
+check('the number is capped, not refused', normalizeSize('123456', 'gram').size.length, MAX_SIZE_DIGITS);
+
+check('an unset pair has no size', hasSize('', ''), false);
+check('a number alone is not a size', hasSize('12', ''), false);
+check('a whole pair has one', hasSize('12', 'ounce'), true);
+
+// The abbreviation is what prints, and it never pluralises — nothing has to
+// decide between "2 dz" and "2 dzs".
+check('one prints its abbreviation', formatSize('1', 'quart'), '1 qt');
+check('two print the same abbreviation', formatSize('2', 'dozen'), '2 dz');
+check('an unset pair prints nothing', formatSize('', ''), '');
+check('a number with no unit prints nothing', formatSize('12', ''), '');
+
+// The one row where the word and the abbreviation disagree on purpose: `1 ½ pt`
+// reads as one and a half pints, and `cup` is what the carton itself says.
+check('half a pint prints as a cup', formatSize('1', 'half-pint'), '1 cup');
+
+// The keys are slugs so that what a household stores survives us changing what
+// it prints — the same reasoning D32 gives for term colours.
+check('a unit key is a slug, not its abbreviation', unitFor('qt'), undefined);
+check('the slug resolves', unitFor('quart')?.abbr, 'qt');
+check('there are fourteen of them', UNITS.length, 14);
+check('no two units share a key', new Set(UNITS.map((u) => u.key)).size, UNITS.length);
+check('no two units share an abbreviation', new Set(UNITS.map((u) => u.abbr)).size, UNITS.length);
+// Grouped in menu order, so the menu can draw a hairline on every change.
+check('the groups run in one block each', UNITS.map((u) => u.group).join(' ').replace(/(\b\w+\b)( \1)+/g, '$1'), 'count weight volume');
+// `1 each` is not a size, it is the absence of one — which `No size` says.
+check('there is no "each"', UNITS.some((u) => u.key === 'each'), false);
+
+// --- keeping an item off the shopping list ---
+//
+// It hides an item from one *view* and changes nothing about what is true of
+// it. The split between these two functions is the whole idea, and it is
+// invisible when wrong: the list quietly loses a row and the pills still count
+// it, or the pills quietly lose one too.
+
+const KEPT_OFF = item('Black Beans', '0', '2', ['s-costco'], true);
+
+check('an excluded item never joins the list', needsBuying(KEPT_OFF), false);
+check('but it is still out', statusKeyFor(KEPT_OFF.qty, KEPT_OFF.threshold), 'out');
+check('an ordinary out item still joins', needsBuying(item('Bacon', '0', '2', ['s-costco'])), true);
+check('the count drops with it', shoppingCount([...BASKET, KEPT_OFF]), 5);
+check('and so does its store card', shoppingGroups([...BASKET, KEPT_OFF], STORES).map((g) => g.items.length), [2, 3, 1]);
+
+// --- the threshold boundary, said out loud ---
+//
+// `low at 2` reads as "it is low when you are down to 2". Nothing in the app
+// stated this until the sheet grew a line that reports it while you move the
+// numbers.
+check('equal is low, not stocked', statusKeyFor('2', '2'), 'low');
+check('one above is stocked', statusKeyFor('3', '2'), 'ok');
+check('zero is out, whatever the threshold', statusKeyFor('0', '0'), 'out');
+check('the sheet says the pills\u2019 three words', [STATUS_PHRASE.out, STATUS_PHRASE.low, STATUS_PHRASE.ok], ['Out', 'Running low', 'In stock']);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

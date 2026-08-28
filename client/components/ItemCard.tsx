@@ -1,8 +1,9 @@
-import { Plus, Minus, ChevronDown, Pencil, Trash2 } from 'lucide-preact';
+import { Plus, Minus, ChevronDown, Pencil, ShoppingCart, Slash, Trash2 } from 'lucide-preact';
 
 import type { Theme, ThemedColor } from '../lib/theme';
 import { entityColorFor, statusFor, termNameFor } from '../lib/theme';
 import type { Item, Term } from '../../shared/types';
+import { formatSize } from '../../shared/size';
 import {
 	CARD_ACTION, CARD_ACTION_GHOST, CARD_HEADER, CARD_STEPPER, CARD_STEPPER_PRIMARY,
 } from '../lib/controlStyles';
@@ -72,10 +73,21 @@ export function ItemCard({
 	 */
 	const qtyColor = s.key === 'ok' ? theme.textStrong : s.key === 'out' ? s.dot : s.ink;
 
+	const size = formatSize(item.size, item.unit);
+
 	const header = (
 		<>
-			<span class="font-disp text-item-sm sm:text-item font-semibold leading-[1.15] break-words min-w-0" style={{ color: theme.textStrong }}>
-				{item.name}
+			{/*
+			  * The size sits **beneath** the name, not beside it. Names are long,
+			  * and the shopping list's own name-and-badge collision at 460 is
+			  * already on record; under the name is safe at every card width.
+			  */}
+			<span class="flex flex-col min-w-0">
+				<span class="font-disp text-item-sm sm:text-item font-semibold leading-[1.15] break-words" style={{ color: theme.textStrong }}>
+					{item.name}
+				</span>
+				{/* Meta, not faint — the boards' own value, and the one that clears 4.5:1. */}
+				{size && <span class="text-[13px] pt-0.5" style={{ color: theme.textMuted }}>{size}</span>}
 			</span>
 
 			{/*
@@ -94,6 +106,29 @@ export function ItemCard({
 			  * box that holds them, so geometric centring still reads high.
 			  */}
 			<span class="relative top-px flex items-center gap-2 shrink-0 min-h-[21px] sm:min-h-[24px]">
+				{/*
+				  * A struck cart, left of the status, when the item is kept off the
+				  * shopping list. **The status itself does not change** — the card
+				  * still says running low, because it is. Without something here,
+				  * "why isn't the olive oil on my list" has no answer anywhere in
+				  * the grid.
+				  *
+				  * It is a glyph nobody has been taught, on a card that otherwise
+				  * carries no icons beside the name, so it is the first thing to
+				  * challenge if this reads as clutter.
+				  */}
+				{item.offShoppingList && (
+					<span
+						role="img"
+						aria-label="Kept off the shopping list"
+						title="Kept off the shopping list"
+						class="relative inline-flex shrink-0"
+						style={{ color: theme.textFaint }}
+					>
+						<ShoppingCart size={14} strokeWidth={1.9} />
+						<Slash size={14} strokeWidth={1.9} class="absolute inset-0" />
+					</span>
+				)}
 				{/*
 				  * In stock is a dot; low and out get the word. A badge on every
 				  * card would make the healthy majority as loud as the problems.

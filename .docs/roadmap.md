@@ -815,6 +815,87 @@ ten tables, five queries, seventeen mutations, exactly as Phase 4.11 left them.
 touched files was checked against the live `/zero.css` by unescaping the sheet's
 selectors and diffing — printed, not hand-written. **Nobody has clicked it.**
 
+### Phase 4.13 — Add / edit item, redesigned ✅ (2026-08-28)
+
+`.claude/docs/design/add-edit-item.md`, drawn on
+`.claude/docs/design/larderlogaddedititem.html` — nine boards in both themes.
+Governed by [D52](decisions.md#d52-an-item-has-a-size-and-a-size-is-a-pair-that-is-never-half-set)
+(the size) and [D53](decisions.md#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item)
+(off the shopping list).
+
+**The fourth and fifth additive schema changes since Phase 2**, together in one
+publish: `items.size`, `items.unit` and `items.offShoppingList`. Still ten tables, five
+queries and seventeen mutations — no new handler, only three more fields through
+the two that already existed.
+
+- **The sheet reads as four sections, not one stack** — Item · Count ·
+  Location / Store / Type · Notes, each a micro-label over its content and
+  separated by a full-width `divider` hairline. The three taxonomies are three
+  labelled groups under **one** rule, because they are one question asked three
+  times. **The grouping is labels and rules, never a fill**: on this sheet a
+  recessed panel already means *you are editing something* — it is the inline
+  composer — and a second one that only grouped would make the composer stop
+  meaning anything.
+- **One field treatment.** `PAGE_FIELD` — the name, the size number, the unit
+  trigger, both steppers and the notes box are the same object at six widths,
+  and the border is `ink-muted` on a **contrast finding**, not a preference: the
+  composer's old field border measured 2.80:1 on the panel and **2.45:1** on the
+  sheet in dark, which is the same measurement that sent the shopping list's
+  checkbox to this token.
+- **`UnitMenu.tsx`** — the sort menu's construction unchanged, and the trigger is
+  a *field* rather than a ghost because it sits on a form. Fourteen units in
+  three groups behind *No size*; the abbreviation sits in the check's reserved
+  slot on every row but the current one, so you learn that *Quart* prints as
+  *qt* before committing to it. Caps at 320px, scrolls, and opens scrolled to
+  the unit you are on.
+- **On hand and Low at are matched peers.** *Low at* stops being a caption inside
+  the on-hand control, which is most of why it was the hardest thing on the sheet
+  to change. Both are symmetric and neutral — **neither takes the item card's ink
+  plus**, because the sheet already has exactly one primary and it is *Save*.
+- **The numeral is a text field**, which closes *Typing a quantity directly
+  rather than stepping to it* for the sheet: stepping a low-at from 2 to 15 is
+  thirteen taps and typing is one gesture. `useHoldRepeat.ts` adds an
+  accelerating press-and-hold for anyone who does not find it — **the first step
+  still comes from `onClick`**, so a tap fires once through the path that already
+  works for a thumb, a mouse and the keyboard alike.
+- **`Household default` rides the *Low at* sub-label** after a middot, rather
+  than sitting under the field as the boards draw it — a line of its own made
+  two side-by-side steppers unequal. It is **a statement about the number, not
+  about whether you have touched it**: it shows on the Add sheet exactly while
+  the value is still the household's, and **comes back if you step or type your
+  way back to it**. The design's *disappears the moment the number is changed*
+  was built first, as a one-way flag, and left the sheet silent about a value
+  that *was* the default — which is the only thing the line is for.
+- **A live status line, right of the `COUNT` label.** Dot and word in the status
+  ramp's own colours, updating as either stepper moves. **This is what makes the
+  threshold easy rather than merely bigger** — a threshold is an abstraction
+  until you can watch it turn the item in front of you *Running low* — and it
+  costs no vertical space, because the label row was half empty. It also forced
+  a rule the docs had never written down: **`on hand == low at` is low**, which
+  is what the build already did and now has a test.
+- **`CheckBox.tsx`** is the shopping list's own 22px box, extracted rather than
+  drawn twice, and used by *Keep off the shopping list* in the `COUNT` section.
+- **The card gained two things**: the size beneath the name in meta 13 (not
+  beside it — names are long), and a struck cart left of the status when the item
+  is kept off the list. The status itself does not move.
+- **The shopping-list row gained one**: the size riding with the name, before the
+  badge. At the shelf *"Butter, 1 lb"* is one phrase.
+- **`controlStyles` gained** `PAGE_FIELD`, `PAGE_STEPPER_CELL`, `PAGE_MENU`,
+  `PAGE_MENU_ROW`, `PAGE_CHECKBOX_ROW` and the two `PAGE_FIELD_HALO_WITHIN`
+  forms, **and lost `PAGE_BUTTON`** — the sheet's old asymmetric minus was its
+  last caller. `digitField` gained a digit cap.
+
+**Verified without a browser**: typecheck clean, **285 assertions** (46 new,
+covering the size pair, the unit table's invariants, the exclusion's split from
+`statusKeyFor`, and the threshold boundary), the artifact shows all three
+columns on `items` with defaults and **zero migrations pending**, `sf dev` on
+`--port 4199` compiles and serves, every new utility class is in the live
+`/zero.css` — checked by printing and unescaping the sheet's own selectors — and
+the **real handlers** were driven over `POST /__spacefast/zero/run`: a whole
+pair stored, a unit with no number resolving to 1, a number with no unit and an
+unknown unit key both resolving to neither, a unit-only patch keeping the number
+it did not name, and `offShoppingList` set and cleared. **Nobody has clicked it.**
+
 ### The seeded types cover a supermarket — 2026-08-27
 
 [D50](decisions.md#d50-the-seeded-types-are-a-supermarket-and-the-other-two-taxonomies-are-not),

@@ -135,10 +135,6 @@ export const PAGE_CHIP_ADD =
 export const PAGE_BUTTON_PRIMARY =
 	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-50 disabled:pointer-events-none';
 
-/** A quiet secondary — Cancel, the stepper's minus. */
-export const PAGE_BUTTON =
-	'transition-colors bg-surface-alt text-ink-body hover:bg-line hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-50 disabled:pointer-events-none';
-
 /** An icon-only control that is quiet until touched — close, expand. */
 export const PAGE_ICON =
 	'transition-colors text-ink-muted hover:text-ink hover:bg-surface-alt rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
@@ -459,3 +455,76 @@ export const PAGE_CHIP_APPLIED_X =
  */
 export const PAGE_BUTTON_CLEAR =
 	'transition-[background-color,border-color,color] duration-150 bg-transparent border border-transparent text-ink-body hover:bg-line hover:border-ink-faint hover:text-ink active:bg-line active:border-ink-faint active:text-ink focus-visible:bg-line focus-visible:border-ink-faint focus-visible:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+
+/* ---------- the item sheet: one field treatment, and the unit menu ---------- */
+
+/*
+ * **Everything you can change on the sheet is the same object at a different
+ * width.** The name field, the size number, the unit trigger, both steppers and
+ * the notes box share this border, this fill and this focus halo — which is
+ * most of what makes the redesigned sheet read as calmer than the flat stack it
+ * replaces. Nothing got quieter; six controls stopped being four kinds of
+ * thing.
+ *
+ * The border is `ink-muted` and that is a contrast finding rather than a
+ * preference. The composer's old field border reads **2.80:1** on the panel and
+ * **2.45:1** on the sheet in dark — under the 3:1 a control outline needs, and
+ * the same measurement that sent the shopping list's checkbox to this token.
+ * `ink-muted` clears 5:1 on all four surface-and-theme combinations.
+ */
+export const PAGE_FIELD =
+	'transition-shadow bg-surface border border-ink-muted text-ink outline-none placeholder:text-ink-muted';
+
+/**
+ * One cell of a stepper — the `−` and the `+`.
+ *
+ * **Neither carries the ink fill the item card's plus does.** The card has no
+ * primary at all, so its plus has to be one; the sheet already has exactly one
+ * ink control and it is *Save*. Two ink pluses and an ink Save would be three
+ * primaries on a form with a single action.
+ *
+ * The focus ring is inset because the cell sits inside a rounded, clipped
+ * field: an offset ring would be cropped by the parent's `overflow-hidden` and
+ * read as a broken edge rather than a focus state.
+ */
+export const PAGE_STEPPER_CELL =
+	'transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink';
+
+/**
+ * The field halo, raised by anything inside the field rather than by the field.
+ *
+ * A stepper's focusable part is the numeral in the middle of it, and the box is
+ * `overflow-hidden` so the three cells can share one rounded outline — which
+ * clips a shadow drawn on the numeral itself. So the halo goes on the wrapper
+ * and listens for focus below it.
+ */
+export const PAGE_FIELD_HALO_WITHIN =
+	'transition-shadow focus-within:shadow-[0_0_0_3px_rgba(190,51,70,0.14)]';
+
+/** The same, at the dark crimson and a little more alpha. See `PANEL_FIELD_HALO_DARK`. */
+export const PAGE_FIELD_HALO_WITHIN_DARK =
+	'transition-shadow focus-within:shadow-[0_0_0_3px_rgba(212,99,107,0.18)]';
+
+/**
+ * The unit menu's box and rows — the sort menu's construction, unchanged.
+ *
+ * Written down once here rather than twice inline. The shadow stays with the
+ * caller because it is the one part that differs by theme, and a `light-dark()`
+ * box-shadow is not something `theme.json` can express.
+ */
+export const PAGE_MENU =
+	'absolute z-30 p-1.5 rounded-[14px] bg-surface border border-line';
+
+/** One row of it. Selection is a check, never a fill — so hover still reads on it. */
+export const PAGE_MENU_ROW =
+	'flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The row a checkbox and its explanation share — *Keep off the shopping list*.
+ *
+ * The whole row is the target, box and words alike: the box is 22px and a 22px
+ * hit area on a phone is the mistake this app already corrected once on the
+ * shopping list's own rows.
+ */
+export const PAGE_CHECKBOX_ROW =
+	'w-full text-left transition-colors rounded-xl hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';

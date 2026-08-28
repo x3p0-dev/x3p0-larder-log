@@ -66,6 +66,26 @@ export type Item = {
 	storeIds: string[];
 	qty: string;
 	threshold: string;
+	/**
+	 * How big *one* of the thing is — a quart of milk, a 12 oz bag of coffee.
+	 *
+	 * A decimal string like `qty`, and half of a pair that is never half-set:
+	 * `shared/size.ts` owns the rule, and both halves are `''` when there is no
+	 * size at all, which is the ordinary case for anything counted rather than
+	 * packaged.
+	 */
+	size: string;
+	/** The size's unit **key** — a slug (`quart`), never its abbreviation (`qt`). */
+	unit: string;
+	/**
+	 * Keep this item off the shopping list, however low it gets.
+	 *
+	 * For the things a household grows, brews or otherwise never shops for. It
+	 * hides the item from one *view* and changes nothing about what is true of
+	 * it: the card still reads *running low*, and the three status pills — which
+	 * count stock, not shopping — do not move.
+	 */
+	offShoppingList: boolean;
 	notes: string;
 	/**
 	 * Zero's own insert stamp, ISO 8601 UTC — never written by this app, and it

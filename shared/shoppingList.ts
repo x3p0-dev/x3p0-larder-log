@@ -47,8 +47,23 @@ const RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
  */
 const NO_STORE = '';
 
-/** Is this item on the list at all? */
+/**
+ * Is this item on the list at all?
+ *
+ * Two questions, and the second one is authored where the first is derived: an
+ * item joins the list when its count drops under its low-at, **unless someone
+ * has said it never should**. `offShoppingList` is for the things a household grows or
+ * brews and never shops for — it is a property of the item and therefore the
+ * household's, like every other property of an item.
+ *
+ * The exclusion reaches this function and nothing else. `statusKeyFor` is
+ * untouched, so an excluded item still reads *running low* on its card and
+ * still counts toward the top bar's status pills. Those count stock; this
+ * counts shopping.
+ */
 export function needsBuying(item: Item): boolean {
+	if (item.offShoppingList) return false;
+
 	return statusKeyFor(item.qty, item.threshold) !== 'ok';
 }
 

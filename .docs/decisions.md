@@ -2960,3 +2960,183 @@ screen rather than a lost filter.
   household would fight over one row, and one person's phone and desktop would
   fight over it with themselves.
 
+
+---
+
+## D52. An item has a size, and a size is a pair that is never half-set
+
+**Decided:** 2026-08-28
+
+A household buys a quart of milk and a gallon of milk and wants them tracked
+apart. `qty` cannot answer that: *how much butter do I have* and *how big is one
+pack of butter* are two questions and one field cannot ask both. So an item
+carries an optional **size** — a number and a unit, describing **one** of the
+thing. You have three of them, and each one is a quart.
+
+**The fourth additive schema change since Phase 2**, after `households.ink`
+(D42), D44's nine stamp columns and D46's `profiles` table. Two columns on
+`items`, `size` and `unit`, both `string().default('')`; ten tables, five
+queries and seventeen mutations still.
+
+### The pair is never half-set, and that is the whole of the validation
+
+A bare `20` means nothing and a bare `quart` is not a size. `shared/size.ts`
+owns one function, `normalizeSize`, and between it and the sheet's two rules
+there is **no invalid state left to validate or explain**:
+
+1. **Picking a unit against an empty number fills the number with 1.** So *1
+   pint* is one tap, which is the commonest size there is.
+2. ***No size*, the first row of the unit menu, clears both halves.** That is why
+   the row carries no separate `×` — one control already does it.
+
+A number with no unit clears both on the way into the database, and so does an
+unknown unit key. The server calls the same function the sheet does, for a
+client that never came through the sheet.
+
+### The unit key is a slug, not the abbreviation
+
+`quart`, never `qt` — the same reasoning [D32](#d32-a-term-stores-a-color-token-not-a-color)
+gives for term colours: what a household stores has to survive us changing what
+it prints. **Half pint printing as `cup` is exactly the case that would
+otherwise be unfixable.**
+
+Fourteen units in three groups. *Half pint* is the one row where the word and
+the abbreviation disagree on purpose: a US half-pint carton is the common size
+and *half pint* is what anybody would look for in the list, but `1 ½ pt` reads
+as one and a half pints, which is a different quantity and the commonest case of
+this unit. `cup` is the same measure, it is what the carton says, and it cannot
+be misread. The menu shows the abbreviation on every row, so nothing about it is
+a surprise.
+
+**Abbreviations never pluralise** — *2 lb*, *2 qt*, *6 pack*. Nothing has to
+decide whether two dozen is `2 dz` or `2 dzs`.
+
+**There is no `each`.** *1 each* is not a size; it is the absence of one, which
+is what *No size* already says.
+
+### Where it shows, and where it deliberately does not
+
+**On the item card, beneath the name in meta 13** — not beside it. Names are
+long and the shopping list's own 460px name-and-badge collision is already on
+record; beneath is safe at every card width.
+
+**In the shopping-list row it rides with the name**, before the status badge. At
+the shelf *"Butter, 1 lb"* is one phrase, and moving the size across the row to
+sit with `have 2 · low at 4` would take that phrase apart to save a measurement.
+The name truncates inside the `min-width: 0` flex; the size does not, because
+half a unit is worse than no unit.
+
+**Not in the top bar, not in the filter pane, and not sortable.** A size is a
+property of an item, not a term: it has no colour, no chip, and nothing to
+filter by. If sizes ever need grouping they have to become terms first, which is
+a different design.
+
+### Rejected
+
+- **Calling it an *amount*,** which is what the ask called it. *Amount* collides
+  with the on-hand count, and the collision is the exact confusion the field
+  exists to remove. Flagged rather than settled: it is a one-word change if
+  *size* reads wrong.
+- **A household-level unit system in *Pantry settings*.** It would halve the
+  menu to seven rows and remove the *is it oz or ml* pause, at the cost of a
+  setting nobody asked for and a household that buys both. The menu scrolls,
+  which is the honest admission that it is long.
+- **Making units terms.** Then two people entering *1 qt* and *32 fl oz* for the
+  same bottle would be reconcilable, and the shopping list could one day answer
+  *how much olive oil do we have*. It is also a fourth taxonomy, with colours and
+  chips and a composer, for a field that is optional. **This is the decision to
+  revisit first if that question ever gets asked** — nothing about the size is
+  shared vocabulary today, and that is the price.
+- **A decimal size.** `1.5 lb` is a real thing to buy. Digits only, for now, for
+  the same reason `qty` is: the platform has no numeric column, string ordering
+  is a trap, and every parse in the app goes through `toInt`.
+- **Suppressing the number when it is 1**, so *Half pint* could print `½ pt`.
+  One rule this sheet otherwise does not need, to recover an abbreviation that
+  is already ambiguous.
+
+---
+
+## D53. Some things are never shopped for, and that is a property of the item
+
+**Decided:** 2026-08-28
+
+A household that grows its own black beans wants them in the pantry and never on
+a shopping list. Before this the two were the same statement: an item joined the
+list when it dropped under its low-at, and the only way to keep it off was to
+set a threshold of zero — which lies about the item on its own card.
+
+So `items.offShoppingList`, a `boolean().default(false)` — the **fifth** additive schema
+change since Phase 2, landing with D52's two columns.
+
+### The column is `offShoppingList`, spelled out
+
+Named `offList` first, and renamed the same day — **while it was still free.**
+The column had never been published, so the rename was an edit; after the next
+`sf publish` it would have needed `sf db migrate --rename`, which is one of the
+two destructive flags this project has deliberately never had to use.
+
+The short name is unambiguous everywhere it is *read* — `item.offList` inside
+`needsBuying` in `shared/shoppingList.ts` names the only list the app has. It is
+ambiguous in the one place that has no surrounding context, which is the schema
+literal itself, and that is the place a person meets it first. It also stops
+matching the checkbox's own words, *Keep off the shopping list*, which is the
+sentence the column exists to store.
+
+Eight characters, in about a dozen places, against a name that explains itself
+in the file where nothing else does.
+
+### It hides an item from one view; it does not change what is true about it
+
+**`needsBuying` is the only function that reads it.** `statusKeyFor` is
+untouched, and that split is the whole idea:
+
+| | Excluded item that is out |
+|---|---|
+| The card's status | still **Out** |
+| The three status pills | still count it |
+| The store card, and its count | drops it |
+| The top bar's cart count | drops it |
+
+The pills count *stock*; the list counts *shopping*. An app where excluding an
+item also made it look stocked would be an app you cannot trust about your own
+pantry.
+
+### The control lives in Count, and the marker on the card is the unsettled part
+
+**A single checkbox, last row of the `COUNT` section, under the two steppers** —
+not a section of its own. *Low at* is the sentence *put this on the list when I
+am down to N*; this is *…except don't*. It modifies the threshold, so it sits
+where the threshold is set, and putting it anywhere else would make it a fifth
+section for one checkbox.
+
+The box is the shopping list's own checkbox at its own size, extracted to
+`CheckBox.tsx` rather than drawn twice. **The rhyme is deliberate**: the box that
+takes a row off the list you are shopping, and the box that keeps an item off
+every list.
+
+**The card carries a struck cart in meta, left of the status.** Without
+something there, *why isn't the olive oil on my list* has no answer anywhere in
+the grid. It is a glyph nobody has been taught, on a card that deliberately
+carries no icons beside the name, and it is **the first thing to challenge** —
+the design document drew it as a mockup and said so.
+
+### What this leaves open, on purpose
+
+- **Whether an excluded item should still be counted somewhere.** A household
+  could quietly exclude half its pantry and the shopping trigger would go quiet
+  with it, with nothing on screen saying why.
+- **Whether the exclusion is the household's or yours.** It is the household's,
+  because every other property of an item is — but a shared list where one
+  person silently mutes a row is worth watching. Making it personal is a join
+  table, not a column, and therefore not a decision to take by accident.
+
+### Rejected
+
+- **A threshold of zero as the idiom.** It is what people would have reached for,
+  and it makes the card say *Out* forever. The card has to keep telling the
+  truth.
+- **A `neverBuy` taxonomy term.** A term is a thing you filter and colour by;
+  this is a flag on one item, and it would have been the app's fourth taxonomy
+  for a checkbox.
+- **Hiding excluded items from the pantry grid too.** They are in the pantry.
+  The whole point is that you still want to know you have them.

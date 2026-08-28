@@ -901,6 +901,114 @@ Verified: typecheck clean, 239 assertions, and on a throwaway `sf dev --port
 clicked any of it** — all three are press-time behaviour, so all three want a
 thumb.
 
+### Add / edit item, redesigned (Phase 4.13) — 2026-08-28
+
+`.claude/docs/design/add-edit-item.md`, drawn on
+`.claude/docs/design/larderlogaddedititem.html`. Governed by
+[D52](../.docs/decisions.md#d52-an-item-has-a-size-and-a-size-is-a-pair-that-is-never-half-set)
+and
+[D53](../.docs/decisions.md#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item).
+
+**The fourth and fifth additive schema changes since Phase 2**, in one edit:
+`items.size`, `items.unit` and `items.offShoppingList`. Still **ten tables, five
+queries, seventeen mutations** — three more fields through the two item
+mutations that already existed. It applies on the next publish with no flag, as
+`households.ink`, D44's nine columns and the `profiles` table all did.
+**`offShoppingList` is the app's second boolean column** and compiles exactly as
+`invites.revoked` does.
+
+- **An item has a size, and a size is a pair that is never half-set.**
+  `shared/size.ts` owns it: fourteen units in three groups, and one function —
+  `normalizeSize` — that both the sheet and the server call. A unit with no
+  number becomes `1`; a number with no unit, or an unknown unit key, becomes
+  neither. Between that and the sheet's two rules there is **no invalid state
+  left to validate**, which is why nothing anywhere renders a size error.
+- **`unit` stores a slug, never the abbreviation** — `quart`, not `qt`, on D32's
+  reasoning about term colours. **Half pint printing as `cup` is the case that
+  would otherwise be unfixable**: `1 ½ pt` reads as one and a half pints, which
+  is a different quantity and the commonest use of that unit.
+- **`offShoppingList` is read by exactly one function, `needsBuying`.** `statusKeyFor`
+  does not see it. So an excluded item still reads *Out* on its card and still
+  counts toward the three status pills, while the store card, its count and the
+  cart total all drop it. **That split is the whole idea** — the pills count
+  stock, the list counts shopping — and it is the thing to keep right.
+- **The sheet is four sections**: Item · Count · Location / Store / Type ·
+  Notes, micro-label over content, separated by a `divider` hairline. The three
+  taxonomies share **one** rule because they are one question asked three times.
+  **Grouping is labels and rules, never a fill**: a recessed panel on this sheet
+  already means *you are editing something* — it is the inline composer — and a
+  second one that only grouped would empty that meaning out.
+- **One field treatment, and its border is `ink-muted` on a contrast finding.**
+  The composer's old field border measures **2.80:1** on the panel and **2.45:1**
+  on the sheet in dark; `ink-muted` clears 5:1 on all four surface-and-theme
+  combinations. Same measurement that sent the shopping list's checkbox to this
+  token. **`PAGE_FIELD` is now what a field on the page ground looks like**;
+  `PAGE_INPUT` survives for the top bar's search alone, and **`PAGE_BUTTON` is
+  deleted** — the sheet's old asymmetric minus was its last caller.
+- **`UnitMenu.tsx` is the sort menu's construction, and its trigger is a field
+  rather than a ghost** — the ghost treatment is for a control on the ground,
+  this one sits on a form. The abbreviation sits in the check's reserved slot on
+  every row but the current one. Caps at 320px and opens scrolled to the current
+  unit; fifteen rows would otherwise be 593px of menu.
+- **Two matched steppers, and *Low at* is a peer rather than a caption.**
+  Symmetric and neutral, and **neither takes the card's ink plus**: the sheet has
+  exactly one primary and it is *Save*. **The numeral is a text field** — 2 to 15
+  is thirteen taps otherwise — capped at four digits, which is what fits an 85px
+  cell at 390. `useHoldRepeat.ts` adds the accelerating hold, and **the first
+  step still comes from `onClick`** so a tap fires once through the path that
+  already works for a thumb, a mouse and the keyboard.
+- **A live status line right of the `COUNT` label**, in the status ramp's own
+  dot and text. **This is what makes the threshold easy rather than merely
+  bigger.** It forced a rule the docs never stated: **`on hand == low at` is
+  low** — which is what `statusKeyFor` already did, and now has a test.
+- **`CheckBox.tsx`** is the shopping list's 22px box, extracted rather than drawn
+  twice. The rhyme is the point: the box that takes a row off the list you are
+  shopping, and the box that keeps an item off every list.
+- **The card gained the size beneath the name** (not beside it — names are long,
+  and the list's own 460px collision is on record) **and a struck cart left of
+  the status** when the item is kept off the list. The status does not move. The
+  cart is `ShoppingCart` under `Slash`, since lucide has no struck one, and it is
+  **the first thing to challenge**: a glyph nobody has been taught, on a card
+  that otherwise carries no icons beside the name.
+- **The list row gained the size riding with the name**, before the badge — at
+  the shelf *"Butter, 1 lb"* is one phrase. **The stacking floor was left at
+  460**, not raised to the design's derived 520: the row already wraps on
+  measured content rather than at a hard breakpoint, and 520 would change the
+  grid's column count at 1440 on an unmeasured number. Worth a look on a real
+  screen.
+
+**Three deliberate departures from the boards.** The status line does **not**
+crossfade — there is no stylesheet in this project and therefore no `@keyframes`
+to reach for, and a 140ms fade is not worth appending a `<style>` at boot for.
+The sheet keeps its full-height right-edge geometry on desktop rather than the
+boards' floating card, which is how the boards draw it in isolation; the spec's
+own table says *480 from the right*. And **`Household default` rides the *Low
+at* sub-label after a middot**, rather than sitting on a line under the field:
+the note is about the number the field arrived holding, so it belongs beside
+that field's name, and a line of its own made two side-by-side steppers unequal.
+It truncates rather than wraps — the pair measures 156px inside the 173px a
+stepper gets at 390.
+
+**That note tracks the value, not a touched flag**, which is a fourth departure
+and the one worth knowing. The spec says it *disappears the moment the number is
+changed*; built that way it was a one-way `thresholdTouched` boolean, and it
+left the sheet saying nothing about a threshold that **was** the household's —
+which is the only thing the line exists to say. It is now
+`toInt(threshold) === toInt(defaultThreshold)` on the Add sheet, so stepping away
+and back brings it back. `toInt` on both sides, so an empty field and a leading
+zero read as the numbers they are. **`ItemSheet` takes `defaultThreshold`
+again** — it was dropped when the hint stopped naming the number.
+
+**Verified without a browser**: typecheck clean, **285 assertions** (46 new),
+the artifact shows all three columns with defaults and `db.migrations` empty,
+`sf dev` on `--port 4199` compiles and serves, every new class literal is in the
+live `/zero.css` — printed and unescaped, never hand-written — and the **real
+handlers** were driven over `POST /__spacefast/zero/run`: a whole pair stored, a
+unit with no number resolving to 1, a bare number and a bogus unit key both
+resolving to neither, a unit-only patch keeping the number it did not name, and
+`offShoppingList` set and cleared. **Nobody has clicked it** — every interesting part of
+this is press-time behaviour, so all of it wants a thumb.
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -1402,13 +1510,15 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D51, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load** |
+| `.docs/decisions.md` | D1–D53, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
 | `.claude/docs/design/larderlogshoppinglistboards-2.html` | **The 16 boards for the shopping list** — eight screens, light and dark. Supersedes the `-1` file, which drew a top bar the app does not have |
 | `.claude/docs/design/larderloghouseholdcolourboards.html` | **The 8 boards for the household colour** — four screens, light and dark |
 | `.claude/docs/design/appliedfilterbar.html` | **The applied filter bar** — a live page rather than boards: desktop, 390, and the state strip, in both themes |
+| `.claude/docs/design/add-edit-item.md` | **The add / edit item redesign** (28 Aug) — the sheet's four sections, the size, the two steppers, and the off-list checkbox. A section of the design spec kept as its own doc, because `ui-directions.md` has no patch operation |
+| `.claude/docs/design/larderlogaddedititem.html` | **The 9 boards for that redesign** — the sheet in both themes, the size row and its unit menu, the two steppers, where the size shows, 390, and keeping an item off the list |
 | `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
 | `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes. **The build has one state now** — D48 removed the prefill, so neither board's hint exists |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |
@@ -1493,13 +1603,14 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 235 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 285 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
   invite-link parsing, the dev-guest bypass in `shared/identity.ts`, D44's
   stamp guards and A–Z term ordering, D45's *OR inside a group, AND across
-  groups*, and D46's display-name fallback chain. **Add to it** when you touch any of those — that file is the app's
+  groups*, D46's display-name fallback chain, and D52's size pair together with
+  D53's split between `needsBuying` and `statusKeyFor`. **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
