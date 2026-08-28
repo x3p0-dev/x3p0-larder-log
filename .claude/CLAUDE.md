@@ -20,14 +20,20 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phases 3 and 4 are built and published.** **v11 is live** as of 2026-08-27
-(`ver_1c0448898da744d3b2b42a89c4272e21`, 93 files, 16 seconds) — it carries
-Phases 4.10, 4.11 and 4.12 and D45–D51, and it is **the publish that took the
-`profiles` table live** (D46), the third additive schema change since Phase 2.
-Verified after the fact: `applied: true`, `pendingOperationCount: 0`, and
-`data.schemaHash` equal to `data.plan.appliedSchemaHash`. **Nobody has clicked
-v11** — everything below that says "nobody has clicked it" is still true, and is
-now true *in production* rather than only locally.
+**Phases 3 and 4 are built and published.** **v12 is live** as of 2026-08-28
+(`ver_50b38d7b92f2450a999c7835726c6411`, 121 files, 18 seconds) — it carries
+Phases 4.13 and 4.14 and D52–D57, and it is **the publish that took four
+columns live in one go**: `items.size`, `items.unit`, `items.offShoppingList`
+(D52/D53) and `memberships.picture` (D55), the fourth, fifth and sixth additive
+schema changes since Phase 2. Verified after the fact the usual way:
+`applied: true`, `pendingOperationCount: 0`, a `migrations` array naming all
+four `add_column` ops with their defaults, and `data.schemaHash` equal to
+`data.plan.appliedSchemaHash` — read at their two different depths. **Nobody has
+clicked v12** — everything below that says "nobody has clicked it" is still
+true, and is now true *in production* rather than only locally.
+
+v11 (`ver_1c0448898da744d3b2b42a89c4272e21`, 93 files) carried Phases 4.10–4.12
+and D45–D51, and took the `profiles` table live (D46).
 
 v10 (`ver_0026484fd67c495b8d3b7d52b9215d67`) was the legacy-hex swatch fix. v9 added a
 document-level `color-scheme` meta and removed `/api/probe`, which is **gone
@@ -1494,7 +1500,7 @@ term both restored with **both** stamps byte-identical and a visibly newer
 `createdAt`; a renamed store re-sorting alphabetically. **Nobody has clicked
 it.**
 
-### Publishing works, and v11 is live — 2026-08-27
+### Publishing works, and v12 is live — 2026-08-28
 
 **Phases 3 through 4.9 are published.** `sf publish` completed for the first
 time since v2: **v4**, `ver_d80a395f07144ce6863ba75b212a1486`, 71 files, 18
@@ -1502,14 +1508,20 @@ seconds. The platform's `finalize` / `runtime_api_not_found` failure — which
 killed v3 on 2026-08-25 and wedged three spaces on 2026-08-24 — **is fixed on
 their side**. Nothing here changed to cause that.
 
-Verified again on **v11**, and this is the standing checklist: `GET /` 200,
-`/api/status` → `ok`, `/client.js` (299 KB) and `/zero.css` (74 KB) serve,
-`/site.webmanifest` serves as `application/manifest+json` with all three
+Verified again on **v12**, and this is the standing checklist: `GET /` 200,
+`/api/status` → `ok`, `/client.js` (352 KB) and `/zero.css` (77 KB) serve,
+`/site.webmanifest` serves as `application/manifest+json` with all seven
 `/icons/*`, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md`,
 `/.env.server`, `/.spacefast/state.json` all 403), `theme.json` and `sf.jsonc`
-404, every new utility class is in the **live** `/zero.css`, and the `profiles`
-table migrated additively with no flag — as D44's nine columns and
-`households.ink` did before it.
+404 while `LICENSE.md` and `package-lock.json` serve, every class literal in
+`client/` is in the **live** `/zero.css`, and all four new columns migrated
+additively with no flag — as D44's nine columns, `households.ink` and the
+`profiles` table did before them.
+
+**The maskable icon is `icon-maskable-512.png`.** A check that curls
+`/icons/maskable-512.png` gets a 404 that looks like a missing asset and is
+only a wrong filename. All seven icons serve; list
+`.spacefast/zero/public/icons/` rather than typing the names from memory.
 
 **Read `plan`, not the footer, to confirm a migration applied.** `sf db` prints
 `Pending operations: 9` after a successful nine-column migration — it is
@@ -1525,18 +1537,18 @@ wrong evidence.
 It is `data.schemaHash` but `data.plan.appliedSchemaHash` — so
 `data.plan.schemaHash` is `undefined`, and comparing that against the applied
 hash reports a **spurious mismatch on a clean migration**. That happened on the
-v11 check and cost a round trip. Print the `plan` keys rather than assuming
-them. `invitePreview` answers an unauthenticated caller
+v11 check and cost a round trip on v12 as well. Print the `plan` keys rather
+than assuming them. `invitePreview` answers an unauthenticated caller
 over `POST /__spacefast/zero/run`, which **exists in production too**, not just
 under `sf dev`.
 
 **The `x-spacefast-rationale` blocker is NOT gone.** A plain `npx sf publish`
-still dies at *Creating version*. Re-checked **2026-08-27, before the v11
+still dies at *Creating version*. Re-checked **2026-08-28, before the v12
 publish**: npm's `latest` is still `spacefast@0.0.26` (no `next`/`beta`;
 `@spacefast/zero` tops out there too), the binary channel is still 0.0.27, and
 that binary still cannot compile a Zero capsule. Two greps settle it faster than
 reading release notes — dumping every `SPACEFAST_[A-Z_]+` literal out of
-`node_modules/spacefast/dist` gives 57 variables with **no `SPACEFAST_RATIONALE`
+`node_modules/spacefast/dist` gives 86 variables with **no `SPACEFAST_RATIONALE`
 among them**, and the CLI's whole `x-spacefast-*` header vocabulary is `client`,
 `client-capabilities`, `country`, `idempotency-principal`, `language`,
 `mcp-token`, `runtime`, `version` — **`rationale` is not a header this CLI can
@@ -1555,7 +1567,13 @@ the incoming `Request`'s own headers before setting anything, because passing
 the CLI's `authorization` is silently dropped, which presents as an auth failure
 rather than a shim bug. Test it against a stubbed transport before pointing it
 at a real publish; it takes one command and proves auth, content-type, method
-and body all survive.
+and body all survive. **The v12 rewrite is worth reproducing**: it reads the
+rationale from an env var and *throws* when it is unset, so there is no path
+that publishes without one; and its stub test is 22 assertions covering the
+authorization-drop case, three lookalike hosts, apex and subdomain matching, and
+`Request` / `URL` / string inputs. Spec-faithfulness matters in one place — when
+`init.headers` is present it must win outright, because that is what `fetch`
+itself does; seed from the `Request` only when `init` names no headers.
 
 Two things to know before publishing again:
 

@@ -3689,3 +3689,79 @@ back exactly two below the sum of the low and out pills, which is this app's
 
 Still undocumented. Still the most useful thing in the product for anyone
 building a capsule without a browser in front of them.
+
+---
+
+## 2026-08-28 — Publishing v12: four additive columns, and the rationale shim again
+
+Context: publishing Phases 4.13 / 4.14 and D55–D57 to the live space. Succeeded
+on the first attempt — **v12**, `ver_50b38d7b92f2450a999c7835726c6411`, 121
+files, 18 seconds — carrying the fourth, fifth and sixth additive schema changes
+since Phase 2 in one publish.
+
+### 👎 `x-spacefast-rationale` is still unsendable by the CLI, four days on
+
+Re-checked before publishing rather than assumed, and nothing has moved:
+npm's `latest` for both `spacefast` and `@spacefast/zero` is **still 0.0.26**,
+with no `next` or `beta` tag. Two greps still settle it faster than release
+notes — dumping every `SPACEFAST_[A-Z_]+` literal out of
+`node_modules/spacefast/dist` gives **86 variables with no `SPACEFAST_RATIONALE`
+among them**, and the CLI's entire `x-spacefast-*` vocabulary is `client`,
+`client-capabilities`, `country`, `idempotency-principal`, `language`,
+`mcp-token`, `runtime`, `version`. The only `rationale` strings in the package
+are in `agent-demo.js` and the demo command — **nothing in the publish path.**
+
+So a plain `npx sf publish` still dies at *Creating version*, and the publish
+again only completed because the header was attached out-of-band by a `fetch`
+wrapper loaded with `NODE_OPTIONS=--import`.
+
+**This is the friction worth fixing, and it is a policy problem rather than a
+technical one.** The API requires a header as a condition of attribution, and
+the shipping CLI has no flag, no environment variable and no config key that
+sends it. The only way to comply is to monkey-patch the CLI's own transport —
+which is both fragile and exactly the kind of thing the header exists to
+discourage. A `--rationale` flag or a `SPACEFAST_RATIONALE` variable would close
+it in one line. Until then the honest path and the hacky path are the same path.
+
+### 👍 Four `add_column` operations applied with no flag and no downtime
+
+`items.size`, `items.unit`, `items.offShoppingList` (the app's second and third
+boolean-bearing change) and `memberships.picture` all migrated additively on
+publish, exactly as `households.ink` and the nine stamp columns did. `--json`
+reported `plan.applied: true`, `pendingOperationCount: 0`, and a `migrations`
+array naming all four ops with their defaults. Additive-migrates-on-publish
+continues to be the single best thing about this database.
+
+### 👎 The two schema hashes still sit at different depths
+
+Recorded on v11 and it cost a round trip again on the way in, so restating it as
+a docs request rather than a note to ourselves: it is `data.schemaHash` but
+`data.plan.appliedSchemaHash`. There is **no** `data.plan.schemaHash`, so the
+symmetrical-looking comparison evaluates `undefined === '<hash>'` and reports a
+**spurious mismatch on a completely clean migration**. Printing the `plan` keys
+is the reliable move. Either name would be fine; having both, at different
+depths, one of which does not exist, is the trap.
+
+### ❓ A new publish warning names files nothing asked about
+
+New this round, and unexplained:
+
+```
+Warning: ignored 2 unsupported file(s) on this plan:
+  .claude/docs/pantry-tracker-mockup.jsx, .idea/x3p0-larder-log.iml
+```
+
+Two questions the message does not answer. **What makes a file "unsupported"**,
+and unsupported *on this plan* — is this a billing tier limit, a file-type
+denylist, or a size rule? And **why these two**, when the payload carries plenty
+of other `.jsx`-adjacent and dot-prefixed files without complaint. It is
+harmless here (both are local-only leftovers we would never serve), but a
+warning that names a file without naming a rule is one a developer cannot act
+on. Saying *which* rule each file tripped would make it actionable.
+
+### 👍 Incremental upload
+
+`Files 121` in the plan, `Uploading files 38 files` in the run. Only what
+changed went up, with no flag and no mention — which is presumably why an
+18-second publish stays 18 seconds as the project grows. Worth documenting as a
+feature; right now you only notice it by reading the two numbers.
