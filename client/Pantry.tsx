@@ -1930,7 +1930,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							class="font-disp text-wordmark font-extrabold leading-[1.06] tracking-[-0.015em]"
 							style={{ color: theme.textStrong }}
 						>
-							Larder <span class="italic" style={{ color: '#BE3346' }}>Log</span>
+							{/*
+							  * `theme.accent`, not the light crimson written down
+							  * twice. This wordmark held `#BE3346` in both themes —
+							  * 3.11:1 on the dark ground — which is the exact bug
+							  * `accent` was added to fix, on the one wordmark that
+							  * never got it. 4.81:1 in dark now.
+							  */}
+							Larder <span class="italic" style={{ color: theme.accent }}>Log</span>
 						</h1>
 						{householdName && (
 							<span

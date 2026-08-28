@@ -973,6 +973,45 @@ without a browser: typecheck clean, 295 assertions, all 32 class literals in the
 touched component diffed against the live `/zero.css`, and the served
 `/client.js` carrying the URL, both labels and the link hygiene.
 
+### The front door says it is a beta — 2026-08-28
+
+[D57](decisions.md#d57-the-beta-badge-is-on-the-front-door-only-and-not-in-the-app).
+Client only: no schema change, no handler moved, no new `theme.json` token.
+
+**The marketing page discloses the stage; the app shell does not repeat it.** A
+`BETA` pill beside the wordmark in the nav and the footer, and nowhere else —
+not the drawer header, not the mobile header row, not `<title>`, not the
+manifest name, not the icon. It is the tag component with no dot: not focusable,
+no press state, no tooltip, no link.
+
+**Built the spec's way first and rejected.** The spec's rule is *the wordmark
+never appears without it*, on the grounds that a marker on some screens and not
+others stops being a disclosure. Sound about disclosure, wrong about audience —
+a caveat is read once, when you are deciding, and a permanent pill above the
+item grid re-serves it on every load to somebody who has already signed up. The
+rule still holds within the marketing page, which is why the footer keeps it.
+
+- **A fill one step off the ground, a `meta` edge, a `body` label**, all read
+  off the theme. The fill separates at 1.10–1.45:1, so **the edge is the whole
+  component**; it is the second after the shopping-list checkbox to borrow a
+  text token for its border.
+- **It scales off the wordmark's set size**, the way `HouseholdTile` derives its
+  radius and letter, with the 9px label floor applied to the *input* so the 18px
+  footer wordmark takes Small unchanged.
+- **The nav is 20/24, not the spec's assumed 27**, so both its badges are small.
+
+**Done when** it has been looked at — `?signedout` locally, or the published
+front page. The cap-height alignment and the gap beside the italic `g` are
+arguments made on paper. **The sign-in card and the `?join=` landing are now the
+only signed-out surfaces without a marker**, which makes them the open question
+rather than a deliberate exclusion; the invite landing has no wordmark to attach
+one to.
+
+Verified without a browser: typecheck clean, 322 assertions, `sf dev` on
+`--port 4199` compiles and serves, and every class literal in the new component
+was diffed against the live `/zero.css` by unescaping the sheet's own selectors.
+**Nobody has clicked it.**
+
 ### The seeded types cover a supermarket — 2026-08-27
 
 [D50](decisions.md#d50-the-seeded-types-are-a-supermarket-and-the-other-two-taxonomies-are-not),

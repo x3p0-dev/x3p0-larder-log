@@ -3549,3 +3549,143 @@ it is changed, and D55 made every member's face depend on it.
   about, and the slot's rule is already *absent, not blank*.
 - *Link to `gravatar.com/<hash>`* — the SDK's `gravatarProfileUrl()` builds it,
   but it is the **public profile**, not the editor. The row says *change*.
+
+## D57: the beta badge is on the front door only, and not in the app
+
+`.claude/docs/design/beta-badge.md`, drawn on
+`.claude/docs/design/larderlogbetabadgeboards.html`. Client only: no schema
+change, no handler moved, no new `theme.json` token.
+
+**The marketing page discloses the stage; the app shell does not repeat it.**
+The nav and the footer carry a `BETA` pill beside the wordmark, and nothing
+inside the signed-in app does — not the drawer header, not the mobile header
+row, not the `<title>`, not the manifest name, not the icon.
+
+**This overrules the spec's own rule**, which is worth recording because the
+rule is a good one and it is the scope it was applied at that was wrong. The
+spec says *the wordmark never appears without it*: a marker that shows up on
+some screens and not others stops being a disclosure and becomes decoration,
+because the reader has to work out whether its absence means anything. Built
+that way — five call sites, the drawer header and the top bar included — it was
+rejected on sight. The reason it fails is that **it answers a question nobody
+in the app is still asking.** A caveat is read once, when you are deciding; a
+permanent pill above the item grid is that caveat re-served on every load, to
+somebody who has already signed up, in the two places the app is least able to
+spare the width. The front door is where the decision is made, so the front
+door is where the disclosure belongs.
+
+The rule survives *within* the page it applies to, which is why the footer keeps
+it: dropping the marker 900px below the nav on one page really would invite the
+reader to work out what the absence means.
+
+**One component, two call sites, three instances** — `BetaBadge` in
+`Brand.tsx`, drawn twice in the nav because the wordmark there is responsive and
+the badge derives its metrics from a number, and once in the footer. Ending the
+beta is deleting the component and three lines.
+
+**It is not a control.** No press state, no tooltip, no link, no 44px target,
+not focusable. It is the tag component — read-only, bounded, sitting beside a
+thing it labels — with no dot, exactly as the invite composer's role chips are
+the chip component with no dot.
+
+### The construction, and why the edge is the whole component
+
+A fill one step off the ground, a `meta` edge, a `body` label: `border`,
+`textMuted`, `text`, all read off the theme so both themes come from one
+expression.
+
+**The fill does none of the separating** — 1.10:1 against the light ground and
+1.45:1 against the dark. The pill is invisible without its border in either
+theme, which is the thing a re-render will get wrong: drop the edge to a
+hairline "because it looked heavy" and the badge stops existing.
+
+`border` for the fill is **D45's finding reused** — an object on the ground
+moves *away* from the ground, darker on the cream and lighter on the dark, and
+`border` is the one token that does both from a single name. `surfaceAlt` would
+be the ground gradient's own middle stop. The `meta` edge is **the
+shopping-list checkbox's finding reused**: a text token, because the strongest
+border in the palette falls under 3:1 on the surface it actually sits on. This
+is the second component to borrow a text token for its border, which is starting
+to look like the answer to the standing *top-bar controls have almost no edge*
+question rather than two exceptions to it.
+
+Measured: label 6.78:1 light and 7.90:1 dark; edge 4.63:1 light and 5.85:1 dark.
+
+The boards also draw the drawer pairing — `drawer.raised` / `drawer.inkMeta` /
+`drawer.inkMuted`, 8.70:1 and 10.44:1 — and it is **not built**. The values are
+recorded in `BetaBadge`'s own comment so that surface is a trio rather than a
+measuring exercise if it is ever wanted. (The boards' `#DCD0BA` label there is
+the *page* dark theme's body colour; the drawer has its own, `inkMuted`.)
+
+### It scales off the wordmark, and the floor is on the input
+
+Height = 0.66 × the wordmark's set size, label = 0.55 × height, padding =
+0.39 × height, gap = 0.37 × set size, radius 999. Derived rather than tabled,
+the way `HouseholdTile` derives its radius and letter, so a third call site is a
+number rather than a new entry.
+
+**The gap belongs to the badge**, as a `marginLeft`, so a caller cannot get it
+wrong — which is why both call sites wrap the wordmark and badge in a gapless
+flex row of their own rather than letting the surrounding row's `gap` add to it.
+
+**The 9px label floor is applied to the input, not to the label.** The 18px
+footer wordmark asks for an 8px label — below the smallest type in the app, the
+`OUT` / `LOW` badges at 9.5, and below where 0.12em tracking stops separating
+letters and starts dissolving them. `Math.max(24, size)` is what the spec's
+*"the footer takes Small unchanged and sits fractionally large"* amounts to, in
+one expression rather than a cascade of clamps.
+
+**The nav is 20/24, not the spec's assumed 27**, so both of its badges are
+small rather than one being regular. That is the derivation doing its job rather
+than a departure.
+
+### Rejected
+
+- **The whole app, welded to the wordmark.** Built first, and the reason it lost
+  is above. The spec's rule is sound about disclosure and wrong about audience.
+- **`<title>` as `Larder Log (Beta)`.** Built and reverted with the rest. The tab
+  strip is the app, not the front door, and it is read on every load by exactly
+  the people who no longer need telling.
+- **The manifest `name` and the home-screen label.** Never built. iOS truncates
+  past roughly twelve characters and *Larder Log (Beta)* would ellipsize into
+  something worse than either version.
+- **The app icon and favicon.** The 16px face is a hand-cut drawing whose stem is
+  3px and whose arm is 2px; a corner ribbon has nowhere to go, and *the icon does
+  not vary by theme* would become *the icon varies by release stage*, which is a
+  promise to redraw eight files twice.
+- **Crimson fill**, the filter-count badge's construction. Crimson is
+  brand-and-out — it already means *gone* on the status ramp and *something is
+  filtering* on the rail — and the wordmark beside it is **already crimson**, so
+  a crimson pill 10px from an italic crimson *Log* doubles the only accent on
+  screen inside a 200px span.
+- **Amber**, the low tokens. *Hold on* is nearly the right sentence, but the ramp
+  is about **stock** — putting the pantry's status vocabulary on the product's
+  name says the pantry is running low. The shopping-list trigger lost the same
+  argument for the same reason.
+- **Inverted — ink fill, cream label.** It reads beautifully and breaks rule 3 of
+  *Theming* outright: near-black ink is the only thing you press.
+- **A term colour.** Sixteen exist and one would look good. Term colours mean
+  *term*, which is the argument that keeps a person off the palette.
+- **Bare superscript text with no container.** Cheapest, and it has no bounded
+  form — on the ground it is small text with no edge, the one failure mode this
+  system already knows it has.
+- **A version number.** Nobody in a pantry app can act on one, and a number
+  invites the question of what changed between two of them, which is a changelog,
+  which is a page that does not exist.
+
+### Open
+
+- **The sign-in card and the `?join=` landing still have no marker**, and now
+  they are the *only* signed-out surfaces without one. `SignInCard` sets the
+  wordmark at 32/38 — the largest it ever appears, on the last screen before an
+  account is created — and someone who lands on a bounced URL or an invite link
+  never sees the marketing nav. Under this decision they are the strongest
+  remaining candidates rather than a deliberate exclusion: the component is
+  ready, and 38 gives 25/14/14. The invite landing needs a prior answer — its
+  header is the household tile and it has **no wordmark at all**, so either the
+  card gains one or it gains nothing.
+- **It has never been seen next to the wordmark.** The cap-height alignment (a
+  flat `-top-px` at both sizes) and the italic-`g` gap that reads wider than it
+  measures are arguments made on paper.
+- **Nothing says when it comes off.** Trivial to remove, impossible to remember
+  to remove. Worth attaching to something — the Viewer role, or the restock flow.

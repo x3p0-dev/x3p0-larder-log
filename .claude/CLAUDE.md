@@ -1196,6 +1196,72 @@ hand-written — with `.no-underline` among them. The served `/client.js` carrie
 the URL, both labels, `_blank` and `noopener noreferrer`. **Nobody has clicked
 it.**
 
+### The front door says it is a beta (D57) — 2026-08-28
+
+`.claude/docs/design/beta-badge.md`, drawn on
+`.claude/docs/design/larderlogbetabadgeboards.html`. **Client only**: no schema
+change, no handler moved, no new `theme.json` token — still ten tables, five
+queries, eighteen mutations.
+
+**The marketing page discloses the stage and the app shell does not repeat it.**
+`BetaBadge` in `Brand.tsx`, drawn twice in the nav (the wordmark there is
+responsive and the badge derives its metrics from a number) and once in the
+footer. Nothing else: not the drawer header, not the mobile header row, not
+`<title>`, not the manifest name, not the icon.
+
+**It was built the spec's way first and rejected**, and that is the part worth
+keeping. The spec's rule is *the wordmark never appears without it* — a marker
+on some screens and not others stops being a disclosure and becomes decoration.
+Sound about disclosure, wrong about audience: **a caveat is read once, when you
+are deciding.** A permanent pill above the item grid re-serves it on every load
+to somebody who has already signed up, in the two places the app is least able
+to spare the width. The rule still holds *within* the marketing page, which is
+why the footer keeps it.
+
+- **It is not a control.** Not focusable, no press state, no tooltip, no link.
+  The tag component with no dot. The markup says `Beta` and the caps are CSS, so
+  a screen reader is handed a word; it is deliberately **not** `aria-hidden`, so
+  the nav announces *Larder Log Beta*.
+- **A fill one step off the ground, a `meta` edge, a `body` label** — `border`,
+  `textMuted`, `text`, so both themes come from one expression. **The fill does
+  none of the separating** (1.10:1 light, 1.45:1 dark), so the edge is the whole
+  component. It is the **second** component to borrow a text token for its
+  border, after the shopping-list checkbox, which is starting to look like the
+  answer to the *top-bar controls have no edge* question.
+- **The drawer trio is measured and not built** — `drawer.raised` /
+  `drawer.inkMeta` / `drawer.inkMuted`, 8.70:1 and 10.44:1 — and is recorded in
+  `BetaBadge`'s comment so that surface is a trio rather than a measuring
+  exercise if it is ever wanted.
+- **It scales off the wordmark's set size** — height 0.66, label 0.55 of the
+  height, padding 0.39 of the height, gap 0.37 of the set size — the way
+  `HouseholdTile` derives its radius and letter. **The 9px label floor is applied
+  to the input** (`Math.max(24, size)`), which is what the spec's *"the footer
+  takes Small unchanged"* amounts to in one expression. **The gap belongs to the
+  badge**, as a `marginLeft`, which is why both call sites wrap the wordmark and
+  badge in a gapless row of their own.
+- **The nav is 20/24, not the spec's assumed 27**, so both its badges are small.
+  That is the derivation doing its job rather than a departure.
+- **The sign-in card and the `?join=` landing are now the only signed-out
+  surfaces without a marker**, which makes them candidates rather than
+  exclusions — see D57's *Open*. The invite landing has no wordmark at all.
+
+**One unrelated fix rode along.** The mobile header's `Log` was hard-coded
+`#BE3346` in both themes — 3.11:1 on the dark ground, the exact bug
+`theme.accent` was added to fix, on the one wordmark that never got it. Now
+`theme.accent`, 4.81:1 in dark. Found while the badge was still attached to that
+wordmark, and kept when it was removed.
+
+**Verified without a browser**: typecheck clean, 322 assertions, `sf dev` on
+`--port 4199` compiles and serves, and **every class literal** in the new
+component was diffed against the live `/zero.css` by unescaping the sheet's own
+selectors — printed, never hand-written — including `.-top-px` resolving to
+`top: -1px` and `@property --tw-border-style` carrying `initial-value: solid`,
+which is what makes a bare `border` paint the inline `borderColor`.
+
+**Nobody has clicked it, and `?signedout` is the only way to look at it
+locally** — `http://127.0.0.1:4173/?signedout`. The cap-height alignment (a flat
+`-top-px`) and the gap beside the italic `g` are arguments made on paper.
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -1700,7 +1766,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D56, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link** |
+| `.docs/decisions.md` | D1–D57, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -1711,6 +1777,8 @@ most of it is already decided.
 | `.claude/docs/design/larderlogaddedititem.html` | **The 9 boards for that redesign** — the sheet in both themes, the size row and its unit menu, the two steppers, where the size shows, 390, and keeping an item off the list |
 | `.claude/docs/design/install-as-an-app.md` | **Install as an app** (28 Aug) — the one Settings row that offers it, the banner that was cut and why, and two contrast findings that leave the row. Its own doc for the reason `add-edit-item.md` is |
 | `.claude/docs/design/larderloginstallmockup.html` | **The 5 boards for it** — desktop 1440, the row's states with the panel-edge finding drawn both ways, Preferences in three states × both themes, 390, and the appears-where matrix |
+| `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
+| `.claude/docs/design/larderlogbetabadgeboards.html` | **The 5 boards for it** — anatomy and the four surface pairings, the drawer header, 390 with six filters applied, what lost, and the marketing nav and footer in both themes. **Its marketing nav still draws the pre-D47 *Sign in with Gravatar* button** |
 | `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
 | `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes. **The build has one state now** — D48 removed the prefill, so neither board's hint exists |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |

@@ -6,7 +6,7 @@ import { fromInt, toInt } from '../../shared/qty';
 import type { Theme } from '../lib/theme';
 import { entityColorFor } from '../lib/theme';
 import { ItemCard } from './ItemCard';
-import { AppTile, Wordmark } from './Brand';
+import { AppTile, BetaBadge, Wordmark } from './Brand';
 import { SignInButton } from './OutsideShell';
 import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
 
@@ -261,7 +261,24 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 				<span class="flex items-center gap-2.5 md:gap-[13px] min-w-0">
 					<span class="md:hidden"><AppTile size={30} radius={7} /></span>
 					<span class="hidden md:block"><AppTile size={34} radius={7} /></span>
-					<Wordmark size="text-[20px] md:text-[24px]" theme={theme} />
+					{/*
+					  * The wordmark and its badge are one group with no gap of their
+					  * own: the badge carries its own left margin, derived from the
+					  * wordmark's set size, and the row's `gap` would be added on top
+					  * of it.
+					  */}
+					<span class="flex items-center min-w-0">
+						<Wordmark size="text-[20px] md:text-[24px]" theme={theme} />
+						{/*
+						  * The stage marker. Two of them rather than one, because
+						  * the badge derives its metrics from a number and the nav's
+						  * wordmark is responsive — the same reason the tile above is
+						  * drawn twice. Both land on Small: 20 clamps to the 24 floor
+						  * and 24 is Small outright.
+						  */}
+						<span class="md:hidden"><BetaBadge size={20} theme={theme} /></span>
+						<span class="hidden md:block"><BetaBadge size={24} theme={theme} /></span>
+					</span>
 				</span>
 
 				{/*
@@ -437,7 +454,18 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 				<Column class="flex flex-col items-start gap-2.5 py-5 pb-7 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-7">
 					<span class="flex items-center gap-[11px] min-w-0">
 						<AppTile size={26} radius={6} />
-						<Wordmark size="text-[18px]" theme={theme} />
+						<span class="flex items-center min-w-0">
+							<Wordmark size="text-[18px]" theme={theme} />
+							{/*
+							  * The footer keeps it. Carrying the marker in the nav and
+							  * dropping it 900px lower on the same page invites the
+							  * reader to work out what the absence means, and within one
+							  * page it never means anything. At 18 the ratios ask for an
+							  * 8px label, so the input clamps to 24 and the pill sits
+							  * fractionally large — the right way to be wrong.
+							  */}
+							<BetaBadge size={18} theme={theme} />
+						</span>
 					</span>
 					<p class="text-[12.5px] sm:text-[13px]" style={{ color: theme.textMuted }}>&copy; 2026 Larder Log</p>
 				</Column>
