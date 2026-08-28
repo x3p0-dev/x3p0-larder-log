@@ -1767,7 +1767,20 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			<div class="flex-1 min-w-0 overflow-x-hidden">
 			{/* Mobile only: above `md` the drawer carries the wordmark and the menu. */}
 			<header class="md:hidden">
-				<div class="flex items-center gap-[13px] px-5 pt-4 pb-3">
+				{/*
+				  * **24px is the phone's one vertical rhythm**, and every gap down
+				  * this column is it: above the wordmark, between the wordmark and
+				  * the search, between the search and the status pills (row 2's own
+				  * `pt-6`). It was 16 / 36 / 24 — three different gaps in the first
+				  * three, which reads as three unrelated bands rather than one
+				  * column.
+				  *
+				  * The middle one is **split between two owners** and always has
+				  * been: this `pb-3` and the content wrapper's `pt-3` below. They
+				  * are 12 + 12, and neither is meaningful alone — change one and
+				  * change the other.
+				  */}
+				<div class="flex items-center gap-[13px] px-5 pt-6 pb-3">
 					{/* Left, the same side the drawer comes from. */}
 					<span class="relative shrink-0 inline-flex">
 						<button
@@ -1870,7 +1883,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			  * grid below can keep adding tracks instead of stranding whitespace
 			  * on a wide screen. Only the gutters are fixed.
 			  */}
-			<div class="px-[18px] md:px-[34px] py-6 md:py-[30px] pb-28 md:pb-[30px]">
+			{/* `pt-3` is the second half of the header's 24px gap — see the note on it. `py-6`'s bottom half never applied: `pb-28` and `md:pb-[30px]` both overrode it. */}
+			<div class="px-[18px] md:px-[34px] pt-3 md:pt-[30px] pb-28 md:pb-[30px]">
 				<main ref={columnRef}>
 					{/*
 					  * The whole top bar is absent at zero items — search, the

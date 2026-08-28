@@ -825,7 +825,7 @@ flyout in three wearing a different fill reads as a different kind of thing.
 touched files** was diffed against the live `/zero.css` by unescaping the
 sheet's own selectors — printed, never hand-written. **Nobody has clicked it.**
 
-### Three fixes from a real shop — 2026-08-28
+### Four fixes from a real shop — 2026-08-28
 
 Client only: no schema change, no handler moved, no new decision beyond D41's
 amendment.
@@ -853,10 +853,19 @@ amendment.
   pantry behind it, so the sheet takes `tabIndex={-1}` and focuses itself,
   `outline-none` because a ring around a 480px panel says nothing the panel
   does not.
+- **The phone column has one vertical rhythm and it is 24px** — above the
+  wordmark, wordmark to search, search to the status pills. It was 16 / 36 / 24,
+  which reads as three unrelated bands rather than one column. The header takes
+  `pt-6`, and the 24 between it and the search is **split between two owners**,
+  as it always was: the header's `pb-3` and the content wrapper's `pt-3`. The
+  wrapper's old `py-6` was replaced rather than trimmed — its bottom half never
+  applied, `pb-28` and `md:pb-[30px]` having overridden it all along. Row 2's
+  own `pt-6` is the third gap and did not move. **Desktop is untouched**:
+  `md:pt-[30px]` still wins above `md`, checked by line number in the sheet.
 
 Verified: typecheck clean, 239 assertions, and on a throwaway `sf dev --port
 4199` every new utility (`top-0`, `bottom-0`, `my-auto`, `w-full`, `h-full`,
-`text-left`, `outline-none`) is in the live `/zero.css` with the served
+`text-left`, `outline-none`, `md:pt-[30px]`) is in the live `/zero.css` with the served
 `/client.js` carrying the new class literals and none of the old. **Nobody has
 clicked any of it** — all three are press-time behaviour, so all three want a
 thumb.
