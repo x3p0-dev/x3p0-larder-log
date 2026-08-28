@@ -1737,6 +1737,27 @@ Three rules clear a check and none of them needs a button:
    A key per household would hand yesterday's ticks back when you switched away
    and returned.
 
+**And one that does — *Clear checks*, added 2026-08-28.** The three rules cover
+every way a trip *ends*; none covers coming back to a list you ticked half of
+and wanting to walk it again. Sitting the whole trip out for 24 hours is not an
+answer, and unticking eleven rows by hand is the work the button removes.
+
+It is a **ghost on the trip bar**, opposite *Hide N checked*, and a second one
+on the all-checked bar where it is the likelier of the two things to do. Three
+things it deliberately is not:
+
+1. **Not crimson, and no confirm.** D36 governs records; a tick is not one.
+   The clear is instant and the toast hands them straight back — and a dialog
+   in front of someone holding a phone in a shop costs more than the mistake.
+2. **Not the whole record.** It clears the ticks *on screen*. With a Store
+   filter on, the trip holds ticks for rows nobody can see, and a control
+   beside `Hide 3 checked` that quietly cleared seven would be lying about its
+   own neighbour. The ids travel from the list into `uncheck(ids)`; the hook
+   never empties itself.
+3. **Not a viewer's control.** It arrives `undefined` without `mayEditItems`,
+   like the tick itself, so the bar renders no button rather than a dead one
+   (D30).
+
 **They are deliberately not shared.** Two people at two different stores would
 collide on the same rows, and a tick meaning "in *my* cart" cannot be read by
 someone else without saying whose. That is a real feature and it belongs with

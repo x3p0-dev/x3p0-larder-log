@@ -27,6 +27,12 @@ type Props = {
 	checked: ReadonlySet<string>;
 	/** Absent for a viewer, who gets no checkboxes. */
 	onToggle?: (id: string) => void;
+	/**
+	 * Untick everything on screen. Takes the ids rather than a bare signal, so
+	 * the caller's toast can offer exactly those back — and so a Store filter
+	 * cannot clear rows that are not in front of you.
+	 */
+	onClearChecks?: (ids: string[]) => void;
 	/** Opens the item's Edit sheet. Absent for a viewer. */
 	onBack: () => void;
 	/** The store filter's name, when one is on. The empty state names it. */
@@ -54,7 +60,7 @@ type Props = {
  * and its badge crowd the counts on the right, and the row wraps.
  */
 export function ShoppingList(props: Props) {
-	const { groups, checked, onToggle, onBack, dark, theme } = props;
+	const { groups, checked, onToggle, onClearChecks, onBack, dark, theme } = props;
 
 	const [hideChecked, setHideChecked] = useState(false);
 
@@ -78,8 +84,12 @@ export function ShoppingList(props: Props) {
 	 */
 	const here = useMemo(() => new Set(groups.flatMap((g) => g.items.map((i) => i.id))), [groups]);
 	const total = here.size;
-	const checkedCount = useMemo(() => [...checked].filter((id) => here.has(id)).length, [checked, here]);
+	const checkedHere = useMemo(() => [...checked].filter((id) => here.has(id)), [checked, here]);
+	const checkedCount = checkedHere.length;
 	const allChecked = total > 0 && checkedCount >= total;
+
+	/** `undefined` rather than a no-op, so the bars render no control for a viewer. */
+	const clear = onClearChecks && (() => onClearChecks(checkedHere));
 
 	const announcement = groups.length === 0
 		? 'Shopping list, nothing to buy'
@@ -127,12 +137,13 @@ export function ShoppingList(props: Props) {
 			  */}
 			{checkedCount > 0 && (
 				allChecked
-					? <TripDone onBack={onBack} dark={dark} theme={theme} />
+					? <TripDone onClear={clear} onBack={onBack} dark={dark} theme={theme} />
 					: (
 						<TripBar
 							count={checkedCount}
 							hidden={hideChecked}
 							onToggle={() => setHideChecked((prev) => ! prev)}
+							onClear={clear}
 							theme={theme}
 						/>
 					)
@@ -392,12 +403,12 @@ function Box({ checked, theme }: { checked: boolean; theme: Theme }) {
  * item, which makes it shared, which is a different design. The bar exists now
  * so that flow has somewhere to land instead of arriving as a new surface.
  */
-function TripBar({ count, hidden, onToggle, theme }: {
-	count: number; hidden: boolean; onToggle: () => void; theme: Theme;
+function TripBar({ count, hidden, onToggle, onClear, theme }: {
+	count: number; hidden: boolean; onToggle: () => void; onClear?: () => void; theme: Theme;
 }) {
 	return (
 		<div
-			class="flex items-center h-14 md:h-[52px] pl-2 pr-3 mt-6 rounded-[15px]"
+			class="flex items-center h-14 md:h-[52px] px-2 mt-6 rounded-[15px]"
 			style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}
 		>
 			<button
@@ -407,6 +418,21 @@ function TripBar({ count, hidden, onToggle, theme }: {
 				{hidden ? 'Show' : 'Hide'} {count} checked
 			</button>
 			<span class="flex-1" />
+			{/*
+			  * The reset, and it is the same ghost as the hide — two views of the
+			  * trip, neither of them the thing to do next. **It is not crimson and
+			  * it does not confirm**: nothing here is a record, the toast hands
+			  * the ticks straight back (D36), and a dialog in front of a phone in
+			  * a shop is worse than the mistake it guards.
+			  */}
+			{onClear && (
+				<button
+					onClick={onClear}
+					class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold shrink-0 ${LIST_GHOST}`}
+				>
+					Clear checks
+				</button>
+			)}
 		</div>
 	);
 }
@@ -417,12 +443,22 @@ function TripBar({ count, hidden, onToggle, theme }: {
  * Green because nothing is wrong and nothing is pending — the third rung of the
  * same ramp the item badges use.
  */
-function TripDone({ onBack, dark, theme }: { onBack: () => void; dark: boolean; theme: Theme }) {
+function TripDone({ onClear, onBack, dark, theme }: {
+	onClear?: () => void; onBack: () => void; dark: boolean; theme: Theme;
+}) {
 	const ok = statusColor('ok', dark);
 
+	/*
+	 * It wraps, and `min-h` replaces the fixed 70.
+	 *
+	 * Two sentences and two controls do not fit on one line at 390 — the words
+	 * alone are most of it — so the buttons drop to a second line and the bar
+	 * grows. The old `h-[70px]` would have let them overflow it instead, which
+	 * is the same bar with its bottom cut off.
+	 */
 	return (
 		<div
-			class="flex items-center gap-[13px] h-[70px] pl-[18px] pr-3 mt-6 rounded-[15px]"
+			class="flex flex-wrap items-center gap-[13px] min-h-[70px] py-3 pl-[18px] pr-3 mt-6 rounded-[15px]"
 			style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}
 		>
 			<span
@@ -431,7 +467,7 @@ function TripDone({ onBack, dark, theme }: { onBack: () => void; dark: boolean; 
 			>
 				<Check size={16} strokeWidth={2.6} style={{ color: ok.ink }} />
 			</span>
-			<span class="flex flex-col gap-0.5 min-w-0">
+			<span class="flex flex-col gap-0.5 min-w-0 flex-1 basis-[200px]">
 				<span class="font-semibold text-[14.5px]" style={{ color: theme.textStrong }}>
 					Everything&rsquo;s checked off.
 				</span>
@@ -439,13 +475,29 @@ function TripDone({ onBack, dark, theme }: { onBack: () => void; dark: boolean; 
 					Update your counts when you unpack.
 				</span>
 			</span>
-			<span class="flex-1" />
-			<button
-				onClick={onBack}
-				class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold shrink-0 ${LIST_GHOST}`}
-			>
-				Back to items
-			</button>
+			{/*
+			  * *Clear checks* first: this is the state you reach at the end of a
+			  * trip, and starting the list over is the likelier of the two. The
+			  * exit keeps the last slot it has always had — and it stays here
+			  * rather than leaning on row 2's copy, because at the foot of a long
+			  * list row 2 is a scroll away.
+			  */}
+			<span class="ml-auto shrink-0 flex items-center gap-2">
+				{onClear && (
+					<button
+						onClick={onClear}
+						class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
+					>
+						Clear checks
+					</button>
+				)}
+				<button
+					onClick={onBack}
+					class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
+				>
+					Back to items
+				</button>
+			</span>
 		</div>
 	);
 }

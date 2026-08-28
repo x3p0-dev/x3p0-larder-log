@@ -1349,6 +1349,31 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	}
 
 	/**
+	 * Empties the cart, with the ticks one press from coming back.
+	 *
+	 * D36's rule holds even though nothing here is a record: **undo what comes
+	 * back**. The ticks are local (D41), so the clear is instant and total and
+	 * the toast is the whole safety net — a confirm dialog in front of someone
+	 * holding a phone in a shop costs more than the mistake it prevents, and
+	 * unlike a deleted term there is no server round trip to fail.
+	 *
+	 * The ids come *from the list*, not from the trip record: with a Store
+	 * filter on, this clears what you can see and leaves the rest, which is the
+	 * only reading that agrees with the `Hide 3 checked` beside it.
+	 */
+	function clearChecks(ids: string[]) {
+		if (ids.length === 0) return;
+
+		trip.uncheck(ids);
+
+		toasts.push({
+			lead: 'Cleared',
+			name: plural(ids.length, 'check'),
+			onUndo: () => trip.recheck(ids),
+		});
+	}
+
+	/**
 	 * Puts a deleted term back, and the filter with it if it was the active one.
 	 *
 	 * **Position survives now**, two different ways: term lists are sorted A–Z
@@ -2141,6 +2166,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							groups={shoppingGroupsForView}
 							checked={trip.checked}
 							onToggle={mayEditItems ? trip.toggle : undefined}
+							onClearChecks={mayEditItems ? clearChecks : undefined}
 							onBack={() => trip.setListMode(false)}
 							storeFilterName={storeFilterName}
 							elsewhereCount={elsewhereCount}

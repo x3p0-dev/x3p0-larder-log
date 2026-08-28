@@ -825,7 +825,7 @@ flyout in three wearing a different fill reads as a different kind of thing.
 touched files** was diffed against the live `/zero.css` by unescaping the
 sheet's own selectors — printed, never hand-written. **Nobody has clicked it.**
 
-### Four fixes from a real shop — 2026-08-28
+### Four fixes from a real shop, and a way to reset a trip — 2026-08-28
 
 Client only: no schema change, no handler moved, no new decision beyond D41's
 amendment.
@@ -863,9 +863,22 @@ amendment.
   own `pt-6` is the third gap and did not move. **Desktop is untouched**:
   `md:pt-[30px]` still wins above `md`, checked by line number in the sheet.
 
+**And *Clear checks* exists** — D41's fourth rule, and the only one with a
+button. `useTripChecks` gained `uncheck(ids)` / `recheck(ids)`; the trip bar
+gained a ghost opposite *Hide N checked*, and the all-checked bar a second one
+before *Back to items*. It clears **what is on screen** — with a Store filter
+on, the trip holds ticks for rows nobody can see, and a control beside
+`Hide 3 checked` must not quietly clear seven — and it arms an ordinary
+actionable toast, *Cleared 3 checks*, with Undo. **No confirm and no crimson**:
+D36 governs records, a tick is not one, and a dialog in front of a phone in a
+shop costs more than the mistake. The all-checked bar wraps now (`min-h-[70px]`
++ `flex-wrap`) because two sentences and two controls do not fit one line at
+390.
+
 Verified: typecheck clean, 239 assertions, and on a throwaway `sf dev --port
 4199` every new utility (`top-0`, `bottom-0`, `my-auto`, `w-full`, `h-full`,
-`text-left`, `outline-none`, `md:pt-[30px]`) is in the live `/zero.css` with the served
+`text-left`, `outline-none`, `md:pt-[30px]`, `flex-wrap`, `min-h-[70px]`,
+`basis-[200px]`) is in the live `/zero.css` with the served
 `/client.js` carrying the new class literals and none of the old. **Nobody has
 clicked any of it** — all three are press-time behaviour, so all three want a
 thumb.

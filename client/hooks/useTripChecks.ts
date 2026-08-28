@@ -16,7 +16,9 @@ import { usePersistentState } from './usePersistentState';
  * reloading in a shop, on a phone with two bars of signal, has to come back to
  * the list with the ticks intact.
  *
- * Three rules clear a check, and none of them needs a button:
+ * Three rules clear a check without a button, and *Clear checks* on the trip
+ * bar is the fourth — the one case none of them covers, which is coming back to
+ * a list you ticked half of and wanting to start it again:
  *
  * 1. The item leaves the list — anyone restocks it, and the check goes with the
  *    row.
@@ -50,6 +52,17 @@ export type TripChecks = {
 	/** How many of the rows currently on the list are ticked. */
 	count: number;
 	toggle: (id: string) => void;
+	/**
+	 * Untick a set of rows at once — what *Clear checks* takes off the screen.
+	 *
+	 * It takes ids rather than emptying the record, because the caller knows
+	 * which rows are on screen and this hook does not: with a Store filter on,
+	 * the trip holds ticks for rows nobody can see, and a control sitting beside
+	 * `Hide 3 checked` must not quietly clear seven.
+	 */
+	uncheck: (ids: readonly string[]) => void;
+	/** Puts exactly those ticks back — the toast's Undo, and nothing else. */
+	recheck: (ids: readonly string[]) => void;
 	listMode: boolean;
 	setListMode: (on: boolean) => void;
 };
@@ -114,6 +127,43 @@ export function useTripChecks(key: string, householdId: string | null, liveIds: 
 		});
 	}, [householdId, setTrip]);
 
+	const uncheck = useCallback((ids: readonly string[]) => {
+		if (! householdId || ids.length === 0) return;
+
+		const drop = new Set(ids);
+
+		/*
+		 * No `base` fallback, unlike `toggle` and `setListMode`: there is
+		 * nothing to untick in a record that does not exist or has expired, and
+		 * writing a fresh one would restart the 24-hour window over an empty
+		 * cart.
+		 */
+		setTrip((prev) => {
+			if (! prev || prev.householdId !== householdId) return prev;
+
+			const kept = prev.ids.filter((id) => ! drop.has(id));
+
+			return kept.length === prev.ids.length ? prev : { ...prev, at: Date.now(), ids: kept };
+		});
+	}, [householdId, setTrip]);
+
+	const recheck = useCallback((ids: readonly string[]) => {
+		if (! householdId || ids.length === 0) return;
+
+		setTrip((prev) => {
+			const base = prev && prev.householdId === householdId && Date.now() - prev.at <= DAY_MS
+				? prev
+				: { householdId, at: Date.now(), ids: [], listMode: true };
+
+			// Undo runs seconds after the clear, so a row it names is normally
+			// still unticked — but the same rows can be ticked by hand in the
+			// meantime, and a check is a set membership, never a count.
+			const back = ids.filter((id) => ! base.ids.includes(id));
+
+			return back.length === 0 ? base : { ...base, at: Date.now(), ids: [...base.ids, ...back] };
+		});
+	}, [householdId, setTrip]);
+
 	const setListMode = useCallback((on: boolean) => {
 		if (! householdId) return;
 
@@ -126,5 +176,5 @@ export function useTripChecks(key: string, householdId: string | null, liveIds: 
 		});
 	}, [householdId, setTrip]);
 
-	return { checked, count: checked.size, toggle, listMode: live?.listMode ?? false, setListMode };
+	return { checked, count: checked.size, toggle, uncheck, recheck, listMode: live?.listMode ?? false, setListMode };
 }
