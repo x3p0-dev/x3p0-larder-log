@@ -385,11 +385,19 @@ export const LIST_TARGET =
 	'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
 /**
- * The trip bar's ghost — *Hide 3 checked*, *Back to items*.
+ * The trip bar's ghost — *Hide 3 checked*, *Clear checks*.
  *
  * It lifts to `surface` rather than sinking to `surface-alt`, which is the
  * token the spec names: the bar *is* `surface-alt`, so sinking would give the
  * control no hover at all. Lifting is the same one-step move in both themes.
+ *
+ * **It stays a ghost, and the glyph is what carries it at rest.** A bordered
+ * box was built here and reverted: what made these read as prose was never the
+ * missing outline but the all-checked bar putting two of them, centred, on a
+ * line of their own. With one control per end of the bar the position is the
+ * affordance, the same argument `PAGE_BUTTON_QUIET` makes in row 2 — and an
+ * icon beside the label says *control* without spending an edge on a surface
+ * where `line` measures 1.21:1 and would have had to be `line-strong`.
  */
 export const LIST_GHOST =
 	'transition-colors text-ink-body hover:bg-surface hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';

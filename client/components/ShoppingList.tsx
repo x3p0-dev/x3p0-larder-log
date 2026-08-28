@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
-import { Check } from 'lucide-preact';
+import { Check, Eye, EyeOff, RotateCcw } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
 import { statusColor, statusFor, themed } from '../lib/theme';
@@ -33,8 +33,6 @@ type Props = {
 	 * cannot clear rows that are not in front of you.
 	 */
 	onClearChecks?: (ids: string[]) => void;
-	/** Opens the item's Edit sheet. Absent for a viewer. */
-	onBack: () => void;
 	/** The store filter's name, when one is on. The empty state names it. */
 	storeFilterName: string | null;
 	/** What the *rest* of the household still has to buy, for that same screen. */
@@ -60,7 +58,7 @@ type Props = {
  * and its badge crowd the counts on the right, and the row wraps.
  */
 export function ShoppingList(props: Props) {
-	const { groups, checked, onToggle, onClearChecks, onBack, dark, theme } = props;
+	const { groups, checked, onToggle, onClearChecks, dark, theme } = props;
 
 	const [hideChecked, setHideChecked] = useState(false);
 
@@ -137,7 +135,7 @@ export function ShoppingList(props: Props) {
 			  */}
 			{checkedCount > 0 && (
 				allChecked
-					? <TripDone onClear={clear} onBack={onBack} dark={dark} theme={theme} />
+					? <TripDone onClear={clear} dark={dark} theme={theme} />
 					: (
 						<TripBar
 							count={checkedCount}
@@ -413,13 +411,16 @@ function TripBar({ count, hidden, onToggle, onClear, theme }: {
 		>
 			<button
 				onClick={onToggle}
-				class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
+				class={`inline-flex items-center gap-1.5 h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
 			>
+				{hidden
+					? <Eye size={15} strokeWidth={2.2} />
+					: <EyeOff size={15} strokeWidth={2.2} />}
 				{hidden ? 'Show' : 'Hide'} {count} checked
 			</button>
 			<span class="flex-1" />
 			{/*
-			  * The reset, and it is the same ghost as the hide — two views of the
+			  * The reset, and it wears the same box as the hide — two views of the
 			  * trip, neither of them the thing to do next. **It is not crimson and
 			  * it does not confirm**: nothing here is a record, the toast hands
 			  * the ticks straight back (D36), and a dialog in front of a phone in
@@ -428,8 +429,9 @@ function TripBar({ count, hidden, onToggle, onClear, theme }: {
 			{onClear && (
 				<button
 					onClick={onClear}
-					class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold shrink-0 ${LIST_GHOST}`}
+					class={`inline-flex items-center gap-1.5 h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold shrink-0 ${LIST_GHOST}`}
 				>
+					<RotateCcw size={15} strokeWidth={2.2} />
 					Clear checks
 				</button>
 			)}
@@ -443,18 +445,25 @@ function TripBar({ count, hidden, onToggle, onClear, theme }: {
  * Green because nothing is wrong and nothing is pending — the third rung of the
  * same ramp the item badges use.
  */
-function TripDone({ onClear, onBack, dark, theme }: {
-	onClear?: () => void; onBack: () => void; dark: boolean; theme: Theme;
+function TripDone({ onClear, dark, theme }: {
+	onClear?: () => void; dark: boolean; theme: Theme;
 }) {
 	const ok = statusColor('ok', dark);
 
 	/*
 	 * It wraps, and `min-h` replaces the fixed 70.
 	 *
-	 * Two sentences and two controls do not fit on one line at 390 — the words
-	 * alone are most of it — so the buttons drop to a second line and the bar
-	 * grows. The old `h-[70px]` would have let them overflow it instead, which
-	 * is the same bar with its bottom cut off.
+	 * Two sentences and a control do not always fit one line at 390 — the words
+	 * alone are most of it — so the button drops to a second line and the bar
+	 * grows. The old `h-[70px]` would have let it overflow instead, which is the
+	 * same bar with its bottom cut off.
+	 *
+	 * **One control is what makes the wrap read.** With two of them the wrapped
+	 * line was a pair pinned right under a sentence that starts 47px in — two
+	 * ragged edges, neither shared — and filling the line to fix that turned a
+	 * pair of ghosts into centred prose. There is only *Clear checks* now, and a
+	 * single trailing action hanging off `ml-auto` is the same shape as the
+	 * trip bar above it in either arrangement.
 	 */
 	return (
 		<div
@@ -476,28 +485,26 @@ function TripDone({ onClear, onBack, dark, theme }: {
 				</span>
 			</span>
 			{/*
-			  * *Clear checks* first: this is the state you reach at the end of a
-			  * trip, and starting the list over is the likelier of the two. The
-			  * exit keeps the last slot it has always had — and it stays here
-			  * rather than leaning on row 2's copy, because at the foot of a long
-			  * list row 2 is a scroll away.
+			  * *Clear checks*, and it is the bar's only control.
+			  *
+			  * **There is no exit here.** A *Back to items* sat in this slot and
+			  * was a third way out of a mode that already has two — row 2's own
+			  * quiet chevron, and the trigger it shares the row with, which is
+			  * tinted and pressed while the list is on. Neither of those is on
+			  * screen at the foot of a long list, which was the argument for
+			  * repeating it here; but the answer to that is a scroll, and the
+			  * cost was a second control competing with the one thing this state
+			  * is actually for.
 			  */}
-			<span class="ml-auto shrink-0 flex items-center gap-2">
-				{onClear && (
-					<button
-						onClick={onClear}
-						class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
-					>
-						Clear checks
-					</button>
-				)}
+			{onClear && (
 				<button
-					onClick={onBack}
-					class={`inline-flex items-center h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
+					onClick={onClear}
+					class={`inline-flex items-center gap-1.5 ml-auto shrink-0 h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
 				>
-					Back to items
+					<RotateCcw size={15} strokeWidth={2.2} />
+					Clear checks
 				</button>
-			</span>
+			)}
 		</div>
 	);
 }

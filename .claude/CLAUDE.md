@@ -875,6 +875,24 @@ shop costs more than the mistake. The all-checked bar wraps now (`min-h-[70px]`
 + `flex-wrap`) because two sentences and two controls do not fit one line at
 390.
 
+**The all-checked bar has one control now, and it is *Clear checks*.**
+*Back to items* is gone from it — a third way out of a mode that already has
+two, when the state's own subject is the trip. That is also what fixed the
+wrap: with two buttons the wrapped line was a pair pinned right under a
+sentence starting 47px in, two ragged edges and neither shared. **Two
+alternatives were built and reverted on the way**, and both are worth knowing.
+Filling the line (`w-full` + `flex-1`, symmetric padding) aligned the block but
+turned two ghosts into centred prose — a label on nothing reads as a control
+only while its *position* is the affordance, which the ends of a bar give it
+and the middle of its own line does not. Then giving them a box
+(`bg-surface` + `line-strong`, since `line` measures 1.21:1 on this surface)
+made them buttons and made the bar busy. **One control needs neither fix**: it
+hangs off `ml-auto` at the row's end, wrapping or not, which is the shape the
+trip bar above it already has. The glyphs stayed from that round —
+`RotateCcw` on both *Clear checks*, `EyeOff` / `Eye` on the hide toggle — so
+the ghosts say *control* at rest without spending an edge. `LIST_GHOST` is
+unchanged, and `ShoppingList` no longer takes an `onBack`.
+
 Verified: typecheck clean, 239 assertions, and on a throwaway `sf dev --port
 4199` every new utility (`top-0`, `bottom-0`, `my-auto`, `w-full`, `h-full`,
 `text-left`, `outline-none`, `md:pt-[30px]`, `flex-wrap`, `min-h-[70px]`,
