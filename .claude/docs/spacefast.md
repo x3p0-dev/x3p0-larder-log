@@ -3534,3 +3534,64 @@ Gravatar URL is a hash and identifies nobody who is not already looked up, while
 an address identifies a person — and it is the position the SDK's own comment
 describes. It is just not written down anywhere a developer would find it before
 building a UI around the missing field.
+
+## 2026-08-28 (fifth) — 🐛 `sf publish` dies with a 502 at *Creating version*, and nothing else is unhealthy
+
+**Blocking.** Three consecutive `sf publish` runs failed identically:
+
+```
+✓ Updating space  larderlog (spc_7770744a870a43f5927213fa397c780e)
+⠋ Creating version
+Request failed with status 502.
+Learn more: https://spacefast.com/docs/errors/request_failed
+Check your connection or the SPACEFAST_API_URL setting.
+Run `sf doctor` to diagnose.
+```
+
+**The advice in the error message is wrong here**, and that is the first piece
+of feedback. `sf doctor` was run and returns **exit 0 with all nine checks
+green** — including `api  API reachable: https://api.spacefast.com` and
+`schema  OpenAPI schema reachable` — in the same minute as the failure. The
+connection is fine and `SPACEFAST_API_URL` is unset. A 502 is the *gateway*
+saying an upstream did not answer; telling the caller to check their own
+connection sends them to the one place the problem cannot be.
+
+**It is not the `x-spacefast-rationale` blocker.** This was isolated: the
+publish was run twice through the usual `NODE_OPTIONS=--import` fetch shim that
+attaches a truthful rationale, and once **without it**. All three produced the
+same 502 at the same step. So whatever this is, it sits upstream of the header
+check that has gated publishing since 0.0.26.
+
+**Nothing is wedged, which is the good news** and worth contrasting with the
+2026-08-24 incident that left three spaces stuck. The failure is clean:
+
+- `sf versions list` shows **no v12 record** — the version was never created.
+- `sf doctor` reports `runtime  state=active live=ver_1c0448898da744d3b2b42a89c4272e21:ready pending=none:none`.
+- v11 is still live and serving: `GET /` 200, `/api/status` → `ok`,
+  `/client.js` 200 at the same 299,269 bytes as before the attempts.
+
+So the space is transactionally intact and the retry is safe. **`Updating space`
+succeeds before the failure**, so the space record is touched and only the
+version creation fails — which is the right order for this to be recoverable,
+and is worth stating in the docs as a guarantee rather than left to be inferred
+from a lucky outcome.
+
+**What would help:**
+
+1. **Do not print connection advice on a 5xx.** A 502/503/504 is server-side by
+   definition. Say so, and say whether the operation is safe to retry — which
+   here it is, but the caller has no way to know without going and reading the
+   version list.
+2. **Surface an upstream request id.** There is nothing in the output to quote
+   in a support request. A 502 with no correlation id is unactionable from
+   outside.
+3. **`sf doctor` should exercise the failing path.** It checks that the API and
+   the OpenAPI schema are reachable and concludes everything is `ok` while
+   publishing is completely blocked. A check that cannot see the outage it is
+   invoked to diagnose is worse than no check, because it moves suspicion onto
+   the user's machine.
+
+Nothing was changed locally in response. Typecheck is clean, `npm test` is at
+295 assertions, and `--dry-run` produces a valid artifact (ten tables, five
+queries, eighteen mutations, `migrations: []`, and the four new additive columns
+with defaults). **The build is ready and the platform is not.** Retrying later.
