@@ -23,6 +23,7 @@ import type {
 import { SEED_LOCATIONS, SEED_TYPES, SEED_STORES } from '../shared/seed';
 import { householdInk, toHouseholdInk } from '../shared/household';
 import { normalizeDisplayName, pickDisplayName } from '../shared/profile';
+import { normalizeAvatarUrl } from '../shared/avatar';
 
 /**
  * The Larder Log capsule.
@@ -84,6 +85,24 @@ async function accountName(ctx: { auth: AuthContext; db: ReadDb | WriteDb }): Pr
 		.collect();
 
 	return pickDisplayName(...memberships.map((m) => m.displayName), ctx.auth.displayName);
+}
+
+/**
+ * The avatar to stamp on a membership row, from the identity that is asking.
+ *
+ * Deliberately **not** the chain `accountName()` walks. A name has a fallback
+ * worth reaching for — an unnamed row in Members is worse than a stale one — but
+ * an avatar's fallback is the initial the component already draws, so an absent
+ * picture is an answer rather than a gap to paper over. `''` is the whole
+ * absent case: no Gravatar, or an identity that carries no claim.
+ *
+ * `ctx.auth.picture` is the only route to this at all. The platform tells a
+ * handler about its **caller** and never about a third party, so the two moments
+ * a membership row is written are the two moments the value is in reach —
+ * which is why `syncAccountAvatar` exists for every moment after them.
+ */
+function accountAvatar(ctx: { auth: AuthContext }): string {
+	return normalizeAvatarUrl(ctx.auth.picture);
 }
 
 /**
@@ -153,6 +172,11 @@ export const schema = {
 		householdId: id('households'),
 		userId: string(),
 		displayName: string(),
+		// A denormalized copy of the account's avatar URL, for the same reason
+		// `displayName` is one: the member list is a live query and must not join
+		// a row per member to draw a face. '' means none — an account with no
+		// Gravatar, and every row written before this column existed.
+		picture: string().default(''),
 		role: string().default('viewer'),
 	})
 		.index('by_user', ['userId'])
@@ -408,6 +432,7 @@ export default capsule({
 					id: m.id,
 					userId: m.userId,
 					displayName: m.displayName,
+					picture: m.picture,
 					role: toRole(m.role),
 				})),
 				// Live codes only. A revoked or expired invite is noise in the UI,
@@ -619,6 +644,51 @@ export default capsule({
 		}),
 
 		/**
+		 * Bring the caller's own avatar copy up to date, everywhere they belong.
+		 *
+		 * **Without this the column would be write-once at join time**, which is
+		 * the wrong shape for the commonest case there is: somebody joins, then
+		 * sets up their Gravatar afterwards. It is also the only thing that can
+		 * reach a row written *before* the column existed — nothing backfills
+		 * (D44), so every membership on the published space today holds `''` and
+		 * would hold it forever.
+		 *
+		 * Deliberately not folded into `setDisplayName`, which is the other
+		 * write-through: that one fires on a rename, and a picture changing has
+		 * nothing to do with a name changing.
+		 *
+		 * Safe to call on every load, and the client does. It reads the caller's
+		 * own rows and writes only the ones that disagree, so the steady state is
+		 * a handful of index reads and no writes at all — and it can only ever
+		 * write `ctx.auth.picture` onto rows keyed by `ctx.auth.userId`, which is
+		 * why it needs no household argument and has nothing to authorize beyond
+		 * being signed in.
+		 */
+		syncAccountAvatar: mutation(async (ctx) => {
+			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
+
+			const picture = accountAvatar(ctx);
+
+			const memberships = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
+				.collect();
+
+			let changed = false;
+
+			for (const row of memberships) {
+				if (row.picture === picture) continue;
+
+				await ctx.db.memberships.update(row.id, { picture });
+				changed = true;
+			}
+
+			// Nothing moved on screen if nothing was written, and this runs on
+			// every load — an unconditional invalidate would refetch the household
+			// for every member of it on each other member's page load.
+			if (changed) ctx.invalidate('household');
+		}),
+
+		/**
 		 * A new household, owned by the caller — their first, or their fifth.
 		 *
 		 * D18 refused this to anyone who already belonged somewhere. D33 dropped
@@ -652,6 +722,7 @@ export default capsule({
 				// anyone who changed theirs, and this row is what the member list
 				// renders.
 				displayName: await accountName(ctx),
+				picture: accountAvatar(ctx),
 				role: 'owner',
 			});
 
@@ -1137,6 +1208,7 @@ export default capsule({
 				// path that most needs it: someone arriving on an invite is the
 				// person the rest of the household is about to see a name for.
 				displayName: await accountName(ctx),
+				picture: accountAvatar(ctx),
 				role: toRole(invite.role),
 			});
 

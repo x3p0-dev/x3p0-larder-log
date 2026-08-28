@@ -28,6 +28,7 @@
  */
 
 import type { Member } from '../../shared/types';
+import { devGuestPicture } from './devIdentity';
 
 /** Shared with `client/index.tsx`. See the note on `isLoopback` there. */
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
@@ -58,9 +59,20 @@ export function devMembersEnabled(): boolean {
  * last-owner guard on the dev guest's own row turns on, which is the other
  * state worth seeing.
  */
+/**
+ * One with a face and one without, on purpose.
+ *
+ * A member's avatar falls back to the initial when the account has no Gravatar,
+ * so a real household is a **mixed** row of pictures and letters — and whether
+ * that reads worse than all letters is the one open question about the feature
+ * (`.docs/notes.md`). It cannot be looked at with a single local identity, so
+ * the stand-ins carry both cases. Rowan borrows the dev guest's own picture
+ * because it is the one URL known to resolve here; two identical faces is a
+ * quirk of the stand-in, not of the design.
+ */
 export const DEV_MEMBERS: readonly Member[] = [
-	{ id: `${DEV_PREFIX}editor`, userId: 'dev:rowan', displayName: 'Rowan Ash', role: 'editor' },
-	{ id: `${DEV_PREFIX}viewer`, userId: 'dev:sedge', displayName: 'Sedge Miller', role: 'viewer' },
+	{ id: `${DEV_PREFIX}editor`, userId: 'dev:rowan', displayName: 'Rowan Ash', picture: devGuestPicture() ?? '', role: 'editor' },
+	{ id: `${DEV_PREFIX}viewer`, userId: 'dev:sedge', displayName: 'Sedge Miller', picture: '', role: 'viewer' },
 ];
 
 /** Whether this membership id is one of the stand-ins, and must not be sent anywhere. */

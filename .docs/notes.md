@@ -462,6 +462,20 @@ Settled: filtering is **multi-select** (OR inside a group, AND across groups);
 the bar **stays visible** with the drawer open; and focus moves to
 **`Clear filters`** when a chip is removed.
 
+One was opened on 2026-08-28, by looking at where avatars are drawn, and
+**settled the same day** — see [D55](decisions.md#d55-a-members-face-is-a-copy-on-the-membership-and-the-letter-is-not-a-fallback-to-be-ashamed-of)
+for what was built. Members have faces now: `memberships.picture`, stamped from
+`ctx.auth.picture` at the two moments a row is written and reconciled on load by
+`syncAccountAvatar`. It stores a URL and therefore no email, which is what
+removed the only real argument against it.
+
+**The mixed row was looked at the same day and is fine** — two faces and a
+letter reads as a household, not as a rendering fault. One is left:
+
+- **How stale is too stale?** Your picture reaches the rest of your household on
+  *your* next load, not on theirs. The alternative is a write on somebody else's
+  read, which is worse — but nothing has watched how long the lag actually is.
+
 ## Paid off in Phase 2
 
 Both of the costs this section used to track are gone.

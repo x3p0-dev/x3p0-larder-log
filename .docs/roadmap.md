@@ -904,6 +904,75 @@ pair stored, a unit with no number resolving to 1, a number with no unit and an
 unknown unit key both resolving to neither, a unit-only patch keeping the number
 it did not name, and `offShoppingList` set and cleared. **Nobody has clicked it.**
 
+### Members have faces — 2026-08-28
+
+[D55](decisions.md#d55-a-members-face-is-a-copy-on-the-membership-and-the-letter-is-not-a-fallback-to-be-ashamed-of).
+**The sixth additive schema change since Phase 2**: `memberships.picture`, a
+string defaulting to `''`. Ten tables and five queries still; **eighteen
+mutations**, the new one being `syncAccountAvatar`. Applies on the next publish
+with no flag, as the previous five did.
+
+Only the account's *own* avatar had ever been a picture — the drawer's foot row,
+the collapsed rail, the account menu, the first-run card. The Members pane and
+Settings' stacked trio drew initials, and **nothing had decided that**:
+`DrawerAvatar` has taken a `picture` since Phase 4.12 and calls the initial "the
+fallback"; those rows were the one caller with nothing to pass. It read as
+deliberate only because the boards draw a letter for everyone, your own row
+included.
+
+- **It stores a URL, so it stores no email.** `ctx.auth.picture` is already the
+  finished Gravatar address and the server had never read it. That removed the
+  only real objection — `ctx.gravatar.avatarUrl(email)` would have needed an
+  address every member of a household could then read.
+- **Stamped at the two moments it is in reach** — `createHousehold` and
+  `redeemInvite`, through `accountAvatar(ctx)` beside the `accountName(ctx)`
+  already there. The platform tells a handler about its caller, never a third
+  party.
+- **`syncAccountAvatar` is what makes it visible.** Write-once-at-join is wrong
+  for the ordinary case (join, then set up a Gravatar) and useless for rows that
+  predate the column, which hold `''` forever since nothing backfills (D44). It
+  writes only rows that disagree and invalidates only when it wrote.
+- **`onError` on both avatar components**, and it is load-bearing: the
+  platform's URL carries `d=404`, so an account with no Gravatar serves no image
+  and a bare `<img>` shows the broken-image glyph. Already true of your own
+  avatar, never hit.
+- **The stacked trio stays capped at three** with the count in words below it,
+  and gets no "+2" bubble.
+
+**Done when** a household with two Gravatar'd members and one without has been
+looked at on a real screen — which is also the one open question, since a mixed
+row of faces and letters may read worse than letters alone. `?members` seeds one
+stand-in with a picture and one without for exactly that.
+
+Verified without a browser: typecheck clean, **295 assertions**, the artifact
+shows the column with its default and `db.migrations` empty, and the real
+handlers were driven over `POST /__spacefast/zero/run` — the members DTO
+carrying the column, the reconcile clearing a seeded value, and a second call
+reporting `changedTables: []`. **Nobody has clicked it**, and the stamping half
+cannot be clicked here at all: `sf dev` issues no `auth.picture`.
+
+### The account row, and the first outbound link — 2026-08-28
+
+[D56](decisions.md#d56-the-account-row-shows-a-name-and-a-face-never-an-address--and-change-your-picture-leaves-the-app).
+Client only: no schema change, no handler moved.
+
+**`auth.email` is empty in production by design** — it is the identity token's
+`email` claim and a Spacefast account carries none, while `auth.picture` *is*
+present (which is what makes D55 safe). Both render sites were already
+*absent, not blank*, so nothing in production changed; what changed is that the
+**dev guest stopped inventing an address**, having briefly made the local
+account row a line taller than the published one.
+
+**`Change your picture` ships** — the board's third row, previously marked *"Do
+not build yet."* Its own block between the identity row and *Sign out*, pointing
+at Gravatar's avatar editor, with the outbound arrow that means this leaves the
+app. The app's first external link.
+
+**Done when** somebody presses it and lands on the editor signed in. Verified
+without a browser: typecheck clean, 295 assertions, all 32 class literals in the
+touched component diffed against the live `/zero.css`, and the served
+`/client.js` carrying the URL, both labels and the link hygiene.
+
 ### The seeded types cover a supermarket — 2026-08-27
 
 [D50](decisions.md#d50-the-seeded-types-are-a-supermarket-and-the-other-two-taxonomies-are-not),

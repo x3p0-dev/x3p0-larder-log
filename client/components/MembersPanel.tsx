@@ -65,7 +65,7 @@ export function MembersPanel({ members, me, onChangeRole, onRemoveMember, theme 
 						{i > 0 && <span class="block h-px" style={{ background: d.line }} />}
 
 						<div class="flex items-center gap-3 px-3 py-[11px]">
-							<DrawerAvatar name={name} size={36} />
+							<DrawerAvatar name={name} picture={member.picture} size={36} />
 
 							{isMe ? (
 								/*

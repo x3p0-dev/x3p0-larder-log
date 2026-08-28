@@ -31,6 +31,7 @@ import { usePersistentState } from './hooks/usePersistentState';
 import { readViewState, usePersistedView } from './hooks/useViewState';
 import { usePantryData, useInvitePreview, useProfile } from './hooks/usePantryData';
 import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
+import { useAvatarSync } from './hooks/useAvatarSync';
 import { addedAtOf, changedAtOf } from '../shared/stamp';
 import { useToasts } from './hooks/useToasts';
 import { useTripChecks } from './hooks/useTripChecks';
@@ -803,6 +804,16 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	// never enabled on the strength of data that hasn't arrived.
 	const myRole = household?.me.role ?? DEFAULT_ROLE;
 	const myMembershipId = household?.me.membershipId ?? '';
+
+	/*
+	 * Your own avatar, reconciled into the copy the rest of the household reads.
+	 * `null` until the query answers — '' is a real value meaning no picture.
+	 * See client/hooks/useAvatarSync.ts.
+	 */
+	useAvatarSync(
+		picture ?? '',
+		realMembers.find((m) => m.id === myMembershipId)?.picture ?? null,
+	);
 
 	/**
 	 * D20's matrix, read once and threaded down as plain booleans.

@@ -17,6 +17,7 @@ import { useInvitePreview } from './hooks/usePantryData';
 import type { Theme } from './lib/theme';
 import { getTheme } from './lib/theme';
 import { installAppIcon, setThemeColor } from './lib/appIcon';
+import { devGuestPicture } from './lib/devIdentity';
 import { installFonts } from './lib/fonts';
 import { watchInstall } from './lib/install';
 import { capturePendingInvite, markInviteAccepted, pendingInvite } from './lib/pendingInvite';
@@ -245,8 +246,17 @@ export function App() {
 				 * display there instead.
 				 */
 				displayName={devGuest ? 'Local dev guest' : (auth.displayName ?? '')}
+				/*
+				 * The dev guest borrows a real address to *hash*, so the avatar's
+				 * `<img>` branch is reachable locally at all — see
+				 * client/lib/devIdentity.ts. Its email stays `''` on purpose: a real
+				 * Spacefast account has no `email` claim either, so showing one here
+				 * would make the local drawer a row taller than the published one.
+				 * The name stays 'Local dev guest' for the same kind of reason — the
+				 * account menu is where you look to find out who you are.
+				 */
 				email={devGuest ? '' : (auth.email ?? '')}
-				picture={devGuest ? undefined : auth.picture}
+				picture={devGuest ? devGuestPicture() : auth.picture}
 				onSignOut={() => signOut()}
 			/>
 		);

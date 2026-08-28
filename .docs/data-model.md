@@ -106,6 +106,7 @@ memberships: table({
   householdId: id("households"),
   userId: string(),                    // ctx.auth.userId
   displayName: string(),               // denormalized for the member list
+  picture: string().default(""),       // ditto, the avatar URL — "" for none
   role: string().default("viewer"),    // "owner" | "editor" | "viewer"
 })
   .index("by_user", ["userId"])
@@ -132,6 +133,26 @@ whole. Two rules keep the copy honest, and both are load-bearing:
 - `setDisplayName` writes back through **every** membership the account holds. A
   rename that skipped that would show the new name to the person who typed it
   and the old one to everybody else, which is worse than having no column.
+
+`picture` is the same kind of copy for the same reason, and holds the account's
+avatar URL or `""` ([D55](decisions.md#d55-a-members-face-is-a-copy-on-the-membership-and-the-letter-is-not-a-fallback-to-be-ashamed-of)).
+It is **a URL and not an email**: `ctx.auth.picture` is already the finished
+address, so nothing here stores or exposes a member's email to the rest of their
+household. The same two inserts stamp it, through `accountAvatar()`.
+
+Its write-back is **not** `setDisplayName` but `syncAccountAvatar`, a mutation
+the client calls on load — a picture changing has nothing to do with a name
+changing, and the copy has two ways of starting out stale that a rename would
+never fix: an account that sets up its Gravatar *after* joining, and every row
+written before the column existed (`""` forever, since nothing backfills — see
+[D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)).
+It writes only rows that disagree and invalidates only when it wrote.
+
+**Every reader must handle `""`**, and the fallback is the initial the avatar
+components already draw. Note that the platform's avatar URL carries `d=404`, so
+an account with no Gravatar serves *no image* rather than a placeholder — an
+`<img>` without an `onError` shows a broken-image glyph instead of falling
+back.
 
 A row written before `profiles` existed holds the Gravatar name the account
 joined under, and that is not dead weight: it is what grandfathers an existing
@@ -433,7 +454,8 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `household` | query | The named household + members + live invites |
 | `pantry` | query | Items with their types/stores joined, plus all three taxonomies, **A–Z** |
 | `invitePreview` | query | What an invite link says about itself, to a signed-out guest — [D39](decisions.md#d39-an-invite-preview-is-the-one-query-that-answers-a-guest) |
-| `setDisplayName` | mutation | Upsert the account's name and write it through every membership. The one write not scoped to a household |
+| `setDisplayName` | mutation | Upsert the account's name and write it through every membership. One of two writes not scoped to a household |
+| `syncAccountAvatar` | mutation | Reconcile `ctx.auth.picture` into every membership the caller holds, writing only the rows that disagree — [D55](decisions.md#d55-a-members-face-is-a-copy-on-the-membership-and-the-letter-is-not-a-fallback-to-be-ashamed-of). Takes no argument, called on load, and the other unscoped write |
 | `addItem` | mutation | Create an item and its join rows. Takes optional `addedAt` / `changedAt` — **undo only** |
 | `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |

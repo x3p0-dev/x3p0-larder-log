@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { LogOut, Pencil } from 'lucide-preact';
+import { CircleDot, ExternalLink, LogOut, Pencil } from 'lucide-preact';
 
 import { DrawerAvatar } from './DrawerAvatar';
 import { DrawerMenuRule } from './DrawerMenu';
@@ -130,13 +130,42 @@ export function AccountMenu({
 				</div>
 			)}
 
+			<DrawerMenuRule theme={theme} />
+
 			{/*
-			  * Not in v1: *Change your picture*, a third row handing off to
-			  * Gravatar with the outbound arrow that means this leaves the app. It
-			  * is drawn on the board and deliberately absent here — there is
-			  * nowhere to send anyone yet, and a row that opens a page you cannot
-			  * come back from is worse than no row.
+			  * *Change your picture* — the board's third row, its own block between
+			  * the identity and the way out, with the outbound arrow that means
+			  * **this leaves the app**.
+			  *
+			  * Naming Gravatar here is right where naming it on the sign-in button
+			  * was wrong (D47). That button went to a Spacefast account and only
+			  * looked like it went to Gravatar; this genuinely is Gravatar —
+			  * `auth.picture` is a `gravatar.com/avatar/…` URL, and that page is
+			  * where the image behind it is changed.
+			  *
+			  * The label stays the board's four words because the menu is 292px
+			  * and *Change your picture on Gravatar* does not fit one line; the
+			  * destination rides the accessible name instead, which contains the
+			  * visible label rather than replacing it.
+			  *
+			  * `/profile/avatars` rather than the profile root: it is the editor,
+			  * and Gravatar bounces a signed-out visitor through sign-in and back
+			  * to it. No `onDone()` — this opens a tab beside us rather than
+			  * navigating away, and a menu that shut itself would make coming back
+			  * feel like the app had forgotten where you were.
 			  */}
+			<a
+				href="https://gravatar.com/profile/avatars"
+				target="_blank"
+				rel="noopener noreferrer"
+				aria-label="Change your picture on Gravatar (opens in a new tab)"
+				class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left no-underline ${DRAWER_MENU_ROW}`}
+			>
+				<CircleDot size={15} class="shrink-0" style={{ color: d.inkFaint }} />
+				<span class="flex-1 min-w-0 truncate">Change your picture</span>
+				<ExternalLink size={14} class="shrink-0" style={{ color: d.inkFaint }} aria-hidden="true" />
+			</a>
+
 			<DrawerMenuRule theme={theme} />
 
 			<button

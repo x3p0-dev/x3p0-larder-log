@@ -282,7 +282,7 @@ export function DrawerSettings({
 						<span class="flex items-center shrink-0">
 							{members.slice(0, 3).map((m, i) => (
 								<span key={m.id} class="flex" style={i > 0 ? { marginLeft: '-9px' } : undefined}>
-									<DrawerAvatar name={m.displayName} size={28} stackRing={d.raised} />
+									<DrawerAvatar name={m.displayName} picture={m.picture} size={28} stackRing={d.raised} />
 								</span>
 							))}
 						</span>

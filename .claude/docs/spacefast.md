@@ -3369,3 +3369,168 @@ row. Compiling it, curling `/zero.css` for every class literal and driving the
 handlers over `run` proves the build is coherent. It does not prove it is
 usable, which is the lesson this file recorded on 2026-08-27 and has no way to
 act on without a browser.
+
+## 2026-08-28 (later) — `ctx.gravatar` exists, and its avatar URL is pure
+
+### 👍 A handler can derive an avatar URL with no network call and no key
+
+`ServerContext` carries a `gravatar` alongside `auth`, `db`, `env`, `log` and
+`spam`, typed in `@spacefast/common/contracts/runtime-services`:
+
+```ts
+avatarUrl(email: string, options?: GravatarAvatarOptions): string   // pure, sync
+profile(email: string): Promise<GravatarProfile | null>             // brokered
+```
+
+`avatarUrl` is a hash plus a query string, so it costs nothing and cannot fail —
+which makes it usable from a query handler on the hot path. `profile` is the
+brokered one, and the reason the credential stays out of tenant reach. This is
+the answer to "can the app show the *other* members' avatars", which it cannot
+today because `memberships` stores only a display name.
+
+### 🤔 The canonical avatar URL is a shared constant nothing documents
+
+`@spacefast/common/dist/utils/gravatar.js` pins one shape for the whole
+platform:
+
+```
+https://gravatar.com/avatar/<sha256 of trimmed+lowercased email>?d=404&r=g&s=160
+```
+
+`d=404` is deliberate and load-bearing for a consumer: an address with no
+Gravatar serves **no image**, so the page renders its own initials fallback
+instead of a stock silhouette. Worth knowing, because an `<img src={picture}>`
+with no `onError` shows a broken-image glyph rather than falling back — the
+platform is assuming the consumer checks.
+
+The helper beside it, `gravatarEmailHash`, is `async` and returns `null` without
+`crypto.subtle`, so it is unusable during a synchronous render and unusable in
+the hosted capsule runtime (which has no `crypto` at all — see 2026-08-27).
+`shared/sha256.ts`, written for the invite codes, produces a byte-identical hex
+and works in both places.
+
+### 🤔 `sf dev`'s identity carries no `email` and no `picture`
+
+Its `AuthValue` is the guest one, so both the `picture` branch of an avatar
+component and anything that renders an address are unreachable locally — the
+same shape of gap as the missing sign-in flow and the single fixed identity.
+Worked around here with a loopback-only dev switch that hands the dev guest a
+real address and derives the platform's own URL from it.
+
+## 2026-08-28 (later still) — a sixth additive migration, and `ctx.auth.picture`
+
+### 👍 `ctx.auth.picture` is on the server context, and it is the finished URL
+
+Adding avatars for the *other* members of a household looked like it needed an
+email in the schema — and it did not. `AuthContext` carries `picture` on the
+server exactly as `AuthValue` does on the client, already resolved to the
+platform's canonical Gravatar address. So a handler can stamp a face onto a row
+without the app ever storing or exposing an email.
+
+Worth saying plainly because the obvious tool points the other way:
+`ctx.gravatar.avatarUrl(email)` is right there, free, pure and synchronous, and
+it makes an address look like the natural thing to persist. The field one line
+up on the same object is the better answer for anything about **the caller**.
+`ctx.gravatar` earns its place for an address you already hold for another
+reason — it is not the way to get one.
+
+The corresponding gap: a handler is told about its **caller** and never about a
+third party, so the only moments another person's avatar is in reach are the
+moments *they* are the caller. That is a sensible boundary, and it is what
+pushes a denormalized copy plus a reconcile-on-load rather than a join.
+
+### 👍 `mutation.result` reports `changedTables` and `changedQueries`, and both go empty
+
+The new reconcile writes only rows that disagree and invalidates only when it
+wrote. Proving the no-op steady state took one call:
+
+```
+{"op":"mutation.result","ok":true,"changedTables":[],"changedQueries":[]}
+```
+
+That envelope is a better assertion than anything the handler could return
+itself — it is the runtime's own account of what the mutation did, so "it
+correctly did nothing" is directly observable. Undocumented as far as we can
+tell, and genuinely useful for any write that runs on every page load.
+
+### 🤔 `sf dev`'s identity still carries no `picture`, so half of this is unclickable
+
+Recorded again because it bit a second time in one day. The rendering half can
+be seen locally; the **stamping** half — `createHousehold` and `redeemInvite`
+writing a real avatar URL — needs an identity that has one, and `sf dev` issues
+a guest with no `email` and no `picture`. Worked around for the test by putting
+a value on the row through a throwaway endpoint and then driving the real query
+and the real reconcile over `run`, which proves everything except the one line
+that reads `ctx.auth.picture`.
+
+A `--identity` flag on `sf dev` — or any way to hand the dev guest a fabricated
+`email` / `picture` / `displayName` — would close this, and would also close the
+older complaint that a second local tab is the same user.
+
+### 👍 Sixth additive migration, no flag, no surprises
+
+`memberships.picture`, `string().default("")`. `--dry-run` then the artifact:
+ten tables, five queries, **eighteen** mutations, `db.migrations` empty, the
+column present with its default. Same as the previous five. The additive path
+is genuinely boring now, which is the highest praise a migration story gets.
+
+## 2026-08-28 (fourth) — the docs promise `email` on `useAuth()`; production may not send it
+
+### 🤔 `auth.email` is empty on the published space and populated nowhere else
+
+The drawer's account row prints an email under the name. It appears under
+`sf dev` (with a dev identity we supply ourselves) and **not on the published
+space**, where a real Spacefast account is signed in.
+
+`auth.email` is exactly `claims.email`, read straight off the identity JWT —
+`createAuthFromToken` in `dist/client.js` does no lookup and has no fallback:
+
+```js
+const userId = stringValue(claims.pairwise_sub) ?? stringValue(claims.sub) ?? stringValue(claims.email);
+...
+email: stringValue(claims.email),
+```
+
+So an empty `auth.email` means the token carries no `email` claim. Meanwhile
+`docs/zero.md` states plainly that `useAuth()` returns "`userId`, `displayName`,
+`provider`, `isGuest`, `isAuthenticated`, `email`, `picture`, and `isLoading`"
+with **no note that any of them can be absent**, and the TypeScript makes
+`email` and `picture` optional without saying when.
+
+**If this is deliberate it is a reasonable design and should be documented.**
+Two things in the SDK suggest it is: `pairwise_sub` is preferred over `sub` for
+the user id, which is the OIDC per-relying-party opaque subject and exists so an
+app cannot identify or correlate the person; and the one comment on the subject
+reads
+
+> A Gravatar avatar URL carries the profile's own hash, so the public profile
+> page is derivable without ever touching the email behind it.
+
+That is a considered privacy stance. It just is not in the docs, and an app that
+believes the docs will build a UI around a field that is empty in production and
+full in development — which is exactly what happened here.
+
+**What would fix it:** one sentence in the auth section saying which claims are
+guaranteed and which depend on the sign-in lane, and whether `email` is ever
+released to a capsule. Also worth stating whether `picture` is guaranteed, since
+an app that draws avatars has the same question and no way to answer it before
+publishing.
+
+### 🤔 The same gap makes a feature unverifiable before publish
+
+`sf dev` issues a guest with no `email` and no `picture`, and production issues
+an account whose claim set is undocumented. So there is **no environment in
+which the real shape of the identity can be observed before a publish** — the
+local one is known-wrong and the hosted one cannot be inspected without shipping
+something that reports it. A `--identity` flag on `sf dev`, or a documented
+claim contract, closes this. It is the third time in two days this file has
+asked for the first of those.
+
+### Answered same day: `picture` is present in production, `email` is not
+
+The avatar renders on the published space, so the identity token carries a
+`picture` claim while carrying no `email`. That is a coherent position — a
+Gravatar URL is a hash and identifies nobody who is not already looked up, while
+an address identifies a person — and it is the position the SDK's own comment
+describes. It is just not written down anywhere a developer would find it before
+building a UI around the missing field.

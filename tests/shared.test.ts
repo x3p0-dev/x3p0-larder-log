@@ -25,6 +25,7 @@ import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
 import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplayName } from '../shared/profile';
+import { normalizeAvatarUrl } from '../shared/avatar';
 import { buildJoinUrl, readJoinCode, readJoinInput, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
@@ -825,6 +826,25 @@ check('equal is low, not stocked', statusKeyFor('2', '2'), 'low');
 check('one above is stocked', statusKeyFor('3', '2'), 'ok');
 check('zero is out, whatever the threshold', statusKeyFor('0', '0'), 'out');
 check('the sheet says the pills\u2019 three words', [STATUS_PHRASE.out, STATUS_PHRASE.low, STATUS_PHRASE.ok], ['Out', 'Running low', 'In stock']);
+
+// --- a member's avatar URL ---
+//
+// The value is written by a mutation and rendered into somebody else's
+// `<img src>`, which is why it goes through a rule rather than straight into
+// the column. The platform would never send anything but its own Gravatar URL;
+// the column is permanent and the check is one line.
+const GRAVATAR = 'https://gravatar.com/avatar/8013a62d?d=404&r=g&s=160';
+
+check('the platform\u2019s own URL survives', normalizeAvatarUrl(GRAVATAR), GRAVATAR);
+check('absent is no picture', normalizeAvatarUrl(undefined), '');
+check('null is no picture', normalizeAvatarUrl(null), '');
+check('whitespace alone is no picture', normalizeAvatarUrl('   '), '');
+check('it is trimmed', normalizeAvatarUrl(`  ${GRAVATAR} `), GRAVATAR);
+check('http is refused, not upgraded', normalizeAvatarUrl('http://gravatar.com/avatar/x'), '');
+check('a script URL is refused', normalizeAvatarUrl('javascript:alert(1)'), '');
+check('a data URL is refused', normalizeAvatarUrl('data:image/png;base64,AAAA'), '');
+check('a protocol-relative URL is refused', normalizeAvatarUrl('//gravatar.com/avatar/x'), '');
+check('an absurd length is refused', normalizeAvatarUrl(`https://x/${'a'.repeat(600)}`), '');
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

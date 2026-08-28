@@ -3347,3 +3347,205 @@ changed** — one row should not quietly restyle three components.
   Manifest ▸ Installability on the published space; the steps variant means the
   row works either way, which is the other reason the amendment was worth
   making.
+
+## D55: a member's face is a copy on the membership, and the letter is not a fallback to be ashamed of
+
+**A household is the one screen in this app where several people appear at
+once, and until now every one of them was a letter on a brown circle.** Only
+your *own* avatar was ever a picture, in the drawer's foot row, the collapsed
+rail, the account menu and the first-run card.
+
+**Nothing decided that**, which is the finding that opened this. `DrawerAvatar`
+has taken a `picture` prop since the hour it was written (Phase 4.12) and its own
+doc comment calls the initial "the fallback" — the members' rows were simply the
+one caller that never had anything to pass. It read as deliberate because
+[the boards draw a letter for **everyone**, your own row included](../.claude/docs/design/larderlogdrawerpreview.html):
+every circle in that file is an initial on `#4A3E2E`. So the members matching the
+boards was never the departure. **Your own face was**, and it is there because
+`auth.picture` happened to be in the entry's hand when `Pantry` was wired up.
+
+**The sixth additive schema change since Phase 2**, after `households.ink`
+(D42), D44's nine stamp columns, the `profiles` table (D46) and D52/D53's three
+item fields. `memberships.picture`, a string defaulting to `''`. Ten tables and
+five queries still; **eighteen mutations**, the new one being
+`syncAccountAvatar`. It applies on the next publish with no flag.
+
+### It stores a URL, and therefore not an email
+
+The first sketch stored the address, or a hash of it, so the server could call
+`ctx.gravatar.avatarUrl(email)` — which is pure, synchronous, needs no key and
+makes no network call, and was the obvious tool. It is the wrong one here.
+**`ctx.auth.picture` is already the finished URL**, the platform derives it from
+the identity's Gravatar, and the server had simply never read it.
+
+That difference is the whole privacy argument. An email is more identifying than
+a name and every member of a household would have been able to read every other
+member's; the URL is a SHA-256 with a query string, and the image behind it
+follows the person's Gravatar for free. **Storing the address was the only real
+reason to keep drawing letters, and it turned out to be unnecessary.**
+
+### The column is a copy, for the reason `displayName` is one
+
+`memberships.displayName` is denormalized so the member list — a live query —
+never joins a row per member (D46). A picture is the same shape of value with
+the same constraint, so it goes in the same place rather than onto `profiles`
+with a join per member behind it.
+
+**The platform tells a handler about its *caller* and never about a third
+party.** So the two moments a membership row is written, `createHousehold` and
+`redeemInvite`, are the only two moments the value is in reach — and both stamp
+it through `accountAvatar(ctx)`, beside the `accountName(ctx)` that was already
+there.
+
+### `syncAccountAvatar` is what makes it visible at all
+
+Stamped at join and left alone, the column would be **write-once**, and wrong for
+the ordinary case: somebody joins, then sets up their Gravatar afterwards. Worse,
+**every membership row on the published space today holds `''` and nothing
+backfills** (D44's rule) — so without a reconcile the feature would be invisible
+to everyone already using the app, which is very nearly the same as not shipping
+it.
+
+So there is an eighteenth mutation, called on load from
+`client/hooks/useAvatarSync.ts`. It takes no household argument and authorizes
+nothing beyond being signed in, because it can only ever write
+`ctx.auth.picture` onto rows keyed by `ctx.auth.userId`. It reads the caller's
+own rows and writes **only the ones that disagree**; the steady state is a
+handful of index reads, no writes, and — deliberately — **no `invalidate`**,
+since an unconditional one would refetch the household for every member of it on
+each other member's page load. Verified: a second call in a row reports
+`changedTables: []` and `changedQueries: []`.
+
+It is not folded into `setDisplayName`, which is the *other* write-through:
+that one fires on a rename, and a picture changing has nothing to do with a name
+changing.
+
+### `onError` is load-bearing, not defensive
+
+The platform's avatar URL carries **`d=404`** — on purpose, so that an account
+*without* a Gravatar serves no image at all and the consumer draws its own
+initial. Both avatar components rendered `<img src={picture}>` with no error
+path, so that account got the browser's **broken-image glyph**, which is the one
+outcome worse than the letter. This was already true of your own avatar and had
+simply never been hit.
+
+Both now hold the URL that failed rather than a boolean, so a member whose
+picture changes gets a fresh attempt with no effect to reset a flag.
+
+### `normalizeAvatarUrl` is one line and belongs in `shared/`
+
+The value is written by a mutation and rendered into somebody else's
+`<img src>`. `https:` only — `javascript:` and `data:` are refused at the write
+rather than trusted to be impossible upstream, and the length is capped because a
+string column has no ceiling of its own. The platform would never send either;
+the column is permanent and the check is cheap. `npm test` is at **295
+assertions**.
+
+### The stack was already capped, and stays capped at three
+
+Settings' Household card draws `members.slice(0, 3)` and the meta line carries
+the real count, which is the boards' own construction. Faces make the cap matter
+more rather than less — three overlapping pictures at 28px is already the most a
+row that width can say — so it did not move, and there is deliberately **no
+"+2" bubble**: the count is one line below it in words.
+
+### Rejected
+
+- *Store the email, or a hash of it, and derive the URL server-side.* The tool
+  fits (`ctx.gravatar.avatarUrl` is free) and the input is the problem. See
+  above.
+- *Join `profiles` per member in the `household` query.* Live query, one index
+  read per member per emission, against a column that changes about never. It
+  also needs `profiles` to carry a picture it does not have, and `profiles` rows
+  only exist for accounts that set a name after D46.
+- *Write the reconcile on every load unconditionally.* One write per member per
+  page load, and an `invalidate` storm across a household, to save a comparison.
+- *A "+2 more" bubble on the stacked trio.* The count is already written beside
+  it in words, and a fourth circle that is not a person is a worse thing to
+  overlap than a person.
+
+### Open
+
+- **Whether a mixed row reads worse than a uniform one.** A household where two
+  people have Gravatars and one does not now shows two faces and a letter, and
+  that may be uglier than three letters. It is a taste call that wants looking
+  at, not reasoning about — which is why `?members` seeds one stand-in with a
+  picture and one without.
+- **Drift between reconciles.** Your picture updates on *your* next load, not on
+  theirs, so a household can hold a stale face for a while. Acceptable: the
+  alternative is a write on somebody else's read.
+- **Nobody has clicked it.** The stamping path needs a real identity with a real
+  `auth.picture`, which `sf dev` does not issue.
+
+**One risk under this closed on the same day.** `auth.picture` could have been
+absent from the production identity the way `auth.email` turned out to be
+([D56](#d56-the-account-row-shows-a-name-and-a-face-never-an-address--and-change-your-picture-leaves-the-app)),
+in which case `memberships.picture` would take `''` for everyone and this would
+have been dead on arrival with no way to find out before publishing. **It is
+present** — the account's own avatar renders on the published space today. The
+mixed row was also looked at and is fine, which settles the one open question
+above.
+
+## D56: the account row shows a name and a face, never an address — and *Change your picture* leaves the app
+
+**`auth.email` is empty on the published space, and that is the platform's
+design rather than a bug to route around.** The value is nothing but the
+identity token's `email` claim — `createAuthFromToken` in the SDK reads it
+straight off the JWT with no lookup and no fallback — and a Spacefast account
+token does not carry one. Two things in the same file say it is deliberate:
+`pairwise_sub` is preferred over `sub` for the user id, which is the OIDC
+per-relying-party opaque subject and exists precisely so an app cannot identify
+the person; and the one comment on the subject reads *"A Gravatar avatar URL
+carries the profile's own hash, so the public profile page is derivable without
+ever touching the email behind it."* The app is given a face, not an address.
+
+`docs/zero.md` lists `email` among what `useAuth()` returns and never says it can
+be absent, which is how this got built around in the first place. Logged as a
+docs gap in `.claude/docs/spacefast.md`.
+
+**So the dev guest stopped showing one.** D14's dev identity was briefly given
+`justintadlock@gmail.com`, and it showed an email in the drawer's account row
+that production has never shown — making the one local preview of that row a row
+taller than the real thing. The address is still there and still hashed, because
+the avatar needs it; it is simply never rendered. **The rule that came out of it
+is worth more than the fix: a dev switch may reveal what production hides, and
+must never invent what production lacks.**
+
+Both render sites were already `{email && …}` — *absent, not blank* — so nothing
+changed in production, and nothing needs to: a name and a face identify a person
+in a five-person household perfectly well.
+
+### *Change your picture* is the board's third row, and it ships now
+
+`larderlogdrawerpreview.html` drew it dashed and marked it **"Do not build
+yet — there is nowhere to send anyone."** There is now: `auth.picture` is a
+`gravatar.com/avatar/…` URL, so gravatar.com is exactly where the image behind
+it is changed, and D55 made every member's face depend on it.
+
+- **Its own block between the identity row and *Sign out***, a `DrawerMenuRule`
+  on each side, with the outbound arrow that means *this leaves the app*.
+- **Naming Gravatar here is right where naming it on the sign-in button was
+  wrong** (D47). That button went to a Spacefast account and merely looked like
+  it went to Gravatar; this genuinely is Gravatar.
+- **The label is the board's four words**, because the menu is 292px and
+  *Change your picture on Gravatar* does not fit a line. The destination rides
+  the accessible name — `"Change your picture on Gravatar (opens in a new
+  tab)"` — which **contains** the visible label rather than replacing it.
+- **`/profile/avatars`, not the profile root.** It is the editor, and Gravatar
+  bounces a signed-out visitor through sign-in and back to it (verified: 302 to
+  `/connect/?redirect_to=%2Fprofile%2Favatars`).
+- **No `onDone()`.** It opens a tab beside the app rather than navigating away,
+  and a menu that shut itself would make coming back feel like the app had
+  forgotten where you were.
+- **The app's first external link**, hence its first `target="_blank"` and first
+  `rel="noopener noreferrer"`.
+
+### Rejected
+
+- *Fetch the address from somewhere else so the row can show it.* There is no
+  route to one, and building it would be undoing a privacy decision the platform
+  made on the person's behalf.
+- *Say "no email on file" in the slot.* It explains an absence nobody asked
+  about, and the slot's rule is already *absent, not blank*.
+- *Link to `gravatar.com/<hash>`* — the SDK's `gravatarProfileUrl()` builds it,
+  but it is the **public profile**, not the editor. The row says *change*.

@@ -47,7 +47,7 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, five live queries, and seventeen mutations. The schema is
+`.docs/data-model.md`, five live queries, and eighteen mutations. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -1110,6 +1110,92 @@ and Android steps.
 
 **Nobody has clicked it.**
 
+### Members have faces (D55) — 2026-08-28
+
+`.docs/decisions.md` D55. **The sixth additive schema change since Phase 2**:
+`memberships.picture`, a string defaulting to `''`. Ten tables and five queries
+still; **eighteen mutations**, the new one being `syncAccountAvatar`. Applies on
+the next publish with no flag.
+
+Only your *own* avatar was ever a picture, and **nothing decided that** —
+`DrawerAvatar` has taken a `picture` since Phase 4.12 and calls the initial "the
+fallback"; the members' rows were the one caller with nothing to pass. It read as
+deliberate because **the boards draw a letter for everyone, your own row
+included**, so your face was the departure rather than their initials.
+
+- **It stores a URL, and therefore no email.** `ctx.auth.picture` is already the
+  finished Gravatar URL and the server had simply never read it. That is the
+  whole privacy argument: `ctx.gravatar.avatarUrl(email)` is free and was the
+  obvious tool, but it needs an *address*, and every member of a household would
+  have been able to read every other member's.
+- **The two stamp sites are the only two moments the value is in reach.** The
+  platform tells a handler about its **caller**, never a third party — so
+  `createHousehold` and `redeemInvite` stamp through `accountAvatar(ctx)`,
+  beside the `accountName(ctx)` already there.
+- **`syncAccountAvatar` is what makes it visible at all.** Stamped-at-join and
+  left alone, the column is write-once — wrong for the ordinary case (join
+  first, set up Gravatar later) and, worse, **every row on the published space
+  today holds `''` and nothing backfills** (D44). It writes only rows that
+  disagree and **invalidates only when it wrote**; an unconditional invalidate
+  would refetch the household for every member on each other member's load. A
+  second call in a row reports `changedTables: []`.
+- **`onError` is load-bearing.** The platform's URL carries `d=404` on purpose,
+  so an account without a Gravatar serves **no image** and the consumer draws
+  its own initial. Both avatar components rendered a bare `<img>`, so that
+  account got the browser's broken-image glyph — already true of your own
+  avatar, never hit. They hold the URL that *failed* rather than a boolean, so a
+  changed picture retries with no effect to reset a flag.
+- **The stacked trio was already capped** at `members.slice(0, 3)` with the
+  count in words below it, and did not move. No "+2" bubble: a fourth circle
+  that is not a person is a worse thing to overlap than a person.
+
+**Verified without a browser**: typecheck clean, **295 assertions**, the
+artifact shows `picture` with `default: ""` and `db.migrations` empty, and the
+**real handlers** were driven over `POST /__spacefast/zero/run` — the members
+DTO carrying the column, the reconcile clearing a seeded picture, and a second
+call writing nothing. **Nobody has clicked it, and one half cannot be clicked
+here at all**: `sf dev` issues no `auth.picture`, so the stamping path needs the
+published space. What *is* local is the rendering, via `?members`.
+
+### The account row, and the app's first outbound link (D56) — 2026-08-28
+
+**Client only**: no schema change, no handler moved. Ten tables, five queries,
+eighteen mutations.
+
+- **`auth.email` is empty in production by design.** It is the identity token's
+  `email` claim, read straight off the JWT by `createAuthFromToken` with no
+  lookup and no fallback, and a Spacefast account carries none. `pairwise_sub`
+  preferred over `sub` for the user id, plus the SDK's own comment about
+  deriving a Gravatar profile *"without ever touching the email behind it"*, say
+  it is a privacy stance rather than an omission. **`auth.picture` is present** —
+  confirmed on the live site — so D55 is safe. `docs/zero.md` promises `email`
+  with no caveat; logged as a docs gap.
+- **The dev guest no longer reports an email**, only hashes one for its avatar.
+  It briefly showed `justintadlock@gmail.com` and made the local account row a
+  line taller than the published one. **A dev switch may reveal what production
+  hides; it must never invent what production lacks.** Both render sites were
+  already `{email && …}` — *absent, not blank* — so production never changed.
+- **`Change your picture` ships**, the board's third row, which had been marked
+  *"Do not build yet — nowhere to send anyone."* There is now. Its own block
+  between the identity row and *Sign out*, `CircleDot` in front and
+  `ExternalLink` behind. **Naming Gravatar here is right where naming it on the
+  sign-in button was wrong (D47)**: that button went to a Spacefast account, this
+  genuinely goes to Gravatar. Label stays the board's four words (292px menu);
+  the destination rides the accessible name, which *contains* the visible label.
+  Points at `/profile/avatars`, the editor — Gravatar bounces a signed-out
+  visitor through sign-in and back to it. No `onDone()`: it opens a tab beside
+  the app, and a menu that shut itself would read as the app forgetting where
+  you were.
+- **The app's first `target="_blank"` and first `rel="noopener noreferrer"`**,
+  and its first use of `no-underline`.
+
+Verified: typecheck clean, 295 assertions, and on a throwaway `sf dev --port
+4199` **all 32 class literals** in the touched component were diffed against the
+live `/zero.css` by unescaping the sheet's own selectors — printed, never
+hand-written — with `.no-underline` among them. The served `/client.js` carries
+the URL, both labels, `_blank` and `noopener noreferrer`. **Nobody has clicked
+it.**
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -1614,7 +1700,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D54, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list**; **D54 governs the offer to install** |
+| `.docs/decisions.md` | D1–D56, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -1709,14 +1795,15 @@ to keep a database between runs.
 
 Cheapest first:
 
-- **`npm test`** — 285 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 295 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
   invite-link parsing, the dev-guest bypass in `shared/identity.ts`, D44's
   stamp guards and A–Z term ordering, D45's *OR inside a group, AND across
-  groups*, D46's display-name fallback chain, and D52's size pair together with
-  D53's split between `needsBuying` and `statusKeyFor`. **Add to it** when you touch any of those — that file is the app's
+  groups*, D46's display-name fallback chain, D52's size pair together with
+  D53's split between `needsBuying` and `statusKeyFor`, and D55's `https:`-only
+  avatar rule. **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
@@ -1839,6 +1926,28 @@ Do not claim something works because it compiled. Three hard limits:
   `client/lib/devMembers.ts`, and take it out with D14 alongside `?signedout`.
   It is a way to see the panel, **not** a way to test the handlers — those still
   need two real people on the published space.
+- **The dev guest borrows a real Gravatar**, so the avatar's `<img>` branch is
+  reachable locally at all. `sf dev`'s identity carries no `email` and no
+  `picture`, so every local look at the drawer's foot row, the collapsed rail,
+  the account menu and the first-run card was the initial-on-a-fill fallback.
+  `client/lib/devIdentity.ts` hands the dev guest `justintadlock@gmail.com` and
+  builds **the platform's own URL shape** — `?d=404&r=g&s=160` over
+  `sha256Hex` of the trimmed, lowercased address, byte-identical to what
+  `@spacefast/common` emits. `?gravatar=<address>` previews a different one and
+  `?gravatar=none` previews the initial fallback, which is the branch a real
+  account with no Gravatar gets. The display name stays *Local dev guest*.
+  Loopback-only; take it out with D14 alongside the other two.
+- **Everyone has a face now (D55), and `?members` is the only way to see a
+  mixed row.** One stand-in carries a picture and one does not, because a real
+  household is two faces and a letter — an account with no Gravatar falls back.
+  The mixed row was looked at on 2026-08-28 and is fine.
+- **`auth.email` is empty in production and always will be (D56).** It is the
+  identity token's `email` claim and a Spacefast account carries none — the SDK
+  prefers `pairwise_sub` and derives the Gravatar profile from the avatar hash
+  rather than the address. The docs list `email` among what `useAuth()` returns
+  and never say it can be absent. **A dev switch may reveal what production
+  hides and must never invent what production lacks** — which is why the dev
+  guest hashes an address for its avatar and still reports no email.
 - **A failing query is invisible to the client.** Zero emits `query.result` only
   — there is no error path — so a query that throws leaves `useQuery` on its
   initial value forever, indistinguishable from loading. This is why queries

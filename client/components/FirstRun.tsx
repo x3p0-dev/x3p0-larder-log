@@ -185,15 +185,22 @@ export function Avatar({ displayName, picture, theme, size = 34 }: {
 	theme: Theme;
 	size?: number;
 }) {
+	// The URL that did not load. `DrawerAvatar` carries the same pair and the
+	// same reason: the platform's avatar URL uses `d=404`, so an account without
+	// a Gravatar serves nothing and this is what draws the letter instead of the
+	// browser's broken-image glyph.
+	const [failed, setFailed] = useState('');
+
 	const box = { width: `${size}px`, height: `${size}px` };
 
-	if (picture) {
+	if (picture && failed !== picture) {
 		return (
 			<img
 				src={picture}
 				alt=""
 				class="shrink-0 rounded-full object-cover"
 				style={{ ...box, border: `1px solid ${theme.border}` }}
+				onError={() => setFailed(picture)}
 			/>
 		);
 	}

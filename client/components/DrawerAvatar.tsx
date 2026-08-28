@@ -1,3 +1,5 @@
+import { useState } from 'preact/hooks';
+
 /**
  * A person, on the drawer.
  *
@@ -32,6 +34,18 @@ export function DrawerAvatar({
 	 */
 	stackRing?: string;
 }) {
+	/**
+	  * The URL that did not load, rather than a boolean — so a member whose
+	  * picture changes gets a fresh attempt without an effect to reset a flag.
+	  *
+	  * This is load-bearing and not defensive. The platform's avatar URL carries
+	  * `d=404`, deliberately, so that an account **without** a Gravatar serves no
+	  * image at all and the consumer draws its own initial. Without `onError`
+	  * that account gets the browser's broken-image glyph, which is the one
+	  * outcome worse than the letter.
+	  */
+	const [failed, setFailed] = useState('');
+
 	const rings = [
 		stackRing ? `0 0 0 2px ${stackRing}` : '',
 		ring ? '0 0 0 2px #F2E9DA' : '',
@@ -40,8 +54,16 @@ export function DrawerAvatar({
 
 	const box = { width: `${size}px`, height: `${size}px`, boxShadow: rings };
 
-	if (picture) {
-		return <img src={picture} alt="" class="shrink-0 rounded-full object-cover" style={box} />;
+	if (picture && failed !== picture) {
+		return (
+			<img
+				src={picture}
+				alt=""
+				class="shrink-0 rounded-full object-cover"
+				style={box}
+				onError={() => setFailed(picture)}
+			/>
+		);
 	}
 
 	return (

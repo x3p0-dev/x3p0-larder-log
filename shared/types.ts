@@ -116,6 +116,8 @@ export type Member = {
 	id: string;
 	userId: string;
 	displayName: string;
+	/** The account's avatar URL, or '' for none. See shared/avatar.ts. */
+	picture: string;
 	role: Role;
 };
 
