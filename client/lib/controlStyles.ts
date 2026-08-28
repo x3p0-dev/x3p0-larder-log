@@ -96,6 +96,26 @@ export const DRAWER_MENU_ROW_DANGER =
 export const DRAWER_PRIMARY =
 	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer disabled:opacity-100 disabled:pointer-events-none';
 
+/**
+ * The drawer's cream primary sitting on a **raised card** — the install pill.
+ *
+ * Two things move from `DRAWER_PRIMARY`, and both are about what is underneath.
+ * The ring offsets against `drawer-raised` rather than the gradient, and it is
+ * `focus-dark` rather than `on-dark`: a cream ring around a cream pill is the
+ * pill drawn twice. Crimson on a dark card in both themes, for the reason the
+ * rail already gives — the surface under it is dark either way.
+ */
+export const DRAWER_PRIMARY_ON_CARD =
+	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/**
+ * The dismiss `×` on a panel filled with the drawer's well — the install steps.
+ *
+ * `TOAST_DISMISS` with its ring offset moved to the fill it actually sits on.
+ */
+export const DRAWER_PANEL_X =
+	'transition-colors text-on-dark-faint hover:text-on-dark-muted rounded-[9px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-well';
+
 /** A stepper key on the drawer's well — the default-threshold pair. */
 export const DRAWER_STEPPER =
 	'transition-colors text-on-dark-muted hover:bg-drawer-raised hover:text-on-dark active:translate-y-px rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset disabled:opacity-40 disabled:pointer-events-none';

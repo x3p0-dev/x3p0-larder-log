@@ -252,6 +252,14 @@ household.
 - ✅ **The app is installable** — `site.webmanifest` serves as
   `application/manifest+json` with the 192, 512 and maskable-512 icons.
   **Nobody has installed it**; that needs a phone.
+- ✅ **The app says it is installable** — one row in Settings › Preferences,
+  *Add to home screen*, built 2026-08-28 and governed by
+  [D54](decisions.md#d54-the-offer-to-install-is-one-row-in-settings-and-there-is-no-banner).
+  **Install** where a browser hands the page a prompt, **Show me** and two
+  written steps on iOS, and nothing at all in the installed app or where no
+  path exists. There is deliberately no banner, which means **discovery is
+  unsolved on purpose** — the first thing to revisit if nobody installs it.
+  **Nobody has clicked it.**
 - Custom domain
 - `sf db export` backup routine
 - Use it for a month of actual grocery trips

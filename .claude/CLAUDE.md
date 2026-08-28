@@ -1009,6 +1009,107 @@ resolving to neither, a unit-only patch keeping the number it did not name, and
 `offShoppingList` set and cleared. **Nobody has clicked it** — every interesting part of
 this is press-time behaviour, so all of it wants a thumb.
 
+### The app now says it is installable (Phase 4.14) — 2026-08-28
+
+`.claude/docs/design/install-as-an-app.md`, drawn on
+`.claude/docs/design/larderloginstallmockup.html`. Governed by
+[D54](../.docs/decisions.md#d54-the-offer-to-install-is-one-row-in-settings-and-there-is-no-banner).
+**Client only**: no schema change, no handler moved, no new `theme.json` token —
+still ten tables, five queries, seventeen mutations.
+
+The manifest shipped on 2026-08-27 and **nothing in the app has ever said so**.
+This is one row — *Add to home screen*, in Settings › Preferences under
+Appearance, behind the block's own hairline. **There is no banner, no
+interstitial and no badge anywhere else.**
+
+- **Two rules, and everything follows.** *Nothing offers to install what is
+  already open* — four `display-mode` queries plus `navigator.standalone`, which
+  is the only answer there is on a home-screen Safari. And *the row appears only
+  where a path actually exists*, which is what the sort trigger and the
+  shopping-list trigger already refuse to be.
+- **One control, two labels** — **Install** where a browser handed the page a
+  prompt, **Show me** everywhere the path is a menu. Same pill, same geometry,
+  same position; the label carries the difference, which is the shopping-list
+  trigger's rule.
+- **A prompt is one path, not the definition of one**, and this is the part that
+  was got wrong first. `beforeinstallprompt` was treated as the proxy for *a
+  path exists* — but **Chrome installs any page from its own ⋮ menu**, with no
+  manifest, no service worker and no prompt, and **the page is never told**.
+  There is no API to ask. So the row keyed to the prompt stayed hidden on
+  desktop Chrome while the browser sat there offering to install it. Now four
+  `steps` modes carry the four menus that can be named — iOS, Chrome on Android,
+  Chrome on the desktop, Safari on macOS — each in that browser's own words.
+  **Edge, Opera, Samsung Internet, Vivaldi and Firefox answer `none`**: they all
+  carry `Chrome/` or have a real path, and none of their menus has been checked.
+- **The label follows the platform** — *Add to home screen* on a phone,
+  **Install as an app** on a desktop, which has no home screen. The one
+  departure from the boards, which drew the phone's words on the 1440 board
+  before the row had desktop steps to be wrong about.
+- **The event is captured at boot, not when Settings opens.**
+  `beforeinstallprompt` fires once and early, so `watchInstall()` runs from the
+  entry beside `installFonts()` and `installAppIcon()` and `client/lib/install.ts`
+  holds the event. Waiting for the drawer would mean the row could only ever
+  appear on a reload after the one that mattered — which the design doc listed
+  as an open question and this is the answer to. **The event is dropped before
+  the dialog opens**, not after: it can be prompted once, a second press throws,
+  and a pill that fires nothing is the worst version of this row.
+- **The steps panel is the inline composer on a fourth surface.** It drops in
+  below the row and **the row stays put**, 180ms in and 140ms out — the applied
+  chip's exit — animated on `grid-template-rows`, because a panel of unknown
+  height has no pixel value for `max-height` to guess at. Instant under
+  `prefers-reduced-motion`. **The words are Safari's own**: *Share* and *Add to
+  Home Screen* are what the buttons say, and the share mark is drawn **beside**
+  the word rather than instead of it.
+- **`Theme.drawer` gained `inkMeta` (`#A5937A`) on a contrast finding.**
+  `inkFaint` — the rail's rest colour — had been standing in for drawer meta
+  text everywhere and measures **4.28:1** on the light theme's raised fill. It
+  is fine on the drawer gradient and fails on the card that sits on it, which is
+  where every meta line in the Settings pane actually lives. `drawerTheme()`'s
+  `textMuted` resolves to it now, so the household's item count and the members
+  count moved with the new row.
+- **The steps panel's hairline is `#6E5F4B`, hard-coded, and that is the second
+  finding.** The composer's own `#3B3126` reads **1.10:1** on `drawer-raised`;
+  the fill alone is 1.31:1, so the panel has no edge at all. **The invite
+  composer and the Filter tab's term composer have the same bug and were
+  deliberately left alone** — one row should not quietly restyle three
+  components.
+- **The detection is exercised against eleven real user agents**, including the
+  two that are easy to get wrong: **iPadOS 17 reports itself as a Mac** (a touch
+  count is what separates them) and **Chrome's own user agent contains
+  `Safari/`**. It lives in `client/lib/install.ts` and **cannot move to
+  `shared/`** — it reads `navigator`, which is on the capsule compiler's server
+  denylist — so it is checked by driving the compiled module, not by `npm test`.
+- **There is no service worker anywhere in this project**, and that is the open
+  risk under all of it: Chrome has historically wanted one before it will fire
+  `beforeinstallprompt`, so the **Install** branch may be dead everywhere. The
+  manifest is complete and its three icons serve — checked against the live
+  space. **DevTools ▸ Application ▸ Manifest ▸ Installability** settles it. The
+  steps variant is what makes the row useful either way.
+
+**Discovery is unsolved on purpose, and this is the thing to remember about the
+whole change.** A banner was drawn at 358 × 127 and cut: it cost ~125px at the
+top of a 390 screen where the top bar already takes three rows, it needed a
+whole dismissal design to be tolerable, and it made the already-installed case
+worse. **Nobody opens Settings to see what is in it** — so installing is now
+reachable only by someone who already suspects it is possible. That is on the
+record rather than left to be noticed later, and it is the first thing to
+revisit if install numbers come back at zero.
+
+**Verified without a browser**: typecheck clean, 285 assertions, `sf dev` on
+`--port 4199` compiles and serves, and **all 65 class literals** in the new
+component and the two new control styles were diffed against the live
+`/zero.css` by unescaping the sheet's own selectors — printed, never
+hand-written — including the line numbers proving each `md:` rule lands after
+the base it overrides. The served `/client.js` carries every new string.
+**The row is now visible under `sf dev`**, which the first cut was not: desktop
+Chrome on loopback resolves to `chromium`, so it renders *Install as an app* and
+**Show me**. That is honest rather than a dev switch — Chrome really will
+install a localhost page from that menu. What still cannot be reached locally is
+the **Install** pill, which needs a browser that fires the prompt, and the iOS
+and Android steps.
+
+**Nobody has clicked it.**
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -1174,6 +1275,9 @@ checks**. **Two of the three are now answered, on v11**: `/site.webmanifest`
 serves `200 application/manifest+json; charset=utf-8` (769 B) and all three
 icons serve as `image/png`, so the edge maps the extension correctly with no
 configuration. **Nobody has installed it** — that half still needs a phone.
+
+**And as of 2026-08-28 the app finally offers to be installed** — one row in
+Settings › Preferences, D54. See *The app now says it is installable* above.
 
 ### Every ordered row carries its own stamps (D44) — 2026-08-27
 
@@ -1510,7 +1614,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D53, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list** |
+| `.docs/decisions.md` | D1–D54, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list**; **D54 governs the offer to install** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -1519,6 +1623,8 @@ most of it is already decided.
 | `.claude/docs/design/appliedfilterbar.html` | **The applied filter bar** — a live page rather than boards: desktop, 390, and the state strip, in both themes |
 | `.claude/docs/design/add-edit-item.md` | **The add / edit item redesign** (28 Aug) — the sheet's four sections, the size, the two steppers, and the off-list checkbox. A section of the design spec kept as its own doc, because `ui-directions.md` has no patch operation |
 | `.claude/docs/design/larderlogaddedititem.html` | **The 9 boards for that redesign** — the sheet in both themes, the size row and its unit menu, the two steppers, where the size shows, 390, and keeping an item off the list |
+| `.claude/docs/design/install-as-an-app.md` | **Install as an app** (28 Aug) — the one Settings row that offers it, the banner that was cut and why, and two contrast findings that leave the row. Its own doc for the reason `add-edit-item.md` is |
+| `.claude/docs/design/larderloginstallmockup.html` | **The 5 boards for it** — desktop 1440, the row's states with the panel-edge finding drawn both ways, Preferences in three states × both themes, 390, and the appears-where matrix |
 | `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
 | `.claude/docs/design/display-name-light.html` / `-dark.html` | **The first-run display name** — two states, *Gravatar had a name* and *it didn't*, in both themes. **The build has one state now** — D48 removed the prefill, so neither board's hint exists |
 | `.claude/docs/design/larder-log-front-door/` | **The 18 boards for the flows outside the shell** — nine screens, light and dark. Where these and the spec text disagree, these win |

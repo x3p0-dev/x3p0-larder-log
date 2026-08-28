@@ -18,6 +18,7 @@ import type { Theme } from './lib/theme';
 import { getTheme } from './lib/theme';
 import { installAppIcon, setThemeColor } from './lib/appIcon';
 import { installFonts } from './lib/fonts';
+import { watchInstall } from './lib/install';
 import { capturePendingInvite, markInviteAccepted, pendingInvite } from './lib/pendingInvite';
 import { clearSignInAttempt, markSignInAttempt, signInAttemptPending } from './lib/signInAttempt';
 import { InviteLanding } from './components/InviteLanding';
@@ -41,6 +42,14 @@ capturePendingInvite();
  */
 installFonts();
 installAppIcon();
+
+/*
+ * `beforeinstallprompt` fires once and early, and a page with no listener
+ * registered by then never hears it — so the capture happens here rather than
+ * when the Settings pane mounts, which would be several minutes and one drawer
+ * too late. See client/lib/install.ts.
+ */
+watchInstall();
 
 /**
  * Hostnames the browser can only be talking to a local `sf dev` on. A LAN

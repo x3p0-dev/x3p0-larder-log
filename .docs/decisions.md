@@ -3140,3 +3140,210 @@ the design document drew it as a mockup and said so.
   for a checkbox.
 - **Hiding excluded items from the pantry grid too.** They are in the pantry.
   The whole point is that you still want to know you have them.
+
+## D54: the offer to install is one row in Settings, and there is no banner
+
+**28 Aug 2026.** The app has been a PWA since `site.webmanifest` shipped and
+nothing in it has ever said so. This adds **one row** — *Add to home screen*, in
+Settings › Preferences under Appearance — that installs it: a real prompt where
+a browser offers one, and two written steps where none exists. There is no
+banner, no interstitial and no badge anywhere else.
+
+Client only. No schema change, no handler moved, no new `theme.json` token.
+
+### Two rules, and everything follows from them
+
+**Nothing offers to install what is already open.** In standalone the row does
+not exist — four `display-mode` queries, plus `navigator.standalone`, which is
+iOS's own and the only answer there is on a home-screen Safari.
+
+**The row appears only where a path to install actually exists.** A control that
+can only disappoint is what the sort trigger and the shopping-list trigger
+already refuse to be.
+
+| Context | The row | The path |
+|---|---|---|
+| Running as the installed app | — | |
+| A prompt was captured | **Install** | fires it |
+| iOS / iPadOS | **Show me** | Share ▸ Add to Home Screen |
+| Chrome on Android | **Show me** | ⋮ ▸ Add to Home screen |
+| Chrome on the desktop | **Show me** | ⋮ ▸ Cast, save, and share ▸ Install page as app |
+| Safari on macOS | **Show me** | File ▸ Add to Dock |
+| Anything else | — | none we can name |
+| Viewer role, empty household | shown, unchanged | |
+
+**One control, two labels** — the shopping-list trigger's rule, where the label
+carries the difference and the treatment does not. Same pill, same geometry,
+same position.
+
+### Amended the same day: a prompt is one path, not the definition of one
+
+The first cut had three modes and read `beforeinstallprompt` as the proxy for
+*a path exists*. **That is wrong, and wrong in the direction that hides the row
+from people who can install perfectly well.** Chrome offers *Install page as
+app* on **any** page from its own menu — no manifest, no service worker, no
+prompt — and **the page is never told about it**: there is no API to ask, and
+`getInstalledRelatedApps()` answers a different question on one platform. Found
+by the obvious route, which is someone installing the app from the menu while
+the row that offers to install it was not on screen.
+
+So the rule holds and its reading changes: **the row appears wherever a path
+exists, and the pill fires a prompt only where there is one.** Four `steps`
+modes instead of one, because four different menus say four different things.
+
+**The label follows the platform**, which is this build's one departure from the
+boards: *Add to home screen* on a phone, **Install as an app** on a desktop. A
+desktop has no home screen, and the steps under it end in *Install page as app*
+or *Add to Dock* — a label saying otherwise would be exactly the paraphrase the
+steps refuse to make. The boards drew *Add to home screen* on the 1440 board,
+written before the row had any desktop steps to be wrong about.
+
+**Only browsers whose wording can be named are claimed.** Edge, Opera, Samsung
+Internet and Vivaldi all carry `Chrome/` in the user agent and all put the
+command somewhere else; claiming them would print instructions for a menu that
+is not there, which is the one thing the steps must never do. They answer
+`none`. Firefox has no install path on the desktop and answers `none` too.
+
+**The cost of the table is drift**, and it is real: a menu can be reorganised in
+a release with nothing to tell us. That is the risk D47 declined to take when it
+refused to name the sign-in lanes, taken here on the opposite balance — a lane
+nobody can see is a different thing from a menu the person is looking at while
+they read the step.
+
+**Detection is exercised against eleven real user agents**, including the two
+that are easy to get wrong: iPadOS 17 reports itself as a Mac, and Chrome's own
+user agent contains `Safari/`. It lives in `client/lib/install.ts` and **cannot
+move to `shared/`** — it reads `navigator`, which is on the capsule compiler's
+server denylist — so it is checked by driving the compiled module rather than by
+`npm test`.
+
+### There was a banner, and the cut is the decision
+
+A dismissible bar at the top of the content column, on the drawer surface, with
+the app tile and a cream *Install* pill — the toast's construction, in the flow.
+It was drawn at 358 × 127 and it worked.
+
+- **It cost about 125px at the top of a 390 screen**, where the top bar already
+  takes three rows and four with a term filter on. The first card started around
+  315px down, and 370px while filtering — the most chrome anywhere in the app,
+  on the screen with the least of it.
+- **It needed a dismissal design to be tolerable at all**: a permanent `×`, a
+  stored key against the account, and a rule holding it back until the household
+  had its first item so it could not land on an empty state. Three decisions in
+  service of an interruption nobody asked for.
+- **It made the already-installed case worse.** No browser reliably tells the
+  page it is installed, so both surfaces keep offering; in Settings that is
+  invisible, in a banner it is a nuisance you have to dismiss.
+
+**What the cut costs, stated plainly: nobody opens Settings to see what is in
+it.** Installing is now reachable only by someone who already suspects it is
+possible — which, on iOS, is the person who least needs telling. **This does not
+solve discovery; it declines to**, and that is the first thing to revisit if
+nobody ever installs it.
+
+### Scope is in the label, and it survives
+
+*Preferences* are yours; *Pantry settings* are the household's. Installing is
+yours. It does not follow you between **devices** — but nothing in this pane
+ever claimed to, so the row carries `On this device.` in meta and the rule
+holds. A fourth block for one row is what D52's off-list checkbox already
+argued against.
+
+**Owners, editors and viewers all see it**, exactly as Appearance does (D30).
+Installing is a fact about your browser, not a power over the household.
+
+### The event is captured at boot, not when Settings opens
+
+`beforeinstallprompt` fires once and early, and a page with no listener
+registered by then never hears it. So `watchInstall()` runs from the entry
+beside `installFonts()` and `installAppIcon()`, and the saved event is held in
+`client/lib/install.ts` until something presses the pill. Waiting for the drawer
+would mean the row could only ever appear on a reload after the one that
+mattered.
+
+**The event is dropped before the dialog opens**, not after. It can be prompted
+once — a second press throws — and a pill that fires nothing is the worst
+version of this row.
+
+### The steps panel is the inline composer, on a fourth surface
+
+It drops in below the row and **the row stays put**: the Filter tab's editing
+panel, the item sheet's term composer and the invite composer already work
+exactly this way. No modal, no pushed pane. 180ms in, 140ms out — the applied
+chip's exit — and instant under `prefers-reduced-motion`.
+
+**The words are Safari's own.** *Share* and *Add to Home Screen* are what the
+buttons say; anything paraphrased sends people looking for a control that is not
+there. The share mark is drawn **beside** the word rather than instead of it —
+an icon nobody has been taught is not an instruction, and it is the only thing
+in the app borrowed from another vendor's interface.
+
+### Two contrast findings leave this row
+
+**Drawer meta on the raised fill does not clear 4.5:1.** `#9E8C74` — the rail's
+rest colour — had been standing in for drawer meta text everywhere, and it
+measures **4.28:1** on the light theme's raised fill. It is fine on the drawer
+gradient (5.02:1) and fails on the card that sits on it, which is where every
+meta line in the Settings pane actually lives. `Theme.drawer` gains **`inkMeta`
+= `#A5937A`** — 4.67:1 light, 5.61:1 dark — and `drawerTheme()`'s `textMuted`
+resolves to it, which is the one place inline-painted meta inside the drawer
+comes from. Same shape as D52's finding that faint text never clears 4.5:1 as a
+hint, one surface over.
+
+**The composer panel's hairline is invisible on drawer-raised.** The panel is a
+recessed fill on a 1px inset hairline, and on this surface that reads `#3B3126`
+on `#332B22` — **1.10:1**; the fill alone is 1.31:1, so the panel has no edge at
+all. `#6E5F4B` takes it to **2.25:1** from outside and 2.94:1 from inside, and it
+is what `Toast` already leans on for the same reason. **The invite composer and
+the Filter tab's term composer have the same bug and are deliberately not
+changed** — one row should not quietly restyle three components.
+
+### What it does not get
+
+- **No toast on install.** The app appearing on the home screen is the
+  confirmation, and you have left the browser to see it.
+- **No confirm.** Nothing is destroyed.
+- **No *Installed ✓* state.** No browser reliably tells the page it is already
+  installed — `getInstalledRelatedApps()` is Android-only — and a badge that
+  lies on iOS is worse than no badge. In Settings the row simply keeps offering,
+  harmlessly.
+
+### Rejected
+
+- **The banner**, above.
+- **A marker on the Settings tab that clears once seen.** The drawer has no
+  vocabulary for one, and the mobile menu button's crimson badge is already
+  spoken for by D45's filter count.
+- **A line in the account menu.** Wrong scope — that menu is about who you are.
+- **A mention on the marketing page.** It would be describing a browser feature
+  to someone who has not signed up.
+- **Keying the row to `beforeinstallprompt` alone.** Built first, and it is what
+  the amendment above undoes. It hid the row on every desktop Chrome where the
+  prompt does not fire — which may be all of them, since this app has no service
+  worker — while the browser's own menu installed it happily.
+- **Naming Edge, Opera, Samsung Internet or Vivaldi.** Each has a real path and
+  none of them has been checked. Naming a menu nobody has opened is worse than
+  staying quiet, which is the rule that kept *Add to Dock* out of the first cut
+  and now lets it in: macOS Safari's File menu is checkable and stable.
+
+### Open
+
+- **Discovery**, above. The trade is recorded rather than solved.
+- **Where *Share* is.** On iPhone it is the bar at the bottom; on iPad the
+  toolbar at the top. Step 1 names the button and not its place, which is one
+  clause short on the platform that needs it most — and adding the clause costs
+  a line wrap at 340.
+- **Whether the row belongs above or below Appearance.** Built below, on the
+  argument that Appearance is the one anyone actually changes. If install is
+  meant to be found, above is the cheaper half of a discovery fix.
+- **Non-Safari browsers on iOS.** All of them are WebKit and all of them have a
+  Share menu, but only some carry *Add to Home Screen*. The row treats iOS as
+  one platform.
+- **Whether this app is installable at all in Chromium's eyes.** There is **no
+  service worker anywhere in the project**, which has historically been part of
+  Chrome's installability criteria — so `beforeinstallprompt` may never fire and
+  the `Install` branch may be dead everywhere. The manifest itself is complete
+  and its three icons serve. Settled by reading DevTools ▸ Application ▸
+  Manifest ▸ Installability on the published space; the steps variant means the
+  row works either way, which is the other reason the amendment was worth
+  making.

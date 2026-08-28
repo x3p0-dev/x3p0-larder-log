@@ -315,6 +315,22 @@ export type Theme = {
 		ink: string;
 		inkMuted: string;
 		inkFaint: string;
+		/**
+		 * Meta text on a **raised card** inside the drawer — an item count, a
+		 * member count, *On this device.*
+		 *
+		 * `inkFaint` is the rail's rest colour and had been standing in for this
+		 * everywhere, where it measures **4.28:1** on the light theme's raised
+		 * fill and misses 4.5:1. It is fine on the drawer gradient itself
+		 * (5.02:1) and fails on the card that sits on it — which is where every
+		 * meta line in the Settings pane actually lives. `#A5937A` clears it on
+		 * both: 4.67:1 light, 5.61:1 dark.
+		 *
+		 * Theme-independent like the other four, and the same value the page's
+		 * own `textMuted` takes in dark — the surfaces are close enough that it
+		 * is the same answer twice rather than a coincidence.
+		 */
+		inkMeta: string;
 		label: string;
 	};
 };
@@ -323,6 +339,7 @@ const DRAWER_INK = {
 	ink: '#F2E9DA',
 	inkMuted: '#D8CBB6',
 	inkFaint: '#9E8C74',
+	inkMeta: '#A5937A',
 	label: '#8A7860',
 };
 
@@ -412,7 +429,7 @@ export function drawerTheme(theme: Theme): Theme {
 		divider: d.line,
 		text: d.inkMuted,
 		textStrong: d.ink,
-		textMuted: d.inkFaint,
+		textMuted: d.inkMeta,
 		textFaint: d.label,
 		neutralChipBg: d.raised,
 		neutralChipText: d.inkMuted,

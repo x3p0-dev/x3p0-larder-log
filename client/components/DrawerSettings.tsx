@@ -4,6 +4,7 @@ import { ChevronRight, LogOut, Minus, Pencil, Plus } from 'lucide-preact';
 
 import { DrawerAvatar } from './DrawerAvatar';
 import { HouseholdIdentity } from './HouseholdIdentity';
+import { InstallRow } from './InstallRow';
 import { MembersPane } from './MembersPane';
 import { TermPanel } from './TermPanel';
 import type { Theme } from '../lib/theme';
@@ -312,9 +313,21 @@ export function DrawerSettings({
 				</div>
 			</Block>
 
+			{/*
+			  * Two rows, not two blocks. Installing is yours in exactly the way
+			  * Appearance is, so it lands under it behind the block's own
+			  * hairline rather than taking a fourth heading for one row — which
+			  * is the argument the add/edit sheet already made for its off-list
+			  * checkbox.
+			  *
+			  * `InstallRow` renders nothing at all where no install path exists,
+			  * or where the app is already the installed app, so most of the time
+			  * this block is what it was: Appearance alone, and no orphan rule
+			  * under it.
+			  */}
 			<Block title="Preferences" theme={theme}>
-				<div class="flex flex-col gap-2.5 px-3 pt-3 pb-3.5 rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
-					<p class="text-[14.5px] pl-0.5" style={{ color: d.inkMuted }}>Appearance</p>
+				<div class="flex flex-col px-3 pt-3 pb-3.5 rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
+					<p class="text-[14.5px] pl-0.5 mb-2.5" style={{ color: d.inkMuted }}>Appearance</p>
 					<div class="grid grid-cols-3 gap-1 p-1 rounded-[13px]" style={{ background: d.well }}>
 						{THEME_OPTIONS.map((opt) => (
 							<button
@@ -327,6 +340,8 @@ export function DrawerSettings({
 							</button>
 						))}
 					</div>
+					{/* Owns its own hairline, because it owns whether it exists at all. */}
+					<InstallRow theme={theme} />
 				</div>
 			</Block>
 
