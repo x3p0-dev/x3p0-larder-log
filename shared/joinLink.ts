@@ -90,3 +90,34 @@ export function stripJoinParam(search: string): string {
 export function formatCode(code: string): string {
 	return (code.match(/.{1,4}/g) ?? []).join(' ');
 }
+
+/**
+ * A code out of whatever a person pasted into the join field — a bare code, or
+ * the whole invite link.
+ *
+ * The sender's one-press affordance is *Copy link*, so the thing most easily
+ * handed over is a URL, and that is what lands in the field. Refusing it there
+ * would fail silently: the value is not code-shaped, so the button simply
+ * stays disabled with nothing to explain why.
+ *
+ * The link branch runs first because a code is a subset of a link rather than
+ * an alternative to one. `readJoinCode` returns `null` for a bare code (there
+ * is no `join=` key in it), so trying it costs nothing when the paste was a
+ * code all along. It is given the text after the first `?` when there is one
+ * — and without the fragment, which is never part of the query.
+ */
+export function readJoinInput(value: string): string | null {
+	const trimmed = value.trim();
+
+	if (! trimmed) return null;
+
+	const q = trimmed.indexOf('?');
+	const query = q === -1 ? trimmed : trimmed.slice(q + 1);
+	const fromLink = readJoinCode(query.split('#')[0] ?? '');
+
+	if (fromLink) return fromLink;
+
+	const code = normalizeCode(trimmed);
+
+	return isCodeShaped(code) ? code : null;
+}

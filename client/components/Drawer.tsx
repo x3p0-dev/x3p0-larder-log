@@ -249,9 +249,9 @@ export function Drawer({
 				{/*
 				  * The switcher the spec draws, now that a user may belong to more
 				  * than one household (D33). It stays a button with a single
-				  * household too — that is where *New household* and *Join with a
-				  * link* live, and hiding them until you already have two would
-				  * mean there was no way to get the second one.
+				  * household too — that is where *New household* and *Join with
+				  * a code or link* live, and hiding them until you already had
+				  * two would mean there was no way to get the second one.
 				  */}
 				{! pushed && (
 				<div class="relative mx-5 mt-3.5" ref={switcherRef}>

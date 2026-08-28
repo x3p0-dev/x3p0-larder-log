@@ -25,7 +25,7 @@ import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
 import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
 import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplayName } from '../shared/profile';
-import { buildJoinUrl, readJoinCode, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
+import { buildJoinUrl, readJoinCode, readJoinInput, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
@@ -374,6 +374,41 @@ check('the stripped result has no code left', readJoinCode(stripJoinParam(`?${JO
 // The grouped form is for reading aloud; it must survive the round trip back.
 check('codes group in fours', formatCode('ABCDEFGHJK'), 'ABCD EFGH JK');
 check('the grouped form normalizes back', normalizeCode(formatCode(LINK_CODE)), LINK_CODE);
+
+// --- the join field takes either form ---
+//
+// The sender's one-press affordance is *Copy link*, so the whole URL is what
+// most often lands in the switcher's field. Both forms have to resolve, or the
+// paste fails with a disabled button and nothing to explain it.
+const LINK_URL = buildJoinUrl('https://larderlog.view.fast', LINK_CODE);
+
+check('a pasted link gives the code', readJoinInput(LINK_URL), LINK_CODE);
+check('a bare code gives the code', readJoinInput(LINK_CODE), LINK_CODE);
+check('a spaced code gives the code', readJoinInput(formatCode(LINK_CODE)), LINK_CODE);
+check('a lowercased code gives the code', readJoinInput(LINK_CODE.toLowerCase()), LINK_CODE);
+check('surrounding whitespace is ignored', readJoinInput(`  ${LINK_URL}  `), LINK_CODE);
+
+// A mail client may lowercase a whole link, and a chat app may append a
+// fragment. Neither should cost the recipient the paste.
+check('a lowercased link gives the code', readJoinInput(LINK_URL.toLowerCase()), LINK_CODE);
+check('a fragment after the code is dropped', readJoinInput(`${LINK_URL}#x`), LINK_CODE);
+check('other parameters in a link are ignored', readJoinInput(`${LINK_URL}&ref=chat`), LINK_CODE);
+check('a bare query string works too', readJoinInput(`${JOIN_PARAM}=${LINK_CODE}`), LINK_CODE);
+
+// Nothing usable is `null` rather than a guess, which is what keeps the button
+// disabled instead of sending `redeemInvite` something nobody typed.
+check('an empty field is nothing', readJoinInput('   '), null);
+check('a truncated code is nothing', readJoinInput('ABC2 3DEF'), null);
+check('a link with no join parameter is nothing', readJoinInput('https://larderlog.view.fast/'), null);
+check('a link with a bad code is nothing', readJoinInput(buildJoinUrl('https://x.test', 'OOOOOOOOOO')), null);
+
+// The link wins over the surrounding text, so a code that only *looks* shaped
+// because the URL was stripped of its separators cannot be read out of one.
+check(
+	'the code is read from the parameter, not the URL text',
+	readJoinInput('https://larderlog.view.fast/?a=1&' + JOIN_PARAM + '=' + LINK_CODE),
+	LINK_CODE
+);
 
 // --- the stepper's one step ---
 //

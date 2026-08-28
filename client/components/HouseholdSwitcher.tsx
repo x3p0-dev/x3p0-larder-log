@@ -3,7 +3,7 @@ import { Check, Link2, Plus } from 'lucide-preact';
 
 import { HouseholdTile } from './HouseholdTile';
 import { DRAWER_BUTTON, DRAWER_INPUT } from '../lib/controlStyles';
-import { isCodeShaped, normalizeCode } from '../../shared/invite';
+import { readJoinInput } from '../../shared/joinLink';
 import type { HouseholdSummary } from '../../shared/types';
 
 /**
@@ -23,6 +23,11 @@ import type { HouseholdSummary } from '../../shared/types';
  * the confirm shell (D42) — a name and a colour will not fit in a 264px flyout
  * without pushing the list of households off the bottom of it. Joining stays
  * inline, because a code is one field and nothing else.
+ *
+ * **The field takes the link as well as the code**, and says so. The sender's
+ * one-press affordance in `InvitesPanel` is *Copy link*, so a URL is the thing
+ * most likely to be pasted here; `readJoinInput` reads the code out of either
+ * form.
  */
 
 type Props = {
@@ -48,9 +53,9 @@ export function HouseholdSwitcher({ households, currentId, onSelect, onNewHouseh
 	const [busy, setBusy] = useState(false);
 
 	async function join() {
-		const entered = normalizeCode(code);
+		const entered = readJoinInput(code);
 
-		if (busy || ! isCodeShaped(entered)) return;
+		if (busy || ! entered) return;
 
 		setBusy(true);
 		const id = await onJoin(entered);
@@ -108,17 +113,26 @@ export function HouseholdSwitcher({ households, currentId, onSelect, onNewHouseh
 						onInput={(e) => setCode(e.currentTarget.value)}
 						onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void join(); } }}
 						placeholder="ABC2 3DEF GH"
-						aria-label="Invite code"
+						aria-label="Invite code or link"
 						autocapitalize="characters"
 						spellcheck={false}
-						class={`h-9 px-3 rounded-[10px] text-[13.5px] font-mono tracking-widest ${DRAWER_INPUT}`}
+						/*
+						 * The grouped mono face is the code's, and a pasted URL
+						 * in `tracking-widest` is a wall you cannot check
+						 * against the message it came from. Any character
+						 * outside the code alphabet's own separators means a
+						 * link is being typed — a URL has a `:` and a `/` and a
+						 * code never does — so the treatment is derived from
+						 * the alphabet rather than from a guessed width.
+						 */
+						class={`h-9 px-3 rounded-[10px] text-[13.5px] ${/[^0-9A-Za-z\s-]/.test(code) ? '' : 'font-mono tracking-widest'} ${DRAWER_INPUT}`}
 						// eslint-disable-next-line
 						ref={(el) => el?.focus()}
 					/>
 					<div class="flex items-center gap-2">
 						<button
 							onClick={() => void join()}
-							disabled={busy || ! isCodeShaped(normalizeCode(code))}
+							disabled={busy || ! readJoinInput(code)}
 							class={`h-8 px-3 rounded-[10px] text-[12.5px] font-medium disabled:opacity-50 ${DRAWER_BUTTON}`}
 						>
 							{busy ? 'Joining…' : 'Join'}
@@ -143,7 +157,7 @@ export function HouseholdSwitcher({ households, currentId, onSelect, onNewHouseh
 						onClick={() => setForm('join')}
 						class="flex items-center gap-2 w-full px-2 py-1.5 rounded-[9px] text-[12.5px] text-on-dark-muted hover:bg-drawer-raised"
 					>
-						<Link2 size={14} /> Join with a link
+						<Link2 size={14} /> Join with a code or link
 					</button>
 				</div>
 			)}
