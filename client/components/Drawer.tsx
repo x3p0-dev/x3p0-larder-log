@@ -10,6 +10,7 @@ import { DrawerSettings } from './DrawerSettings';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { HouseholdTile } from './HouseholdTile';
 import { useDismiss } from '../hooks/useDismiss';
+import { useScrollLock } from '../hooks/useScrollLock';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
@@ -162,6 +163,14 @@ export function Drawer({
 	 * to the household you left, and the pane has no header that could say so.
 	 */
 	useEffect(() => { setMembersOpen(false); }, [currentHouseholdId]);
+
+	/*
+	 * The slide-over covers the column it slid over, so the column stops
+	 * scrolling behind it. `open` is the mobile flag — `Pantry` clears it above
+	 * the dock, where the drawer is part of the layout and the page behind it is
+	 * the page you are using.
+	 */
+	useScrollLock(open);
 
 	/*
 	 * Only pushed while Settings is the tab showing it. The rail's *Open full
