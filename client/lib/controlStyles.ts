@@ -368,18 +368,18 @@ export const PAGE_TINT_HOVER = {
 /**
  * A shopping-list row.
  *
- * The row is not a target — the checkbox and the name are, and between them
- * they cover it — so the hover belongs to the `<li>` and neither child paints
- * its own. `surface-alt` is the row hover in both themes.
+ * The whole row is one checkbox now, but the hover stays on the `<li>`: the
+ * button is a flex child and its own fill would stop at the row's rounding
+ * rather than at its edge. `surface-alt` is the row hover in both themes.
  */
 export const LIST_ROW = 'transition-colors hover:bg-surface-alt';
 
 /**
- * The checkbox, and the name beside it.
+ * A shopping-list row's one target.
  *
- * Both offset their focus ring against `surface`, not the ground: these sit on
- * a card, and a ring offset against the canvas draws its gap in the wrong
- * colour and reads as a halo.
+ * It offsets its focus ring against `surface`, not the ground: these sit on a
+ * card, and a ring offset against the canvas draws its gap in the wrong colour
+ * and reads as a halo.
  */
 export const LIST_TARGET =
 	'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';

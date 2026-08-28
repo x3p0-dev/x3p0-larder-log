@@ -1692,6 +1692,32 @@ household; the meta line answers *what is on this screen*.
 It is hidden when nothing is low or out — the same argument that hides the sort
 trigger at zero items (D37): a control that can only disappoint.
 
+### The whole row is the checkbox — amended 2026-08-28
+
+**Every press on a list row ticks it.** The row shipped as *two* targets: the
+52px left column checked, and the name and the counts opened the Edit sheet.
+The argument was that both were over 44px and neither could be hit by accident,
+so there was no way to open a sheet when you meant to tick something.
+
+**That is exactly what happened.** The reachable half of the row — the words,
+which is what the eye goes to and the thumb follows — was the half that opened
+a sheet. On this screen every press means *got it*, and the one that did not
+covered the list with a form.
+
+**There is no way to edit an item from the list now, and that is the point.**
+Editing lives in the grid, which is one press away and named on the screen. A
+list row is a thing to tick; if the count is wrong, the honest fix is the item
+card, and pretending otherwise is what put a form over a shopping list in the
+first place.
+
+**One `<button role="checkbox">` spans the row**, box and words inside it, with
+no `aria-label` — the row's own text names the control, so it announces as
+*Butter, OUT, have 0 · low at 2, checkbox, not checked*, where the old label
+replaced all of that with the name. A viewer gets no button at all, the same
+row rendered as plain spans (D30). The hover stays on the `<li>`: the button is
+a flex child and its own fill would stop at the row's rounding rather than at
+its edge.
+
 ### Checks are local, and they expire
 
 Check state lives in `localStorage`, which makes it the **third** thing there

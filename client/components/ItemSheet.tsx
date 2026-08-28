@@ -157,16 +157,31 @@ export function ItemSheet({
 }: Props) {
 	const editing = mode === 'edit';
 	const nameRef = useRef<HTMLInputElement>(null);
+	const sheetRef = useRef<HTMLElement>(null);
 
 	/*
 	 * Focus is an *opening* effect and nothing else. Folded in with the Escape
 	 * listener it depended on `onClose`, which the parent rebuilds every render
 	 * — so every keystroke, every chip, every stepper press re-ran it and threw
 	 * the caret back into the name field mid-edit.
+	 *
+	 * **Only adding lands in the name field.** An add sheet has exactly one
+	 * next step and the field is empty, so the caret is doing what you already
+	 * came to do. Editing is the opposite: the sheet opens on a whole item and
+	 * nothing here knows which part of it you came to change — a caret in the
+	 * name says *rename this*, and on a phone it also throws the keyboard up
+	 * over the fields you were probably reaching for.
+	 *
+	 * Focus still has to *enter* the dialog, or Tab would walk the pantry
+	 * behind it, so editing focuses the sheet itself. It is `tabIndex={-1}`:
+	 * programmatically focusable, never a tab stop of its own.
 	 */
 	useEffect(() => {
-		if (open) nameRef.current?.focus();
-	}, [open]);
+		if (! open) return;
+
+		if (editing) sheetRef.current?.focus();
+		else nameRef.current?.focus();
+	}, [open, editing]);
 
 	useEffect(() => {
 		if (! open) return;
@@ -205,10 +220,13 @@ export function ItemSheet({
 			/>
 
 			<aside
+				ref={sheetRef}
+				tabIndex={-1}
 				role="dialog"
 				aria-label={editing ? `Edit ${title ?? 'item'}` : 'Add an item'}
 				class={
-					'fixed z-50 flex flex-col ' +
+					/* `outline-none` because the sheet is only focusable to catch the keyboard on an edit — a ring around a 480px panel says nothing the panel itself does not. */
+					'fixed z-50 flex flex-col outline-none ' +
 					/* `dvh` for the same reason the drawer takes it: `vh` is the URL-bar-hidden viewport, so the sheet's foot — Save — sat under the browser chrome. */
 					'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-3xl ' +
 					'md:inset-y-0 md:left-auto md:right-0 md:w-[480px] md:max-h-none md:rounded-none'

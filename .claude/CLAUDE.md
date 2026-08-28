@@ -223,9 +223,9 @@ store banner above the grid are **deleted**; the Store filter is a filter again.
   not `auto-fit`**, and that is the opposite of the item grid on purpose: with
   one card left after a store filter, `auto-fit` would stretch it across the
   screen. The card header is the tag component stretched to the card's width.
-- **The row is not a click target.** The left column checks; the name and the
-  counts open the Edit sheet. Below `md` it stacks — the spec leaves the exact
-  breakpoint open and `md` is a choice made here.
+- **The whole row is the checkbox** (amended 2026-08-28 — see below). Below
+  `md` it stacks — the spec leaves the exact breakpoint open and `md` is a
+  choice made here.
 - **`ShoppingListTrigger.tsx`** sits **immediately after the three status
   pills** and is **secondary** — `surface` on `line strong`, ink label, ink
   count pill. Placement does the work colour would have: the eye crosses
@@ -824,6 +824,42 @@ flyout in three wearing a different fill reads as a different kind of thing.
 `--port 4199` compiles and serves, and **every class literal in the twelve
 touched files** was diffed against the live `/zero.css` by unescaping the
 sheet's own selectors — printed, never hand-written. **Nobody has clicked it.**
+
+### Three fixes from a real shop — 2026-08-28
+
+Client only: no schema change, no handler moved, no new decision beyond D41's
+amendment.
+
+- **The press no longer drops *Back to items* half its own height.** It was
+  centred with `top-1/2 -translate-y-1/2` over the hidden status pills *and*
+  carried the row's `active:translate-y-px`. **Tailwind writes both to
+  `--tw-translate-y`**, so a press replaced `-50%` with `1px` and the button
+  fell ~21px for as long as you held it. It centres with `top-0 bottom-0
+  my-auto` now, which leaves the transform to the press. **Never pair an
+  absolute-centring transform with the press nudge** — the two cannot coexist
+  on one element, and neither `typecheck` nor a class-presence grep sees it.
+  `CollapsedRail`'s tooltip is the only other `-translate-y-1/2` and is
+  `pointer-events-none`, so this was the only site.
+- **A press on a shopping-list row ticks it, anywhere on the row** — D41's new
+  amendment. The name and the counts used to open the Edit sheet, which is a
+  form over a shopping list, arriving from the half of the row the thumb aims
+  at. `onOpenItem` is gone from all three levels of the component and from
+  `Pantry`'s call site.
+- **The Edit sheet does not put the caret in the name field.** Adding still
+  does — one next step, an empty field. Editing opens on a whole item and
+  nothing knows which part of it you came for, so a caret in the name says
+  *rename this* and on a phone throws the keyboard over the fields you were
+  reaching for. Focus still has to **enter** the dialog or Tab would walk the
+  pantry behind it, so the sheet takes `tabIndex={-1}` and focuses itself,
+  `outline-none` because a ring around a 480px panel says nothing the panel
+  does not.
+
+Verified: typecheck clean, 239 assertions, and on a throwaway `sf dev --port
+4199` every new utility (`top-0`, `bottom-0`, `my-auto`, `w-full`, `h-full`,
+`text-left`, `outline-none`) is in the live `/zero.css` with the served
+`/client.js` carrying the new class literals and none of the old. **Nobody has
+clicked any of it** — all three are press-time behaviour, so all three want a
+thumb.
 
 ### Empty results — 2026-08-26
 

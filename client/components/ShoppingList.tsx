@@ -28,7 +28,6 @@ type Props = {
 	/** Absent for a viewer, who gets no checkboxes. */
 	onToggle?: (id: string) => void;
 	/** Opens the item's Edit sheet. Absent for a viewer. */
-	onOpenItem?: (item: Item) => void;
 	onBack: () => void;
 	/** The store filter's name, when one is on. The empty state names it. */
 	storeFilterName: string | null;
@@ -55,7 +54,7 @@ type Props = {
  * and its badge crowd the counts on the right, and the row wraps.
  */
 export function ShoppingList(props: Props) {
-	const { groups, checked, onToggle, onOpenItem, onBack, dark, theme } = props;
+	const { groups, checked, onToggle, onBack, dark, theme } = props;
 
 	const [hideChecked, setHideChecked] = useState(false);
 
@@ -115,7 +114,6 @@ export function ShoppingList(props: Props) {
 							group={group}
 							checked={checked}
 							onToggle={onToggle}
-							onOpenItem={onOpenItem}
 							dark={dark}
 							theme={theme}
 						/>
@@ -152,7 +150,6 @@ type CardProps = {
 	group: ShoppingGroup;
 	checked: ReadonlySet<string>;
 	onToggle?: (id: string) => void;
-	onOpenItem?: (item: Item) => void;
 	dark: boolean;
 	theme: Theme;
 };
@@ -169,7 +166,7 @@ type CardProps = {
  * colour, so it reads quieter by having no hue at all rather than by being
  * dimmer.
  */
-function StoreCard({ group, checked, onToggle, onOpenItem, dark, theme }: CardProps) {
+function StoreCard({ group, checked, onToggle, dark, theme }: CardProps) {
 	const term = group.storeId ? themed(group.ink, dark) : null;
 	const headingId = `shopping-${group.storeId ?? 'none'}`;
 
@@ -213,7 +210,6 @@ function StoreCard({ group, checked, onToggle, onOpenItem, dark, theme }: CardPr
 						first={index === 0}
 						checked={checked.has(item.id)}
 						onToggle={onToggle}
-						onOpenItem={onOpenItem}
 						dark={dark}
 						theme={theme}
 					/>
@@ -229,18 +225,20 @@ type RowProps = {
 	first: boolean;
 	checked: boolean;
 	onToggle?: (id: string) => void;
-	onOpenItem?: (item: Item) => void;
 	dark: boolean;
 	theme: Theme;
 };
 
 /**
- * A row is **not** a click target.
+ * The whole row is the checkbox.
  *
- * The left column checks; the name and the counts open the Edit sheet. Two
- * controls, both over 44px, and no way to open a sheet when you meant to tick
- * something — which on a phone in a shop is the whole game. They cover the row
- * between them, which is why the hover belongs to the `<li>`.
+ * It was two targets — the left column ticked, the name and the counts opened
+ * the Edit sheet — on the reasoning that both were over 44px and neither could
+ * be hit by accident. In a shop that is the wrong split: every press on this
+ * screen means *got it*, and the one that opened a sheet did so over exactly
+ * the words you were aiming at. There is no way to edit an item from the list
+ * now, and nothing is lost — the grid is one press away and it is where
+ * editing lives.
  *
  * A checked row does not move. Strike the name, hold the badge at 55%, fill the
  * box: reordering a list under someone's thumb is the same failure the undo
@@ -248,7 +246,7 @@ type RowProps = {
  * already get the butter?" is a question you ask *about* the checked rows, and
  * the filled box has already said it is done.
  */
-function ListRow({ item, first, checked, onToggle, onOpenItem, dark, theme }: RowProps) {
+function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	const status = statusFor(item.qty, item.threshold, dark);
 	const counts = `have ${toInt(item.qty)} · low at ${toInt(item.threshold)}`;
 
@@ -321,35 +319,42 @@ function ListRow({ item, first, checked, onToggle, onOpenItem, dark, theme }: Ro
 
 	const bodyClass = 'flex-1 min-w-0 flex flex-wrap items-center content-center gap-x-2.5 gap-y-0.5';
 
+	/*
+	 * The box and the words, in that order, in one target or none.
+	 *
+	 * A viewer gets no `onToggle` and therefore no button — the same row,
+	 * rendered as plain spans, which is what keeps a control that does nothing
+	 * off a read-only screen (D30).
+	 */
+	const inner = (
+		<>
+			<span class="w-[52px] md:w-14 shrink-0 flex items-center justify-center self-stretch">
+				<Box checked={checked} theme={theme} />
+			</span>
+			<span class={`${bodyClass} pr-4 md:pr-0`}>{body}</span>
+		</>
+	);
+
 	return (
 		<li
-			class={`flex items-center h-16 md:h-14 ${onOpenItem || onToggle ? LIST_ROW : ''}`}
+			class={`flex items-center h-16 md:h-14 ${onToggle ? LIST_ROW : ''}`}
 			style={first ? undefined : { borderTop: `1px solid ${theme.divider}` }}
 		>
-			<div class="w-[52px] md:w-14 shrink-0 flex items-center justify-center self-stretch">
-				{onToggle && (
-					<button
-						role="checkbox"
-						aria-checked={checked}
-						aria-label={`${item.name} — in the cart`}
-						onClick={() => onToggle(item.id)}
-						class={`flex items-center justify-center w-full h-full rounded-[10px] ${LIST_TARGET}`}
-					>
-						<Box checked={checked} theme={theme} />
-					</button>
-				)}
-			</div>
-
-			{onOpenItem ? (
+			{onToggle ? (
+				/*
+				 * No `aria-label`: the row's own text names the checkbox, so it
+				 * announces as *Butter, OUT, have 0 · low at 2, checkbox, not
+				 * checked*. A label would have replaced all of that with the name.
+				 */
 				<button
-					onClick={() => onOpenItem(item)}
-					class={`${bodyClass} self-stretch pr-4 md:pr-0 text-left rounded-[10px] ${LIST_TARGET}`}
+					role="checkbox"
+					aria-checked={checked}
+					onClick={() => onToggle(item.id)}
+					class={`flex items-center w-full h-full text-left rounded-[10px] ${LIST_TARGET}`}
 				>
-					{body}
+					{inner}
 				</button>
-			) : (
-				<div class={`${bodyClass} pr-4 md:pr-0`}>{body}</div>
-			)}
+			) : inner}
 		</li>
 	);
 }

@@ -2127,7 +2127,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							groups={shoppingGroupsForView}
 							checked={trip.checked}
 							onToggle={mayEditItems ? trip.toggle : undefined}
-							onOpenItem={mayEditItems ? startEdit : undefined}
 							onBack={() => trip.setListMode(false)}
 							storeFilterName={storeFilterName}
 							elsewhereCount={elsewhereCount}
