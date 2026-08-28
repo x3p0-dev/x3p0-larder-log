@@ -20,8 +20,16 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phases 3 and 4 are built and published.** **v10 is live** as of 2026-08-27
-(`ver_0026484fd67c495b8d3b7d52b9215d67`) — the legacy-hex swatch fix. v9 added a
+**Phases 3 and 4 are built and published.** **v11 is live** as of 2026-08-27
+(`ver_1c0448898da744d3b2b42a89c4272e21`, 93 files, 16 seconds) — it carries
+Phases 4.10, 4.11 and 4.12 and D45–D51, and it is **the publish that took the
+`profiles` table live** (D46), the third additive schema change since Phase 2.
+Verified after the fact: `applied: true`, `pendingOperationCount: 0`, and
+`data.schemaHash` equal to `data.plan.appliedSchemaHash`. **Nobody has clicked
+v11** — everything below that says "nobody has clicked it" is still true, and is
+now true *in production* rather than only locally.
+
+v10 (`ver_0026484fd67c495b8d3b7d52b9215d67`) was the legacy-hex swatch fix. v9 added a
 document-level `color-scheme` meta and removed `/api/probe`, which is **gone
 from the artifact and 404s in production even with its key**. v8 is what carried
 the schema:
@@ -977,8 +985,11 @@ and the cold-launch splash is light for everyone.
 `/site.webmanifest` comes back as the SPA shell and Chrome logs a manifest parse
 error on every local load — harmless, and unavoidable without a dev-only branch
 that would make the thing untestable everywhere. Whether it serves, with what
-content type, and whether a Pixel offers to install it are **post-publish
-checks**. Nobody has installed it.
+content type, and whether a Pixel offers to install it were **post-publish
+checks**. **Two of the three are now answered, on v11**: `/site.webmanifest`
+serves `200 application/manifest+json; charset=utf-8` (769 B) and all three
+icons serve as `image/png`, so the edge maps the extension correctly with no
+configuration. **Nobody has installed it** — that half still needs a phone.
 
 ### Every ordered row carries its own stamps (D44) — 2026-08-27
 
@@ -1043,7 +1054,7 @@ term both restored with **both** stamps byte-identical and a visibly newer
 `createdAt`; a renamed store re-sorting alphabetically. **Nobody has clicked
 it.**
 
-### Publishing works again as of 2026-08-26 — v4 is live
+### Publishing works, and v11 is live — 2026-08-27
 
 **Phases 3 through 4.9 are published.** `sf publish` completed for the first
 time since v2: **v4**, `ver_d80a395f07144ce6863ba75b212a1486`, 71 files, 18
@@ -1051,11 +1062,14 @@ seconds. The platform's `finalize` / `runtime_api_not_found` failure — which
 killed v3 on 2026-08-25 and wedged three spaces on 2026-08-24 — **is fixed on
 their side**. Nothing here changed to cause that.
 
-Verified on v8: `GET /` 200, `/api/status` → `ok`, `/client.js`, `/zero.css`
-and `/icons/*` serve, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md`,
-`/.env.server`, `/.spacefast/state.json` all 403), every new utility class is in
-the **live** `/zero.css`, and D44's nine columns migrated additively with no
-flag.
+Verified again on **v11**, and this is the standing checklist: `GET /` 200,
+`/api/status` → `ok`, `/client.js` (299 KB) and `/zero.css` (74 KB) serve,
+`/site.webmanifest` serves as `application/manifest+json` with all three
+`/icons/*`, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md`,
+`/.env.server`, `/.spacefast/state.json` all 403), `theme.json` and `sf.jsonc`
+404, every new utility class is in the **live** `/zero.css`, and the `profiles`
+table migrated additively with no flag — as D44's nine columns and
+`households.ink` did before it.
 
 **Read `plan`, not the footer, to confirm a migration applied.** `sf db` prints
 `Pending operations: 9` after a successful nine-column migration — it is
@@ -1065,18 +1079,43 @@ migration *did*, not a queue of what is outstanding. The real answer is
 `appliedSchemaHash` equal to `schemaHash`. **The human-readable output says the
 opposite of the truth here**, and the same trap sank the D42 check, which read
 the declared `tables` list and concluded `ink` had migrated — right answer,
-wrong evidence. `invitePreview` answers an unauthenticated caller
+wrong evidence.
+
+**The two hashes sit at different depths, and the obvious read is `undefined`.**
+It is `data.schemaHash` but `data.plan.appliedSchemaHash` — so
+`data.plan.schemaHash` is `undefined`, and comparing that against the applied
+hash reports a **spurious mismatch on a clean migration**. That happened on the
+v11 check and cost a round trip. Print the `plan` keys rather than assuming
+them. `invitePreview` answers an unauthenticated caller
 over `POST /__spacefast/zero/run`, which **exists in production too**, not just
 under `sf dev`.
 
 **The `x-spacefast-rationale` blocker is NOT gone.** A plain `npx sf publish`
-still dies at *Creating version*. Re-checked 2026-08-26: npm's `latest` is still
-`spacefast@0.0.26` (no `next`/`beta`; `@spacefast/zero` tops out there too), the
-binary channel is still 0.0.27, and that binary still cannot compile a Zero
-capsule. The publish only completed because the header was attached out-of-band:
-a `fetch` wrapper loaded with `NODE_OPTIONS=--import`, adding a **truthful**
+still dies at *Creating version*. Re-checked **2026-08-27, before the v11
+publish**: npm's `latest` is still `spacefast@0.0.26` (no `next`/`beta`;
+`@spacefast/zero` tops out there too), the binary channel is still 0.0.27, and
+that binary still cannot compile a Zero capsule. Two greps settle it faster than
+reading release notes — dumping every `SPACEFAST_[A-Z_]+` literal out of
+`node_modules/spacefast/dist` gives 57 variables with **no `SPACEFAST_RATIONALE`
+among them**, and the CLI's whole `x-spacefast-*` header vocabulary is `client`,
+`client-capabilities`, `country`, `idempotency-principal`, `language`,
+`mcp-token`, `runtime`, `version` — **`rationale` is not a header this CLI can
+send at all.**
+
+The publish only completed because the header was attached out-of-band: a
+`fetch` wrapper loaded with `NODE_OPTIONS=--import`, adding a **truthful**
 rationale to `*.spacefast.com` requests. The shim is not in the repo — it lives
 in the session scratchpad and has to be rewritten each time.
+
+**Two things the rewrite must get right**, both learned on v11. Match the host
+with `/(^|\.)spacefast\.com$/` and not a bare `includes('spacefast.com')`, or
+a lookalike domain would be handed the rationale too. And seed a `Headers` from
+the incoming `Request`'s own headers before setting anything, because passing
+`init.headers` to `fetch` **replaces** rather than merges — get that wrong and
+the CLI's `authorization` is silently dropped, which presents as an auth failure
+rather than a shim bug. Test it against a stubbed transport before pointing it
+at a real publish; it takes one command and proves auth, content-type, method
+and body all survive.
 
 Two things to know before publishing again:
 

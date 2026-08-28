@@ -243,12 +243,28 @@ household.
 
 ## Phase 5 — Ship
 
-- `sf publish` to a real space
+- ✅ **`sf publish` to a real space** — live at
+  <https://larderlog.view.fast/>. **v11** as of 2026-08-27
+  (`ver_1c0448898da744d3b2b42a89c4272e21`, 93 files, 16 seconds) carries
+  everything through Phase 4.12 and D51, and took the `profiles` table live.
+  Publishing still needs the `x-spacefast-rationale` shim — see
+  [CLAUDE.md](../.claude/CLAUDE.md) before attempting one.
+- ✅ **The app is installable** — `site.webmanifest` serves as
+  `application/manifest+json` with the 192, 512 and maskable-512 icons.
+  **Nobody has installed it**; that needs a phone.
 - Custom domain
 - `sf db export` backup routine
 - Use it for a month of actual grocery trips
 
 **Done when:** we stop keeping a mental list.
+
+**The gap now is clicking, not building.** Every phase through 4.12 is built,
+published and verified by compiling, curling and reading the artifact — and the
+Phase 4.9 entry records what that is worth: a single real session on a phone
+found six defects none of those checks could have caught. v11 is the first
+build carrying 4.10, 4.11 and 4.12 into production, and **nobody has used any
+of it**. The applied filter bar, the display-name gate, the redesigned drawer,
+the members pane and the restored view state are all unexercised by a human.
 
 ## Later, maybe
 

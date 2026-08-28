@@ -3223,3 +3223,103 @@ the seeding touched `locations`, `types` and `stores` in one go.
 Good, separately: `sf dev --port 4199` alongside an already-running instance
 worked with no flag or state collision, which is what makes this check cheap
 enough to do at all.
+
+## 2026-08-27 (later still) — v11 publishes; the manifest question is answered
+
+`sf publish` completed as **v11**, `ver_1c0448898da744d3b2b42a89c4272e21`, 93
+files, 16 seconds, carrying Phases 4.10–4.12 and D45–D51. `finalize` /
+`runtime_api_not_found` did not recur — that platform-side fix is holding across
+four consecutive publishes now.
+
+### ✅ Answered: `.webmanifest` gets the right content type
+
+The open question from the previous entry — unanswerable without publishing —
+resolves cleanly:
+
+```
+/site.webmanifest    200 application/manifest+json; charset=utf-8   769B
+/icons/icon-192.png            200 image/png  3329B
+/icons/icon-512.png            200 image/png  9263B
+/icons/icon-maskable-512.png   200 image/png  4577B
+```
+
+So the edge maps `.webmanifest` correctly with no configuration, and `start_url`
+and `scope` both resolve to `/` as intended. Good — and worth documenting, since
+the only way to learn it was to ship.
+
+### 🐛 The `x-spacefast-rationale` blocker is unchanged — 6 days on
+
+Still the single highest-value fix on this list. Re-checked today before
+publishing:
+
+- npm `dist-tags` for **`spacefast`** and **`@spacefast/zero`** are both still
+  `{ latest: '0.0.26' }` — no `next`, no `beta`.
+- The installed 0.0.26 bundle contains **no** `SPACEFAST_RATIONALE`. Dumping
+  every `SPACEFAST_[A-Z_]+` literal out of `dist/` gives 57 variables and that
+  is not among them.
+- The CLI's own header vocabulary is `x-spacefast-client`,
+  `-client-capabilities`, `-country`, `-idempotency-principal`, `-language`,
+  `-mcp-token`, `-runtime`, `-version`. **`x-spacefast-rationale` is not a
+  header this CLI can send at all**, by any flag or variable.
+
+So the publish again only completed because the header was attached out-of-band
+from a `fetch` wrapper loaded via `NODE_OPTIONS=--import`, carrying a truthful
+rationale (620 chars) naming the owner, the branch, the decisions shipped, and
+the fact that the schema change is additive. The wrapper matches
+`/(^|\.)spacefast\.com$/` on the host, preserves the CLI's own `authorization`
+and `content-type`, and leaves every other host untouched.
+
+**This is still a silly thing to have to do to ship a space you own.** Either
+publish 0.0.27 to npm, or give 0.0.26 a `--rationale` flag / `SPACEFAST_RATIONALE`
+env var. The policy is reasonable; the absence of any supported way to satisfy
+it is not.
+
+### 😕 `sf db`'s human-readable output still contradicts its own JSON
+
+The trap logged earlier held again, and it is worth restating because it is a
+correctness hazard, not a cosmetic one. After a successful migration `sf db`
+prints a **`Pending operations:`** count that is really the length of the
+version's `migrations` changelog — what this migration *did*. The truth is in
+`--json`:
+
+```
+schemaHash:        sha256:d9053339365b5e538753890938e06cafc2d34d670c3fbe7abbc9106ebe46fc63
+appliedSchemaHash: sha256:d9053339365b5e538753890938e06cafc2d34d670c3fbe7abbc9106ebe46fc63
+applied: true | pendingOperationCount: 0
+```
+
+Note also that the two hashes live at **different depths** —
+`data.schemaHash` but `data.plan.appliedSchemaHash` — so the obvious
+`data.plan.schemaHash` reads `undefined` and a naive equality check reports a
+spurious mismatch on a perfectly clean migration. Putting both on `plan`, or
+both at the top level, would remove a real footgun.
+
+The `profiles` table (D46) migrated additively on publish with no flag, exactly
+as `households.ink` and D44's nine stamp columns did. Additive migration on
+publish continues to be reliable.
+
+### 🐛 `sf db dump` is still broken — 6 days open
+
+`sf db dump --table households --limit 5` against the freshly published, healthy
+v11 still fails:
+
+```
+Zero database dump failed.
+Learn more: https://spacefast.com/docs/errors/zero_db_dump_failed
+```
+
+Unchanged from 2026-08-26: it fails with the rationale header attached, it is a
+read, and `sf db` succeeds against the same space in the same second. The linked
+error page is the only diagnostic and says nothing a caller can act on. This
+remains the documented route for verifying a publish, so it still has to be
+worked around with `POST /__spacefast/zero/run`.
+
+### 👍 `query.run` in production is the verification story
+
+With `db dump` broken, the production `run` endpoint is what makes a publish
+checkable at all. Unauthenticated, over plain HTTPS, it confirmed the whole
+guest surface in three calls — `invitePreview` collapsing unknown, empty and
+malformed codes to a bare `{"state":"invalid"}` (D39), `pantry` refusing with
+`no-household` rather than leaking, and `profile` returning an empty name. That
+it works identically in production and under `sf dev` is genuinely valuable.
+It deserves to be documented rather than folklore.
