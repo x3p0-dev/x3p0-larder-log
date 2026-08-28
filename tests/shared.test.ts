@@ -28,6 +28,7 @@ import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplay
 import { normalizeAvatarUrl } from '../shared/avatar';
 import { buildJoinUrl, readJoinCode, readJoinInput, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
+import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
@@ -845,6 +846,138 @@ check('a script URL is refused', normalizeAvatarUrl('javascript:alert(1)'), '');
 check('a data URL is refused', normalizeAvatarUrl('data:image/png;base64,AAAA'), '');
 check('a protocol-relative URL is refused', normalizeAvatarUrl('//gravatar.com/avatar/x'), '');
 check('an absurd length is refused', normalizeAvatarUrl(`https://x/${'a'.repeat(600)}`), '');
+
+
+// --- ?demo's fixture and its resolution (client/lib/devItems.ts) ---
+//
+// The fixture is only worth having if its *distribution* holds: the reason for
+// sixty rows is to make the collection behaviour visible, and a fixture that
+// drifts to all-stocked or drops a type silently stops doing that while still
+// looking fine on screen. These are the claims its own header comment makes.
+//
+// The resolver is here rather than in `client/lib/` for the ordinary reason —
+// it is pure, and `npm test` only compiles `shared/`.
+
+const demoStatus = (i: { qty: string; threshold: string }) => {
+	const q = toInt(i.qty);
+	return q <= 0 ? 'out' : q <= toInt(i.threshold) ? 'low' : 'ok';
+};
+const demoCount = (k: string) => DEMO_ITEMS.filter((i) => demoStatus(i) === k).length;
+
+check('the fixture is sixty rows', DEMO_ITEMS.length, 60);
+check('no two rows share a name', new Set(DEMO_ITEMS.map((i) => i.name)).size, 60);
+check('eight are out', demoCount('out'), 8);
+check('thirteen are low', demoCount('low'), 13);
+check('thirty-nine are stocked', demoCount('ok'), 39);
+
+// Every seeded type must appear, or a chip in the Type filter is dead and the
+// filter looks broken rather than empty.
+check(
+	'every seeded type is used',
+	SEED_TYPES.every((t) => DEMO_ITEMS.some((i) => i.typeNames.includes(t.name))),
+	true
+);
+check(
+	'every row names a seeded location',
+	DEMO_ITEMS.every((i) => SEED_LOCATIONS.some((l) => l.name === i.locationName)),
+	true
+);
+check(
+	'every store named is a seeded store',
+	DEMO_ITEMS.every((i) => i.storeNames.every((s) => SEED_STORES.some((x) => x.name === s))),
+	true
+);
+
+// D52: the size pair is never half-set. The fixture goes through `addItem`,
+// which would normalize a half-set pair away — so a broken row here would
+// vanish silently rather than fail.
+check(
+	'no row is half-sized',
+	DEMO_ITEMS.every((i) => (i.size === undefined) === (i.unit === undefined)),
+	true
+);
+check(
+	'every unit named is a real unit key',
+	DEMO_ITEMS.every((i) => i.unit === undefined || UNITS.some((u) => u.key === i.unit)),
+	true
+);
+
+// D41's storeless group has never had anything in it locally, and D53's split
+// is only legible if something is low *and* off the list.
+check(
+	'one storeless row is on the shopping list',
+	DEMO_ITEMS.filter((i) => i.storeNames.length === 0 && ! i.offShoppingList).length,
+	1
+);
+check(
+	'two off-list rows are low, so the pills lead the list by two',
+	DEMO_ITEMS.filter((i) => i.offShoppingList && demoStatus(i) !== 'ok').length,
+	2
+);
+
+// D35/D44: sixty rows stamped in one second sort by nothing, so *Recently
+// added* would render in id order and look like it was applying no sort — the
+// exact bug D35 fixed. The ties that remain are deliberate: seven rows share a
+// day with another, because a real pantry arrives in shopping trips.
+const demoDays = DEMO_ITEMS.map((i) => i.daysAgo);
+check('addedAt spans two months', Math.max(...demoDays) - Math.min(...demoDays), 59);
+check('and is distinct enough to order by', new Set(demoDays).size, 53);
+
+const demoTerm = (id: string, name: string): Term =>
+	({ id, name, ink: 'color-1', createdAt: '', addedAt: '', changedAt: '' });
+
+const DEMO_LOCS = SEED_LOCATIONS.map((l, n) => demoTerm(`loc${n}`, l.name));
+const DEMO_TYPES = SEED_TYPES.map((t, n) => demoTerm(`type${n}`, t.name));
+const DEMO_STORES = SEED_STORES.map((s, n) => demoTerm(`store${n}`, s.name));
+const NOW = Date.parse('2026-08-28T12:00:00.000Z');
+
+const full = resolveDemoItems(DEMO_LOCS, DEMO_TYPES, DEMO_STORES, NOW);
+
+check('a full taxonomy resolves every row', full.drafts.length, 60);
+check('and skips none', full.skipped.length, 0);
+check('term names become ids', full.drafts[0].locationId.startsWith('loc'), true);
+check(
+	'both stamps match, since nothing has edited these',
+	full.drafts.every((d) => d.addedAt === d.changedAt),
+	true
+);
+check(
+	'daysAgo becomes a date that far back',
+	full.drafts.find((d) => d.name === 'Sourdough Loaf')?.addedAt,
+	new Date(NOW - 86_400_000).toISOString()
+);
+check(
+	'an absent size resolves to the empty pair, not undefined',
+	full.drafts.find((d) => d.name === 'Lemons')?.size === '' &&
+		full.drafts.find((d) => d.name === 'Lemons')?.unit === '',
+	true
+);
+
+// Case-insensitive, because a household's terms are whatever somebody typed.
+const lowered = resolveDemoItems(
+	SEED_LOCATIONS.map((l, n) => demoTerm(`loc${n}`, l.name.toLowerCase())),
+	DEMO_TYPES, DEMO_STORES, NOW
+);
+check('a renamed-case location still matches', lowered.drafts.length, 60);
+
+// A missing *location* drops the row: `id()` is not a foreign key, so nothing
+// downstream would catch a bogus reference.
+const noFreezer = resolveDemoItems(
+	DEMO_LOCS.filter((l) => l.name !== 'Freezer'), DEMO_TYPES, DEMO_STORES, NOW
+);
+check('a missing location drops its rows', noFreezer.drafts.length, 47);
+check('and names them', noFreezer.skipped.length, 13);
+check(
+	'nothing resolves to a location that is gone',
+	noFreezer.drafts.every((d) => d.locationId !== ''),
+	true
+);
+
+// A missing *type* or *store* is only a missing tag, so the row survives it.
+const noTypes = resolveDemoItems(DEMO_LOCS, [], DEMO_STORES, NOW);
+check('a missing taxonomy keeps every row', noTypes.drafts.length, 60);
+check('with no types on any of them', noTypes.drafts.every((d) => d.typeIds.length === 0), true);
+check('and its stores intact', noTypes.drafts.some((d) => d.storeIds.length > 0), true);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

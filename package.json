@@ -6,7 +6,7 @@
 	"description": "Household pantry and inventory tracker.",
 	"author": "Justin Tadlock",
 	"scripts": {
-		"dev": "sf dev",
+		"dev": "sf dev --state-backend sqlite",
 		"typecheck": "tsc --noEmit",
 		"publish:zero": "sf publish",
 		"test": "tsc -p tsconfig.test.json && node -e \"require('fs').writeFileSync('.test-out/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node .test-out/tests/shared.test.js"

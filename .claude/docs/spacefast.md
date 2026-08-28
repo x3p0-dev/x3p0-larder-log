@@ -3595,3 +3595,97 @@ Nothing was changed locally in response. Typecheck is clean, `npm test` is at
 295 assertions, and `--dry-run` produces a valid artifact (ten tables, five
 queries, eighteen mutations, `migrations: []`, and the four new additive columns
 with defaults). **The build is ready and the platform is not.** Retrying later.
+
+## 2026-08-28 (sixth) — the `location` scanner false positive, a third time — and it moved
+
+Building a `?demo` switch that fills a dev household with sixty items. No
+schema change, no handler moved; the whole thing is a fixture, a resolver and a
+loop over the existing `addItem`.
+
+### 🐛 The `location:` false positive fired again — and `shared/` is scanned as server source
+
+Logged on 2026-08-24 and again on 2026-08-26. Third time, and this round it
+landed somewhere the previous two would not have predicted.
+
+The fixture's row type has a field called `location` — a pantry app's most
+ordinary noun, and the name of one of its three taxonomies:
+
+```ts
+export type DemoItem = { name: string; location: string; /* … */ };
+```
+
+The file was written in `client/lib/`, where it compiled fine. Moving one pure
+function into `shared/` — so `npm test` could reach it, `shared/` being all the
+test config compiles — made `sf dev` refuse to start:
+
+```
+Zero source shared/demoItems.ts references unsupported server global location.
+Error: Zero source shared/demoItems.ts references unsupported server global location.
+```
+
+**That is correct in principle and surprising in practice.** `shared/` is
+scanned under `ZERO_SERVER_UNSAFE_GLOBAL_PATTERN` because `server/` *may* import
+it — reasonable. But this particular file is imported only by `client/`, will
+never be imported by the capsule, and contains no code at all beyond a data
+table. It is refused for a word in a field name.
+
+The practical shape of it: **the same identifier is legal in `client/lib/` and
+illegal in `shared/`, and moving a file between them is a refactor that can
+break the build for reasons unrelated to what the file does.** Nothing warns at
+the moment you move it; you find out at the next `sf dev` start.
+
+Three things would each have made this a non-event, in order of value:
+
+1. **Report the line and column.** Still the ask from August 24. The message
+   names the file and the identifier and nothing else, and the natural reading
+   — "you referenced the browser `location`" — is false, so it sends you looking
+   for an import or a stray browser API rather than at a field name. A 200-line
+   data table is a manual search for a word that appears sixty-one times, sixty
+   of which are fine.
+2. **Say that a property name is the usual cause, and that quoting resolves it.**
+   The error could carry the fix in one clause.
+3. **Resolve identifiers rather than text-matching.** A non-computed property
+   key or member access is never a global reference. This is the real fix and
+   the other two are mitigations.
+
+We renamed the field to `locationName` rather than quoting, on the grounds that
+a rule reading "never write the word `location` in `shared/`" is one somebody
+will break again in six months. That is a workaround for a linter, not a design
+improvement — though it does read better beside the `locationId` it resolves to.
+
+### 👍 `--state-backend sqlite` works exactly as advertised, and it is the difference
+
+`sf dev --state-backend sqlite` starts cleanly, writes
+`.spacefast/zero/dev-state.sqlite` (143 KB for sixty items and a household), and
+**the data survives a restart** — verified by killing the server, restarting it,
+and reading `pantry` back over `run`: `ready | 60 items`. It is in
+`sf dev --help` and correctly defaulted to `memory`.
+
+Worth recording as a good thing because of what it fixes. `sf dev` issues one
+fixed identity *and* an empty database, so every local session starts by typing
+past the display-name screen, naming a household, and then adding whatever rows
+the thing under test needs. With sqlite that is a one-time cost. Anything with a
+first-run flow — which is anything with sign-in — pays that tax on every restart
+by default, and the flag that removes it is a single word.
+
+**One friction:** the flag is in `sf dev --help` but not in `/docs/zero.md`, and
+the dev-server section there does not mention that state is in-memory by default
+at all. The consequence (your data is gone every restart) is the kind of thing a
+developer attributes to their own bug the first time.
+
+### 👍 `POST /__spacefast/zero/run` drove a sixty-row fixture end to end
+
+Restating the standing recommendation with a bigger example, since every prior
+note about `run` was three or four calls. One shell command: bootstrap,
+`createHousehold`, `pantry` to resolve term names to ids, **sixty `addItem`
+mutations**, then `pantry` again to read it all back and check the distribution.
+No browser, no throwaway endpoint, no code added to the capsule.
+
+It caught two things a typecheck could not. The fixture's status spread had
+drifted to two-thirds *low* — a real refactoring error, invisible in the source
+and obvious in the read-back. And the count of items needing restocking came
+back exactly two below the sum of the low and out pills, which is this app's
+`offShoppingList` rule (D53) being right rather than merely compiling.
+
+Still undocumented. Still the most useful thing in the product for anyone
+building a capsule without a browser in front of them.

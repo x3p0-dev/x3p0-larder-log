@@ -31,6 +31,7 @@ import { usePersistentState } from './hooks/usePersistentState';
 import { readViewState, usePersistedView } from './hooks/useViewState';
 import { usePantryData, useInvitePreview, useProfile } from './hooks/usePantryData';
 import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
+import { devItemsEnabled, runDemoSeed } from './lib/devItems';
 import { useAvatarSync } from './hooks/useAvatarSync';
 import { addedAtOf, changedAtOf } from '../shared/stamp';
 import { useToasts } from './hooks/useToasts';
@@ -610,7 +611,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const [openId, setOpenId] = useState<string | null>(null);
 
 	const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-	const sentinelRef = useRef<HTMLDivElement | null>(null);
 
 	/**
 	 * D17: undo is a client-held tombstone, not a soft delete.
@@ -803,6 +803,44 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	// The least privileged role until the query says otherwise, so a control is
 	// never enabled on the strength of data that hasn't arrived.
 	const myRole = household?.me.role ?? DEFAULT_ROLE;
+
+	/*
+	 * `?demo` — sixty items, so the collection behaviour can be looked at at all
+	 * (`client/lib/devItems.ts`). Loopback only, and it refuses a household that
+	 * already holds items.
+	 *
+	 * **The ref is load-bearing.** Each `addItem` invalidates `pantry`, so
+	 * `items` grows under the effect while it is still writing; without a latch
+	 * the effect re-runs on every arrival and starts sixty overlapping seeds.
+	 * `runDemoSeed`'s own empty-household check cannot cover this — by the time
+	 * the second run reads it, the first has already written row one.
+	 */
+	const demoSeeded = useRef(false);
+
+	useEffect(() => {
+		if (! ready || demoSeeded.current || ! devItemsEnabled()) return;
+
+		// Terms arrive with the same query as the items, so this is only ever
+		// false for a household that has genuinely lost its locations.
+		if (locations.length === 0) return;
+
+		demoSeeded.current = true;
+
+		void runDemoSeed({ items, locations, types, stores, addItem: api.addItem })
+			.then(({ added, skipped }) => {
+				if (added === 0) return;
+
+				toasts.push({
+					lead: skipped.length
+						? `Added ${added} demo items · skipped ${skipped.length} with no matching location`
+						: `Added ${added} demo items`,
+				});
+			});
+		// Deliberately not reactive: this fires once for the household that was
+		// on screen when the page loaded. A household switch is a new intent,
+		// and re-seeding on one would be a surprise rather than a feature.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ready]);
 	const myMembershipId = household?.me.membershipId ?? '';
 
 	/*
@@ -1029,18 +1067,47 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	// Reset pagination whenever the active filter set changes.
 	useEffect(() => { setVisibleCount(PAGE_SIZE); }, [termFilters, activeStatus, search]);
 
-	// Infinite scroll: grow visibleCount when the sentinel enters the viewport.
+	/**
+	 * Infinite scroll: grow `visibleCount` when the sentinel enters the viewport.
+	 *
+	 * **The sentinel is held in state, not a ref, and that is the whole point.**
+	 * A `useRef` gives the effect nothing to depend on, so the effect has to
+	 * guess at which renders the element exists — and the guess was
+	 * `[sorted.length, visibleCount]`, which are merely *correlated* with it.
+	 * The element's real conditions are those two **and** `listMode`, `empty`,
+	 * and the loading gate. Any transition that mounted it without moving the
+	 * two numbers left the observer attached to nothing, permanently:
+	 *
+	 *   load in list mode with 60 items  → effect runs at [60, 20], no sentinel
+	 *   press *Back to items*            → sentinel mounts, deps still [60, 20]
+	 *                                    → effect never re-runs, nothing observes
+	 *
+	 * A callback ref fires on attach and detach with the node itself, so the
+	 * effect depends on the element rather than on a theory about it. This is
+	 * the general fix: there is no longer a render path that can mount the
+	 * sentinel without waking the observer.
+	 *
+	 * `visibleCount` stays in the deps deliberately. An observer only reports
+	 * *changes* to intersection, so when a page lands and the sentinel is still
+	 * on screen, nothing further fires and the list stops short. Re-observing
+	 * replays the initial callback, which is what carries a tall viewport
+	 * through several pages in one scroll.
+	 */
+	const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+
 	useEffect(() => {
-		const el = sentinelRef.current;
-		if (! el) return;
+		if (! sentinel) return;
+
 		const observer = new IntersectionObserver((entries) => {
 			if (entries[0].isIntersecting) {
 				setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, sorted.length));
 			}
 		}, { rootMargin: '200px' });
-		observer.observe(el);
+
+		observer.observe(sentinel);
+
 		return () => observer.disconnect();
-	}, [sorted.length, visibleCount]);
+	}, [sentinel, sorted.length, visibleCount]);
 
 	/**
 	 * A filter pointing at a term that isn't there would silently hide every
@@ -2304,9 +2371,22 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 								</button>
 							)}
 
+							{/*
+							  * A real control, not only a scroll trigger. An
+							  * IntersectionObserver answers a gesture a keyboard does
+							  * not have, so a sentinel with nothing in it is a list a
+							  * keyboard user cannot reach the end of. The observer makes
+							  * this redundant for a pointer, which is the right order:
+							  * the button is the floor, the scroll is the convenience.
+							  */}
 							{visibleCount < sorted.length && (
-								<div ref={sentinelRef} class="col-span-full py-4 text-center">
-									<span class="font-mono tracking-[0.02em] text-xs" style={{ color: theme.textFaint }}>Loading more…</span>
+								<div ref={setSentinel} class="col-span-full py-4 flex justify-center">
+									<button
+										onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, sorted.length))}
+										class={`inline-flex items-center h-10 px-4 rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
+									>
+										{`Show ${Math.min(PAGE_SIZE, sorted.length - visibleCount)} more`}
+									</button>
 								</div>
 							)}
 						</div>

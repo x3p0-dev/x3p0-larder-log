@@ -1765,7 +1765,7 @@ update `.docs/roadmap.md` and the status section here.
 
 ```bash
 npm install
-npm run dev          # the Zero app — `sf dev` on http://localhost:4173
+npm run dev          # the Zero app — `sf dev --state-backend sqlite` on :4173
 npm run typecheck    # tsc --noEmit over client/, server/, shared/
 npm test             # unit tests over shared/ — compiles with tsc, runs on node
 ```
@@ -1788,14 +1788,16 @@ curl -X POST -H "authorization: Bearer $CAP" -H "origin: http://127.0.0.1:4173" 
 curl -b "spacefast_zero_dev_4173=$CAP" http://127.0.0.1:4173/zero.css
 ```
 
-`sf dev` state is in memory and resets on restart. Pass `--state-backend sqlite`
-to keep a database between runs.
+**`npm run dev` passes `--state-backend sqlite`**, so the dev database now
+persists across restarts in `.spacefast/zero/dev-state.sqlite` (gitignored).
+The CLI's own default is `memory`, which resets every run — drop the flag for a
+clean slate, or delete that file.
 
 ## Verifying work
 
 Cheapest first:
 
-- **`npm test`** — 295 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 322 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -1803,7 +1805,7 @@ Cheapest first:
   stamp guards and A–Z term ordering, D45's *OR inside a group, AND across
   groups*, D46's display-name fallback chain, D52's size pair together with
   D53's split between `needsBuying` and `statusKeyFor`, and D55's `https:`-only
-  avatar rule. **Add to it** when you touch any of those — that file is the app's
+  avatar rule, and `?demo`'s fixture distribution and term resolution. **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still
@@ -1918,6 +1920,33 @@ Do not claim something works because it compiled. Three hard limits:
   (`guest:local`). So a second tab is the same user: enough to watch a mutation
   propagate, not enough to test two members of a household. Anything touching
   sign-in, invites, or roles goes to the published space.
+- **`?demo` fills an empty household with sixty items** —
+  `http://127.0.0.1:4173/?demo` — so everything that is only wrong *at scale*
+  can be looked at: the filters, the three sorts, the shopping list's grouping
+  and its store cards, `Showing X of Y`, search, and the grid's wrapping. The
+  rows are **real**, written through `addItem` one at a time, which is the whole
+  point — a client-side fake would mean the thing under test is not the thing
+  that runs. So there is no `isDemoItem` guard and none is wanted: a demo row is
+  an ordinary item the moment it lands. Loopback-only, one page load, and it
+  **refuses a household that already holds items**, so it cannot run twice or
+  bury a real pantry. The fixture and the resolver are `shared/demoItems.ts`
+  (in `shared/` so `npm test` reaches it); the gate and the write loop are
+  `client/lib/devItems.ts`. Take it out with D14 alongside the other three.
+  **`npm run dev` passes `--state-backend sqlite`**, so the sixty rows — and
+  your household and display name — survive a restart; without it every restart
+  is a fresh empty database and a first-run screen.
+  **The fixture's distribution is the point, not its size**, and `npm test`
+  asserts it: 8 out / 13 low / 39 stocked, all fourteen seeded types used, eight
+  items in two stores, four in none, one of those storeless *and* on the list
+  (the only way D41's storeless group renders), two off-list rows that are low
+  (so the pills read exactly two above the list's row count — D53 made
+  countable), and `addedAt` spread over 59 days so *Recently added* sorts by
+  something. **Do not "tidy" those numbers** — each one is a screen that is
+  otherwise unreachable locally.
+  **Never write the bare identifier `location` in `shared/`**: the capsule
+  compiler text-matches it as a browser global in anything `server/` might
+  import, and the same word is legal in `client/lib/`. That is why the fixture
+  says `locationName`. It cost a dev-server start; see `.claude/docs/spacefast.md`.
 - **`?members` puts two stand-ins in the Members panel** —
   `http://127.0.0.1:4173/?members` — so the role chips, the remove button and
   the last-owner guard can be *looked at* locally. Loopback-only, one page load,
