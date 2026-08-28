@@ -1999,11 +1999,19 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							  * chevron and its words on nothing, resolving under the
 							  * pointer. Two filled controls a gap apart would both be
 							  * asking to be pressed.
+							  *
+							  * **It is centred with auto margins, not `-translate-y-1/2`.**
+							  * Every control in this row presses with `active:translate-y-px`,
+							  * and Tailwind writes both of those to the same
+							  * `--tw-translate-y` — so a centring transform means the press
+							  * replaces `-50%` with `1px` and the button falls half its own
+							  * height the moment you touch it. `top-0 bottom-0 my-auto`
+							  * centres a definite height without spending the transform.
 							  */}
 							{listMode && (
 								<button
 									onClick={() => setListMode(false)}
-									class={`absolute left-0 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 whitespace-nowrap ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
+									class={`absolute left-0 top-0 bottom-0 my-auto inline-flex items-center gap-1.5 whitespace-nowrap ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
 								>
 									<ChevronLeft size={16} strokeWidth={2.4} />
 									Back to items
