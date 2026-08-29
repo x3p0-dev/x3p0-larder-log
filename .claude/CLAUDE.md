@@ -53,7 +53,7 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, five live queries, and eighteen mutations. The schema is
+`.docs/data-model.md`, five live queries, and nineteen mutations. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -219,7 +219,7 @@ The spec's *Shopping list*, governed by
 replaces the content column, not a modal over it. `ShoppingListModal` and the
 store banner above the grid are **deleted**; the Store filter is a filter again.
 
-- **`shared/shoppingList.ts`** owns the grouping and both orderings — groups
+- **`shared/shoppingList.ts`** (now `shared/runList.ts` — D58) owns the grouping and both orderings — groups
   A–Z with the storeless one last, rows out-before-low then A–Z, the latter
   being the *Needs restocking* sort reused rather than written twice. An item
   naming several stores appears under **every** one of them, so the count is of
@@ -1268,6 +1268,337 @@ which is what makes a bare `border` paint the inline `borderColor`.
 locally** — `http://127.0.0.1:4173/?signedout`. The cap-height alignment (a flat
 `-top-px`) and the gap beside the italic `g` are arguments made on paper.
 
+### A source carries a kind (Phase 4.15a, D58) — 2026-08-29
+
+`.claude/docs/design/garden-and-kitchen.md`, drawn on
+`.claude/docs/design/larderloggardenkitchenboards.html`. **The seventh additive
+schema change since Phase 2**: `stores.kind`, a string defaulting to `''`. Ten
+tables and five queries still; **nineteen mutations**, the new one being
+`setSourceKind`. Applies on the next publish with no flag.
+
+**The first of three builds from that document** — the run list's bands and the
+item side's season and ingredients both read this column, so it exists first.
+
+- **A store carries a kind — shop, grow or make**, and it is a property of the
+  *term*, not the item, not a fourth term group, and not a mode. *The Garden* is
+  a term like any other: a colour, a name, a count, a chip that filters, a tag on
+  a card. **The drawer never learns what a kind is**, and **the item card did not
+  change at all** — which is the strongest argument for putting it here.
+- **Why it exists: `NO STORE` was carrying two opposite meanings.** Baking Soda
+  has no store because nobody set one — a gap. Frozen Peaches may have none
+  because *there isn't one*. The list drew them identically.
+- **`shared/source.ts`** owns every rule — `toSourceKind` (anything unrecognised,
+  `''` included, is a `shop`; a query that throws is invisible, so nothing here
+  throws) and `sourceGroupWord`. `npm test` is at **342 assertions**.
+- **The group renames itself** — `Store`, or `Source` once one source is not a
+  shop. **Five places move together**, one more than the design doc names: the
+  Filter heading, the dashed chip, the composer's micro-label, the item sheet's
+  group label, and the **blocked-delete dialog**, which would otherwise say *"A
+  store can only be deleted…"* under a heading reading `SOURCE`. `termBlock`
+  takes a `noun` and both halves pass it, so the server's throw and the client's
+  dialog stay one string. The rail's flyout **label** moves with them; **its
+  storefront glyph deliberately does not** — a neutral mark has not been drawn,
+  and inventing one would put an unlearned glyph on the one surface that is
+  nothing but glyphs.
+- **The rule is "does anything here fail to be a shop", not "how many distinct
+  kinds are there"**, and that is a **knowing departure from the doc's prose**,
+  which says *one kind and it is a Store*. Its own table says otherwise, and a
+  household whose every source is a garden has exactly one kind. The table wins.
+  `npm test` asserts the gardens-only case specifically.
+- **`SourceKindMenu` is `RoleMenu` with different words in it** — nothing new is
+  drawn. **The trigger is the glyph, not a word**: a 340px row cannot spend a
+  slot on *Shop*. Shop sits at `drawer.inkFaint`, grow and make brighten to
+  `inkMuted`, so a glance down the panel says which rows are not shops.
+  `DRAWER_KIND` is `DRAWER_TRASH`'s geometry with **no colour of its own** — the
+  glyph's colour is an inline style, which would beat a class's `:hover` colour,
+  so the hover is the fill alone.
+- **A new source is a shop unless you say otherwise** (amended 2026-08-29, and
+  D58 had this wrong). It shipped with no kind control on any composer; the kind
+  is not something you discover afterwards, and saying *The Garden* is a garden
+  meant naming it, pressing *Done*, re-opening the group with the pencil and
+  finding the row again. **All three draft rows carry the glyph now** — the
+  Filter tab's `NEW` panel, its editing panel's add row, and the item sheet's
+  `+ Source` composer — in the slot an editing row already spends on it, and
+  **defaulting to shop**, which is what `toSourceKind` resolves an absent value
+  to. A household that never touches it composes exactly the row D58 composed.
+  **`createTerm` did not change**: the draft's optional `kind` existed for undo,
+  and composing is a second caller of an argument that was already there.
+- **The composer stopped hanging past its column, on both surfaces**, and that
+  bug is older than any of this — `TermPanel` has carried a `-mx-2.5` since
+  Phase 4.5. It was there to read as a tray opening rather than a card floating
+  in a list, and it read as neither: on the item sheet it hung 10px outside the
+  fields, the micro-labels and the season and make panels either side of it, and
+  in the Filter tab it hung outside the chips it drops under **and outside the
+  `EDITING` card** — which is the same panel one state along and has always sat
+  on the pane's gutter. One panel disagreeing with itself one state later is the
+  clearest argument there was. **The margin is gone rather than made a prop**:
+  it was added as `bleed`, defaulting on, with the sheet turning it off, and
+  then nothing wanted it on. One geometry now — the panel's edges are its
+  column's, `px-3.5` inside, which is the season panel's `p-3.5` and the editing
+  card's `pl-3.5`.
+- **The kind menu is on cream for the first time**, since one of the three
+  composers is the item sheet. `SourceKindMenu` takes an `onDark` and re-skins
+  the way `TermRow` and `panelSkin` do — the drawer keeps `DrawerMenu`, the
+  sheet gets `PAGE_MENU`, which is the sort menu's popover and therefore the box
+  the unit menu opens a few pixels away on the same sheet. **The reverse would
+  be the mistake `DrawerMenu` already records**: a cream popover over the
+  darkest panel in the app. **`PAGE_KIND` fills to `surface`, not
+  `surface-alt`** — the composer panel *is* `surface-alt`, so the usual ghost
+  hover would move the control to the colour it is already on (D45's rule, on a
+  different ground).
+- **`setSourceKind` is its own mutation**, not a `kind` on `updateTerm`'s patch:
+  that handler's second argument is *already* called `kind` and means the
+  taxonomy. It **short-circuits an unchanged value and invalidates nothing** —
+  the menu is a radio group where pressing the current row is how you close it.
+- **Undo carries the kind back.** `createTerm`'s draft takes an optional `kind`,
+  **undo only**, the same trade the stamps make (D44). Undo is a re-insert
+  (D17), so without it a restored garden comes back a shop.
+- **The item count left the editing row** — D36's own delta, and a consequence of
+  the glyph taking its slot rather than a change of mind. At 340px a fifth
+  control left the field ~150px, which is where *Calfee Cattle* truncates.
+  **Counts stay on the chips at rest.** D16's widening to all three kinds stands
+  without it; that rule was argued from the count, never about it.
+
+**Two things landed with the revised spec on 2026-08-29.**
+
+- **The item card carries one glyph** — sprout or pot, 15px in `textMuted`,
+  leftmost in a top-right cluster that is now **glyph · dot · chevron**. A
+  bought item has nothing there and **the absence is the point**. The first
+  version of the spec said the card changed *not at all*; the glyph adds *what
+  kind*, which the tag cannot say — a household can call a grow source anything
+  and colour it anything. **Meta grey, never the term's colour**: the status dot
+  stays the only coloured thing in that corner. The objection that nearly killed
+  the off-list cart does not apply — this glyph is taught three times (band
+  headers, segment tabs, the editing row) before a card shows it.
+  `itemSourceKind()` returns `null` far more often than not, and **grow wins a
+  tie** on the run list's own band order. **A make item kept off the list draws
+  both this and the struck cart**, which will be common — worth watching.
+- **Every editing panel gained a way to add a term**, and that gap was **not
+  this feature's**. The dashed chip is hidden while editing — the panel *is* the
+  group — which left the Filter pane as the one place you could rename,
+  recolour and delete a term but not make one. All three groups, not just
+  sources. Both add affordances are the same draft row on two surfaces and are
+  never both open; the editing panel's own *Done* commits it.
+
+**Verified without a browser**: typecheck clean, **353 assertions**, the artifact
+shows `stores.kind` with `default: ""`, `setSourceKind` among nineteen
+mutations, ten tables and `db.migrations` empty; every class literal in the four
+touched files was diffed against a live `/zero.css` by unescaping the sheet's
+own selectors — printed, never hand-written — and the **real handlers** were
+driven over `POST /__spacefast/zero/run` on a throwaway `sf dev --port 4199`:
+seeded stores resolving `''` to `shop`, a new source arriving as a shop, shop →
+grow → shop, a repeat write reporting `changedTables: []` *and*
+`changedQueries: []`, a bogus kind refused, a bogus kind on create landing as a
+shop, a cross-household id refused, a kind surviving a create, and the blocked
+dialog saying **"A source can only be deleted once nothing uses it."**
+
+**Nobody has clicked it.** The menu is the only new surface, and it is the one
+thing that wants a thumb. **To see any of it locally**: Filter tab → `+ Store` →
+name it → the pencil → press the cart glyph. The seeded three are all shops, so
+a fresh household says `Store` until you change one.
+
+### The run list (Phase 4.15b, D58) — 2026-08-29
+
+**Client only**: no schema change, no handler moved. Ten tables, five queries,
+nineteen mutations.
+
+**`shared/shoppingList.ts` is `shared/runList.ts`**, `shoppingGroups` is
+`runBands`, `ShoppingList.tsx` is `RunList.tsx` and `ShoppingListTrigger.tsx` is
+`RunListTrigger.tsx` — all four `git mv`'d, so history follows. The list groups
+by **kind first, source second**, and **nothing about a card changed**: same
+460px `auto-fill` grid, same header, same rows, same trip bar.
+
+- **A band appears only when it holds something**, always Buy · Harvest · Make.
+  A household with nothing but shops gets one band, no headers and no segment —
+  **today's shopping list byte for byte**, which is most of why this shape won.
+- **An item appears under every source it names, which now means two bands.**
+  Tomatoes bought in February and picked in July are on both cards, counted once
+  by each — so **the bands need not add up to the total**, exactly as the store
+  cards never summed to it.
+- **The storeless group is Buy's, and its test is against *every* source.** An
+  item naming only The Garden has a source, so it must not also turn up in Buy
+  asking to be given a shop.
+- **`needsBuying` gates every band**, so *Keep off the list* keeps an item off
+  Harvest and Make too — what the checkbox says is *never remind me about this*,
+  and a harvest list is a reminder. **That narrows what D53's checkbox is for**:
+  it was written for "the things a household grows or brews", and a grow source
+  now says that better and says which. The label lost the word *shopping* with
+  it, and so did the card's `aria-label`.
+- **The trigger says `To get`** — *Shopping list* stopped being true the moment
+  three of the seventeen were things you pick. **Its cart glyph stays** at the
+  compact width and is the one thing still saying *shop*; recorded rather than
+  solved, in the same place the rail's storefront is. Its count is unchanged: the
+  household's total across all bands.
+- **`All` is the default and the whole design**, and carries no glyph — the
+  drawer's `All items` argument reused. **The active tab is not the ink
+  primary** (*Add item* is on screen and ink is what you press), so it is
+  `surface` on `borderStrong`: a raised tab on a sunk track. An inactive tab
+  carries a **transparent 1px border** so picking one does not shift its
+  neighbours by a pixel.
+- **The segment's counts are the filtered set's; the trigger's is the
+  household's.** That pair has always been allowed to disagree.
+- **The trip line shrinks to the cart clause when the segment is up** —
+  `12 to buy · 4 stores` is what the segment now says in tabs you can press.
+- **The active tab is resolved once and read three times.** A chosen band can
+  empty under you, so it falls back to `All`. Reading the raw tab in one place
+  and the fallback in another draws every band with no headers over them — built,
+  caught, fixed before it shipped.
+
+**Two departures from the boards, both forced.** **The Make card is a Buy card**:
+the doc's own refinement says the row is 56px "until a recipe gives it something
+to say", and recipes are not being built (D59), so there is no second line and no
+*short 3 carrots*. **Board 1 draws it in the taller form and is drawing the
+mockup.** And **below the measured column the segment takes its own row**: row
+2's left slot holds its width in both modes so the trigger never moves when
+pressed, and in compact that slot *is* the slack — taking it would move the
+trigger, the one thing that row cannot do. So the segment drops to a scrolling
+row beneath with row 3's bleed. **That costs a fifth row at 390 in list mode and
+wants a real phone.**
+
+**Verified without a browser**: typecheck clean, **368 assertions** (15 new,
+covering band order, the two-kind item counted once by each band, the storeless
+group staying on Buy, an excluded grown item reaching no band, and a `''` kind
+landing on Buy), and every class literal in the four touched files diffed
+against the live `/zero.css` by unescaping the sheet's own selectors — printed,
+never hand-written. The served `/client.js` carries `To get`, `Harvest` and
+`Run list`.
+
+**Nobody has clicked it, and `?demo` cannot show it** — the seeded sources are
+all shops, so it draws one band and no segment. To see the bands locally:
+`?demo`, then Filter → the pencil → **Add a source** → *The Garden* → the cart
+glyph → **Grow** → Done, then tag two low items with it. Extending `?demo` is
+the obvious fix and was not done: `DEMO_ITEMS`' distribution is pinned by
+`npm test` on purpose and adding rows moves eight assertions.
+
+### The item side (Phase 4.15c, D58) — 2026-08-29
+
+**The eighth additive schema change since Phase 2**: `items.seasonFrom` and
+`items.seasonTo`, both `''`. Ten tables, five queries, nineteen mutations. That
+is the *whole* schema cost of the item side, because **the ingredients are not
+here and never will be** (D59).
+
+- **`shared/season.ts`** owns every rule. **Months, not dates** — a season
+  repeats and a date does not, so there is no year, no locale and no format.
+  **A pair that is never half-set**, and `normalizeSeason` **discards a half
+  rather than completing it**: completing means guessing a value nobody typed,
+  which D48 settled once for names. A patch naming one month reads the other off
+  the row, exactly as the size pair does.
+- **The range wraps, and it is the case worth a test.** November to February is
+  a real season; read literally as `11 <= m <= 2` it is empty, which would move
+  an item to `NOT YET` in every month of the year including the ones it is ready
+  in.
+- **An unset season is always in season**, which is what makes it safe to ask
+  about every item.
+- **`NOT YET`** is a sub-group at the foot of a harvest card. Its rows keep the
+  56px height and lose exactly two things — the checkbox (nothing to pick) and
+  the status badge (the slot says *Ready in September*). **Not focusable and not
+  in the tab order.**
+- **An out-of-season row does not count** — not toward its band, not toward the
+  trigger — **but the item is unchanged**: still *out* on its card, still in the
+  three status pills. That is the one place those two numbers deliberately
+  disagree, and `runIds` reading off the bands rather than filtering in parallel
+  is what stops them drifting.
+- **Only the harvest card is affected.** Something you buy at Publix *and* pick
+  in July is still on the Buy card in February, counted once by the band it is
+  really on.
+- **The season panel is the inline composer**, from `panelSkin` rather than the
+  boards' two hexes — it sits a few pixels from where a `+ Source` opens one, so
+  literals would mean a panel that stopped matching its neighbour on the first
+  re-theme. **`MonthMenu` is `UnitMenu` with twelve rows** and no *no month* row.
+- **The make panel is the season panel's twin, and promises nothing** (amended
+  2026-08-29). It sits in the **same place** — below the source chips, before
+  Type, so an item naming both a garden and a kitchen gets both panels in the
+  run list's own band order — and wears the **same `panelSkin` surface**, radius,
+  padding and micro-label. It was a `surfaceAlt` card below Type reading
+  *Recipes are coming*; that is a roadmap on a form, dating the sheet against a
+  feature D59 does not commit to and apologising for a panel already doing its
+  whole job. The label states the fact — **`MADE, NOT BOUGHT`** rather than the
+  boards' `MADE BY`, which heads a list of ingredients that will never be there
+  — and the copy says only what the kind changed: running low puts the item on
+  the **Make** band rather than on a shopping card. **A statement**, not an empty
+  state and not a disabled control — no icon, no amber, nothing to press. Make
+  items only. **Two departures from the spec's *Made by — what ships*** and both
+  deliberate.
+- **Deselecting a grow source does not clear the season.** The panel goes and
+  the months stay, so putting the source back brings them with it. Discarding
+  what somebody typed because they touched another control is a silent write,
+  and the value is inert — `runBands` reads it in the harvest band and nowhere
+  else.
+
+**The item card now wears every kind it has**, one glyph per distinct kind in
+band order, amending this feature's own first pass (which drew one and broke a
+tie toward grow). **An item naming no source still draws nothing** — D58's table
+splits an empty source three ways and the first is *not set yet*, a gap.
+
+**The off-list marker stopped being a struck cart**, for two reasons that
+arrived together: a cart is now the *shop* kind's glyph, and a cart beside a
+struck cart in one cluster is the worst pair of marks on the screen — and the
+strike was claiming the wrong thing anyway, since `needsBuying` gates every band.
+`ListX` says *off the list* and collides with nothing.
+
+**Verified without a browser**: typecheck clean, **419 assertions** (49 new,
+covering the wrap-around both ways, the half-set discard, a one-month season,
+and every `NOT YET` case including the bought-and-grown row that stays on Buy),
+the artifact shows both columns with `default: ""` and `db.migrations` empty,
+every class literal in the four touched files diffed against the live
+`/zero.css` by unescaping the sheet's own selectors, and the **real handlers**
+driven over `POST /__spacefast/zero/run`: a whole pair stored, a start with no
+end and an end with no start both stored as neither, a bogus month stored as
+neither, a patch naming one half reading the other off the row (both ways),
+`11`–`2` surviving storage, and clearing one half clearing the pair.
+
+**Nobody has clicked it.** The season panel needs a grow source selected on the
+sheet and the make panel needs a make one, so both are behind the same setup the
+bands are.
+
+**That completes `garden-and-kitchen.md`'s v1.** Everything left in that
+document — recipes, the ingredient panel, quantities, units, the picker, the
+*See recipe* link and both models on board 6 — is a **marked mockup** governed by
+[D59](../.docs/decisions.md#d59-processes-depend-on-the-pantry-the-pantry-depends-on-nothing).
+
+### The off-list checkbox is retired (D60) — 2026-08-29
+
+**Client only, and there is no migration.**
+[D60](../.docs/decisions.md#d60-the-off-list-checkbox-is-retired-and-the-column-is-kept)
+amends D53: a source's kind answers the question the checkbox was invented for,
+and answers it better. **You grow it, you make it, or you buy it** — the first
+two go to their own bands without anybody ticking anything.
+
+**The checkbox says it worse than the kind does**, which is the argument rather
+than mere duplication: it hides an item from the list *without saying where it
+went*, while a grow source puts it on a Harvest card while it does so.
+
+- **`items.offShoppingList` stays.** Dropping a column needs
+  `sf db migrate --drop`; filling one again is additive — the same trade D34
+  made for `icon`, which is still there holding `''`. **Do not "clean up"
+  either.**
+- **`needsBuying` still reads it**, so a row ticked before today behaves exactly
+  as it did. Nothing about existing data moves.
+- **The control is a way out, not a way in.** The sheet draws it **only on an
+  item that already carries the flag**; pressing it clears the flag and unmounts
+  the row. So it can be cleared and never set, and the flag drains out of the
+  database as people meet it rather than being migrated out from under them.
+  **Absent where it would create a new one, present where it is the only way out
+  of an old one** — D30's rule doing a job it was not written for. Removing it
+  outright would strand every ticked row off every band with no way back.
+- **The card's `ListX` marker is a legacy marker now** and draws only for those
+  rows. It goes on its own when the last one is cleared.
+- **Putting it back is deleting one condition.** The column, both mutations'
+  normalisation, the `ItemDraft` field, the undo path and `needsBuying` are all
+  untouched — only the sheet's `value.offShoppingList &&` guard stands between
+  today and the control returning.
+- **`?demo` still seeds three flagged rows, on purpose.** Nothing in the UI can
+  set the flag any more, so they are the only way to reach the legacy state
+  locally: the marker, the clear-only checkbox, and the two-item gap between the
+  status pills and the run list's total that made D53's split countable.
+
+**[D59](../.docs/decisions.md#d59-processes-depend-on-the-pantry-the-pantry-depends-on-nothing)
+is the rule to not violate**: processes depend on the pantry, and the pantry
+depends on nothing. A recipe references items; a planting references items;
+neither is referenced back, so **a pantry item gains no recipe-shaped field at
+all**. Everything about recipes, ingredients, quantities and unit arithmetic in
+that design doc is a **marked mockup** and is not being built.
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -1752,16 +2083,24 @@ These are hard platform limits and they shape everything:
 
 ### Reading the Spacefast docs
 
-The whole runtime reference is one file: `https://spacefast.com/docs/zero.md`
-(~19 KB of plain Markdown — schema API, auth, storage, styling, limits, and a
-complete example app).
+The whole runtime reference is one file:
+**`https://spacefast.com/docs/zero-runtime.md`** (~22 KB of plain Markdown —
+schema API, auth, storage, styling, limits, and a complete example app).
+
+**It was `/docs/zero.md` and that path now 404s** (checked 2026-08-29) — the
+page moved and nothing redirects. Worse, the 404 body is 25 KB of HTML, so a
+script that does not check the status code gets a page of `<script>` tags where
+it expected Markdown. The HTML page at `/docs/zero` still works, which is why a
+browser sees nothing wrong. **`https://spacefast.com/docs/llms.txt` is the index
+that names the current URL of every page** — check it there before assuming a
+docs page is gone.
 
 A plain `curl` works — **the 403 to programmatic fetches was fixed on
 2026-08-25**, so the browser User-Agent this file used to insist on is no longer
 needed:
 
 ```bash
-curl -sL https://spacefast.com/docs/zero.md
+curl -sL https://spacefast.com/docs/zero-runtime.md
 ```
 
 Every docs page has a `.md` twin at the same path. Prefer it over the HTML. If a
@@ -1784,7 +2123,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D57, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it** |
+| `.docs/decisions.md` | D1–D57, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -1795,6 +2134,8 @@ most of it is already decided.
 | `.claude/docs/design/larderlogaddedititem.html` | **The 9 boards for that redesign** — the sheet in both themes, the size row and its unit menu, the two steppers, where the size shows, 390, and keeping an item off the list |
 | `.claude/docs/design/install-as-an-app.md` | **Install as an app** (28 Aug) — the one Settings row that offers it, the banner that was cut and why, and two contrast findings that leave the row. Its own doc for the reason `add-edit-item.md` is |
 | `.claude/docs/design/larderloginstallmockup.html` | **The 5 boards for it** — desktop 1440, the row's states with the panel-edge finding drawn both ways, Preferences in three states × both themes, 390, and the appears-where matrix |
+| `.claude/docs/design/garden-and-kitchen.md` | **Garden and Kitchen** (rev. 29 Aug) — a source carries a kind, the shopping list becomes a run list of three bands with a segment over it, and an item gains a season. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list* wholesale**. **Read its *what is in v1 and what is a mockup* callout first**: everything about recipes, ingredients, quantities and units is a marked mockup (D59). **Its lede is stale** — it still promises an item gains "ingredients with quantities", which the callout eight lines below and the *Ingredients — on the recipe, never on the item* section both contradict. **Built so far: D58** — the kind, the rename, the menu, the card glyph |
+| `.claude/docs/design/larderloggardenkitchenboards.html` | **The 8 boards for it** — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
 | `.claude/docs/design/larderlogbetabadgeboards.html` | **The 5 boards for it** — anatomy and the four surface pairings, the drawer header, 390 with six filters applied, what lost, and the marketing nav and footer in both themes. **Its marketing nav still draws the pre-D47 *Sign in with Gravatar* button** |
 | `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
@@ -1883,7 +2224,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 322 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 419 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -1891,7 +2232,9 @@ Cheapest first:
   stamp guards and A–Z term ordering, D45's *OR inside a group, AND across
   groups*, D46's display-name fallback chain, D52's size pair together with
   D53's split between `needsBuying` and `statusKeyFor`, and D55's `https:`-only
-  avatar rule, and `?demo`'s fixture distribution and term resolution. **Add to it** when you touch any of those — that file is the app's
+  avatar rule, D58's source-kind fallbacks, the group-word rule and the item card's
+  one-glyph resolver, and
+  `?demo`'s fixture distribution and term resolution. **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still

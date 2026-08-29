@@ -5,10 +5,14 @@ import type { Theme } from '../lib/theme';
 import { entityColorFor, proposeColor, statusFor } from '../lib/theme';
 import { CheckBox } from './CheckBox';
 import { TermPanel, TermRow } from './TermPanel';
+import { MonthMenu } from './MonthMenu';
+import { panelSkin } from './TermPanel';
 import { UnitMenu } from './UnitMenu';
 import { digitField } from '../lib/numericField';
 import { useHoldRepeat } from '../hooks/useHoldRepeat';
-import type { ItemDraft, Term } from '../../shared/types';
+import type { SourceKind } from '../../shared/source';
+import { itemSourceKinds, sourceGroupWord } from '../../shared/source';
+import type { ItemDraft, Source, Term } from '../../shared/types';
 import type { TaxonomyActions } from '../lib/actions';
 import { toInt } from '../../shared/qty';
 import { formatSize, MAX_SIZE_DIGITS } from '../../shared/size';
@@ -34,7 +38,7 @@ type Props = {
 	error: string;
 	locations: Term[];
 	types: Term[];
-	stores: Term[];
+	stores: Source[];
 	taxonomy: TaxonomyActions;
 	canCreateTerms: boolean;
 	/** The household's low-stock default, for the *Low at* note. See below. */
@@ -83,13 +87,19 @@ function Hint({ children, theme }: { children: preact.ComponentChildren; theme: 
  * matching what the item actually holds.
  */
 function ChipRow({
-	terms, selected, onToggle, onAdd, canAdd, label, dark, theme,
+	terms, selected, onToggle, onAdd, canAdd, kindable, label, dark, theme,
 }: {
 	terms: Term[];
 	selected: string[];
 	onToggle: (id: string) => void;
-	onAdd: (name: string, ink: string) => void;
+	onAdd: (name: string, ink: string, kind?: SourceKind) => void;
 	canAdd: boolean;
+	/**
+	 * Whether a term made here carries a kind — the source group, and nothing
+	 * else. It is the same flag `onSetKind` is in the drawer, and it decides
+	 * one thing: whether the composed row gets the glyph.
+	 */
+	kindable?: boolean;
 	label: string;
 	dark: boolean;
 	theme: Theme;
@@ -97,18 +107,25 @@ function ChipRow({
 	const [composing, setComposing] = useState(false);
 	const [draft, setDraft] = useState('');
 	const [color, setColor] = useState<string | null>(null);
+	/*
+	 * A shop by default, which is both the common case and what the column's
+	 * own fallback resolves an empty string to — but composable, because you
+	 * know whether you are adding Publix or the garden while you are typing it.
+	 */
+	const [kind, setKind] = useState<SourceKind>('shop');
 
 	const proposed = color ?? proposeColor(terms.map((t) => t.ink));
 
 	function open() {
 		setDraft('');
 		setColor(null);
+		setKind('shop');
 		setComposing(true);
 	}
 
 	function commit() {
 		const name = draft.trim();
-		if (name) onAdd(name, proposed);
+		if (name) onAdd(name, proposed, kindable ? kind : undefined);
 		setComposing(false);
 	}
 
@@ -166,6 +183,8 @@ function ChipRow({
 				<TermPanel label={label} mode="new" onDone={commit} theme={theme}>
 					<TermRow
 						name={draft} ink={proposed} placeholder={`New ${label.toLowerCase()}…`} autoFocus
+						kind={kindable ? kind : undefined}
+						onKind={kindable ? setKind : undefined}
 						onName={setDraft} onColor={setColor}
 						onAction={() => setComposing(false)} action="abandon"
 						theme={theme}
@@ -292,7 +311,8 @@ function Stepper({ label, value, onValue, note, dark, theme }: {
  * **It reads as four sections rather than one stack** — Item, Count, the three
  * taxonomies, Notes — each a micro-label over its content, separated by a
  * full-width hairline. The old flat run gave every field the same weight, and
- * adding a fifth would only have made that worse. Location, Store and Type are
+ * adding a fifth would only have made that worse. Location, Store (or Source —
+ * see D58) and Type are
  * three labelled groups under *one* rule and not three sections: they are one
  * question — where and what — asked three times.
  */
@@ -302,10 +322,38 @@ export function ItemSheet({
 	defaultThreshold, saving, onSave, onClose, dark, theme,
 }: Props) {
 	const editing = mode === 'edit';
+	/*
+	 * `Store` or `Source` — the group's label here follows the drawer's heading
+	 * exactly (D58). Four places move together or the app contradicts itself in
+	 * the space of one screen, and two of them are on this sheet: the label, and
+	 * the dashed chip `ChipRow` builds from it.
+	 */
+	const sourceWord = sourceGroupWord(stores);
+
+	/*
+	 * What the item's chosen sources make it, which is what decides whether the
+	 * two sections below the chips exist at all. **They appear because of the
+	 * source, not beside it** (D58): pick a grow source and the season panel is
+	 * there, pick a shop and it never existed.
+	 */
+	const kinds = itemSourceKinds(value.storeIds, stores);
+	const grown = kinds.includes('grow');
+	const made = kinds.includes('make');
+
+	/*
+	 * The season panel's fill and edge come from `panelSkin`, not from the two
+	 * hexes the boards name. It **is** the inline composer on this sheet — the
+	 * same surface a `+ Source` drops in on, a few pixels from it — so borrowing
+	 * two literals would mean a panel that stopped matching its neighbour the
+	 * first time either was re-themed.
+	 */
+	const season = panelSkin(theme, false);
 	const nameRef = useRef<HTMLInputElement>(null);
 	const sheetRef = useRef<HTMLElement>(null);
 
 	const [unitOpen, setUnitOpen] = useState(false);
+	const [fromOpen, setFromOpen] = useState(false);
+	const [toOpen, setToOpen] = useState(false);
 
 	/*
 	 * The unit menu owns Escape while it is open. Read through a ref rather than
@@ -360,8 +408,13 @@ export function ItemSheet({
 	const status = statusFor(value.qty, value.threshold, dark);
 	const sizePreview = formatSize(value.size, value.unit);
 
-	async function addTerm(kind: 'location' | 'type' | 'store', name: string, ink: string) {
-		const id = await taxonomy.create(kind, { name, ink });
+	async function addTerm(
+		kind: 'location' | 'type' | 'store',
+		name: string,
+		ink: string,
+		sourceKind?: SourceKind
+	) {
+		const id = await taxonomy.create(kind, { name, ink, kind: sourceKind });
 		if (! id) return;
 
 		if (kind === 'location') onChange({ ...value, locationId: id });
@@ -479,7 +532,7 @@ export function ItemSheet({
 					</div>
 
 					{/* *With*, not *beside*: it sits beneath the name on a card and beside it in the list. */}
-					<Hint theme={theme}>Optional — it shows with the name on cards and in the shopping list.</Hint>
+					<Hint theme={theme}>Optional — it shows with the name on cards and on the run list.</Hint>
 
 					<Rule theme={theme} />
 
@@ -532,29 +585,49 @@ export function ItemSheet({
 					</div>
 
 					{/*
-					  * **In Count rather than in a section of its own.** *Low at* is
-					  * the sentence *put this on the list when I am down to N*; this
-					  * is *…except don't*. It modifies the threshold, so it sits where
-					  * the threshold is set.
+					  * **Retired, and this is the way out rather than the way in**
+					  * (D60). It appears only on an item that *already* carries the
+					  * flag, so it can be cleared and never set — and once cleared the
+					  * row unmounts and cannot come back.
 					  *
-					  * The whole row is the target. A 22px box is the hit area this
-					  * app already corrected once, on the shopping list's own rows.
+					  * The checkbox existed to answer *some things are never shopped
+					  * for* (D53), and **a source's kind answers that better**: you
+					  * grow it, you make it, or you buy it, and the first two go to
+					  * their own bands without anyone ticking anything. A control
+					  * whose whole job has been taken over is a second way to say one
+					  * thing, and this one says it worse — it hides an item from the
+					  * list without saying where it went.
+					  *
+					  * **The column stays**, because dropping one needs
+					  * `sf db migrate --drop` while filling it again is additive — the
+					  * same trade D34 made for `icon`. `needsBuying` still reads it, so
+					  * a row that was ticked before today keeps behaving exactly as it
+					  * did, and putting the control back is deleting one condition.
+					  *
+					  * **Absent rather than disabled** where it would create a new
+					  * one, present where it is the only way out of an old one. A
+					  * legacy row with no control at all would be stuck off every
+					  * band for good, which is a worse thing to ship than a control
+					  * that only subtracts.
 					  */}
-					<button
-						type="button"
-						role="checkbox"
-						aria-checked={value.offShoppingList}
-						onClick={() => onChange({ ...value, offShoppingList: ! value.offShoppingList })}
-						class={`flex items-start gap-[11px] mt-3.5 -mx-2 px-2 py-2 ${PAGE_CHECKBOX_ROW}`}
-					>
-						<span class="pt-px shrink-0"><CheckBox checked={value.offShoppingList} theme={theme} /></span>
-						<span class="min-w-0">
-							<span class="block text-[15px]" style={{ color: theme.text }}>Keep off the shopping list</span>
-							<span class="block text-[12.5px] leading-[1.45] pt-[3px]" style={{ color: theme.textMuted }}>
-								It still shows as low or out on its card — it just never joins the list.
+					{value.offShoppingList && (
+						<button
+							type="button"
+							role="checkbox"
+							aria-checked
+							onClick={() => onChange({ ...value, offShoppingList: false })}
+							class={`flex items-start gap-[11px] mt-3.5 -mx-2 px-2 py-2 ${PAGE_CHECKBOX_ROW}`}
+						>
+							<span class="pt-px shrink-0"><CheckBox checked theme={theme} /></span>
+							<span class="min-w-0">
+								<span class="block text-[15px]" style={{ color: theme.text }}>Keep off the list</span>
+								<span class="block text-[12.5px] leading-[1.45] pt-[3px]" style={{ color: theme.textMuted }}>
+									It still shows as low or out on its card — it just never joins the list.
+									Clearing this is permanent: what you grow or make gets its own band now.
+								</span>
 							</span>
-						</span>
-					</button>
+						</button>
+					)}
 
 					<Rule theme={theme} />
 
@@ -571,7 +644,7 @@ export function ItemSheet({
 					</div>
 
 					<div class="pt-4">
-						<Label theme={theme}>Store</Label>
+						<Label theme={theme}>{sourceWord}</Label>
 					</div>
 					<div class="pt-2.5">
 						<ChipRow
@@ -583,10 +656,106 @@ export function ItemSheet({
 									? value.storeIds.filter((s) => s !== id)
 									: [...value.storeIds, id],
 							})}
-							onAdd={(n, ink) => void addTerm('store', n, ink)}
-							canAdd={canCreateTerms} label="Store" dark={dark} theme={theme}
+							onAdd={(n, ink, k) => void addTerm('store', n, ink, k)}
+							canAdd={canCreateTerms} kindable label={sourceWord} dark={dark} theme={theme}
 						/>
 					</div>
+
+					{/*
+					  * ---------- In season, on a grow item ----------
+					  *
+					  * **The inline composer's construction, on a cream sheet.** It is
+					  * a recessed panel because it is a thing that has dropped in —
+					  * the same shape the term composer takes when a `+ Source` opens
+					  * one — and it drops in *below the source chips* because the
+					  * source is why it is here.
+					  *
+					  * **Months, not dates.** No year, no locale, no format: a season
+					  * repeats and a date does not. That is the Members pane's
+					  * *Expires in 12 days* argument, one step further.
+					  *
+					  * **Deselecting the grow source does not clear the season.** The
+					  * panel goes and the two stored months stay, so putting the
+					  * source back brings them with it. Discarding what somebody
+					  * typed because they touched a different control would be a
+					  * silent write, and the value is inert until a harvest card asks
+					  * for it — `runBands` reads it in the harvest band and nowhere
+					  * else.
+					  */}
+					{grown && (
+						<div
+							class="mt-[18px] p-3.5 rounded-[14px]"
+							style={{ background: season.panel, boxShadow: `inset 0 0 0 1px ${season.hairline}` }}
+						>
+							<Label theme={theme}>In season</Label>
+							<div class="flex items-center gap-2.5 pt-2.5">
+								<MonthMenu
+									value={value.seasonFrom}
+									onChange={(m) => onChange({ ...value, seasonFrom: m, seasonTo: value.seasonTo || m })}
+									label="In season from"
+									open={fromOpen} setOpen={setFromOpen} dark={dark} theme={theme}
+								/>
+								<span class="text-[13.5px] shrink-0" style={{ color: theme.textMuted }}>to</span>
+								<MonthMenu
+									value={value.seasonTo}
+									onChange={(m) => onChange({ ...value, seasonTo: m, seasonFrom: value.seasonFrom || m })}
+									label="In season to"
+									open={toOpen} setOpen={setToOpen} dark={dark} theme={theme}
+								/>
+							</div>
+							<Hint theme={theme}>
+								Only asked because the {sourceWord.toLowerCase()} you picked is one you grow. Out of
+								season the item still reads <i>low</i> or <i>out</i> on its card — it just moves to
+								<i> Not yet</i> on the harvest list.
+							</Hint>
+						</div>
+					)}
+
+					{/*
+					  * ---------- Made, not bought, on a make item ----------
+					  *
+					  * **The season panel's twin, and deliberately so.** Same place —
+					  * below the source chips, because the source is why it is here —
+					  * same recessed `panelSkin` surface, same radius, padding and
+					  * micro-label. The two are one question answered two ways: what
+					  * does picking this kind of source mean for this item. An item
+					  * naming both a garden and a kitchen gets both panels, in the run
+					  * list's own band order.
+					  *
+					  * **A statement, not an empty state and not a disabled control.**
+					  * Nothing is wrong and nothing is pending on the reader, so there
+					  * is no icon, no amber and nothing to press — *a disabled control
+					  * cannot explain itself* (D36) is what rules out the alternative.
+					  *
+					  * **There are no ingredients on an item sheet and there never
+					  * will be** (D59). A pantry item answers one question — *do we
+					  * need more* — from its own count and its own low-at. Ingredients
+					  * belong to a recipe, and a recipe points at the item rather than
+					  * the other way round.
+					  *
+					  * So the panel **promises nothing**. It said *Recipes are coming*
+					  * for one round, which is a roadmap on a form: it dated the sheet
+					  * against a feature D59 does not commit to, and it read as an
+					  * apology for a panel that is already doing its whole job. What
+					  * is here now is only what is true today — what the kind changed
+					  * about this item — which is also why the label states the fact
+					  * rather than heading a list of ingredients the way the boards'
+					  * `MADE BY` does.
+					  */}
+					{made && (
+						<div
+							class="mt-[18px] p-3.5 rounded-[14px]"
+							style={{ background: season.panel, boxShadow: `inset 0 0 0 1px ${season.hairline}` }}
+						>
+							<Label theme={theme}>Made, not bought</Label>
+							<p class="text-[13px] leading-[1.55] pt-2.5" style={{ color: theme.text }}>
+								The {sourceWord.toLowerCase()} you picked is one you make, so running low puts
+								{' '}{value.name.trim() || 'this'} on the{' '}
+								<b class="font-semibold" style={{ color: theme.textStrong }}>Make</b> band of the run
+								list rather than on a shopping card.
+							</p>
+						</div>
+					)}
 
 					<div class="pt-4">
 						<Label theme={theme}>Type</Label>

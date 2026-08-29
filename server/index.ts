@@ -7,6 +7,8 @@ import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCap
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
+import { isSourceKind, sourceGroupWord, toSourceKind } from '../shared/source';
+import { normalizeSeason } from '../shared/season';
 import { normalizeSize } from '../shared/size';
 import { normalizeStamp, stampFrom } from '../shared/stamp';
 import { byName, normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
@@ -227,11 +229,18 @@ export const schema = {
 		changedAt: string().default(''),
 	}).index('by_household', ['householdId']),
 
-	// Stores never had the column at all.
+	// Stores never had the `icon` column at all.
+	//
+	// `kind` is what makes a store a *source* (D58) — `shop`, `grow` or `make`,
+	// and `''` for every row written before it, which `toSourceKind()` resolves
+	// to `shop`. That default is not a placeholder: every source in the app was
+	// a shop until this column existed, so an unset value is the right answer
+	// rather than a missing one.
 	stores: table({
 		householdId: id('households'),
 		name: string(),
 		ink: string(),
+		kind: string().default(''),
 		// D44's pair. `addedAt` is ours because the platform's `createdAt` cannot
 		// be set by app code and so cannot survive an undo's re-insert; `changedAt`
 		// is ours for the same reason `updatedAt` is not used. Both default to ''
@@ -259,10 +268,22 @@ export const schema = {
 		// stored must survive us changing what it prints.
 		size: string().default(''),
 		unit: string().default(''),
-		// Never joins the shopping list, however low it gets — the things a
-		// household grows rather than buys. It hides an item from one view and
-		// changes nothing about its status; see `needsBuying`.
+		// Never joins the run list, however low it gets. **Retired (D60)**: a
+		// source's kind says what this said, and better, so nothing writes `true`
+		// any more. Kept because dropping a column needs `sf db migrate --drop`
+		// while filling it again is additive (D34), and because the rows that
+		// already hold it must keep behaving as they did. See `needsBuying`.
 		offShoppingList: boolean().default(false),
+		// When a grown thing is ready, as two month numbers — `'6'` to `'9'`, and
+		// `''` for no season at all (D58). A pair that is never half-set, the way
+		// `size` and `unit` are, and `shared/season.ts` owns that rule.
+		//
+		// **Months, not dates**: a season repeats and a date does not, so there is
+		// no year, no locale and no format to store. `seasonFrom` above
+		// `seasonTo` wraps the turn of the year — November to February is a real
+		// season and reads as one.
+		seasonFrom: string().default(''),
+		seasonTo: string().default(''),
 		notes: string().default(''),
 		addedAt: string().default(''),
 		changedAt: string().default(''),
@@ -505,6 +526,8 @@ export default capsule({
 					size: item.size,
 					unit: item.unit,
 					offShoppingList: item.offShoppingList,
+					seasonFrom: item.seasonFrom,
+					seasonTo: item.seasonTo,
 					notes: item.notes,
 					typeIds: typesByItem.get(item.id) ?? [],
 					storeIds: storesByItem.get(item.id) ?? [],
@@ -521,7 +544,7 @@ export default capsule({
 				// order of the same three lists.
 				locations: byName(locations).map(termDto),
 				types: byName(types).map(termDto),
-				stores: byName(stores).map(termDto),
+				stores: byName(stores).map(sourceDto),
 			};
 		}),
 
@@ -808,6 +831,11 @@ export default capsule({
 					size?: string;
 					unit?: string;
 					offShoppingList?: boolean;
+					// Both, or neither — `normalizeSeason` discards a half rather
+					// than completing it. Only a grow item ever carries one, and
+					// undo carries it back with the rest of the row.
+					seasonFrom?: string;
+					seasonTo?: string;
 					notes?: string;
 					typeIds?: string[];
 					storeIds?: string[];
@@ -839,6 +867,7 @@ export default capsule({
 				// One place makes the pair whole, and it is the same one the sheet
 				// calls — a client that sends a number with no unit stores neither.
 				const size = normalizeSize(draft.size, draft.unit);
+				const season = normalizeSeason(draft.seasonFrom, draft.seasonTo);
 
 				const item = await ctx.db.items.insert({
 					householdId: membership.householdId,
@@ -849,6 +878,8 @@ export default capsule({
 					size: size.size,
 					unit: size.unit,
 					offShoppingList: draft.offShoppingList === true,
+					seasonFrom: season.seasonFrom,
+					seasonTo: season.seasonTo,
 					notes: normalizeNotes(draft.notes),
 					addedAt: normalizeStamp(draft.addedAt, now),
 					changedAt: normalizeStamp(draft.changedAt, now),
@@ -878,6 +909,8 @@ export default capsule({
 					size?: string;
 					unit?: string;
 					offShoppingList?: boolean;
+					seasonFrom?: string;
+					seasonTo?: string;
 					notes?: string;
 					typeIds?: string[];
 					storeIds?: string[];
@@ -919,6 +952,19 @@ export default capsule({
 					);
 					next.size = size.size;
 					next.unit = size.unit;
+				}
+
+				// The season's two halves move together for exactly the reason the
+				// size's do, and through the same shape of guard: one month with no
+				// other end is not a season, so a patch naming one reads the other
+				// off the row and normalizes the pair.
+				if (patch.seasonFrom !== undefined || patch.seasonTo !== undefined) {
+					const season = normalizeSeason(
+						patch.seasonFrom !== undefined ? patch.seasonFrom : item.seasonFrom,
+						patch.seasonTo !== undefined ? patch.seasonTo : item.seasonTo
+					);
+					next.seasonFrom = season.seasonFrom;
+					next.seasonTo = season.seasonTo;
 				}
 
 				await ctx.db.items.update(item.id, next);
@@ -976,6 +1022,28 @@ export default capsule({
 				draft: {
 					name: string;
 					ink: string;
+					/**
+					 * A source's kind, from either of the two callers that have
+					 * one.
+					 *
+					 * **Composing one is the ordinary path now.** All three of the
+					 * app's draft rows carry the glyph, so a garden is a garden
+					 * from the moment it is named — D58 shipped without that and
+					 * made you name the source, press *Done*, re-open the panel
+					 * with the pencil and find the row again to say what it was.
+					 *
+					 * Undo is the other caller and is why this argument existed
+					 * first: undo re-inserts (D17), the same trade the stamps
+					 * below make, so without it a restored garden would come back
+					 * a shop.
+					 *
+					 * Unvalidated on purpose — `toSourceKind` resolves anything it
+					 * does not recognise to `shop`, so a client sending nonsense
+					 * gets the default rather than an error.
+					 *
+					 * Ignored for `location` and `type`, which have no column.
+					 */
+					kind?: string;
 					/** The deleted term's own stamps, on the undo path only. See `addItem`. */
 					addedAt?: string;
 					changedAt?: string;
@@ -1009,7 +1077,9 @@ export default capsule({
 				// the reserved column holds (D34).
 				const row =
 					tableName === 'stores'
-						? await ctx.db.stores.insert({ householdId: owner, name, ink, ...stamps })
+						? await ctx.db.stores.insert({
+							householdId: owner, name, ink, kind: toSourceKind(draft.kind), ...stamps,
+						})
 						: await ctx.db[tableName].insert({ householdId: owner, name, ink, icon: '', ...stamps });
 
 				ctx.invalidate('pantry');
@@ -1064,6 +1134,39 @@ export default capsule({
 			}
 		),
 
+		/**
+		 * What you do to get things from this source — shop, grow or make (D58).
+		 *
+		 * Its own mutation rather than a `kind` on `updateTerm`'s patch, because
+		 * that handler's second argument is *already* called `kind` and means the
+		 * taxonomy. `updateTerm(id, 'store', x, { kind: 'grow' })` reads as a
+		 * contradiction and would be one to maintain.
+		 *
+		 * Stores only, and there is no `TermKind` parameter for the same reason:
+		 * `locations` and `types` have no column, so a caller naming one is asking
+		 * for something that cannot exist rather than something it may not do.
+		 */
+		setSourceKind: mutation(async (ctx, householdId: string, storeId: string, kind: string) => {
+			const membership = await requireCapability(ctx, householdId, 'taxonomy:write');
+
+			if (! isSourceKind(kind)) throw new AccessError('Unknown source kind.');
+
+			const store = assertInHousehold(
+				await ctx.db.stores.get(storeId),
+				membership,
+				termLabel('store')
+			);
+
+			// A no-op still costs a refetch of every subscriber's pantry, and the
+			// menu is a radio group where pressing the current row is the ordinary
+			// way to close it.
+			if (toSourceKind(store.kind) === kind) return;
+
+			await ctx.db.stores.update(store.id, { kind, changedAt: stampFrom(Date.now()) });
+
+			ctx.invalidate('pantry');
+		}),
+
 		deleteTerm: mutation(async (ctx, householdId: string, kind: TermKind, termId: string) => {
 			const membership = await requireCapability(ctx, householdId, 'taxonomy:write');
 			const tableName = termTable(kind);
@@ -1102,9 +1205,28 @@ export default capsule({
 					? (await ctx.db.itemTypes.withIndex('by_type', (r) => r.eq('typeId', termId)).collect()).length
 					: (await ctx.db.itemStores.withIndex('by_store', (r) => r.eq('storeId', termId)).collect()).length;
 
-			// The client draws its blocked dialog from this same call, so the
-			// refusal and the explanation can never disagree.
-			const blocked = termBlock(kind, term.name, used);
+			/*
+			 * The client draws its blocked dialog from this same call, so the
+			 * refusal and the explanation can never disagree — including the
+			 * group's own word, which is `Source` rather than `Store` in a
+			 * household that grows or cooks anything (D58). That costs one extra
+			 * `collect()` on a delete that is about to be refused, which is the
+			 * rarest path in the handler.
+			 */
+			const sources = kind === 'store'
+				? await ctx.db.stores
+					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
+					.collect()
+				: [];
+
+			const blocked = termBlock(
+				kind,
+				term.name,
+				used,
+				kind === 'store'
+					? sourceGroupWord(sources.map((r) => ({ kind: toSourceKind(r.kind) })))
+					: kind
+			);
 
 			if (blocked) throw new AccessError(blocked.body);
 
@@ -1343,6 +1465,21 @@ function termDto(t: { id: string; name: string; ink: string; addedAt: string; ch
 		addedAt: t.addedAt,
 		changedAt: t.changedAt,
 	};
+}
+
+/**
+ * A store row as the client sees it: a term, plus its kind (D58).
+ *
+ * The kind is resolved here rather than in the client, for the reason
+ * `HouseholdSummary.ink` is: `''` is what every row written before the column
+ * holds, and one resolver server-side beats a `toSourceKind()` at every render
+ * site that would each have to remember to call it.
+ */
+function sourceDto(t: {
+	id: string; name: string; ink: string; kind: string;
+	addedAt: string; changedAt: string; createdAt: string;
+}) {
+	return { ...termDto(t), kind: toSourceKind(t.kind) };
 }
 
 /**

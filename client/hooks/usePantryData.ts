@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'preact/hooks';
 import { useMutation, useQuery } from '@spacefast/zero/client';
 
 import type { Role } from '../../shared/roles';
+import type { SourceKind } from '../../shared/source';
 import type {
 	HouseholdData,
 	HouseholdListResult,
@@ -83,7 +84,7 @@ export type PantryApi = {
 	/** True when the row is really gone — the undo toast is armed on this. */
 	removeItem: (id: string) => Promise<boolean>;
 
-	createTerm: (kind: TermKind, draft: TermDraft, stamps?: Stamps) => Promise<string | null>;
+	createTerm: (kind: TermKind, draft: TermDraft & { kind?: SourceKind }, stamps?: Stamps) => Promise<string | null>;
 	updateTerm: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
 	/**
 	 * True when the term is really gone — the undo toast is armed on this.
@@ -92,6 +93,8 @@ export type PantryApi = {
 	 * offered for a delete the server refused would mint a duplicate.
 	 */
 	deleteTerm: (kind: TermKind, id: string) => Promise<boolean>;
+	/** Stores only — locations and types have no kind. See `shared/source.ts`. */
+	setSourceKind: (storeId: string, kind: SourceKind) => Promise<void>;
 
 	/** Resolves to the new code, or null when the server refused. */
 	createInvite: (role: Role) => Promise<{ code: string; expiresAt: string } | null>;
@@ -140,9 +143,10 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
 	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
 	const rawRemoveItem = useMutation<[string, string], void>('removeItem');
-	const rawCreateTerm = useMutation<[string, TermKind, TermDraft & Stamps], { id: string }>('createTerm');
+	const rawCreateTerm = useMutation<[string, TermKind, TermDraft & Stamps & { kind?: SourceKind }], { id: string }>('createTerm');
 	const rawUpdateTerm = useMutation<[string, TermKind, string, { name?: string; ink?: string }], void>('updateTerm');
 	const rawDeleteTerm = useMutation<[string, TermKind, string], void>('deleteTerm');
+	const rawSetSourceKind = useMutation<[string, string, string], void>('setSourceKind');
 	const rawCreateInvite = useMutation<[string, string], { code: string; expiresAt: string }>('createInvite');
 	const rawRevokeInvite = useMutation<[string, string], void>('revokeInvite');
 	const rawRedeemInvite = useMutation<[string], { householdId: string }>('redeemInvite');
@@ -252,6 +256,10 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 		deleteTerm: useCallback(async (kind, id) => (
 			(await run(() => rawDeleteTerm(currentHouseholdId, kind, id).then(() => true))) === true
 		), [run, rawDeleteTerm, currentHouseholdId]),
+
+		setSourceKind: useCallback(async (storeId, kind) => {
+			await run(() => rawSetSourceKind(currentHouseholdId, storeId, kind));
+		}, [run, rawSetSourceKind, currentHouseholdId]),
 
 		createInvite: useCallback(async (role) => (
 			run(() => rawCreateInvite(currentHouseholdId, role))

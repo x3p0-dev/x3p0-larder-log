@@ -22,7 +22,7 @@ type Props = {
 };
 
 /**
- * The way into the shopping list, and the light that says you are in it.
+ * The way into the run list, and the light that says you are in it.
  *
  * **It does not move.** Row 2's left slot keeps its width in list mode — the
  * status pills go `invisible` rather than unmounting — so this sits at the same
@@ -56,14 +56,14 @@ type Props = {
  * 11: the trigger answers *is there shopping to do*, which is a fact about the
  * household, and the meta line answers *what is on this screen*.
  */
-export function ShoppingListTrigger({ active, count, onToggle, compact, dark, theme }: Props) {
+export function RunListTrigger({ active, count, onToggle, compact, dark, theme }: Props) {
 	const low = statusColor('low', dark);
 
 	return (
 		<button
 			onClick={onToggle}
 			aria-pressed={active}
-			aria-label={`Shopping list, ${count} to buy`}
+			aria-label={`To get, ${count} across every kind`}
 			class={
 				'inline-flex items-center rounded-[13px] text-sm font-semibold shrink-0 ' +
 				(compact ? 'gap-2 h-11 pl-3 pr-[11px] ' : 'gap-[9px] h-10 pl-[15px] pr-3 ') +
@@ -83,16 +83,28 @@ export function ShoppingListTrigger({ active, count, onToggle, compact, dark, th
 		>
 			{/*
 			  * The label goes when space is short and the cart carries it. This is
-			  * the only element on that row with a fixed cost — 165px against 74 —
-			  * and *Shopping list* is the most expendable phrase on the screen once
-			  * the pill says 11 and the glyph says what kind of 11.
+			  * the only element on that row with a fixed cost, and the label is the
+			  * most expendable thing on the screen once the pill says 17 and the
+			  * glyph says what kind of 17.
 			  *
-			  * The label does not change with the state. *Shopping list* names the
-			  * thing you are looking at either way, and a control that renames
-			  * itself on press is a second thing to read at the moment the whole
-			  * screen has already changed.
+			  * **It says *To get*, not *Shopping list*** (D58). The old label stopped
+			  * being true the moment three of the seventeen were things you pick —
+			  * a control that opens a screen with a Harvest band on it cannot call
+			  * itself shopping. *To get* is honest across all three bands, and the
+			  * segment inside gives *Buy* its own name and its own count, so
+			  * nothing was lost by generalising the way in.
+			  *
+			  * **The cart glyph stays** at the compact width, and it is the one
+			  * thing here still saying *shop*. It is what the control has always
+			  * been, it is what most households will only ever use it for, and the
+			  * alternative is a mark for *get* that does not exist. Recorded rather
+			  * than solved — the same place the collapsed rail's storefront is.
+			  *
+			  * The label does not change with the state. It names the thing you are
+			  * looking at either way, and a control that renames itself on press is
+			  * a second thing to read at the moment the whole screen has changed.
 			  */}
-			{compact ? <ShoppingCart size={20} strokeWidth={1.8} /> : 'Shopping list'}
+			{compact ? <ShoppingCart size={20} strokeWidth={1.8} /> : 'To get'}
 
 			{/*
 			  * The pill inverts with the button rather than keeping its own

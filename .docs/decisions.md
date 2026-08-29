@@ -3076,7 +3076,8 @@ The column had never been published, so the rename was an edit; after the next
 two destructive flags this project has deliberately never had to use.
 
 The short name is unambiguous everywhere it is *read* — `item.offList` inside
-`needsBuying` in `shared/shoppingList.ts` names the only list the app has. It is
+`needsBuying` in `shared/shoppingList.ts` (now `shared/runList.ts` — D58, where it
+gates all three bands rather than one list) names the only list the app has. It is
 ambiguous in the one place that has no surrounding context, which is the schema
 literal itself, and that is the place a person meets it first. It also stops
 matching the checkbox's own words, *Keep off the shopping list*, which is the
@@ -3689,3 +3690,538 @@ than a departure.
   measures are arguments made on paper.
 - **Nothing says when it comes off.** Trivial to remove, impossible to remember
   to remove. Worth attaching to something — the Viewer role, or the restock flow.
+
+---
+
+## D58. A source carries a kind, and the group is named for what it holds
+
+**Decided:** 2026-08-29
+
+`.claude/docs/design/garden-and-kitchen.md`, drawn on
+`.claude/docs/design/larderloggardenkitchenboards.html`.
+
+**A store carries a kind — shop, grow or make.** *The Garden* is a source of
+kind `grow`; *The Kitchen* is one of kind `make`. It is a property of the
+**term**: not of the item, not a fourth term group, and not a mode. Both take a
+term colour, both appear in the filter group, and both tag an item card exactly
+as Costco does.
+
+**The seventh additive schema change since Phase 2**: `stores.kind`, a string
+defaulting to `''`, after `households.ink` (D42), D44's nine stamp columns, the
+`profiles` table (D46), `items.size` / `items.unit` / `items.offShoppingList`
+(D52/D53) and `memberships.picture` (D55). Ten tables and five queries still;
+**nineteen mutations**, the new one being `setSourceKind`. It applies on the
+next publish with no flag.
+
+### Why it exists: an empty store was carrying two opposite meanings
+
+*Shopping list*'s `NO STORE` card says *"Opening one of its rows is how you give
+it a store"* — copy that assumes an empty store is a **gap**, something not
+filled in yet. Baking Soda has no store because nobody set one. Frozen Peaches
+may have none because *there isn't one*. The list drew those identically, and
+the moment a household grows or cooks anything they have to come apart:
+
+| Case | What it means | What happens when it runs low |
+|---|---|---|
+| Not set yet | A gap | Sits in `NO STORE` asking to be filled in — unchanged |
+| We grow it | There is no shop | It belongs on a harvest list, never a shopping list |
+| We make it | There is no shop | It belongs on a list that says what to cook |
+
+### Why the kind is on the source rather than the item
+
+A source is already a coloured, named thing you filter and tag with, so one more
+property costs **one glyph in one panel**. Putting it on the item would mean a
+fourth chip group, a fourth colour list, and a second thing to set every time
+you add anything. It is also what leaves the item card untouched: tags already
+carry their term's colour, so a fern *The Garden* says where a thing comes from
+with no new component and nothing taught.
+
+**The counter-argument, recorded because it is the one that could sink this.**
+You buy tomatoes at Publix in February and pick them in July, so an *item* can
+have two sources. Under this scheme that is either two items or one item whose
+source you change twice a year. Nobody has lived with it.
+
+**`Calfee Cattle` stays a shop**, and that is the tell that the rule is right: a
+rancher is not a shop, but you still drive there.
+
+### The group's name follows what's in it
+
+`Store` while every source is a shop; `Source` once one of them is not. It moves
+in four places at once — the Filter tab's heading, the dashed chip that ends the
+list, the editing panel's micro-label, and the same group's label on the Add /
+Edit sheet — **plus the blocked-delete dialog**, which is a fifth the design doc
+does not name and which would otherwise say *"A store can only be deleted…"*
+under a heading reading `SOURCE`. `sourceGroupWord()` in `shared/source.ts` owns
+the rule and both halves call it, so the sentence the server throws and the one
+the client draws stay one string.
+
+**The rule is "does anything here fail to be a shop", not "how many distinct
+kinds are there"** — which is where the build departs from the design doc's
+prose. That prose says *one kind and it is a Store, more than one and it is a
+Source*; its own table then says *any grow or make source exists → SOURCE*. A
+household whose every source is a garden has exactly one kind, and calling that
+group *Store* is the precise confusion the kind exists to remove. The table
+wins, and an empty list is `Store`.
+
+**Nothing else in this app renames itself, so this is the exception and it earns
+it**: the alternative is calling The Garden a store. It changes only when you
+change the *list* — adding a grow source is a deliberate act inside the editing
+panel, and the heading directly above your hands is what moves.
+
+### The kind is set in the editing panel, and nowhere else
+
+`SourceKindMenu` is **`RoleMenu` with different words in it** — three rows on
+`drawer.menu`, radius 9, the current one at 600 with a crimson check rather than
+a fill, and a trigger that takes the swatch's cream open state. Nothing new is
+drawn, which is most of the argument for putting the kind on a term.
+
+**The trigger is the glyph, not a word**: a cart for shop, a sprout for grow, a
+pot for make. A shop's cart sits at the drawer's rest colour `inkFaint` and grow
+and make brighten to `inkMuted`, so a glance down the panel says which rows are
+not shops without reading any of them. `DRAWER_KIND` is `DRAWER_TRASH`'s
+geometry with **no colour of its own** — the glyph's colour arrives as an inline
+style, which would beat a class's `:hover` colour, so the hover here is the fill
+alone.
+
+**A new source is always a shop — amended 2026-08-29, and this one was wrong.**
+D58 shipped with no kind control on any composer, on the reasoning that one
+control on the row you are naming is enough and the menu belongs on the row once
+it exists. **The kind is not something you discover afterwards.** You know as
+you type *The Garden* that it is not a shop, and under that rule saying so meant
+naming it, pressing *Done*, re-opening the group with the pencil and finding the
+row again — four steps to record a fact you held before you started typing, on
+the one taxonomy where the fact changes what the app does with it.
+
+So **every draft row carries the glyph now**, in the slot it already occupies on
+an editing row: the Filter tab's `NEW` panel, the same tab's add row inside the
+editing panel, and the item sheet's `+ Source` composer. Same glyph, same menu,
+same three words. **It defaults to shop**, which is both the common case and
+what `toSourceKind` already resolves an absent value to, so the row a household
+composes without touching it is byte-identical to the row D58 composed.
+
+**That put the menu on cream for the first time**, since one of the three
+composers is on the item sheet. `SourceKindMenu` takes an `onDark` and re-skins
+exactly as `TermRow` and `panelSkin` do: the drawer keeps `DrawerMenu`, the
+sheet gets `PAGE_MENU` — the sort menu's popover, and therefore the box the unit
+menu opens a few pixels away on the same sheet. Reusing the drawer's surface
+there would be the mirror of the mistake `DrawerMenu`'s own note records, which
+is a cream popover over the darkest panel in the app.
+
+**`PAGE_KIND` is `DRAWER_KIND`'s light twin and fills to `surface`, not
+`surface-alt`.** The composer panel *is* `surface-alt`, so the app's usual ghost
+hover would move the control to exactly the colour it is already sitting on —
+D45's rule about an interaction state moving away from the ground, met on a
+different ground.
+
+**Undo carries the kind back**, and is why `createTerm`'s draft took an optional
+`kind` before any composer sent one — the same trade the stamps make (D44) and
+for the same reason. Undo is a re-insert (D17), so without it a restored garden
+would come back a shop: a silent change to a row somebody asked to have back
+exactly as it was. Composing is the second caller of an argument that already
+existed, which is most of why the amendment costs nothing server-side.
+
+**`setSourceKind` is its own mutation rather than a `kind` on `updateTerm`'s
+patch.** That handler's second argument is already called `kind` and means the
+taxonomy; `updateTerm(id, 'store', x, { kind: 'grow' })` reads as a
+contradiction and would be one to maintain. It short-circuits when the value has
+not changed and therefore **invalidates nothing** — the menu is a radio group
+where pressing the current row is the ordinary way to close it, and an
+unconditional invalidate would refetch every subscriber's pantry for a no-op.
+
+### Delta: the item count leaves the editing row
+
+D36 put the item count between the field and the trash *"so the outcome is
+predictable before you reach for it"*. **It is removed.** At 340px the row was
+already swatch · field · count · trash, and a fifth slot left the field around
+150px — where *Calfee Cattle* starts truncating. A source you cannot read is
+worse than a delete whose outcome you discover one press later. **The kind glyph
+is what took the space**, so this is a consequence of the feature rather than a
+change of mind about the count.
+
+**What it costs:** the blocked dialog is now the only place you learn a term is
+in use. It already names the number (*Pantry holds 3 items*) and already offers
+*Show the 3 items*, so nothing is unreachable — it takes a press. **Counts stay
+on the chips at rest**, where the chip is the thing you press and the number is
+what pressing it will do. D16's widening to all three kinds stands without the
+count; that rule was never about the count, only argued from it.
+
+### The item card carries one glyph, and a bought item carries none
+
+Added when the spec was revised on 2026-08-29; the first version of it said the
+item card changed **not at all**, and that was the strongest argument for
+putting the kind on the source. It still is — the tags already carry their
+term's colour, so a fern *The Garden* says *which* source with no new component.
+What the glyph adds is *what kind*, and that matters because a household can
+call a grow source anything and colour it anything, so nothing about the tag
+says at a glance that it is something you pick.
+
+The top-right cluster becomes **glyph · dot · chevron** — what kind of thing,
+what state it is in, then the control. Sprout for grow, pot for make, 15px in
+`textMuted`. **A shop item has nothing there and the absence is the point**:
+most of a pantry is bought, so the two kinds that are not are the ones worth
+spotting from across a grid.
+
+- **Meta grey, never the term's colour.** The status dot stays the only coloured
+  thing in that corner, because colour is what status is for. A term's hue is
+  whatever the household picked, so tinting by it would imply the hue says
+  something about the kind.
+- **It does not break *Item card*'s rule**, which is *"Name (no icons beside
+  it)"*. The top-right is a different place and already carries two things.
+- **The objection that nearly killed the off-list cart does not apply.** That was
+  *a glyph nobody has been taught*; this one is taught three times before a card
+  ever shows it — the run list's band headers, the segment tabs, and the source
+  editing row all draw the same two marks.
+- **It does not go on the run list's row.** The row sits inside a source card
+  whose header names the source and whose band names the kind; a third statement
+  of one fact on one screen is noise.
+- **`itemSourceKind()` returns `null` far more often than not**, and that is the
+  shape of the function: it answers *is this something other than bought*, not
+  *what are its sources*. **Grow wins a tie**, and the tiebreak is the run list's
+  own band order rather than a coin toss — an item naming a grow source *and a
+  shop* is exactly the case this decision records as the one that could sink it
+  (tomatoes bought in February, picked in July), and *grown* is the more useful
+  of the two things to say about it.
+- **A make item kept off the shopping list draws both this and the struck cart**,
+  and that pairing will be common — the things you make are often the things you
+  never shop for. Worth watching on a real grid.
+
+### One gap fixed on the way, and it was not this feature's
+
+**Every editing panel now has a way to add a term**, a dashed row at its foot.
+The dashed chip is hidden while editing — the panel *is* the group — which left
+the Filter pane as **the one place in the app where you could rename, recolour
+and delete a term but not make one**. Pressing *Done* to reach an add
+affordance is a trip out of the thing you are already in.
+
+It predates this feature and applies to all three groups, not just sources. Both
+add affordances are the same draft row on two surfaces and are never both open:
+opening the composer closes editing, and the add row only exists inside it. This
+panel's own *Done* commits it, because a second confirm inside a panel that
+already has one is two answers to one question.
+
+### Rejected
+
+- **A fourth term group, `Kind`, on the item.** The alternative this decision is
+  chosen against. A fourth chip row, a fourth colour list, and a decision to make
+  on every single add.
+- **`Where from` as the group's word.** Plainer, and closer to this app's voice.
+  Two words in a slot built for one, not drawn anywhere, and every one of the
+  five places would need re-measuring. *Origin* and *Supply* were both colder
+  than anything else in the interface. `Source` is the working word and this
+  decision does not claim it is the settled one.
+- **A `kind` field on `Term`.** `Source` is a separate type instead. A field that
+  is meaningfully `''` on two taxonomies out of three is a field every reader has
+  to remember not to trust — and `Source extends Term`, so every component that
+  takes a `Term` takes one unchanged.
+- **Renaming the rail's storefront glyph.** The label follows the group word;
+  the glyph does not. A storefront means *shop* and is wrong in a Source
+  household, but the neutral mark that would replace it has not been drawn, and
+  inventing one here would put a glyph nobody has been taught on the one surface
+  that is nothing but glyphs. Recorded rather than guessed at.
+
+### Open
+
+- **`Source` vs `Where from`.** The working word against the plainer one.
+- **The rail's glyph**, above. And **the marketing page's band still says
+  *Location, Store, Type*** and its Store column describes shopping, which is
+  wrong for a household that grows anything — user-facing copy, which is the
+  worst place for a contradiction.
+- **The seeded sources are all shops** — Grocery, Warehouse, Market — so a new
+  household is a `Store` household on day one and stays one until it isn't. That
+  is correct, and it means most people never meet the word *Source*.
+- **The run list is built** — see *The run list* below.
+- **`?demo` seeds nothing but shops**, so the bands are unreachable under
+  `sf dev` without hand-building a grow source and re-tagging two items. Cheap
+  to fix and not fixed: `DEMO_ITEMS`' distribution is pinned by `npm test` on
+  purpose, and adding rows moves eight assertions.
+- **A season is stored on an item that no longer names a grow source.** Changing
+  the source hides the panel and keeps the two months, so putting the source
+  back brings them with it. Discarding what somebody typed because they touched
+  a different control would be a silent write, and the value is inert —
+  `runBands` reads it in the harvest band and nowhere else.
+
+### The item side — built 2026-08-29
+
+**The eighth additive schema change since Phase 2**: `items.seasonFrom` and
+`items.seasonTo`, both defaulting to `''`. Ten tables, five queries, nineteen
+mutations. It is the whole schema cost of the item side, because **the
+ingredients are not here and never will be** (D59).
+
+- **Months, not dates**, and a pair that is never half-set — `shared/season.ts`
+  owns both rules, and `normalizeSeason` **discards a half rather than
+  completing it**. Completing would mean guessing a value the household never
+  typed, which D48 settled once already for names. Both item mutations run it,
+  and a patch naming one month reads the other off the row, exactly as the size
+  pair does.
+- **The range wraps, and that is the case worth a test.** November to February
+  is a real season and reads as one on the sheet; read literally as
+  `11 <= m <= 2` it is empty, which would move an item to `NOT YET` in every
+  month of the year including the ones it is ready in.
+- **An unset season is always in season**, which is what makes it safe to ask
+  about every item. A household that has said nothing about when its basil is
+  ready has not said it is unavailable.
+- **`NOT YET` is a sub-group at the foot of a harvest card.** Its rows keep the
+  56px height and lose exactly two things: the checkbox, because there is
+  nothing to pick, and the status badge, because the slot says *Ready in
+  September* instead. Not focusable and not in the tab order — a focusable row
+  that does nothing is worse than a row that says so.
+- **An out-of-season row does not count** — not toward its band, not toward the
+  trigger. But **the item is unchanged**: it still reads *out* on its card and
+  still counts toward the three status pills. That is the one place those two
+  numbers deliberately disagree, and it is `runIds` reading off the bands rather
+  than filtering in parallel that keeps them from drifting.
+- **Only the harvest card is affected.** An item you buy at Publix *and* pick in
+  July is still on the Buy card in February — the season says nothing about the
+  shop — and it is counted once, by the band it is really on.
+- **A card whose every row is out of season still draws.** Seeing what is coming
+  is the whole point of the group.
+- **The season panel is the inline composer's construction**, taken from
+  `panelSkin` rather than from the two hexes the boards name: it *is* the
+  composer, a few pixels from where a `+ Source` opens one, so two literals
+  would mean a panel that stopped matching its neighbour the first time either
+  was re-themed. **`MonthMenu` is `UnitMenu` with twelve rows** and no *no
+  month* row — a season is a pair, so clearing one end would have to reach
+  across to the other.
+- **`MADE BY` is a statement, not an empty state and not a disabled control.**
+  Nothing is wrong and nothing is pending on the reader, so no icon, no amber
+  and nothing to press — *a disabled control cannot explain itself* (D36) rules
+  out the alternative. Make items only.
+
+### The item card wears every kind it has
+
+Amending this decision's own first pass, which drew **one** glyph and broke a tie
+toward grow. It now draws **one per distinct kind**, in band order — so an item
+bought at Publix *and* picked from the garden carries a cart and a sprout, which
+is the honest answer to a question the tags below it cannot answer.
+
+**An item naming no source still draws nothing**, even though it lands on the
+Buy band. This decision's own table splits an empty source three ways and the
+first of them is *not set yet* — a gap. A cart there would answer a question
+nobody has answered. The glyphs mirror the tags: what is on the card is what is
+on the item.
+
+**The off-list marker stopped being a struck cart**, for two reasons that
+arrived together. A cart is now the *shop* kind's own glyph, and a cart beside a
+struck cart in one cluster is the worst pair of marks on the screen. And the
+strike was claiming the wrong thing anyway: `needsBuying` gates every band, so
+it keeps an item off Harvest and Make as well — it means *off the list*, not
+*never bought*. `ListX` says that and collides with nothing. It stays fainter
+than the kind glyphs: the kinds are facts about the item, this is a rule
+somebody set about it.
+
+### The run list — built 2026-08-29
+
+`shoppingList.ts` **is** `runList.ts` now, and `shoppingGroups` is `runBands`.
+The list groups by **kind first, source second**, and nothing about a *card*
+changed: same 460px `auto-fill` grid, same header, same rows, same trip bar.
+
+- **A band is present only when it holds something**, always in the order Buy ·
+  Harvest · Make. A household with nothing but shops gets one band, no headers
+  and no segment — **today's shopping list byte for byte**, which is most of why
+  this shape won.
+- **An item appears under every source it names, which now means two bands.**
+  Tomatoes bought at Publix in February and picked in July are on the Buy card
+  and the Harvest card, and each band counts them once — so the bands need not
+  add up to the total, exactly as the store cards never summed to it either.
+- **The storeless group is Buy's, and the test for it is against every source**,
+  not the band's own: an item naming only The Garden *has* a source, so it must
+  not also turn up in Buy asking to be given a shop.
+- **`needsBuying` gates every band, not only Buy.** What *Keep off the list*
+  says is *never remind me about this*, and a harvest list is a reminder. That
+  narrows what D53's checkbox is **for**: it was written for "the things a
+  household grows or brews", and a grow source now says that better and says
+  which. What is left is the genuine override — the salt you never restock. The
+  label lost the word *shopping* with it.
+- **`All` is the default and the whole design**, and it carries no glyph —
+  the drawer's `All items` chip's argument, reused. **The active tab is not the
+  ink primary**: *Add item* is on screen in row 1 and ink is the thing you press,
+  so a tab is `surface` on `borderStrong`, a raised tab on a sunk track.
+- **The segment's counts are of the filtered set; the trigger's is the
+  household's.** That pair has always been allowed to disagree.
+- **The trip line shrinks to the cart clause when the segment is up.**
+  `12 to buy · 4 stores` is what the segment now says in tabs you can press, and
+  printing it twice a gap apart is one question answered two ways. What the
+  segment cannot say is how much is already in your hand.
+- **The active tab is resolved once and read three times.** A chosen band can
+  empty out under you — tick the last thing on Harvest — so it falls back to
+  `All`. Reading the raw tab in one place and the fallback in another is exactly
+  how the screen ends up drawing every band with no headers over them; that bug
+  was built and caught before it shipped.
+
+**Two departures from the boards, both forced.**
+
+**The Make card is a Buy card.** The doc's own refinement says a make row is
+56px "until a recipe gives it something to say", and recipes are not being built
+(D59) — so there is no second line, no 76px row and no *short 3 carrots*.
+**Board 1 draws it in the taller form**, which is the mockup.
+
+**Below the measured column the segment gets its own row.** Row 2's left slot
+holds its width in both modes so the trigger never moves when pressed, and in
+compact that slot *is* the row's slack — there is nothing for a fourth control
+to take, and taking it would move the trigger, which is the one thing this row
+cannot do. So the segment drops to a scrolling row beneath, with row 3's bleed.
+The doc guesses "it probably scrolls horizontally like the applied-filter chips
+do", which it does; what it does not say is that it needs a row. **That costs a
+fifth row at 390 in list mode and wants a real phone.**
+
+---
+
+## D59. Processes depend on the pantry; the pantry depends on nothing
+
+**Decided:** 2026-08-29
+
+From the *Where this goes* section of
+`.claude/docs/design/garden-and-kitchen.md`, drawn on board 6.
+
+**Nothing here is built, and that is the point of writing it down.** It governs
+what a make item's sheet may and may not carry, which is a decision the very
+next build has to respect.
+
+A make source implies a **recipe**; a grow source implies a **planting**. Both
+are *processes*, and the pantry tracks their *outputs*. The reference runs one
+way only:
+
+| | Holds a reference to | Is referenced by |
+|---|---|---|
+| A recipe | the items it uses, and the item it yields | nothing |
+| A planting | the item it yields | nothing |
+| A pantry item | nothing | — |
+
+**So a pantry item gains no field at all** — no `madeFrom`, no `madeBy`, no
+`recipeId`. A row on an item sheet reading *Made by **Chicken Stock*** is a
+**derived pointer, not an edited field**; display is not ownership, and
+conflating the two is how the pantry ends up knowing about cooking.
+
+**Model B settled, Model A rejected.** Model A grew the item into the recipe —
+the sheet gains *Makes*, *Takes*, *Steps*, and nothing new is created. Its
+ceiling is hard and arrives at the first recipe you do not put in a jar:
+**every recipe would have to stock something**. Chili gets eaten, not shelved,
+and holding a chili recipe would mean a pantry item called *Chili* sitting at 0
+for ever — on the shopping list, in the grid, in every count.
+
+Three consequences fall straight out of the direction, and all three beat A:
+
+- **Two recipes can yield one item.** Under A there is exactly one, because the
+  recipe *is* the item.
+- **Deleting a recipe leaves the pantry untouched.** Under A it deletes an item,
+  its count, and its place in every list.
+- **Deleting an item leaves the recipe standing**, minus its yield.
+
+**One place the rule bends, deliberately.** The run list's Make band would have
+to show *short 3 carrots*, which means looking up which recipe yields an item —
+a reverse lookup the model does not store. That is a **view doing a join**, not
+the pantry holding a reference. Views may join freely; the model stays
+one-directional.
+
+### What this rules out of the current work
+
+**Ingredients are not on the item, and no interim version puts them there.** An
+earlier pass of the design drew the panel on the item sheet and planned to move
+it onto a recipe later; that plan teaches a mental model the app then has to
+take away, and it puts the pantry in the business of knowing about cooking for
+one release.
+
+So the item side ships **`items.seasonFrom` / `items.seasonTo` and a static
+`MADE BY` panel** — a sunk statement reading *Recipes are coming*, explaining
+that marking something as made rather than bought already puts it on the Make
+band instead of a shopping list. **A statement, not an empty state and not a
+disabled control**: nothing is wrong and nothing is pending on the reader, and
+*a disabled control cannot explain itself* (D36) rules out the alternative.
+Drawn only for make items.
+
+**The kind is not made redundant by recipes**, which is the obvious next thought
+and is wrong. **You can be low on something you make and not have written the
+recipe down.** Under a Make band derived from *items some recipe yields*, that
+item silently falls out of Make and into `NO STORE`, and the only fix is a stub
+recipe with no ingredients — the phantom that lost Model A the argument. The
+kind says *how a thing arrives* and is always known; the recipe says *how to
+make it* and is optional. The kind also carries the group's name and the item
+card's glyph, which no recipe can.
+
+### Open
+
+- **The season is borrowed.** It sits on the item because there is only one
+  object today; it belongs on a planting. Two fields to move, and worth knowing
+  it is on loan.
+- **Deduction blocks a third feature now.** Both models can say you have enough
+  and neither can take it out. Restock already gated trends and the
+  *Always on the list* override; cooking joins the queue.
+- **"What can I cook tonight?" is not the Make band.** That band answers a
+  *restocking* question. A cook wants every recipe they have the ingredients
+  for, whether or not its output is tracked and running low. Different screen.
+- **Can one recipe yield more than one item?** A batch of dough is two loaves
+  and a pizza base. Drawn as a single yield.
+
+---
+
+## D60. The off-list checkbox is retired, and the column is kept
+
+**Decided:** 2026-08-29 — amends
+[D53](#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item).
+
+**A source's kind answers the question the checkbox was invented for.** D53's
+own sentence was *"some things are never shopped for, and that is a property of
+the item"* — written for the things a household grows or brews. Under
+[D58](#d58-a-source-carries-a-kind-and-the-group-is-named-for-what-it-holds)
+that is a property of the **source**, and it is answered better: you grow it,
+you make it, or you buy it, and the first two go to their own bands without
+anybody ticking anything.
+
+**The checkbox says it worse than the kind does**, and that is the argument
+rather than mere duplication. It hides an item from the list *without saying
+where it went*: the card reads *out*, the list does not hold it, and nothing on
+either screen explains why. A grow source answers the same question and puts the
+item on a Harvest card while it does so.
+
+### What changes, and what deliberately does not
+
+**No migration.** `items.offShoppingList` stays exactly where it is. Dropping a
+column needs `sf db migrate --drop`; filling one again is additive — the same
+trade [D34](#d34-term-icons-are-cut-and-the-column-is-kept) made for `icon`, and
+the reason that column is still there holding `''`.
+
+**`needsBuying` still reads it.** A row ticked before today behaves exactly as
+it did: off every band, with the card's marker explaining it. Nothing about
+existing data moves, which is the whole point of keeping the column.
+
+**The control is a way out, not a way in.** The sheet draws it **only on an item
+that already carries the flag**, and pressing it clears the flag and unmounts the
+row. So it can be cleared and never set, and the flag drains out of the database
+as people meet it rather than being migrated out from under them.
+
+**Absent rather than disabled where it would create a new one; present where it
+is the only way out of an old one.** That is D30's rule doing a job it was not
+written for. A legacy row with no control at all would be stuck off every band
+for good — a worse thing to ship than a control that only subtracts.
+
+**The card's marker stays and is a legacy marker.** It draws only for rows that
+were ticked before the retirement, which is exactly when *"why isn't the olive
+oil on my list"* still gets asked. It goes on its own when the last such row is
+cleared. (It stopped being a struck cart under D58 for an unrelated reason: a
+cart is now the shop kind's own glyph.)
+
+**Putting it back is deleting one condition.** The column, the normalisation in
+both item mutations, the `ItemDraft` field, the undo path and `needsBuying` are
+all untouched — only the sheet's `value.offShoppingList &&` guard stands between
+today and the control returning. That is what "in case I want to re-add it" is
+worth in code.
+
+**`?demo` still seeds three flagged rows, on purpose.** Nothing in the UI can
+set the flag any more, so seeded rows are the only way to reach the legacy state
+locally: the card's marker, the clear-only checkbox, and the two-item gap
+between the status pills and the run list's total that made D53's split
+countable in the first place.
+
+### Rejected
+
+- **Dropping the column.** It is one `sf db migrate --drop` and it is
+  irreversible against live data, for a saving of nothing — an unread boolean
+  costs a byte a row.
+- **Migrating the flagged rows to a grow or make source.** It would have to
+  guess which, and *Honey from Dale's hives* is neither grown nor made by this
+  household. A wrong guess is a silent rewrite of somebody's pantry.
+- **Leaving the control in and letting the two overlap.** Two ways to say one
+  thing, and the worse one is the one with no explanation attached.
+- **Removing the control outright, legacy rows included.** Cheapest, and it
+  strands every ticked row off every band with no way back. The escape hatch is
+  three lines.

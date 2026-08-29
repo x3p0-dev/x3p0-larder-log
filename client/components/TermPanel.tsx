@@ -2,9 +2,11 @@ import { useState } from 'preact/hooks';
 import { Trash2, X } from 'lucide-preact';
 
 import { ColorPicker } from './ColorPicker';
+import { SourceKindMenu } from './SourceKindMenu';
 import type { Theme } from '../lib/theme';
 import { themed } from '../lib/theme';
 import { DRAWER_TRASH, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK } from '../lib/controlStyles';
+import type { SourceKind } from '../../shared/source';
 
 type Skin = {
 	panel: string;
@@ -14,8 +16,6 @@ type Skin = {
 	fieldLine: string;
 	ink: string;
 	ghost: string;
-	/** The item count beside the trash — quiet, and the same on both grounds. */
-	count: string;
 	doneBg: string;
 	doneInk: string;
 	/** The field's focus halo, as a class — `:focus` cannot be an inline style. */
@@ -36,14 +36,14 @@ export function panelSkin(theme: Theme, onDark: boolean): Skin {
 		? {
 			panel: '#262019', hairline: theme.drawer.line, label: '#C3B49C',
 			field: theme.drawer.well, fieldLine: theme.drawer.line, ink: theme.drawer.ink,
-			ghost: '#6E5F4B', count: '#9E8C74', doneBg: theme.drawer.ink, doneInk: '#241E17',
+			ghost: '#6E5F4B', doneBg: theme.drawer.ink, doneInk: '#241E17',
 			halo: PANEL_FIELD_HALO_DARK,
 			well: theme.drawer.bg,
 		}
 		: {
 			panel: theme.surfaceAlt, hairline: theme.border, label: theme.textMuted,
 			field: theme.surface, fieldLine: theme.border, ink: theme.textStrong,
-			ghost: theme.textMuted, count: theme.textFaint, doneBg: theme.inkBg, doneInk: theme.inkText,
+			ghost: theme.textMuted, doneBg: theme.inkBg, doneInk: theme.inkText,
 			halo: theme.dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO,
 			well: theme.ground,
 		};
@@ -53,9 +53,21 @@ export function panelSkin(theme: Theme, onDark: boolean): Skin {
  * A recessed panel with a micro-label header and a pill on the right.
  *
  * `LOCATION · NEW` with a *Done* pill on the sheet, `STORE · EDITING` with the
- * same pill in the filter tab. The negative margin lets it bleed to the edge of
- * whatever column it drops into, so it reads as a tray opening rather than a
- * card floating inside the list.
+ * same pill in the filter tab.
+ *
+ * **It used to bleed 10px past its column on both sides**, a `-mx-2.5` meant to
+ * read as a tray opening rather than a card floating inside a list. It read as
+ * neither: it read as a box that missed. On the item sheet it hung outside the
+ * fields, the micro-labels and the season and make panels either side of it; in
+ * the Filter tab it hung outside the chips it drops under **and outside the
+ * `EDITING` card**, which is the same panel one state along and has always sat
+ * on the pane's own gutter. A composer that lines up with nothing it opens
+ * beside is not a different kind of surface, and the tray reading was never
+ * worth an edge that disagreed with every other edge in the column.
+ *
+ * So there is one geometry now: the panel's edges are its column's, on both
+ * surfaces, with `px-3.5` inside — the sheet's season panel and the drawer's
+ * editing card both already use that padding.
  *
  * `flush` is for the callers that open **inside a card rather than inside a
  * list** — Settings › Household, and the Filter tab's `EDITING` panel, which
@@ -87,7 +99,11 @@ export function TermPanel({
 				'flex flex-col gap-2.5 pt-3 pb-3.5 ' +
 				/* 12, not 13: the card's radius less its 1px border, so the fill
 				 * follows the inside of the corner rather than cutting across it. */
-				(flush ? 'pl-3.5 pr-3 rounded-t-[12px]' : '-mx-2.5 px-2.5 rounded-[14px]')
+				/* 14 either way, so the row inside lands where the season panel's
+				 * own `p-3.5` puts its months and where the editing card's
+				 * `pl-3.5` puts its names. The `flush` form trims 2px off the
+				 * right for the trash, which carries its own. */
+				(flush ? 'pl-3.5 pr-3 rounded-t-[12px]' : 'px-3.5 rounded-[14px]')
 			}
 			style={{
 				background: s.panel,
@@ -119,21 +135,34 @@ export function TermPanel({
  * swatch and those sixteen are the theme's palette, not the surface's (D42).
  */
 export function TermRow({
-	name, ink, placeholder, autoFocus, count, onName, onColor, onAction, action, onDark = false, theme,
+	name, ink, placeholder, autoFocus, kind, onKind, onName, onColor, onAction, action, onDark = false, theme,
 }: {
 	name: string;
 	ink: string;
 	placeholder?: string;
 	autoFocus?: boolean;
 	/**
-	 * How many items reference this term, shown between the field and the trash.
+	 * A source's kind, and the glyph that changes it (D58). Stores only —
+	 * locations and types have no kind, and pass neither.
 	 *
-	 * The trash is live on every row (D36), so this is what makes the outcome
-	 * predictable *before* the press: a non-zero count means the blocked dialog,
-	 * a zero means the term goes with an undo toast holding it. Absent on a row
-	 * being composed, which references nothing yet.
+	 * **A row being composed carries it too**, which is new: D58 shipped with
+	 * *a new source is always a shop*, on the reasoning that the kind is a
+	 * property you settle afterwards from the editing row. It is not — you know
+	 * whether you are adding a shop or a garden as you type its name, and
+	 * making one meant naming it, pressing *Done*, re-opening the panel with
+	 * the pencil and finding the row again. Same glyph, same menu, same slot.
+	 *
+	 * **This is what replaced the item count.** D36 put the count here so the
+	 * trash's outcome was predictable before the press; at 340px the row was
+	 * already swatch · field · count · trash, and a fifth slot left the field
+	 * around 150px, which is where *Calfee Cattle* starts truncating. A source
+	 * you cannot read is worse than a delete whose outcome you discover one
+	 * press later — and the blocked dialog still names the number and still
+	 * offers to show you the items. The chips above keep their counts, where
+	 * the number says what pressing the chip will do.
 	 */
-	count?: number;
+	kind?: SourceKind;
+	onKind?: (kind: SourceKind) => void;
 	onName: (next: string) => void;
 	onColor: (token: string) => void;
 	onAction: () => void;
@@ -143,6 +172,7 @@ export function TermRow({
 	theme: Theme;
 }) {
 	const [pickerOpen, setPickerOpen] = useState(false);
+	const [kindOpen, setKindOpen] = useState(false);
 	const s = panelSkin(theme, onDark);
 	/*
 	 * `themed()`, **not** `termColorFor()`.
@@ -191,10 +221,16 @@ export function TermRow({
 					aria-label={placeholder ?? 'Term name'}
 				/>
 
-				{count !== undefined && (
-					<span class="shrink-0 min-w-[20px] text-right text-[13px] tabular-nums" style={{ color: s.count }}>
-						{count}
-					</span>
+				{kind !== undefined && onKind && (
+					<SourceKindMenu
+						open={kindOpen}
+						setOpen={setKindOpen}
+						name={name}
+						kind={kind}
+						onChange={onKind}
+						onDark={onDark}
+						theme={theme}
+					/>
 				)}
 
 				{/*

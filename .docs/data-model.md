@@ -230,10 +230,31 @@ stores: table({
   householdId: id("households"),
   name: string(),
   ink: string(),                 // color token — D32
+  kind: string().default(""),    // "shop" | "grow" | "make"; "" is shop — D58
   addedAt: string().default(""),
   changedAt: string().default(""),
 }).index("by_household", ["householdId"])
 ```
+
+**A store carries a kind, and that is what makes it a *source*
+([D58](decisions.md#d58-a-source-carries-a-kind-and-the-group-is-named-for-what-it-holds)).**
+`shop`, `grow` or `make` — *The Garden* is one you pick from, *The Kitchen* is
+one you cook from. `''` is what every row written before the column holds and
+resolves to `shop`, which is not a placeholder: every source in the app was a
+shop until this column existed. `toSourceKind()` in `shared/source.ts` does the
+resolving, and the `pantry` query does it once server-side so no render site has
+to remember to.
+
+It is the only taxonomy with the column, which is why the DTO is `Source` rather
+than a `kind` on `Term`. It is written by `setSourceKind` — its own mutation,
+because `updateTerm`'s second argument is *already* called `kind` and means the
+taxonomy — and by `createTerm`, on the undo path only.
+
+**The group renames itself**: `Store` while every source is a shop, `Source`
+once one of them is not. `sourceGroupWord()` owns that rule, and it asks *does
+anything here fail to be a shop* rather than counting distinct kinds — a
+household whose every source is a garden has one kind and is emphatically not a
+`Store` household.
 
 **Terms are ordered A–Z by name, and the ordering is applied once** — in the
 `pantry` query, by `byName()` in `shared/term.ts`. The drawer's filters, the item
@@ -267,7 +288,9 @@ items: table({
   threshold: string(),              // non-negative integer, as a string
   size: string().default(""),       // how big ONE of them is — D52
   unit: string().default(""),       // its unit KEY, a slug: "quart", not "qt"
-  offShoppingList: boolean().default(false),
+  offShoppingList: boolean().default(false),   // retired — D60; kept, never set
+  seasonFrom: string().default(""),    // month 1-12 as a string; "" for none — D58
+  seasonTo: string().default(""),      // both, or neither — shared/season.ts
                                     // never joins the shopping list — D53
   notes: string().default(""),
   addedAt: string().default(""),    // when the ITEM entered the pantry — D44
@@ -460,7 +483,8 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |
 | `removeItem` | mutation | Delete an item and its joins |
-| `createTerm` / `updateTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind. `createTerm` takes the same optional stamps |
+| `createTerm` / `updateTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind. `createTerm` takes the same optional stamps, plus a source's `kind` — **undo only** |
+| `setSourceKind` | mutation | A store's `shop` / `grow` / `make` — [D58](decisions.md#d58-a-source-carries-a-kind-and-the-group-is-named-for-what-it-holds). Stores only, and a no-op write invalidates nothing |
 | `updateHousehold` | mutation | Name, colour and `defaultThreshold` — owner only |
 | `createInvite` / `revokeInvite` / `redeemInvite` | mutation | Membership; the invite carries its role |
 | `changeRole` | mutation | Promote or demote a member — owner only, last-owner guarded |

@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — Garden and Kitchen modes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Karla:wght@400;500;600;700&display=swap">
+<style>
+  /* ---- document chrome ---------------------------------------- */
+  /* one board is 1440 wide; --s scales it to whatever the window allows */
+  :root { --s: 1; }
+  @media (max-width: 1559px) { :root { --s: .88; } }
+  @media (max-width: 1359px) { :root { --s: .74; } }
+  @media (max-width: 1159px) { :root { --s: .60; } }
+  @media (max-width:  959px) { :root { --s: .47; } }
+  @media (max-width:  767px) { :root { --s: .34; } }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #F3EADC;
+    color: #241E17;
+    font-family: Karla, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .doc { max-width: 1560px; margin: 0 auto; padding: 56px 40px 96px; }
+
+  .mast { border-bottom: 1px solid #CFBEA3; padding-bottom: 26px; margin-bottom: 40px; }
+  .eyebrow {
+    font-weight: 700; font-size: 10.5px; letter-spacing: .15em;
+    text-transform: uppercase; color: #6F6049; margin-bottom: 12px;
+  }
+  h1 {
+    font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+    font-weight: 600; font-size: 42px; line-height: 1.1; margin: 0 0 14px;
+  }
+  h1 em { font-style: italic; font-weight: 600; color: #BE3346; }
+  .stand { font-size: 16.5px; line-height: 1.6; color: #4C4237; max-width: 62ch; margin: 0; }
+  .meta { font-size: 13px; line-height: 1.6; color: #6F6049; margin: 18px 0 0; max-width: 86ch; }
+
+  .ph {
+    font-family: "Playfair Display", Georgia, serif;
+    font-weight: 600; font-size: 27px; margin: 0 0 22px;
+    padding-bottom: 12px; border-bottom: 1px solid #E2D5C0;
+  }
+  .page + .page { margin-top: 76px; }
+
+  .note {
+    background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px;
+    padding: 22px 26px; margin: 0 0 30px; max-width: 78ch;
+  }
+  .note .nh {
+    font-weight: 700; font-size: 10.5px; letter-spacing: .15em;
+    text-transform: uppercase; color: #6F6049; margin: 0 0 12px;
+  }
+  .note p { font-size: 14.5px; line-height: 1.68; color: #4C4237; margin: 0 0 12px; }
+  .note p:last-child { margin-bottom: 0; }
+
+  .board { margin: 0 0 34px; width: calc(1440px * var(--s)); max-width: 100%; overflow-x: auto; }
+  .bc {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 10.5px; letter-spacing: .15em;
+    text-transform: uppercase; color: #6F6049; margin-bottom: 10px;
+  }
+  .bn {
+    width: 20px; height: 20px; border-radius: 999px; flex-shrink: 0;
+    background: #241E17; color: #F2E9DA;
+    font-size: 11px; font-weight: 700; letter-spacing: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* the frame box hugs the scaled board exactly, so its edge IS the board edge */
+  .fit {
+    width: calc(1440px * var(--s));
+    height: calc(var(--h) * var(--s));
+    overflow: hidden;
+    border: 1px solid #CFBEA3; border-radius: 20px;
+    box-shadow: 0 14px 30px rgba(36, 30, 23, .10);
+    background: #F3EADC;
+  }
+  .frame {
+    width: 1440px;
+    transform: scale(var(--s));
+    transform-origin: top left;
+  }
+
+  .colophon {
+    margin-top: 72px; padding-top: 22px; border-top: 1px solid #CFBEA3;
+    font-size: 13px; line-height: 1.6; color: #6F6049; max-width: 78ch;
+  }
+
+  @media (max-width: 767px) { .doc { padding: 32px 16px 64px; } }
+
+  @media print {
+    :root { --s: .50; }
+    body { background: #fff; }
+    .doc { padding: 0; max-width: none; }
+    .board, .note { break-inside: avoid; }
+    .fit { box-shadow: none; }
+  }
+
+  /* ---- scoped artboard styles --------------------------------- */
+#b1 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b1 a { color: #BE3346; }
+#b1 a:hover { color: #9A2E3B; }
+#b1 .ll { width: 1440px; height: 1510px; display: flex; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); }
+#b1 .rail { width: 68px; flex-shrink: 0; background: linear-gradient(#2B2419, #1F1A13); display: flex; flex-direction: column; align-items: center; padding: 18px 0; gap: 10px; }
+#b1 .rbtn { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #9E8C74; }
+#b1 .rbtn.raised { background: #332B22; }
+#b1 .rdiv { width: 26px; height: 1px; background: #3B3126; margin: 4px 0; }
+#b1 .htile { width: 40px; height: 40px; border-radius: 12px; background: #A85E33; color: #FDFAF4; font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+#b1 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#b1 .topbar { padding: 24px 32px 18px; display: flex; flex-direction: column; gap: 14px; }
+#b1 .r1 { display: flex; gap: 12px; }
+#b1 .search { flex: 1; height: 52px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #6F6049; font-size: 16px; }
+#b1 .primary { height: 52px; border-radius: 15px; background: #241E17; color: #F2E9DA; font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 9px; padding: 0 20px; }
+#b1 .r2 { display: flex; align-items: center; gap: 12px; }
+#b1 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+#b1 .r2meta { margin-left: auto; color: #6F6049; font-size: 13px; }
+#b1 .seg { height: 40px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 13px; padding: 3px; display: flex; gap: 3px; box-sizing: border-box; }
+#b1 .sgi { height: 32px; border-radius: 10px; display: flex; align-items: center; gap: 7px; padding: 0 13px; font-size: 13.5px; font-weight: 500; color: #4C4237; white-space: nowrap; }
+#b1 .sgi.on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
+#b1 .sgc { font-size: 12.5px; color: #6F6049; }
+#b1 .sgi.on .sgc { color: #241E17; }
+#b1 .body { flex: 1; padding: 6px 32px 40px; display: flex; flex-direction: column; gap: 34px; }
+#b1 .bandhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #6F6049; }
+#b1 .bandlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b1 .bandrule { flex: 1; height: 1px; background: #E2D5C0; }
+#b1 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+#b1 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
+#b1 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+#b1 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b1 .ccount { margin-left: auto; letter-spacing: 0.04em; }
+#b1 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b1 .row:first-of-type { border-top: none; }
+#b1 .mkrow:first-of-type { border-top: none; }
+#b1 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#b1 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b1 .cb.on { background: #241E17; border-color: #241E17; display: flex; align-items: center; justify-content: center; }
+#b1 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
+#b1 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; white-space: nowrap; }
+#b1 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
+#b1 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; white-space: nowrap; padding-left: 14px; }
+#b1 .struck { color: #6F6049; text-decoration: line-through; }
+#b1 .tripbar { height: 52px; border-radius: 15px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; padding: 0 16px; margin-top: -10px; }
+#b1 .ghost { height: 34px; border-radius: 11px; display: flex; align-items: center; padding: 0 12px; color: #4C4237; font-weight: 600; font-size: 14px; }
+#b1 .subhead { display: flex; align-items: center; gap: 8px; padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b1 .mkrow { height: 76px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b1 .mkline { font-size: 12.5px; margin-top: 3px; }
+#b2 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b2 a { color: #BE3346; }
+#b2 a:hover { color: #9A2E3B; }
+#b2 .bd { width: 1440px; height: 668px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
+#b2 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
+#b2 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
+#b2 .pdot { width: 8px; height: 8px; border-radius: 999px; }
+#b2 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 9px; padding: 0 12px 0 14px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; }
+#b2 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 9px; }
+#b2 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
+#b2 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+#b2 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b2 .ccount { margin-left: auto; letter-spacing: 0.04em; }
+#b2 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b2 .row:first-of-type { border-top: none; }
+#b2 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#b2 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b2 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
+#b2 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; white-space: nowrap; }
+#b2 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
+#b2 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; white-space: nowrap; padding-left: 14px; }
+#b2 .subhead { display: flex; align-items: center; padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b2 .mkrow { height: 76px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b2 .mkrow:first-of-type { border-top: none; }
+#b2 .note { font-size: 13px; line-height: 1.55; color: #4C4237; margin-top: 14px; }
+#b2 .note b { color: #241E17; font-weight: 600; }
+#b3 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b3 a { color: #BE3346; }
+#b3 a:hover { color: #9A2E3B; }
+#b3 .bd { width: 1440px; height: 1440px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 40px 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
+#b3 .mockbar { background: #F7EEDA; border: 1px solid #E9DAB9; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.5; color: #855A0F; }
+#b3 .mockbar b { color: #6B480C; font-weight: 700; }
+#b3 .cols { display: flex; gap: 34px; align-items: flex-start; }
+#b3 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
+#b3 .sheet { width: 480px; box-sizing: border-box; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; }
+#b3 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
+#b3 .hint { font-size: 12.5px; color: #6F6049; margin-top: 8px; line-height: 1.55; }
+#b3 .panel { background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC; border-radius: 14px; padding: 12px; margin-top: 12px; }
+#b3 .irow { display: flex; align-items: center; gap: 8px; height: 46px; }
+#b3 .step { display: flex; align-items: center; height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; overflow: hidden; flex-shrink: 0; }
+#b3 .sbtn { width: 26px; height: 36px; display: flex; align-items: center; justify-content: center; color: #4C4237; }
+#b3 .snum { width: 30px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 14.5px; font-weight: 500; color: #241E17; font-variant-numeric: tabular-nums; border-left: 1px solid #EEE4D2; border-right: 1px solid #EEE4D2; }
+#b3 .unit { height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; color: #241E17; font-size: 13.5px; display: flex; align-items: center; gap: 5px; padding: 0 8px; flex-shrink: 0; }
+#b3 .unit.open { background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600; }
+#b3 .iname { flex: 1; min-width: 0; display: flex; align-items: baseline; }
+#b3 .inm { font-size: 14.5px; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#b3 .isz { font-size: 12.5px; color: #6F6049; margin-left: 7px; white-space: nowrap; flex-shrink: 0; }
+#b3 .ihave { font-size: 12.5px; flex-shrink: 0; font-variant-numeric: tabular-nums; text-align: right; }
+#b3 .ix { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #9B8B75; flex-shrink: 0; }
+#b3 .urow { display: flex; align-items: center; gap: 8px; height: 46px; padding-left: 94px; }
+#b3 .utxt { flex: 1; min-width: 0; font-size: 14.5px; color: #4C4237; }
+#b3 .untr { font-size: 12.5px; color: #9B8B75; flex-shrink: 0; }
+#b3 .addrow { height: 38px; border: 1px dashed #C9B79B; border-radius: 10px; color: #6F6049; font-size: 13.5px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 4px; }
+#b3 .strip { margin-top: 14px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; color: #4C4237; }
+#b3 .sdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b3 .searchfield { height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: center; gap: 9px; padding: 0 11px; }
+#b3 .caret { width: 1.5px; height: 17px; background: #241E17; }
+#b3 .menu { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 14px; padding: 6px; box-shadow: 0 14px 30px rgba(36,30,23,.20); margin-top: 6px; }
+#b3 .mrow { height: 36px; border-radius: 9px; display: flex; align-items: center; padding: 0 11px; font-size: 14px; color: #241E17; }
+#b3 .mrow.hov { background: #F2EADC; }
+#b3 .mrow.cur { font-weight: 600; }
+#b3 .mgrp { padding: 8px 11px 4px; font-weight: 700; font-size: 9.5px; letter-spacing: .15em; text-transform: uppercase; color: #9B8B75; }
+#b3 .mright { margin-left: auto; font-size: 12.5px; color: #6F6049; font-variant-numeric: tabular-nums; padding-left: 12px; }
+#b3 .mempty { padding: 9px 11px 4px; font-size: 12.5px; color: #6F6049; }
+#b3 .mdiv { height: 1px; background: #EEE4D2; margin: 5px 4px; }
+#b3 .note { font-size: 13px; line-height: 1.62; color: #4C4237; margin-top: 15px; }
+#b3 .note b { color: #241E17; font-weight: 600; }
+#b3 .tbl { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 16px; padding: 14px 16px; margin-top: 16px; }
+#b3 .trow { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; line-height: 1.5; color: #6F6049; padding: 7px 0; border-top: 1px solid #EEE4D2; }
+#b3 .trow:first-of-type { border-top: none; }
+#b3 .trow b { color: #241E17; font-weight: 600; font-size: 13px; min-width: 66px; flex-shrink: 0; }
+#b4 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b4 a { color: #BE3346; }
+#b4 a:hover { color: #9A2E3B; }
+#b4 .bd { width: 1440px; height: 1000px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
+#b4 .cols { display: flex; justify-content: space-between; align-items: flex-start; }
+#b4 .colw { width: 340px; }
+#b4 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
+#b4 .drawer { width: 340px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 18px; padding: 18px 16px 20px; }
+#b4 .dhead { display: flex; align-items: center; margin-bottom: 14px; color: #9E8C74; }
+#b4 .dlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b4 .dicons { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+#b4 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+#b4 .chip { height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+#b4 .chip .cn { color: #6F6049; font-size: 12.5px; }
+#b4 .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+#b4 .chip.dash { background: transparent; border: 1px dashed #4A4031; color: #9E8C74; }
+#b4 .panel { background: #262019; box-shadow: inset 0 0 0 1px #3B3126; border-radius: 14px; padding: 12px; }
+#b4 .phead { display: flex; align-items: center; margin-bottom: 10px; }
+#b4 .donepill { margin-left: auto; height: 28px; border-radius: 10px; background: #F2E9DA; color: #241E17; font-weight: 600; font-size: 13px; display: flex; align-items: center; padding: 0 12px; }
+#b4 .erow { display: flex; align-items: center; gap: 9px; height: 40px; }
+#b4 .sw { width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0; box-shadow: 0 0 0 2px #262019, 0 0 0 3.5px currentColor; }
+#b4 .field { flex: 1; min-width: 0; height: 40px; border-radius: 11px; background: #191510; border: 1px solid #3B3126; color: #DCD0BA; font-size: 13.5px; display: flex; align-items: center; padding: 0 10px; overflow: hidden; white-space: nowrap; }
+#b4 .gbtn { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #9E8C74; flex-shrink: 0; }
+#b4 .gbtn.open { background: #F2E9DA; color: #241E17; }
+#b4 .addrow { height: 36px; border: 1px dashed #4A4031; border-radius: 11px; color: #9E8C74; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 8px; }
+#b4 .menu { width: 196px; background: #241E17; border: 1px solid #4A4031; border-radius: 14px; padding: 6px; box-shadow: 0 16px 40px rgba(10,8,5,.44); }
+#b4 .mrow { height: 36px; border-radius: 9px; display: flex; align-items: center; gap: 9px; padding: 0 10px; color: #DCD0BA; font-size: 14px; }
+#b4 .mrow.cur { color: #F2E9DA; font-weight: 600; }
+#b4 .note { font-size: 13px; line-height: 1.6; color: #4C4237; margin-top: 18px; }
+#b4 .note b { color: #241E17; font-weight: 600; }
+#b4 .namestrip { display: flex; gap: 34px; align-items: flex-start; }
+#b4 .mini { width: 300px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 16px; padding: 15px 14px; }
+#b5 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b5 a { color: #BE3346; }
+#b5 a:hover { color: #9A2E3B; }
+#b5 .bd { width: 1440px; height: 1340px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 48px 52px 48px 60px; box-sizing: border-box; display: flex; gap: 34px; align-items: flex-start; }
+#b5 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
+#b5 .sheet { width: 480px; flex-shrink: 0; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; box-sizing: border-box; }
+#b5 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
+#b5 .rule { height: 1px; background: #EEE4D2; margin: 22px 0 20px; }
+#b5 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+#b5 .chip { height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+#b5 .chip.on { background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600; }
+#b5 .chip.dash { background: transparent; border: 1px dashed #C9B79B; color: #6F6049; }
+#b5 .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+#b5 .hint { font-size: 12.5px; color: #6F6049; margin-top: 9px; line-height: 1.5; }
+#b5 .trig { height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; color: #241E17; font-size: 14.5px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+#b5 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 18px; }
+#b5 .tag { height: 26px; border-radius: 999px; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12.5px; font-weight: 500; border: 1px solid; }
+#b5 .step { display: flex; align-items: center; border: 1px solid #E2D5C0; border-radius: 13px; overflow: hidden; height: 44px; }
+#b5 .minus { width: 44px; height: 44px; background: #F2EADC; color: #4C4237; display: flex; align-items: center; justify-content: center; }
+#b5 .plus { width: 44px; height: 44px; background: #241E17; color: #F2E9DA; display: flex; align-items: center; justify-content: center; }
+#b5 .note { font-size: 13px; line-height: 1.6; color: #4C4237; margin-top: 16px; }
+#b5 .note b { color: #241E17; font-weight: 600; }
+#b6 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b6 a { color: #BE3346; }
+#b6 a:hover { color: #9A2E3B; }
+#b6 .bd { width: 1440px; height: 2100px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b6 .mockbar { background: #F7EEDA; border: 1px solid #E9DAB9; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.5; color: #855A0F; }
+#b6 .mockbar b { color: #6B480C; font-weight: 700; }
+#b6 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
+#b6 .cols { display: flex; gap: 44px; align-items: flex-start; }
+#b6 .col { width: 648px; flex-shrink: 0; }
+#b6 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; }
+#b6 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
+#b6 .rule { height: 1px; background: #EEE4D2; margin: 17px 0 15px; }
+#b6 .pf { font-family: "Playfair Display", Georgia, serif; }
+#b6 .rt { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 23px; color: #241E17; }
+#b6 .rmeta { font-size: 13px; color: #6F6049; margin-top: 4px; }
+#b6 .field { height: 40px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 12px; font-size: 14.5px; color: #241E17; }
+#b6 .stepsbox { background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC; border-radius: 14px; padding: 12px 14px; margin-top: 10px; }
+#b6 .sline { display: flex; gap: 11px; padding: 7px 0; font-size: 14px; color: #4C4237; line-height: 1.5; }
+#b6 .snum { width: 20px; height: 20px; border-radius: 999px; background: #E2D5C0; color: #4C4237; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+#b6 .ing { display: flex; align-items: baseline; padding: 7px 0; font-size: 14px; color: #241E17; border-top: 1px solid #EEE4D2; }
+#b6 .ing:first-of-type { border-top: none; }
+#b6 .iq { width: 84px; flex-shrink: 0; color: #4C4237; font-variant-numeric: tabular-nums; }
+#b6 .ihave { margin-left: auto; font-size: 12.5px; padding-left: 12px; }
+#b6 .link { height: 46px; border-radius: 12px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 11px; padding: 0 14px; margin-top: 10px; }
+#b6 .strip { margin-top: 14px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; color: #4C4237; display: flex; align-items: center; gap: 10px; }
+#b6 .sdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b6 .tag { height: 24px; border-radius: 999px; display: flex; align-items: center; gap: 6px; padding: 0 9px; font-size: 12px; font-weight: 500; border: 1px solid; }
+#b6 .note { font-size: 13.5px; line-height: 1.62; color: #4C4237; margin-top: 14px; }
+#b6 .note b { color: #241E17; font-weight: 600; }
+#b6 .verdict { display: flex; gap: 44px; }
+#b6 .vbox { flex: 1; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 18px 20px; }
+#b7 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b7 a { color: #BE3346; }
+#b7 a:hover { color: #9A2E3B; }
+#b7 .bd { width: 1440px; height: 782px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b7 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
+#b7 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
+#b7 .pdot { width: 8px; height: 8px; border-radius: 999px; }
+#b7 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 8px; padding: 0 11px 0 13px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; white-space: nowrap; }
+#b7 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 8px; }
+#b7 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
+#b7 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+#b7 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b7 .ccount { margin-left: auto; letter-spacing: 0.04em; }
+#b7 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b7 .row:first-of-type { border-top: none; }
+#b7 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#b7 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b7 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
+#b7 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; }
+#b7 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; }
+#b7 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; padding-left: 14px; }
+#b7 .subhead { padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b7 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+#b7 .note { font-size: 13.5px; line-height: 1.65; color: #4C4237; }
+#b7 .note b { color: #241E17; font-weight: 600; }
+#b7 .sortish { color: #4C4237; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+#b8 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b8 a { color: #BE3346; }
+#b8 a:hover { color: #9A2E3B; }
+#b8 .bd { width: 1440px; height: 722px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b8 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
+#b8 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
+#b8 .pdot { width: 8px; height: 8px; border-radius: 999px; }
+#b8 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 9px; padding: 0 12px 0 14px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; white-space: nowrap; }
+#b8 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 9px; }
+#b8 .seg { height: 40px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 13px; padding: 3px; display: flex; gap: 3px; box-sizing: border-box; }
+#b8 .sgi { height: 32px; border-radius: 10px; display: flex; align-items: center; gap: 7px; padding: 0 13px; font-size: 13.5px; font-weight: 500; color: #4C4237; white-space: nowrap; }
+#b8 .sgi.on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
+#b8 .sgc { font-size: 12.5px; color: #6F6049; }
+#b8 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
+#b8 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+#b8 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b8 .ccount { margin-left: auto; letter-spacing: 0.04em; }
+#b8 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b8 .row:first-of-type { border-top: none; }
+#b8 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#b8 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b8 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
+#b8 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; }
+#b8 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; }
+#b8 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; padding-left: 14px; }
+#b8 .subhead { padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b8 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+#b8 .note { font-size: 13.5px; line-height: 1.65; color: #4C4237; }
+#b8 .note b { color: #241E17; font-weight: 600; }
+#b8 .sortish { color: #4C4237; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <header class="mast">
+    <div class="eyebrow">Larder Log &middot; future work &middot; 28 August 2026</div>
+    <h1>Garden and Kitchen <em>modes</em></h1>
+    <p class="stand">Three structural options for how grown and home-made items reach a list, plus where a store&rsquo;s kind is set and what it changes on an item. All six boards from the canvas, at 1440, light theme.</p>
+    <p class="meta">Nothing here is settled design. The tokens, type ramp and control sizes are lifted from <span style="color:#241E17">claude/ui-designs.md</span> and <span style="color:#241E17">claude/add-edit-item.md</span>; the twenty-item sample set is extended to thirty so the new bands have something real to draw.</p>
+  </header>
+
+<section class="page"><h2 class="ph">Settled</h2>
+<div class="note"><h3 class="nh">OPTION A + C — ONE LIST, THREE BANDS, AND A SEGMENT</h3>
+<p>The rule this rests on: a source carries a KIND — Shop, Grow, Make. Nothing else in the model changes. The Garden is a source you pick from; The Kitchen is a source you cook from.</p>
+<p>The list opens on ALL, which is A&#x27;s banded screen — so the adjacency that decided A is what you see first: &quot;you&#x27;re out of stock, and the carrots for it are on the Publix card two bands up.&quot; The segment then buys C&#x27;s focused views for the moments the activities separate — at the shop, in the garden, at the stove.</p>
+<p>It costs nothing for a household with no grow or make source: no second kind, no segment, no bands.</p>
+<p>The group is named for what it holds — Store with one kind, Source with more. Drawn light-theme only; the dark counterparts are a hex-for-hex map away.</p></div>
+<figure class="board"><figcaption class="bc"><span class="bn">1</span>The run list — 1440</figcaption><div class="fit" style="--h:1510px"><div class="frame" id="b1" style="height:1510px"><div class="ll">
+
+  <!-- collapsed rail -->
+  <div class="rail">
+    <div class="rbtn raised"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="M12.5 3.5v13"/></svg></div>
+    <div class="htile">C</div>
+    <div class="rdiv"></div>
+    <div class="rbtn"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 17.5s5.5-5 5.5-9a5.5 5.5 0 1 0-11 0c0 4 5.5 9 5.5 9Z"/><circle cx="10" cy="8.5" r="2"/></svg></div>
+    <div class="rbtn"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 4.5 3.5h11L17 7.5"/><path d="M3 7.5a2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.4 0"/><path d="M4.5 9.6v6.9h11V9.6"/></svg></div>
+    <div class="rbtn"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.4 2.8H17v6.6l-7.7 7.7-6.6-6.6z"/><circle cx="13.6" cy="6.2" r="1.2"/></svg></div>
+    <div class="rdiv"></div>
+    <div class="rbtn"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.6"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M15.4 4.6 14 6M6 14l-1.4 1.4"/></svg></div>
+    <div class="rbtn"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 6h14M3 10h14M3 14h14"/><circle cx="7" cy="6" r="1.8" fill="#2B2419"/><circle cx="13" cy="10" r="1.8" fill="#2B2419"/><circle cx="8" cy="14" r="1.8" fill="#2B2419"/></svg></div>
+    <div style="flex:1"></div>
+    <div style="width:40px;height:40px;border-radius:999px;background:#4A3E2E;box-shadow:inset 0 0 0 1px #63533E;color:#D8CBB6;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">JT</div>
+  </div>
+
+  <div class="col">
+
+    <!-- top bar: rows 1 and 2 -->
+    <div class="topbar">
+      <div class="r1">
+        <div class="search">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.6"/><path d="m13.2 13.2 3.3 3.3"/></svg>
+          <span>What are you looking for?</span>
+        </div>
+        <div class="primary">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3.5v11M3.5 9h11"/></svg>
+          Add item
+        </div>
+      </div>
+      <div class="r2">
+        <div class="backbtn">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 4.5 7.5 9 12"/></svg>
+          Back to items
+        </div>
+        <div class="seg">
+          <div class="sgi on">All <span class="sgc">17</span></div>
+          <div class="sgi"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Buy <span class="sgc">12</span></div>
+          <div class="sgi"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>Harvest <span class="sgc">3</span></div>
+          <div class="sgi"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>Make <span class="sgc">2</span></div>
+        </div>
+        <div class="r2meta">2 in the cart</div>
+      </div>
+    </div>
+
+    <div class="body">
+
+      <!-- BUY -->
+      <div>
+        <div class="bandhead">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>
+          <span class="bandlabel">Buy &middot; 12</span>
+          <span class="bandrule"></span>
+        </div>
+        <div class="grid">
+
+          <section class="card">
+            <header class="chead" style="background:#EFECE9;border-bottom:1px solid #DED7D1;color:#7D6146"><span class="cdot" style="background:#87694C"></span>Aldi<span class="ccount">2</span></header>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Chicken Thighs</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 4 &middot; low at 6</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Frozen Corn</span><span class="sz">12 oz</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 4</span></div>
+          </section>
+
+          <section class="card">
+            <header class="chead" style="background:#F1E7E7;border-bottom:1px solid #E1CECE;color:#A03B36"><span class="cdot" style="background:#A03B36"></span>Calfee Cattle<span class="ccount">1</span></header>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Ground Chuck</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 8 &middot; low at 10</span></div>
+          </section>
+
+          <section class="card">
+            <header class="chead" style="background:#ECEFE9;border-bottom:1px solid #D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Costco<span class="ccount">4</span></header>
+            <div class="row"><div class="cbcell"><div class="cb on"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#F2E9DA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.6 6.8 2.6 2.6 5.2-5.8"/></svg></div></div><span class="nm struck">Bacon</span><span class="sz">12 oz</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B;opacity:.55">Out</span><span class="cnt">have 0 &middot; low at 2</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Shredded Cheese</span><span class="sz">8 oz</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 2</span></div>
+            <div class="row"><div class="cbcell"><div class="cb on"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#F2E9DA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.6 6.8 2.6 2.6 5.2-5.8"/></svg></div></div><span class="nm struck">Butter</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F;opacity:.55">Low</span><span class="cnt">have 2 &middot; low at 4</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Olive Oil</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 2</span></div>
+          </section>
+
+          <section class="card">
+            <header class="chead" style="background:#E8EDEF;border-bottom:1px solid #D0DADF;color:#456B80"><span class="cdot" style="background:#456B80"></span>Publix<span class="ccount">4</span></header>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Black Beans</span><span class="sz">15 oz</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 4</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Carrots</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 2</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tortillas</span><span class="sz">10 ct</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 2</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Coffee</span><span class="sz">12 oz</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 2</span></div>
+          </section>
+
+          <section class="card">
+            <header class="chead" style="background:#F2EADC;border-bottom:1px solid #E2D5C0;color:#6F6049">No store<span class="ccount">1</span></header>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Baking Soda</span><span class="sz">1 lb</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
+          </section>
+
+        </div>
+      </div>
+
+      <!-- HARVEST -->
+      <div>
+        <div class="bandhead">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>
+          <span class="bandlabel">Harvest &middot; 3</span>
+          <span class="bandrule"></span>
+        </div>
+        <div class="grid">
+          <section class="card">
+            <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
+            <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
+            <div class="subhead">Not yet</div>
+            <div class="row" style="border-top:none"><div class="cbcell"></div><span class="nm" style="color:#6F6049">Butternut Squash</span><span class="cnt">Ready in September</span></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- MAKE -->
+      <div>
+        <div class="bandhead">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>
+          <span class="bandlabel">Make &middot; 2</span>
+          <span class="bandrule"></span>
+        </div>
+        <div class="grid">
+          <section class="card">
+            <header class="chead" style="background:#F0E8EC;border-bottom:1px solid #E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>The Kitchen<span class="ccount">2</span></header>
+            <div class="mkrow">
+              <div class="cbcell"><div class="cb"></div></div>
+              <div style="min-width:0">
+                <div style="display:flex;align-items:center"><span class="nm">Yogurt</span><span class="sz">1 qt</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span></div>
+                <div class="mkline" style="color:#47592F">Enough for 2 batches</div>
+              </div>
+              <span class="cnt">have 0 &middot; low at 2</span>
+            </div>
+            <div class="mkrow">
+              <div class="cbcell"><div class="cb"></div></div>
+              <div style="min-width:0">
+                <div style="display:flex;align-items:center"><span class="nm">Chicken Stock</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span></div>
+                <div class="mkline" style="color:#9A2E3B">Short 3 carrots &mdash; enough else for 3 batches</div>
+              </div>
+              <span class="cnt">have 1 &middot; low at 4</span>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="tripbar">
+        <div class="ghost">Hide 2 checked</div>
+      </div>
+
+    </div>
+  </div>
+</div></div></div></figure>
+<div class="note"><p>The Harvest and Make bands each hold one card in a two-column grid, and the card stays 642px rather than stretching across the column.</p>
+<p>That is auto-fill doing exactly what Shopping list says it is there for: &quot;with one store card left after a filter, auto-fit would stretch it across the whole screen.&quot; The bands got that behaviour for free.</p></div>
+<figure class="board"><figcaption class="bc"><span class="bn">2</span>Entry and the three cards</figcaption><div class="fit" style="--h:668px"><div class="frame" id="b2" style="height:668px"><div class="bd">
+
+  <div>
+    <div class="mlabel">The way in &mdash; row 2 in grid mode, unchanged except its count</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="pill" style="background:#EDEFE1;border-color:#DCE0CB;color:#47592F"><span class="pdot" style="background:#5F7546"></span>13 in stock</div>
+      <div class="pill" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F"><span class="pdot" style="background:#C4901F"></span>9 running low</div>
+      <div class="pill" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B"><span class="pdot" style="background:#9A2E3B"></span>9 out</div>
+      <div class="trigger">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>
+        Shopping list <span class="tcount">17</span>
+      </div>
+      <div style="color:#9B8B75;font-size:13px;padding:0 2px">or</div>
+      <div class="trigger">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>
+        To get <span class="tcount">17</span>
+      </div>
+      <div style="margin-left:auto;color:#6F6049;font-size:13px">Showing 31 of 31</div>
+      <div style="color:#4C4237;font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5v11M4 13.5 1.8 11.3M12 13.5v-11M12 2.5l2.2 2.2"/></svg>
+        Sort &nbsp;Recently added
+      </div>
+    </div>
+    <div class="note" style="max-width:980px">The trigger&rsquo;s count is the total across all three bands, and its <b>label is the one thing this structure still costs</b> &mdash; &ldquo;Shopping list&rdquo; stops being literally true the moment three of the seventeen are things you pick and two are things you cook. The segment inside takes some of the pressure off, because <i>Buy</i> is now a tab with its own name and count; what is left is the word on the way in. Both spellings are drawn; neither is chosen.</div>
+  </div>
+
+  <div>
+    <div class="mlabel">Three kinds of card &mdash; one component, two additions</div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px;align-items:start">
+
+      <div>
+        <section class="card">
+          <header class="chead" style="background:#ECEFE9;border-bottom:1px solid #D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Costco<span class="ccount">4</span></header>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Bacon</span><span class="sz">12 oz</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 2</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Shredded Cheese</span><span class="sz">8 oz</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 2</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Butter</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 4</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Olive Oil</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 2</span></div>
+        </section>
+        <div class="note"><b>Buy</b> &mdash; unchanged. Every rule in <i>Shopping list</i> holds: header is the tag component stretched, rows are 56px, the checkbox is the chip rule at 22px.</div>
+      </div>
+
+      <div>
+        <section class="card">
+          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
+          <div class="subhead">Not yet</div>
+          <div class="row" style="border-top:none"><div class="cbcell"></div><span class="nm" style="color:#6F6049">Butternut Squash</span><span class="cnt">Ready in September</span></div>
+        </section>
+        <div class="note"><b>Harvest</b> &mdash; the row is identical. The one addition is the <b>Not yet</b> group: out-of-season items keep their card but lose the checkbox and the badge, and their count slot says when instead. Nothing here is a new component.</div>
+      </div>
+
+      <div>
+        <section class="card">
+          <header class="chead" style="background:#F0E8EC;border-bottom:1px solid #E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>The Kitchen<span class="ccount">2</span></header>
+          <div class="mkrow">
+            <div class="cbcell"><div class="cb"></div></div>
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center"><span class="nm">Yogurt</span><span class="sz">1 qt</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span></div>
+              <div style="font-size:12.5px;margin-top:3px;color:#47592F">Enough for 2 batches</div>
+            </div>
+            <span class="cnt">have 0 &middot; low at 2</span>
+          </div>
+          <div class="mkrow">
+            <div class="cbcell"><div class="cb"></div></div>
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center"><span class="nm">Chicken Stock</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span></div>
+              <div style="font-size:12.5px;margin-top:3px;color:#9A2E3B">Short 3 carrots &mdash; enough else for 3 batches</div>
+            </div>
+            <span class="cnt">have 1 &middot; low at 4</span>
+          </div>
+        </section>
+        <div class="note"><b>Make</b> &mdash; the only row that grows: 76px instead of 56, carrying one line that answers <i>can I make this now</i>. Ingredient quantities are what let it be specific: green with <b>how many batches</b> you could manage, out-red with <b>what you are short and by how much</b>. The carrots it names are on the Publix card two bands up.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div></div></div></figure>
+<figure class="board"><figcaption class="bc"><span class="bn">3</span>Ingredients — quantities and the picker</figcaption><div class="fit" style="--h:1440px"><div class="frame" id="b3" style="height:1440px"><div class="bd">
+
+  <div class="mockbar">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#855A0F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 2.8 18 16.4H2Z"/><path d="M10 7.8v3.6M10 13.8v.1"/></svg>
+    <span><b>Mockup &mdash; not in v1.</b> Recipes are not being built yet. Nothing on this board is specced as settled, and nothing that ships depends on it. What <i>does</i> ship is the make source and the Make band; see board 5 for what an item sheet actually says in the meantime.</span>
+  </div>
+
+  <div class="cols">
+
+  <!-- 1: three kinds of row -->
+  <div style="width:480px;flex-shrink:0">
+    <div class="mlabel">The recipe sheet &mdash; three kinds of ingredient row</div>
+    <div class="sheet">
+      <div style="display:flex;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:21px;color:#241E17">Chicken Stock</div>
+          <div style="font-size:12.5px;color:#6F6049;margin-top:3px">Yields Chicken Stock &middot; 1 qt &times; 4 per batch</div>
+        </div>
+        <span style="margin-left:auto;height:24px;border-radius:999px;background:#F0E8EC;border:1px solid #E0CFD7;color:#8E4468;font-size:12px;font-weight:500;display:flex;align-items:center;padding:0 9px">Recipe</span>
+      </div>
+      <div class="slabel">Ingredients</div>
+      <div class="hint">What one batch uses. A stepper means the app can check it.</div>
+      <div class="panel">
+
+        <div class="irow">
+          <div class="step"><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div><div class="snum">2</div><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div></div>
+          <div class="iname"><span class="inm">Chicken Carcasses</span></div>
+          <div class="ihave" style="color:#47592F">have 6</div>
+          <div class="ix"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></div>
+        </div>
+
+        <div class="irow">
+          <div class="step"><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div><div class="snum">3</div><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div></div>
+          <div class="iname"><span class="inm">Carrots</span></div>
+          <div class="ihave" style="color:#9A2E3B">have 0</div>
+          <div class="ix"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></div>
+        </div>
+
+        <div class="irow">
+          <div class="step"><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div><div class="snum">2</div><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div></div>
+          <div class="unit">cup<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#6F6049" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></div>
+          <div class="iname"><span class="inm">Milk</span><span class="isz">1 gal</span></div>
+          <div class="ihave" style="color:#47592F">have 32 cup</div>
+          <div class="ix"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></div>
+        </div>
+
+        <div class="urow"><span class="utxt">A good pinch of salt</span><span class="untr">not tracked</span><div class="ix"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></div></div>
+
+        <div class="addrow"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>Add an ingredient</div>
+      </div>
+
+      <div class="strip">
+        <div style="display:flex;align-items:center;gap:10px"><span class="sdot" style="background:#9A2E3B"></span><span>Short <b style="color:#241E17;font-weight:600">3 carrots</b> &mdash; enough of everything else for 3 batches</span></div>
+        <div style="font-size:12.5px;color:#9B8B75;margin-top:7px;padding-left:18px">Salt isn&rsquo;t tracked, so nothing checks it.</div>
+      </div>
+    </div>
+
+    <div class="tbl">
+      <div class="mlabel" style="margin-bottom:8px">What each row can do</div>
+      <div class="trow"><b>Counted</b> a stepper and the item&rsquo;s own units &mdash; <i>2 carcasses</i>. Works whether or not the item carries a size</div>
+      <div class="trow"><b>Measured</b> a stepper, a unit, and arithmetic &mdash; <i>2 cup</i> against <i>1 gal</i> &times; 2 on hand = 32 cup. Needs a size in the same dimension</div>
+      <div class="trow"><b>Untracked</b> free text, no stepper, no reading &mdash; <i>a good pinch of salt</i>. Never reaches the batch count</div>
+    </div>
+  </div>
+
+  <!-- 2: the unit menu and the picker -->
+  <div style="width:480px;flex-shrink:0">
+    <div class="mlabel">The unit menu &mdash; only what that item can be measured in</div>
+    <div class="sheet">
+      <div class="panel" style="margin-top:0">
+        <div class="irow">
+          <div class="step"><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div><div class="snum">2</div><div class="sbtn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div></div>
+          <div class="unit open">cup<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#F2E9DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></div>
+          <div class="iname"><span class="inm">Milk</span><span class="isz">1 gal</span></div>
+          <div class="ihave" style="color:#47592F">have 32 cup</div>
+          <div class="ix"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></div>
+        </div>
+        <div class="menu" style="width:300px;margin-left:94px">
+          <div class="mrow">Whole containers<span class="mright">have 2</span></div>
+          <div class="mdiv"></div>
+          <div class="mgrp">Volume</div>
+          <div class="mrow">Gallon<span class="mright">gal</span></div>
+          <div class="mrow">Quart<span class="mright">qt</span></div>
+          <div class="mrow">Pint<span class="mright">pt</span></div>
+          <div class="mrow cur hov">Half pint<span class="mright" style="color:#241E17">cup</span></div>
+          <div class="mrow">Fluid ounce<span class="mright">fl oz</span></div>
+          <div class="mrow">Litre<span class="mright">L</span></div>
+          <div class="mrow">Millilitre<span class="mright">mL</span></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px">Milk is sized in gallons, so the menu offers volume and nothing else. Weight never appears, because the app cannot turn a gallon into a pound without knowing what is in it.</div>
+    </div>
+
+    <div class="mlabel" style="margin-top:26px">Two ways out when nothing matches</div>
+    <div class="sheet">
+      <div class="panel" style="margin-top:0">
+        <div class="searchfield">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" style="flex-shrink:0"><circle cx="9" cy="9" r="5.6"/><path d="m13.2 13.2 3.3 3.3"/></svg>
+          <span style="font-size:14px;color:#241E17">Salt</span><span class="caret"></span>
+        </div>
+        <div class="menu">
+          <div class="mempty">Nothing tracked called <b style="color:#241E17;font-weight:600">Salt</b>.</div>
+          <div class="mrow hov"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="margin-right:9px"><path d="M8 3.5v9M3.5 8h9"/></svg>Add &ldquo;Salt&rdquo; as an ingredient<span class="mright">not counted</span></div>
+          <div class="mrow"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="margin-right:9px"><path d="M8 3.5v9M3.5 8h9"/></svg>Track &ldquo;Salt&rdquo; as a pantry item<span class="mright">counted, can run low</span></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px">The lighter door first. Salt is never going to be a pantry item, and forcing it to be one puts it on a shopping list forever.</div>
+    </div>
+  </div>
+
+  <!-- 3: notes -->
+  <div style="flex:1;min-width:0">
+    <div class="note" style="margin-top:0"><b>This panel is on the recipe, not on the item.</b> A make item carries a <i>See recipe</i> link and nothing else &mdash; no ingredients, no batch line of its own. That is the direction rule doing its work: the recipe references pantry items, and the pantry references nothing back.</div>
+
+    <div class="mlabel">Conversion &mdash; what it can and cannot do</div>
+
+    <div class="tbl" style="margin-top:0">
+      <div class="trow"><b>Volume</b> gal &middot; qt &middot; pt &middot; cup &middot; fl oz &middot; L &middot; mL &mdash; all convertible</div>
+      <div class="trow"><b>Weight</b> lb &middot; oz &middot; kg &middot; g &mdash; all convertible</div>
+      <div class="trow"><b>Count</b> count &middot; dozen &mdash; convertible. <i>Pack</i> is not: a pack of what?</div>
+      <div class="trow" style="color:#9A2E3B"><b style="color:#9A2E3B">Never across</b> two cups of flour is not eight ounces of flour without knowing its density, and the app does not know</div>
+    </div>
+
+    <div class="note"><b>The vocabulary already existed; only the arithmetic was missing.</b> Units come from a fixed fifteen-row menu, so <code>qt</code> and <code>fl oz</code> are both known symbols. <code>add-edit-item.md</code> said the app &ldquo;will never notice&rdquo; they are the same measure &mdash; a statement about it not doing the sum, not about it being unable to.</div>
+
+    <div class="note"><b>What makes the sum possible is that the item already carries a size.</b> On hand &times; size is a real total: two containers at 1 gal is 2 gal is 32 cups. That is the entire mechanism, and it needs no new field anywhere.</div>
+
+    <div class="note"><b>An item with no size can only be counted.</b> Five of the thirty-one sample items are like that on purpose. Their unit trigger never appears, and <i>2 cups of Chicken Carcasses</i> is a sentence the app will not let you write.</div>
+
+    <div class="note" style="color:#855A0F"><b style="color:#855A0F">Checking works. Deducting does not.</b> The app can say two gallons covers a two-cup recipe. It cannot take the two cups out, because on hand is a whole number of containers and there is no such thing as 1.94 gallons in this model. That gap belongs to the Restock flow &mdash; and it is worth knowing that the useful half is the cheap half.</div>
+
+    <div class="note"><b>Half pint prints as <code>cup</code>, and that lands well here.</b> The unit recipes actually want was already in the menu, already spelled the way a carton spells it, and already argued for. Nothing had to be added to the vocabulary for cooking to work.</div>
+
+    <div class="note"><b>Batches are the smallest number over the checkable rows.</b> Counted and measured rows each yield a batch count; the minimum wins; untracked rows yield nothing and are named separately, so the figure never implies a check it did not do.</div>
+
+    <div class="note" style="color:#855A0F"><b style="color:#855A0F">Not drawn:</b> the row is four controls wide at 480. At 390 it needs two lines, and nobody has drawn that.</div>
+  </div>
+
+  </div>
+</div></div></div></figure>
+<figure class="board"><figcaption class="bc"><span class="bn">4</span>Setting the kind</figcaption><div class="fit" style="--h:1000px"><div class="frame" id="b4" style="height:1000px"><div class="bd">
+
+  <div class="cols">
+
+    <!-- 1: at rest -->
+    <div class="colw">
+      <div class="mlabel">At rest &mdash; counts stay, heading changes</div>
+      <div class="drawer">
+        <div class="dhead">
+          <span class="dlabel">Source</span>
+          <div class="dicons">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+          </div>
+        </div>
+        <div class="chips">
+          <div class="chip">All items <span class="cn">31</span></div>
+          <div class="chip"><span class="cdot" style="background:#87694C"></span>Aldi <span class="cn">3</span></div>
+          <div class="chip"><span class="cdot" style="background:#A03B36"></span>Calfee Cattle <span class="cn">3</span></div>
+          <div class="chip"><span class="cdot" style="background:#5F7542"></span>Costco <span class="cn">6</span></div>
+          <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix <span class="cn">8</span></div>
+          <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>The Garden <span class="cn">5</span></div>
+          <div class="chip"><span class="cdot" style="background:#8E4468"></span>The Kitchen <span class="cn">3</span></div>
+          <div class="chip dash">+ Source</div>
+        </div>
+      </div>
+      <div class="note">The Garden and The Kitchen are <b>terms like any other</b> &mdash; a colour, a name, a count, a chip that filters. Filtering by either works exactly as filtering by Costco does. <b>Counts stay here</b>, where the chip is the thing you press and the number is what it will do.</div>
+    </div>
+
+    <!-- 2: editing -->
+    <div class="colw">
+      <div class="mlabel">Editing &mdash; the count goes, the kind arrives</div>
+      <div class="drawer">
+        <div class="panel">
+          <div class="phead">
+            <span class="dlabel" style="color:#9E8C74">Source &middot; Editing</span>
+            <div class="donepill">Done</div>
+          </div>
+          <div class="erow"><div class="sw" style="background:#87694C;color:#87694C"></div><div class="field">Aldi</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#A03B36;color:#A03B36"></div><div class="field">Calfee Cattle</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#5F7542;color:#5F7542"></div><div class="field">Costco</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#456B80;color:#456B80"></div><div class="field">Publix</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#3F7A4C;color:#3F7A4C"></div><div class="field">The Garden</div><div class="gbtn" style="color:#D8CBB6"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#8E4468;color:#8E4468"></div><div class="field">The Kitchen</div><div class="gbtn" style="color:#D8CBB6"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="addrow">+ Add a source</div>
+        </div>
+      </div>
+      <div class="note"><b>The kind glyph is what pushed the count out.</b> The row was already swatch &middot; field &middot; count &middot; trash at 340px; a fifth slot left the field around 150px, which is where &ldquo;Calfee Cattle&rdquo; starts truncating. Both new glyphs sit at rest colour for a shop and brighten for grow and make &mdash; the two that change what the row does.</div>
+    </div>
+
+    <!-- 3: the kind menu -->
+    <div class="colw">
+      <div class="mlabel">The kind menu &mdash; the role menu, unchanged</div>
+      <div class="drawer">
+        <div class="panel">
+          <div class="phead">
+            <span class="dlabel" style="color:#9E8C74">Source &middot; Editing</span>
+            <div class="donepill">Done</div>
+          </div>
+          <div class="erow"><div class="sw" style="background:#456B80;color:#456B80"></div><div class="field">Publix</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#3F7A4C;color:#3F7A4C"></div><div class="field">The Garden</div><div class="gbtn open"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px">
+            <div class="menu">
+              <div class="mrow"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Shop</div>
+              <div class="mrow cur"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>Grow<span style="margin-left:auto"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#D4636B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.8 3 3 6-6.6"/></svg></span></div>
+              <div class="mrow"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>Make</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">Three rows on the drawer&rsquo;s own surface &mdash; <b>#241E17 on #4A4031</b>, 6px padding, 36px rows, a crimson check rather than a fill. It is the Members pane&rsquo;s role menu with different words in it, and the trigger takes the same cream open state.</div>
+    </div>
+
+  </div>
+
+  <!-- the naming rule -->
+  <div>
+    <div class="mlabel">The group&rsquo;s name follows what&rsquo;s in it</div>
+    <div class="namestrip">
+      <div>
+        <div class="mini">
+          <div class="dhead" style="margin-bottom:12px"><span class="dlabel">Store</span><div class="dicons"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></div></div>
+          <div class="chips">
+            <div class="chip"><span class="cdot" style="background:#87694C"></span>Aldi <span class="cn">3</span></div>
+            <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix <span class="cn">8</span></div>
+            <div class="chip dash">+ Store</div>
+          </div>
+        </div>
+        <div class="note" style="max-width:300px">Every source is a shop, so the group keeps the word it has always had. <b>Most households never see anything else.</b></div>
+      </div>
+
+      <div>
+        <div class="mini">
+          <div class="dhead" style="margin-bottom:12px"><span class="dlabel">Source</span><div class="dicons"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></div></div>
+          <div class="chips">
+            <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix <span class="cn">8</span></div>
+            <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>The Garden <span class="cn">5</span></div>
+            <div class="chip dash">+ Source</div>
+          </div>
+        </div>
+        <div class="note" style="max-width:300px">The moment a second kind exists, &ldquo;Store&rdquo; is wrong for at least one chip in the list. The heading, the dashed chip and the composer all move together.</div>
+      </div>
+
+      <div style="flex:1;min-width:0;padding-left:10px">
+        <div class="note" style="margin-top:0"><b>The rule: the group is named for what it holds.</b> One kind and it is a Store; more than one and it is a Source. Nothing else in the app renames itself, so this is the exception and it earns it &mdash; the alternative is calling The Garden a store, which is the confusion the kind exists to remove.</div>
+        <div class="note"><b>It changes only when you change the list.</b> Adding a grow or make source is a deliberate act in the editing panel, and the heading above your hands is what changes. That is what separates this from a control that renames itself while you watch.</div>
+        <div class="note"><b>&ldquo;Source&rdquo; is the working word, not the settled one.</b> <i>Where from</i> is the plainer alternative and reads closer to this app&rsquo;s voice &mdash; it is two words in a slot built for one, and it has not been drawn. <i>Origin</i> and <i>Supply</i> were both colder than anything else in the interface.</div>
+        <div class="note" style="color:#855A0F"><b style="color:#855A0F">Knock-on, not yet drawn:</b> the collapsed rail&rsquo;s storefront glyph means &ldquo;shop&rdquo;, and the marketing page&rsquo;s band says <i>Location, Store, Type</i>. Both are wrong in a Source household.</div>
+      </div>
+    </div>
+  </div>
+
+</div></div></div></figure>
+<figure class="board"><figcaption class="bc"><span class="bn">5</span>Item side — season and made-from</figcaption><div class="fit" style="--h:1340px"><div class="frame" id="b5" style="height:1340px"><div class="bd">
+
+  <!-- grow item -->
+  <div style="width:480px">
+    <div class="mlabel">Edit item &middot; Tomatoes &mdash; sheet fragment</div>
+    <div class="sheet">
+      <div class="slabel">Location</div>
+      <div class="chips">
+        <div class="chip on">Pantry</div>
+        <div class="chip"><span class="cdot" style="background:#456B80"></span>Refrigerator</div>
+        <div class="chip"><span class="cdot" style="background:#3E6D68"></span>Chest Freezer</div>
+        <div class="chip dash">+ Location</div>
+      </div>
+
+      <div style="height:18px"></div>
+      <div class="slabel">Source</div>
+      <div class="chips">
+        <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix</div>
+        <div class="chip"><span class="cdot" style="background:#5F7542"></span>Costco</div>
+        <div class="chip on">The Garden</div>
+        <div class="chip"><span class="cdot" style="background:#8E4468"></span>The Kitchen</div>
+        <div class="chip dash">+ Source</div>
+      </div>
+
+      <div style="margin-top:18px;background:#F3EBDD;box-shadow:inset 0 0 0 1px #DFD2BC;border-radius:14px;padding:14px">
+        <div class="slabel">In season</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+          <div class="trig" style="flex:1">June <span style="margin-left:auto"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></span></div>
+          <span style="color:#6F6049;font-size:13.5px">to</span>
+          <div class="trig" style="flex:1">September <span style="margin-left:auto"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></span></div>
+        </div>
+        <div class="hint">Only asked because the source you picked is one you grow. Out of season the item still reads <i>low</i> or <i>out</i> on its card &mdash; it just moves to <i>Not yet</i> on the harvest list.</div>
+      </div>
+
+      <div class="rule"></div>
+      <div class="slabel">Notes</div>
+      <div style="margin-top:10px;height:60px;border-radius:11px;border:1px solid #6F6049;background:#FDFAF4"></div>
+    </div>
+    <div class="note"><b>The season is the only new field a grow item needs</b>, and it appears because of the store, not beside it. Two month triggers &mdash; no dates, no year, no locale &mdash; because a season repeats and a date does not.</div>
+  </div>
+
+  <!-- make item -->
+  <div style="width:480px">
+    <div class="mlabel">Edit item &middot; Chicken Stock &mdash; what ships, and what it becomes</div>
+    <div class="sheet">
+      <div class="slabel">Source</div>
+      <div class="chips">
+        <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix</div>
+        <div class="chip"><span class="cdot" style="background:#5F7542"></span>Costco</div>
+        <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>The Garden</div>
+        <div class="chip on">The Kitchen</div>
+        <div class="chip dash">+ Source</div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div class="slabel">Made by</div>
+      <div style="margin-top:10px;background:#F2EADC;border:1px solid #E2D5C0;border-radius:14px;padding:14px 16px">
+        <div style="font-size:14px;color:#241E17;font-weight:600">Recipes are coming</div>
+        <div style="font-size:13px;color:#4C4237;line-height:1.6;margin-top:6px">Marking this as made rather than bought already does the useful half: it puts Chicken Stock on the <b style="font-weight:600;color:#241E17">Make</b> band instead of a shopping list when it runs low.</div>
+      </div>
+
+      <div class="rule"></div>
+      <div class="slabel">Notes</div>
+      <div style="margin-top:10px;height:60px;border-radius:11px;border:1px solid #6F6049;background:#FDFAF4"></div>
+    </div>
+    <div style="margin-top:16px;background:#F7EEDA;border:1px solid #E9DAB9;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:12.5px;line-height:1.5;color:#855A0F">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#855A0F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 2.8 18 16.4H2Z"/><path d="M10 7.8v3.6M10 13.8v.1"/></svg>
+      <span><b style="color:#6B480C;font-weight:700">Mockup &mdash; what this section becomes once recipes exist.</b> One of the two, never both.</span>
+    </div>
+    <div style="margin-top:10px;height:52px;border-radius:12px;background:#F2EADC;border:1px solid #E2D5C0;display:flex;align-items:center;gap:11px;padding:0 14px">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>
+      <div style="min-width:0"><div style="font-size:14px;color:#241E17">See recipe &mdash; <b style="font-weight:600">Chicken Stock</b></div><div style="font-size:12px;color:#6F6049">4 ingredients &middot; short 3 carrots</div></div>
+      <span style="margin-left:auto;color:#9B8B75"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg></span>
+    </div>
+    <div style="height:44px;border-radius:12px;border:1px dashed #C9B79B;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;color:#6F6049;font-size:13.5px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      Write a recipe for this
+    </div>
+    <div class="note"><b>The item sheet has no ingredients on it, and that is the point.</b> A pantry item answers one question &mdash; <i>do we need more</i> &mdash; and answers it from its own count and its own low-at. Ingredients belong to the recipe, so what the item carries is a link out to one: the Members row&rsquo;s construction, reading a recipe it does not own. The board beside this one draws the panel where it actually lives.</div>
+  </div>
+
+  <!-- cards -->
+  <div style="width:300px;flex-shrink:0">
+    <div class="mlabel">On the item card &mdash; one glyph, beside the dot</div>
+
+    <div class="card">
+      <div style="display:flex;align-items:flex-start">
+        <div style="min-width:0">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:21px;color:#241E17">Tomatoes</div>
+          <div style="font-size:13px;color:#6F6049;margin-top:2px">1 qt</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:9px;padding-top:5px">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>
+          <span class="cdot" style="background:#C4901F;width:9px;height:9px"></span>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+        <span class="tag" style="background:#ECEFE9;border-color:#D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Pantry</span>
+        <span class="tag" style="background:#E8F0EA;border-color:#D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden</span>
+        <span class="tag" style="background:#ECEFE9;border-color:#D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Produce</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;margin-top:14px">
+        <div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:42px;line-height:1;color:#241E17">1</div>
+          <div style="font-size:13px;color:#6F6049;margin-top:4px">low at 4</div>
+        </div>
+        <div class="step" style="margin-left:auto">
+          <div class="minus"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div>
+          <div class="plus"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div style="display:flex;align-items:flex-start">
+        <div style="min-width:0">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:21px;color:#241E17">Chicken Stock</div>
+          <div style="font-size:13px;color:#6F6049;margin-top:2px">1 qt</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:9px;padding-top:5px">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>
+          <span class="cdot" style="background:#C4901F;width:9px;height:9px"></span>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+        <span class="tag" style="background:#E9EFEE;border-color:#D1DEDD;color:#3E6D68"><span class="cdot" style="background:#3E6D68"></span>Chest Freezer</span>
+        <span class="tag" style="background:#F0E8EC;border-color:#E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>The Kitchen</span>
+        <span class="tag" style="background:#EEEAEE;border-color:#DCD3DB;color:#6D4A69"><span class="cdot" style="background:#6D4A69"></span>Condiment</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;margin-top:14px">
+        <div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:42px;line-height:1;color:#241E17">1</div>
+          <div style="font-size:13px;color:#6F6049;margin-top:4px">low at 4</div>
+        </div>
+        <div class="step" style="margin-left:auto">
+          <div class="minus"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div>
+          <div class="plus"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="card" style="margin-top:16px">
+      <div style="display:flex;align-items:flex-start">
+        <div style="min-width:0">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:21px;color:#241E17">Peanut Butter</div>
+          <div style="font-size:13px;color:#6F6049;margin-top:2px">16 oz</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:9px;padding-top:5px">
+          <span class="cdot" style="background:#5F7546;width:9px;height:9px"></span>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+        <span class="tag" style="background:#ECEFE9;border-color:#D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Pantry</span>
+        <span class="tag" style="background:#E8EDEF;border-color:#D0DADF;color:#456B80"><span class="cdot" style="background:#456B80"></span>Publix</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;margin-top:14px">
+        <div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:42px;line-height:1;color:#241E17">3</div>
+          <div style="font-size:13px;color:#6F6049;margin-top:4px">low at 2</div>
+        </div>
+        <div class="step" style="margin-left:auto">
+          <div class="minus"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 8h9"/></svg></div>
+          <div class="plus"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note"><b>The glyph sits with the dot, not with the name.</b> <i>Item card</i> says &ldquo;name, no icons beside it&rdquo; &mdash; the top-right cluster is a different place and already carries two things. It becomes <b>glyph &middot; dot &middot; chevron</b>: what kind of thing, what state, then the control.</div>
+    <div class="note"><b>A shop item has nothing there, and the absence is the point.</b> Most of a pantry is bought. The two kinds that are not are the ones worth spotting from across a grid.</div>
+    <div class="note"><b>Meta grey, not the term colour.</b> The dot is the only coloured thing in that corner because status is what colour is for &mdash; and a term&rsquo;s colour is whatever the household picked, so colouring the glyph by it would suggest the hue means something about the kind. It does not.</div>
+    <div class="note"><b>And the objection raised against the off-list cart marker does not apply here.</b> That was &ldquo;a glyph nobody has been taught&rdquo;. This one is taught three times before a card ever shows it: the run list&rsquo;s band headers, the segment tabs, and the source editing row all use the same two.</div>
+  </div>
+
+</div></div></div></figure>
+<div class="note"><h3 class="nh">OPEN, AND DELIBERATELY NOT DECIDED HERE</h3>
+<p>1. &quot;Source&quot; is the working word. Where from is the plainer alternative and reads closer to this app&#x27;s voice, at the cost of being two words in a one-word slot. Origin and Supply were both colder than anything else in the interface.</p>
+<p>2. What the trigger is called on the way in. &quot;Shopping list&quot; stops being literally true; &quot;To get&quot; is honest but renames the headline feature and the marketing page with it. The segment took some of the pressure off, not all of it.</p>
+<p>3. Dropping the count from the editing row loses something real. Destructive actions added it so the outcome of pressing the trash was predictable before you reached for it; now the blocked dialog is the only place you learn that a term is in use. The kind glyph is what took the space.</p>
+<p>4. Track &quot;X&quot; as a new item, in the ingredient picker, writes to the pantry from inside a sheet about a different item. It lands with 0 on hand, which puts it straight onto the shopping list. Drawn, not settled.</p>
+<p>5. What checking a Harvest or Make row does. Picking and cooking are both restocks — a write — which is the reserved half of the trip bar, and the reason Restock still blocks this.</p>
+<p>6. Season is per item here. It could belong to the grow source instead.</p>
+<p>7. Whether wanting to make something should pull its ingredients onto the buy list. Stock needs 3 carrots and you have 1: the list says nothing, because it is a view of counts against low-at and nothing else. Demand-driven restocking is a real feature and a real change to that rule.</p>
+<p>8. Knock-ons of the rename, not drawn: the rail&#x27;s storefront glyph means &quot;shop&quot;, and the marketing page&#x27;s band says Location, Store, Type.</p></div>
+</section>
+<section class="page"><h2 class="ph">Where this goes, and what lost</h2>
+<div class="note"><h3 class="nh">WHERE THIS GOES, AND WHAT LOST</h3>
+<p>The first board is not an exploration of the past — it is the next question. Recipes and gardening are the destination, so the test is no longer &quot;does this belong in a pantry app&quot; but &quot;does today&#x27;s design leave room&quot;. Two models for turning a make item into a recipe card, drawn side by side because the choice is not obvious.</p>
+<p>Below them, the two structures that lost. B gave each activity its own mode and lost outright: row 2&#x27;s composition would depend on the household. C is a record rather than a proposal — its segment was adopted onto the settled run list, but with an All tab in front of it.</p></div>
+<figure class="board"><figcaption class="bc"><span class="bn">6</span>Where this goes — two ways a make item becomes a recipe</figcaption><div class="fit" style="--h:2100px"><div class="frame" id="b6" style="height:2100px"><div class="bd">
+
+  <div class="mockbar">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#855A0F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 2.8 18 16.4H2Z"/><path d="M10 7.8v3.6M10 13.8v.1"/></svg>
+    <span><b>Mockup &mdash; not in v1.</b> This board is the argument for a shape, not a spec for a build. The direction it settles &mdash; the recipe references the pantry and the pantry references nothing back &mdash; is what today&rsquo;s work has to leave room for; everything drawn in it comes later.</span>
+  </div>
+
+  <div class="cols">
+
+    <!-- MODEL A -->
+    <div class="col">
+      <div class="mlabel">Model A &mdash; kept as the record of what lost</div>
+      <div class="card">
+        <div class="rt">Chicken Stock</div>
+        <div class="rmeta">1 qt &middot; The Kitchen &middot; have 1, low at 4</div>
+
+        <div class="rule"></div>
+        <div class="slabel">Made from</div>
+        <div style="margin-top:8px">
+          <div class="ing"><span class="iq">2</span>Chicken Carcasses<span class="ihave" style="color:#47592F">have 6</span></div>
+          <div class="ing"><span class="iq">3</span>Carrots<span class="ihave" style="color:#9A2E3B">have 0</span></div>
+          <div class="ing"><span class="iq">2 cup</span>Milk &nbsp;<span style="font-size:12.5px;color:#6F6049">1 gal</span><span class="ihave" style="color:#47592F">have 32 cup</span></div>
+          <div class="ing" style="color:#4C4237"><span class="iq"></span>A good pinch of salt<span class="ihave" style="color:#9B8B75">not tracked</span></div>
+        </div>
+
+        <div class="rule"></div>
+        <div style="display:flex;gap:16px">
+          <div style="flex:1"><div class="slabel">Makes</div><div class="field" style="margin-top:8px">4 &nbsp;<span style="color:#6F6049">&times; 1 qt</span></div></div>
+          <div style="flex:1"><div class="slabel">Takes</div><div class="field" style="margin-top:8px">3 hours</div></div>
+        </div>
+
+        <div class="rule"></div>
+        <div class="slabel">Steps</div>
+        <div class="stepsbox">
+          <div class="sline"><span class="snum">1</span><span>Roast the carcasses at 220&deg;C for forty minutes.</span></div>
+          <div class="sline"><span class="snum">2</span><span>Cover with cold water, bring to a bare simmer, skim.</span></div>
+          <div class="sline"><span class="snum">3</span><span>Add the vegetables. Three hours, uncovered, never boiling.</span></div>
+          <div class="sline" style="color:#9B8B75;font-size:13px"><span class="snum" style="background:transparent;color:#9B8B75;border:1px dashed #C9B79B">+</span><span>Add a step</span></div>
+        </div>
+
+        <div class="strip"><span class="sdot" style="background:#9A2E3B"></span><span>Short <b style="color:#241E17;font-weight:600">3 carrots</b> &mdash; enough of everything else for 3 batches</span></div>
+      </div>
+
+      <div class="note"><b>Nothing is a new object.</b> The sheet grows three sections and the item is the recipe. Everything drawn so far carries over untouched, and the run list, the make band and the batch line all keep working because they were always reading the item.</div>
+      <div class="note"><b>And it has a hard ceiling: every recipe must stock something.</b> Chili gets eaten, not shelved. To hold a chili recipe you would create a pantry item called Chili that sits at 0 for ever &mdash; on the shopping list, in the item grid, in every count. <b>That is the whole argument against A</b>, and it does not appear until the first recipe you do not put in a jar.</div>
+    </div>
+
+    <!-- MODEL B -->
+    <div class="col">
+      <div class="mlabel">Model B &mdash; settled: the recipe owns the link, and the pantry knows nothing</div>
+      <div class="card">
+        <div style="display:flex;align-items:flex-start">
+          <div>
+            <div class="rt">Weeknight Chili</div>
+            <div class="rmeta">Serves 6 &middot; 50 minutes</div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <span class="tag" style="background:#F1E7E7;border-color:#E1CECE;color:#A03B36">Dinner</span>
+            <span class="tag" style="background:#F2EADC;border-color:#E2D5C0;color:#6F6049">Yields nothing</span>
+          </div>
+        </div>
+
+        <div class="rule"></div>
+        <div class="slabel">Ingredients</div>
+        <div style="margin-top:8px">
+          <div class="ing"><span class="iq">1 lb</span>Ground Beef<span class="ihave" style="color:#47592F">have 75 lb</span></div>
+          <div class="ing"><span class="iq">2</span>Black Beans &nbsp;<span style="font-size:12.5px;color:#6F6049">15 oz</span><span class="ihave" style="color:#9A2E3B">have 0</span></div>
+          <div class="ing"><span class="iq">1</span>Onion<span class="ihave" style="color:#47592F">have 5</span></div>
+          <div class="ing" style="color:#4C4237"><span class="iq"></span>Cumin, chilli powder, oregano<span class="ihave" style="color:#9B8B75">not tracked</span></div>
+        </div>
+
+        <div class="strip"><span class="sdot" style="background:#9A2E3B"></span><span>Short <b style="color:#241E17;font-weight:600">2 Black Beans &middot; 15 oz</b></span></div>
+
+        <div class="rule"></div>
+        <div class="slabel">On a recipe that does stock something</div>
+        <div class="link">
+          <span style="width:30px;height:30px;border-radius:9px;background:#8E4468;color:#FDFAF4;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">K</span>
+          <div style="min-width:0"><div style="font-size:14px;color:#241E17">Yields <b style="font-weight:600">Chicken Stock &middot; 1 qt</b></div><div style="font-size:12px;color:#6F6049">4 per batch &mdash; making one raises the count</div></div>
+          <span style="margin-left:auto;color:#9B8B75"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg></span>
+        </div>
+
+        <div class="rule"></div>
+        <div class="slabel">And on the item, the whole panel becomes one row</div>
+        <div class="link" style="margin-top:8px">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>
+          <div style="min-width:0"><div style="font-size:14px;color:#241E17">See recipe &mdash; <b style="font-weight:600">Chicken Stock</b></div><div style="font-size:12px;color:#6F6049">4 ingredients &middot; short 3 carrots</div></div>
+          <span style="margin-left:auto;color:#9B8B75"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg></span>
+        </div>
+        <div style="height:46px;border-radius:12px;border:1px dashed #C9B79B;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;color:#6F6049;font-size:13.5px">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+          Write a recipe for this
+        </div>
+        <div style="font-size:12.5px;color:#6F6049;margin-top:9px;line-height:1.55">Two states and nothing else: a link when a recipe yields this item, the dashed row when none does. The item stores neither &mdash; both are read off the recipes.</div>
+      </div>
+
+      <div class="note"><b>The ingredient panel does not change &mdash; it moves.</b> Rows, steppers, units, untracked lines, the picker: all of it lifts onto the recipe unaltered. What the item keeps is a single row pointing at what makes it, which is the same construction the Members row already uses.</div>
+      <div class="note"><b>&ldquo;See recipe&rdquo; is the whole of the item&rsquo;s recipe surface</b>, and it is a link rather than a field: the row above is the Members row&rsquo;s construction &mdash; glyph, label, a line of meta, chevron &mdash; reading a recipe it does not own. The dashed row beneath it is how a recipe gets written from the pantry side, which is also the migration path: today&rsquo;s panel becomes tomorrow&rsquo;s card, and the item&rsquo;s affordance shrinks to one row.</div><div class="note"><b>It does not go on the list row.</b> <i>Shopping list &rarr; The row</i> allows exactly two targets &mdash; the checkbox and the rest &mdash; so that nobody opens a sheet when they meant to tick something. A third would spend that rule on a convenience.</div><div class="note"><b>The recipe owns the link, and that is the part worth being strict about.</b> The item gains no field: no <i>made from</i>, no <i>made by</i>, nothing. A recipe names the item it yields and how many per batch, and the row on the item sheet is a <b>derived pointer, not an edited field</b> &mdash; display is not ownership.</div><div class="note"><b>Three things fall out of the direction.</b> Two recipes can yield the same item, because the item is not holding the relationship. Deleting a recipe leaves the pantry untouched. Deleting an item leaves the recipe standing, minus its yield &mdash; where Model A would have destroyed both.</div><div class="note"><b>The cost is a second object and a second place to look</b>, plus a drawer that has to hold recipes as well as filters and settings &mdash; the first real change to the shell since it was drawn.</div>
+    </div>
+
+  </div>
+
+
+  <div>
+    <div class="mlabel">Which way the references point &mdash; the settled direction</div>
+    <figure style="margin:0;background:#FDFAF4;border:1px solid #E2D5C0;border-radius:20px;padding:22px 26px 18px">
+      <svg viewBox="0 0 1300 306" style="width:100%;height:auto;display:block" role="img" aria-label="Under Model A an item and its recipe are one record, so a recipe that stocks nothing needs a phantom item. Under Model B recipes and plantings hold references to pantry items, and the pantry holds none back.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8E4468"/>
+          </marker>
+          <marker id="arf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#3F7A4C"/>
+          </marker>
+        </defs>
+
+        <!-- MODEL A -->
+        <text x="0" y="12" font-family="Karla" font-size="10.5" font-weight="700" letter-spacing="1.6" fill="#6F6049">MODEL A &#183; ONE RECORD</text>
+        <rect x="0" y="34" width="250" height="62" rx="13" fill="#F0E8EC" stroke="#E0CFD7"/>
+        <text x="16" y="59" font-family="Karla" font-size="14" font-weight="600" fill="#241E17">Chicken Stock</text>
+        <text x="16" y="79" font-family="Karla" font-size="12" fill="#6F6049">the item is the recipe</text>
+
+        <rect x="0" y="122" width="250" height="62" rx="13" fill="#FDFAF4" stroke="#CFBEA3" stroke-dasharray="5 4"/>
+        <text x="16" y="147" font-family="Karla" font-size="14" font-weight="600" fill="#9B8B75">Weeknight Chili</text>
+        <text x="16" y="167" font-family="Karla" font-size="12" fill="#9B8B75">a phantom item, at 0 for ever</text>
+
+        <text x="0" y="214" font-family="Karla" font-size="12.5" fill="#9A2E3B">Every recipe must stock something,</text>
+        <text x="0" y="232" font-family="Karla" font-size="12.5" fill="#9A2E3B">and deleting the item deletes the recipe.</text>
+
+        <line x1="330" y1="20" x2="330" y2="286" stroke="#E2D5C0"/>
+
+        <!-- MODEL B -->
+        <text x="392" y="12" font-family="Karla" font-size="10.5" font-weight="700" letter-spacing="1.6" fill="#6F6049">MODEL B &#183; PROCESSES POINT AT THE PANTRY</text>
+
+        <rect x="392" y="34" width="232" height="56" rx="13" fill="#F0E8EC" stroke="#E0CFD7"/>
+        <text x="408" y="57" font-family="Karla" font-size="13.5" font-weight="600" fill="#241E17">Chicken Stock</text>
+        <text x="408" y="76" font-family="Karla" font-size="11.5" fill="#8E4468">recipe</text>
+
+        <rect x="392" y="112" width="232" height="56" rx="13" fill="#F0E8EC" stroke="#E0CFD7"/>
+        <text x="408" y="135" font-family="Karla" font-size="13.5" font-weight="600" fill="#241E17">Weeknight Chili</text>
+        <text x="408" y="154" font-family="Karla" font-size="11.5" fill="#8E4468">recipe</text>
+
+        <rect x="392" y="190" width="232" height="56" rx="13" fill="#E8F0EA" stroke="#D0DFD3"/>
+        <text x="408" y="213" font-family="Karla" font-size="13.5" font-weight="600" fill="#241E17">Spring Tomatoes</text>
+        <text x="408" y="232" font-family="Karla" font-size="11.5" fill="#3C7549">planting</text>
+
+        <!-- arrows, all pointing into the pantry -->
+        <line x1="632" y1="62" x2="890" y2="82" stroke="#8E4468" stroke-width="1.6" marker-end="url(#ar)"/>
+        <text x="700" y="58" font-family="Karla" font-size="11.5" fill="#8E4468">uses 3 &#183; yields 1</text>
+
+        <line x1="632" y1="140" x2="890" y2="140" stroke="#8E4468" stroke-width="1.6" marker-end="url(#ar)"/>
+        <text x="704" y="132" font-family="Karla" font-size="11.5" fill="#8E4468">uses 3 &#183; yields nothing</text>
+
+        <line x1="632" y1="218" x2="890" y2="198" stroke="#3F7A4C" stroke-width="1.6" marker-end="url(#arf)"/>
+        <text x="726" y="230" font-family="Karla" font-size="11.5" fill="#3C7549">yields 1</text>
+
+        <!-- the pantry -->
+        <rect x="898" y="34" width="290" height="212" rx="16" fill="#F2EADC" stroke="#CFBEA3"/>
+        <text x="916" y="58" font-family="Karla" font-size="10.5" font-weight="700" letter-spacing="1.6" fill="#6F6049">THE PANTRY</text>
+        <text x="916" y="88" font-family="Karla" font-size="13.5" fill="#241E17">Chicken Stock &#183; 1 qt</text>
+        <text x="916" y="112" font-family="Karla" font-size="13.5" fill="#241E17">Carrots</text>
+        <text x="916" y="136" font-family="Karla" font-size="13.5" fill="#241E17">Milk &#183; 1 gal</text>
+        <text x="916" y="160" font-family="Karla" font-size="13.5" fill="#241E17">Tomatoes &#183; 1 qt</text>
+        <text x="916" y="184" font-family="Karla" font-size="13.5" fill="#241E17">Black Beans &#183; 15 oz</text>
+        <text x="916" y="216" font-family="Karla" font-size="12" fill="#6F6049">holds no reference to any of them</text>
+
+        <text x="392" y="278" font-family="Karla" font-size="12.5" fill="#4C4237">Nothing points left. Delete a recipe and the pantry is untouched; delete an item and the recipe simply loses its yield.</text>
+      </svg>
+      <figcaption style="font-size:12.5px;color:#6F6049;margin-top:14px;line-height:1.55">Under A an item and its recipe are one record, so a recipe that stocks nothing needs a phantom item. Under B the reference lives on the recipe, pointing in &mdash; and the pantry stays exactly what it is today.</figcaption>
+    </figure>
+  </div>
+
+  <div class="verdict">
+    <div class="vbox">
+      <div class="mlabel" style="margin-bottom:8px">What today&rsquo;s design already buys either way</div>
+      <div class="note" style="margin-top:0"><b>The kind on the source is the seam.</b> Shop, Grow, Make were never three list bands &mdash; they are three <i>ways a thing arrives</i>, and two of them want a real object behind them eventually. A shop source needs none: buying is not a process worth modelling. A make source wants a <b>recipe</b>. A grow source wants a <b>planting</b>, which is the same shape again and is where the season we put on the item really belongs.</div>
+      <div class="note"><b>The pantry tracks outputs. Recipes and plantings are the processes that make them.</b> That sentence is what today&rsquo;s work bought, and it holds under both models.</div><div class="note"><b>And the direction gives it a rule to run on: processes depend on the pantry, and the pantry depends on nothing.</b> A recipe references items; a planting references items; neither is referenced back. That is what lets recipes and gardening be built without reopening the pantry, and it is the strongest reason to prefer B.</div>
+    </div>
+    <div class="vbox">
+      <div class="mlabel" style="margin-bottom:8px">What is missing from both, and is not a drawing problem</div>
+      <div class="note" style="margin-top:0"><b>&ldquo;What can I cook tonight?&rdquo; is not the Make band.</b> The make band answers a restocking question &mdash; <i>what am I low on that I make</i>. A cook wants <i>every recipe I have the ingredients for</i>, whether or not its output is a tracked item running low. Those are different screens, and only one of them exists.</div>
+      <div class="note"><b>Deduction.</b> Both models can say you have enough; neither can take it out. On hand is a whole number of containers, so a two-cup pour changes nothing. That is the Restock flow, and it now blocks three features rather than one.</div>
+    </div>
+  </div>
+
+</div></div></div></figure>
+<figure class="board"><figcaption class="bc"><span class="bn">7</span>Option B — separate modes</figcaption><div class="fit" style="--h:782px"><div class="frame" id="b7" style="height:782px"><div class="bd">
+
+  <div>
+    <div class="mlabel">Option B &mdash; three peers in row 2, grid mode</div>
+
+    <div style="background:#FDFAF4;border:1px solid #E2D5C0;border-radius:16px;padding:16px 18px">
+      <div style="font-size:12px;color:#9B8B75;margin-bottom:10px">A household that grows and cooks</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="pill" style="background:#EDEFE1;border-color:#DCE0CB;color:#47592F"><span class="pdot" style="background:#5F7546"></span>13 in stock</div>
+        <div class="pill" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F"><span class="pdot" style="background:#C4901F"></span>9 running low</div>
+        <div class="pill" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B"><span class="pdot" style="background:#9A2E3B"></span>9 out</div>
+        <div class="trigger"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Shopping list <span class="tcount">12</span></div>
+        <div class="trigger" style="background:#E8F0EA;border-color:#3C7549;color:#3C7549"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>Garden <span class="tcount" style="background:#3C7549;color:#E8F0EA">3</span></div>
+        <div class="trigger" style="background:#F0E8EC;border-color:#8E4468;color:#8E4468"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>Kitchen <span class="tcount" style="background:#8E4468;color:#F0E8EC">2</span></div>
+        <div style="margin-left:auto;color:#6F6049;font-size:13px;white-space:nowrap">Showing 31 of 31</div>
+        <div class="sortish"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5v11M4 13.5 1.8 11.3M12 13.5v-11M12 2.5l2.2 2.2"/></svg>Sort &nbsp;Recent</div>
+      </div>
+
+      <div style="height:1px;background:#EEE4D2;margin:18px 0"></div>
+
+      <div style="font-size:12px;color:#9B8B75;margin-bottom:10px">A household that does neither &mdash; the same app, a different row</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="pill" style="background:#EDEFE1;border-color:#DCE0CB;color:#47592F"><span class="pdot" style="background:#5F7546"></span>9 in stock</div>
+        <div class="pill" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F"><span class="pdot" style="background:#C4901F"></span>6 running low</div>
+        <div class="pill" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B"><span class="pdot" style="background:#9A2E3B"></span>5 out</div>
+        <div class="trigger"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Shopping list <span class="tcount">11</span></div>
+        <div style="margin-left:auto;color:#6F6049;font-size:13px;white-space:nowrap">Showing 20 of 20</div>
+        <div class="sortish"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5v11M4 13.5 1.8 11.3M12 13.5v-11M12 2.5l2.2 2.2"/></svg>Sort &nbsp;Recent</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:34px;align-items:flex-start">
+    <div style="width:660px;flex-shrink:0">
+      <div class="mlabel">Garden mode &mdash; and the problem with it</div>
+      <div style="background:#FDFAF4;border:1px solid #E2D5C0;border-radius:16px;padding:16px 18px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+          <div class="backbtn"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 4.5 7.5 9 12"/></svg>Back to items</div>
+          <div style="margin-left:auto;color:#6F6049;font-size:13px">3 to pick &middot; 1 not yet</div>
+        </div>
+        <section class="card">
+          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
+          <div class="subhead">Not yet</div>
+          <div class="row" style="border-top:none"><div class="cbcell"></div><span class="nm" style="color:#6F6049">Butternut Squash</span><span class="cnt">Ready in September</span></div>
+        </section>
+      </div>
+    </div>
+
+    <div style="flex:1;padding-top:30px">
+      <div class="note" style="margin-bottom:18px"><b>What it gets right.</b> Each activity has a home. Checking a harvest row and checking a shopping row can mean different things, expire on different clocks, and end in different flows without one of them having to bend.</div>
+      <div class="note" style="margin-bottom:18px"><b>What it costs, and it is not the width.</b> At 1440 three triggers fit easily &mdash; the crowding argument is a 390 argument, where row 2 already carries a documented four-row worst case. The real cost is drawn above: <b>row 2&rsquo;s composition now depends on the household</b>. One person&rsquo;s app has one mode control, another&rsquo;s has three, and the trigger a gardener reaches for isn&rsquo;t there for anyone else. Nothing in the app varies like that today.</div>
+      <div class="note"><b>And it makes three of nearly the same screen.</b> The mode above is the shopping list with one card in it and different words on the count. Two more modes, two more empty states, two more trip bars, three places to fix a bug &mdash; and the thing that made stock worth cooking (<i>you&rsquo;re out, but you can make it</i>) is now one tap away from the list where that mattered.</div>
+    </div>
+  </div>
+
+</div></div></div></figure>
+<figure class="board"><figcaption class="bc"><span class="bn">8</span>Option C — one trigger, a segment inside</figcaption><div class="fit" style="--h:722px"><div class="frame" id="b8" style="height:722px"><div class="bd">
+
+  <div>
+    <div class="mlabel">Option C &mdash; adopted in part: the segment moved to Settled, with an All tab</div>
+    <div style="background:#FDFAF4;border:1px solid #E2D5C0;border-radius:16px;padding:16px 18px">
+      <div style="font-size:12px;color:#9B8B75;margin-bottom:10px">Grid mode &mdash; row 2 is exactly what it is today</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="pill" style="background:#EDEFE1;border-color:#DCE0CB;color:#47592F"><span class="pdot" style="background:#5F7546"></span>13 in stock</div>
+        <div class="pill" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F"><span class="pdot" style="background:#C4901F"></span>9 running low</div>
+        <div class="pill" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B"><span class="pdot" style="background:#9A2E3B"></span>9 out</div>
+        <div class="trigger"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Shopping list <span class="tcount">17</span></div>
+        <div style="margin-left:auto;color:#6F6049;font-size:13px;white-space:nowrap">Showing 31 of 31</div>
+        <div class="sortish"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5v11M4 13.5 1.8 11.3M12 13.5v-11M12 2.5l2.2 2.2"/></svg>Sort &nbsp;Recently added</div>
+      </div>
+
+      <div style="height:1px;background:#EEE4D2;margin:18px 0"></div>
+
+      <div style="font-size:12px;color:#9B8B75;margin-bottom:10px">List mode &mdash; the pills and the sort have left, so the segment lands in room that already opened up</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="backbtn"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 4.5 7.5 9 12"/></svg>Back to items</div>
+        <div class="seg">
+          <div class="sgi"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Buy <span class="sgc">12</span></div>
+          <div class="sgi on"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>Harvest <span class="sgc" style="color:#241E17">3</span></div>
+          <div class="sgi"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>Make <span class="sgc">2</span></div>
+        </div>
+        <div style="margin-left:auto;color:#6F6049;font-size:13px">3 to pick &middot; 1 not yet</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:34px;align-items:flex-start">
+    <div style="width:660px;flex-shrink:0">
+      <div class="mlabel">Harvest selected &mdash; the focused view the segment buys you</div>
+      <div style="background:#FDFAF4;border:1px solid #E2D5C0;border-radius:16px;padding:18px">
+        <section class="card">
+          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
+          <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
+          <div class="subhead">Not yet</div>
+          <div class="row" style="border-top:none"><div class="cbcell"></div><span class="nm" style="color:#6F6049">Butternut Squash</span><span class="cnt">Ready in September</span></div>
+        </section>
+      </div>
+    </div>
+
+    <div style="flex:1;padding-top:30px">
+      <div class="note" style="margin-bottom:18px"><b>What C had that A didn&rsquo;t.</b> Three activities happen in three places at three times &mdash; you are at Publix, or in the garden, or at the stove. A single scroll makes you pass the other two every time. The segment is the answer, and it costs nothing when a household has no grow or make source: it simply isn&rsquo;t there.</div>
+      <div class="note" style="margin-bottom:18px"><b>What it still costs.</b> The segment is a new component &mdash; the app has one segmented control today and it lives on the drawer&rsquo;s well with a cream active. Out here it needs a light-surface treatment that isn&rsquo;t the ink primary, because <i>Add item</i> is still on screen and ink is what you press. Drawn as surface-on-<code>line strong</code>; that&rsquo;s the third answer to a question the docs already have two answers to.</div>
+      <div class="note"><b>And on its own it hid the adjacency &mdash; which is what the All tab fixes.</b> Chicken Stock is <i>low</i> and you can nearly make it; in A that sits three inches under the Publix card holding the carrots. Pure C put it behind a tab you have no reason to press while writing a shopping list. <b>All is the default, so you get A&rsquo;s screen first and C&rsquo;s focus on demand.</b> This board is kept as the record of the option, not as a proposal.</div>
+    </div>
+  </div>
+
+</div></div></div></figure>
+</section>
+
+  <div class="colophon">
+    Boards are shown at their canvas size and scaled to fit the window &mdash; widen the browser for a closer look, or print to PDF. Light theme only, per the Settings canvas precedent: the dark counterparts are a hex-for-hex map away.
+  </div>
+
+</div>
+</body>
+</html>

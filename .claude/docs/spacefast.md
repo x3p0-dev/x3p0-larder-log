@@ -3765,3 +3765,85 @@ on. Saying *which* rule each file tripped would make it actionable.
 changed went up, with no flag and no mention — which is presumably why an
 18-second publish stays 18 seconds as the project grows. Worth documenting as a
 feature; right now you only notice it by reading the two numbers.
+
+---
+
+## 2026-08-29 — an additive column, and where the artifact keeps its schema
+
+Adding one column (`stores.kind`) and one mutation, then verifying both without
+a browser. Nothing broke; two notes.
+
+### ❓ `artifact.json` keeps the schema under `server`, not under `db`
+
+The artifact has a top-level `db`, and it holds exactly two keys —
+`{ backend, migrations }`. **The tables are at `server.schema`.** That reads
+backwards: the migrations that describe what will happen *to* the tables are in
+one branch and the tables themselves are in another, and `db` is the branch
+whose name says "the database".
+
+It cost two round trips of printing key lists to find, which is the same shape
+of mistake this log already records twice — `sf db`'s footer counting a
+changelog as a queue, and `schemaHash` / `plan.appliedSchemaHash` sitting at two
+different depths. All three are cases where the obvious read returns `undefined`
+or a confidently wrong answer rather than an error. A short `artifact.json`
+schema reference in the docs would close all three at once; there is currently
+none, and the file is the only way to see what a publish would actually install.
+
+For the record, the shape that works:
+
+```js
+const a = JSON.parse(readFileSync('.spacefast/zero/artifact.json', 'utf8'));
+a.server.schema        // the tables, each { name, columns[], indexes[] }
+a.server.mutations     // an array of names, not an object
+a.server.queries       // likewise
+a.server.endpoints     // [{ method, path }]
+a.db.migrations        // [] before the publish that applies them
+```
+
+### 👍 `POST /__spacefast/zero/run` is still the best thing in the local kit
+
+Nine cases against the real handlers in one script, with no browser and no test
+harness: an unset column resolving to its default, a write, a no-op write, a
+refused enum value, a cross-household id, and an error string checked verbatim.
+
+The detail that made it worth writing up: **a mutation that returns early
+reports `changedTables: []` and `changedQueries: []`**, so the envelope proves
+the short-circuit rather than merely implying it. That is a genuinely good
+affordance — it means "did this write?" is answerable from the response instead
+of by reading the row back — and it is not documented anywhere. `changedQueries`
+in particular does not appear in the runtime reference at all — zero matches in
+`/docs/zero-runtime.md`, checked the same day.
+
+The envelope is consistent, checked against two mutations: `mutation.result` /
+`ok` / `result` / `changedTables` / `changedQueries`, with `result` carrying
+whatever the handler returned. (An earlier note here claimed `createTerm` came
+back without a `result` key. It does not — that was our own shell bug, and the
+claim is withdrawn rather than left standing.)
+
+### 🐛 `https://spacefast.com/docs/zero.md` now 404s — the page moved
+
+The whole runtime reference used to be one file at `/docs/zero.md`. It is now
+**`/docs/zero-runtime.md`** (200, `text/markdown`, 22 KB). The old path returns
+**404 with a 25 KB HTML "Page not found" body** and no redirect:
+
+```
+https://spacefast.com/docs/zero.md            404  text/html    (25623 bytes)
+https://spacefast.com/docs/zero               200  text/html
+https://spacefast.com/docs/zero-runtime.md    200  text/markdown (22547 bytes)
+```
+
+Three things make this worse than an ordinary rename:
+
+1. **The HTML page at `/docs/zero` still works**, so a browser sees nothing
+   wrong. Only the `.md` twin moved, and the `.md` twin is the one every agent
+   and script is told to prefer.
+2. **A 404 that returns 25 KB of HTML looks like content.** A script that does
+   not check the status code gets a page of `<script>` tags where it expected
+   Markdown, and the failure surfaces much later as "the docs say nothing about
+   X".
+3. **A redirect from the old path would have cost nothing.** `/docs/llms.txt` is
+   already updated and is how we found the new URL — which is the right
+   discovery mechanism and worth pointing at from a 404 page, if the redirect is
+   deliberately not wanted.
+
+Fixed on our side in `.claude/CLAUDE.md`, which named the old URL.

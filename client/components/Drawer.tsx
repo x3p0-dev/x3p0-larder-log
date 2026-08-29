@@ -15,7 +15,9 @@ import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
 import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
-import type { HouseholdSummary, Item, Term, TermKind } from '../../shared/types';
+import type { SourceKind } from '../../shared/source';
+import { sourceGroupWord } from '../../shared/source';
+import type { HouseholdSummary, Item, Source, Term, TermKind } from '../../shared/types';
 
 export type DrawerTab = 'filter' | 'settings';
 
@@ -23,7 +25,7 @@ type Props = {
 	items: Item[];
 	locations: Term[];
 	types: Term[];
-	stores: Term[];
+	stores: Source[];
 	locationFilter: TermFilter;
 	typeFilter: TermFilter;
 	storeFilter: TermFilter;
@@ -84,10 +86,21 @@ type Props = {
 	 */
 	openMembers: number;
 
-	onCreateTerm: (kind: 'location' | 'type' | 'store', name: string, ink: string) => Promise<string | null>;
+	/**
+	 * `sourceKind` is the store group's alone — a location and a type have no
+	 * kind to compose, and pass nothing.
+	 */
+	onCreateTerm: (
+		kind: 'location' | 'type' | 'store',
+		name: string,
+		ink: string,
+		sourceKind?: SourceKind
+	) => Promise<string | null>;
 	onRenameTerm: (kind: 'location' | 'type' | 'store', id: string, name: string) => void;
 	onRecolorTerm: (kind: 'location' | 'type' | 'store', id: string, token: string) => void;
 	onDeleteTerm: (kind: 'location' | 'type' | 'store', id: string) => void;
+	/** Shop, grow or make — the source group's own control (D58). */
+	onSetSourceKind: (id: string, kind: SourceKind) => void;
 	/** `taxonomy:write`. Gates the pencil and the dashed add chip (D30). */
 	canEditTaxonomy: boolean;
 	/** Bumped to fold every editing panel — see `FilterSection`. */
@@ -118,9 +131,20 @@ export function Drawer({
 	onSelectHousehold, onNewHousehold, onJoinHousehold,
 	accountName, accountEmail, accountPicture, onSetDisplayName, onSignOut,
 	settings, openMembers,
-	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, canEditTaxonomy, closeEditing,
+	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, onSetSourceKind, canEditTaxonomy, closeEditing,
 	theme,
 }: Props) {
+	/*
+	 * `Store` or `Source` — the heading, the dashed chip and the composer's
+	 * micro-label, all from one call (D58).
+	 *
+	 * Computed here rather than threaded from `Pantry`, and the item sheet and
+	 * the rail each call it too. It is a pure function of the same array all
+	 * three already hold, so there is no way for them to disagree — and a prop
+	 * would have to be passed through three components to say something each of
+	 * them can already work out.
+	 */
+	const sourceWord = sourceGroupWord(stores);
 	const d = theme.drawer;
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [accountOpen, setAccountOpen] = useState(false);
@@ -324,13 +348,14 @@ export function Drawer({
 								canEdit={canEditTaxonomy} closeEditing={closeEditing} theme={theme}
 							/>
 							<FilterSection
-								title="Store" entities={stores}
+								title={sourceWord} entities={stores}
 								filter={storeFilter}
 								countFor={(id) => countFor('store', id)}
-								onCreate={(n, ink) => onCreateTerm('store', n, ink)}
+								onCreate={(n, ink, k) => onCreateTerm('store', n, ink, k)}
 								onRename={(id, n) => onRenameTerm('store', id, n)}
 								onRecolor={(id, t) => onRecolorTerm('store', id, t)}
 								onDelete={(id) => onDeleteTerm('store', id)}
+								onSetKind={onSetSourceKind}
 								canEdit={canEditTaxonomy} closeEditing={closeEditing} theme={theme}
 							/>
 							<FilterSection

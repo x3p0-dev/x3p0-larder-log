@@ -6,10 +6,12 @@ import { statusColor, statusFor, themed } from '../lib/theme';
 import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET } from '../lib/controlStyles';
 import { CheckBox } from './CheckBox';
 
-import type { ShoppingGroup } from '../../shared/shoppingList';
+import { SOURCE_KIND_ICONS } from './SourceKindMenu';
+import type { BandKind, RunBand, ShoppingGroup } from '../../shared/runList';
 import type { Item } from '../../shared/types';
 import { toInt } from '../../shared/qty';
 import { formatSize } from '../../shared/size';
+import { readyPhrase } from '../../shared/season';
 
 /**
  * Visually hidden, but read.
@@ -24,7 +26,15 @@ const SR_ONLY = {
 } as const;
 
 type Props = {
-	groups: ShoppingGroup[];
+	/**
+	 * The bands to draw, already filtered to the chosen tab by the caller.
+	 *
+	 * A list rather than a map so the order is the model's — Buy · Harvest ·
+	 * Make — and so a band with nothing in it simply is not here.
+	 */
+	bands: RunBand[];
+	/** False while one tab is showing: one band needs no header naming it. */
+	banded: boolean;
 	/** Item ids currently in the cart. Local to this device — see `useTripChecks`. */
 	checked: ReadonlySet<string>;
 	/** Absent for a viewer, who gets no checkboxes. */
@@ -46,7 +56,7 @@ type Props = {
 };
 
 /**
- * The shopping list — a mode, not a surface.
+ * The run list — a mode, not a surface.
  *
  * It replaces the content column rather than covering it, because a shopping
  * list is a reference you read while doing something else, not a question you
@@ -59,19 +69,33 @@ type Props = {
  * screen. The 460px floor is measured rather than chosen — below it a long name
  * and its badge crowd the counts on the right, and the row wraps.
  */
-export function ShoppingList(props: Props) {
-	const { groups, checked, onToggle, onClearChecks, dark, theme } = props;
+export function RunList(props: Props) {
+	const { bands, banded, checked, onToggle, onClearChecks, dark, theme } = props;
 
 	const [hideChecked, setHideChecked] = useState(false);
 
-	/** Rows on screen, after *Hide checked*. Cards that empty out go with them. */
+	/**
+	 * Rows on screen, after *Hide checked*.
+	 *
+	 * Cards that empty out go with them, and **so do bands** — a `HARVEST · 0`
+	 * header over nothing is a heading for an empty room.
+	 */
 	const shown = useMemo(() => (
 		hideChecked
-			? groups
-				.map((g) => ({ ...g, items: g.items.filter((i) => ! checked.has(i.id)) }))
-				.filter((g) => g.items.length > 0)
-			: groups
-	), [groups, checked, hideChecked]);
+			? bands
+				.map((b) => ({
+					...b,
+					groups: b.groups
+						.map((g) => ({ ...g, items: g.items.filter((i) => ! checked.has(i.id)) }))
+						// A card kept for its `NOT YET` rows alone: hiding what is
+						// checked is about the trip, and nothing down there is on it.
+						.filter((g) => g.items.length > 0 || g.notYet.length > 0),
+				}))
+				.filter((b) => b.groups.length > 0)
+			: bands
+	), [bands, checked, hideChecked]);
+
+	const groups = useMemo(() => bands.flatMap((b) => b.groups), [bands]);
 
 	/*
 	 * Items, not rows: something you can buy at either of two shops draws twice
@@ -91,24 +115,26 @@ export function ShoppingList(props: Props) {
 	/** `undefined` rather than a no-op, so the bars render no control for a viewer. */
 	const clear = onClearChecks && (() => onClearChecks(checkedHere));
 
+	/*
+	 * *Run list, 17 to get across three kinds* — the doc's own sentence, and
+	 * `kinds` rather than `stores` because that is what the bands are. It falls
+	 * back to naming the sources when there is only one band, which is what a
+	 * household with nothing but shops hears and is the sentence this screen has
+	 * always announced.
+	 */
 	const announcement = groups.length === 0
-		? 'Shopping list, nothing to buy'
-		: `Shopping list, ${plural(total, 'item')} to buy across ${plural(groups.length, 'store')}`
+		? 'Run list, nothing to get'
+		: `Run list, ${plural(total, 'item')} to get across `
+			+ (banded ? plural(bands.length, 'kind') : plural(groups.length, 'source'))
 			+ (checkedCount > 0 ? `, ${checkedCount} in the cart` : '');
 
 	return (
 		<div>
 			<span role="status" aria-live="polite" style={SR_ONLY}>{announcement}</span>
 
-			{/*
-			  * Mobile is a single column at its own gutters; from `md` the tracks
-			  * fill rather than fit, and `items-start` lets each card keep its
-			  * natural height so the bottoms run ragged. Both class strings are
-			  * complete literals — Tailwind resolves a class by scanning source.
-			  */}
-			<div class="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-[repeat(auto-fill,minmax(min(460px,100%),1fr))] items-start">
-				{groups.length === 0
-					? (
+			{groups.length === 0
+				? (
+					<div class="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-[repeat(auto-fill,minmax(min(460px,100%),1fr))] items-start">
 						<ListEmpty
 							storeFilterName={props.storeFilterName}
 							elsewhereCount={props.elsewhereCount}
@@ -117,18 +143,47 @@ export function ShoppingList(props: Props) {
 							dark={dark}
 							theme={theme}
 						/>
-					)
-					: shown.map((group) => (
-						<StoreCard
-							key={group.storeId ?? ''}
-							group={group}
-							checked={checked}
-							onToggle={onToggle}
-							dark={dark}
-							theme={theme}
-						/>
-					))}
-			</div>
+					</div>
+				)
+				: (
+					/*
+					 * 34px between bands, and nothing between a header and its
+					 * grid but the header's own 12.
+					 */
+					<div class="flex flex-col gap-[34px]">
+						{shown.map((band) => (
+							<section key={band.kind} aria-label={banded ? BAND_LABELS[band.kind] : undefined}>
+								{banded && <BandHeader kind={band.kind} count={band.count} theme={theme} />}
+
+								{/*
+								  * Mobile is a single column at its own gutters; from `md`
+								  * the tracks fill rather than fit, and `items-start` lets
+								  * each card keep its natural height so the bottoms run
+								  * ragged. Both class strings are complete literals —
+								  * Tailwind resolves a class by scanning source.
+								  *
+								  * **`auto-fill` earns its keep twice over now.** It was
+								  * chosen so one store card left after a filter would not
+								  * stretch across the screen; the Harvest and Make bands
+								  * usually hold exactly one card each, so they get that
+								  * behaviour for free.
+								  */}
+								<div class="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-[repeat(auto-fill,minmax(min(460px,100%),1fr))] items-start">
+									{band.groups.map((group) => (
+										<StoreCard
+											key={group.storeId ?? ''}
+											group={group}
+											checked={checked}
+											onToggle={onToggle}
+											dark={dark}
+											theme={theme}
+										/>
+									))}
+								</div>
+							</section>
+						))}
+					</div>
+				)}
 
 			{/*
 			  * The trip bar is a fact about the *trip*, not about Costco, which is
@@ -148,6 +203,37 @@ export function ShoppingList(props: Props) {
 						/>
 					)
 			)}
+		</div>
+	);
+}
+
+const BAND_LABELS: Record<BandKind, string> = { buy: 'Buy', harvest: 'Harvest', make: 'Make' };
+
+/** The band's glyph is its source kind's glyph. One mark, three places. */
+const BAND_ICONS = { buy: SOURCE_KIND_ICONS.shop, harvest: SOURCE_KIND_ICONS.grow, make: SOURCE_KIND_ICONS.make };
+
+/**
+ * A band's header: glyph, `BUY · 12`, then a rule filling the rest.
+ *
+ * A **micro-label**, which is the app's own word for a heading that names a
+ * region without competing with anything in it — the same treatment the item
+ * sheet's four sections and the drawer's groups take. The rule is what makes it
+ * a band rather than a label floating above a grid, and it is `line` rather
+ * than `line strong` because it separates nothing: there is a 34px gap doing
+ * that already.
+ *
+ * The count is the band's own — distinct items, never rows.
+ */
+function BandHeader({ kind, count, theme }: { kind: BandKind; count: number; theme: Theme }) {
+	const Icon = BAND_ICONS[kind];
+
+	return (
+		<div class="flex items-center gap-2.5 mb-3" style={{ color: theme.textMuted }}>
+			<Icon size={15} strokeWidth={1.7} class="shrink-0" />
+			<span class="font-bold text-label uppercase tracking-[0.15em] whitespace-nowrap">
+				{BAND_LABELS[kind]} &middot; {count}
+			</span>
+			<span class="flex-1 h-px" style={{ background: theme.border }} />
 		</div>
 	);
 }
@@ -225,6 +311,43 @@ function StoreCard({ group, checked, onToggle, dark, theme }: CardProps) {
 						theme={theme}
 					/>
 				))}
+
+				{/*
+				  * **`NOT YET` — what is coming, not what to do.**
+				  *
+				  * A sub-group at the foot of a harvest card for the things whose
+				  * season has not come round. Its rows keep the 56px height and
+				  * lose exactly two things: **the checkbox**, because there is
+				  * nothing to pick, and **the status badge**, because the slot says
+				  * *Ready in September* instead — which is the one fact that is
+				  * actually news here.
+				  *
+				  * The subhead is inset to the checkbox column's own 56px, so the
+				  * label starts where the names do and the empty gutter reads as
+				  * the missing checkboxes rather than as a stray indent.
+				  *
+				  * **The item is unchanged.** An out-of-season squash still reads
+				  * *out* on its card and still counts toward the three status
+				  * pills; it is only this screen that moves it. That is the one
+				  * place the pills and the run list's total deliberately disagree.
+				  */}
+				{group.notYet.length > 0 && (
+					<>
+						<li
+							class="flex items-center h-[34px] pl-[52px] md:pl-14 pr-4 font-bold text-[10px] uppercase tracking-[0.15em]"
+							style={{
+								background: theme.surfaceAlt,
+								borderTop: `1px solid ${theme.divider}`,
+								color: theme.textMuted,
+							}}
+						>
+							Not yet
+						</li>
+						{group.notYet.map((item) => (
+							<NotYetRow key={item.id} item={item} theme={theme} />
+						))}
+					</>
+				)}
 			</ul>
 		</section>
 	);
@@ -384,6 +507,50 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 					{inner}
 				</button>
 			) : inner}
+		</li>
+	);
+}
+
+/**
+ * One `NOT YET` row: a name in meta, and when it will be ready.
+ *
+ * **Not a button and not in the tab order.** There is nothing to press — no
+ * checkbox, and the whole-row target the rows above have exists to tick them.
+ * A focusable row that does nothing is worse than a row that says so.
+ *
+ * The name drops to `textMuted`, which is the same step the checked rows take,
+ * and for a related reason: this is a row you are being told about rather than
+ * asked about.
+ */
+function NotYetRow({ item, theme }: { item: Item; theme: Theme }) {
+	const size = formatSize(item.size, item.unit);
+	const ready = readyPhrase(item.seasonFrom, item.seasonTo);
+
+	return (
+		<li
+			class="flex items-center h-16 md:h-14"
+			style={{ borderTop: `1px solid ${theme.divider}` }}
+		>
+			{/* The empty gutter is what says these have no checkbox. */}
+			<span class="w-[52px] md:w-14 shrink-0" />
+			<span class="flex-1 min-w-0 flex flex-wrap items-center content-center gap-x-2.5 gap-y-0.5 pr-4">
+				<span class="flex items-baseline gap-2 md:gap-2.5 min-w-0 grow shrink-0 basis-[10rem]">
+					<span
+						class="font-disp font-semibold text-[17px] whitespace-nowrap truncate"
+						style={{ color: theme.textMuted }}
+					>
+						{item.name}
+					</span>
+					{size && (
+						<span class="text-[13px] whitespace-nowrap shrink-0" style={{ color: theme.textMuted }}>
+							{size}
+						</span>
+					)}
+				</span>
+				<span class="text-[13px] whitespace-nowrap md:pr-5" style={{ color: theme.textMuted }}>
+					{ready}
+				</span>
+			</span>
 		</li>
 	);
 }

@@ -187,13 +187,13 @@ export function fallbackInk(name: string): string {
  * `id()` is not a foreign key, so nothing in the database enforces it, and a
  * bug in `deleteTerm` would land here rather than crashing.
  */
-export function entityColorFor(id: string, list: Term[], dark: boolean): ThemedColor {
+export function entityColorFor(id: string, list: readonly Term[], dark: boolean): ThemedColor {
 	const found = list.find((e) => e.id === id);
 	return themed(found?.ink || fallbackInk(id), dark);
 }
 
 /** The display name for a term id, or a visible marker if it resolves to nothing. */
-export function termNameFor(id: string, list: Term[]): string {
+export function termNameFor(id: string, list: readonly Term[]): string {
 	return list.find((e) => e.id === id)?.name ?? 'Unknown';
 }
 

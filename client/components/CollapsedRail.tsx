@@ -11,14 +11,15 @@ import { RailFlyout } from './RailFlyout';
 import type { Theme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
 import { chipDot, drawerTheme } from '../lib/theme';
-import type { HouseholdSummary, Term, ThemeOverride } from '../../shared/types';
+import { sourceGroupWord } from '../../shared/source';
+import type { HouseholdSummary, Source, Term, ThemeOverride } from '../../shared/types';
 
 type Group = 'location' | 'store' | 'type';
 type Menu = Group | 'household' | 'appearance' | 'account';
 
 type Props = {
 	locations: Term[];
-	stores: Term[];
+	stores: Source[];
 	types: Term[];
 	locationFilter: TermFilter;
 	storeFilter: TermFilter;
@@ -264,9 +265,19 @@ export function CollapsedRail({
 
 	const chrome: RailChrome = { hovered, dark, onEnter: enter, onLeave: leave };
 
+	const sourceWord = sourceGroupWord(stores);
+
 	const groups: { key: Group; label: string; Icon: typeof MapPin; terms: Term[]; filter: TermFilter }[] = [
 		{ key: 'location', label: 'Filter by location', Icon: MapPin, terms: locations, filter: locationFilter },
-		{ key: 'store', label: 'Filter by store', Icon: StoreIcon, terms: stores, filter: storeFilter },
+		/*
+		 * The label follows the group's own word (D58); **the glyph does not**.
+		 * A storefront means *shop*, which is wrong the moment a household grows
+		 * anything — but the neutral mark that would replace it has not been
+		 * drawn, and inventing one here would put a glyph nobody has been taught
+		 * on the one surface that is nothing but glyphs. Recorded rather than
+		 * guessed at.
+		 */
+		{ key: 'store', label: `Filter by ${sourceWord.toLowerCase()}`, Icon: StoreIcon, terms: stores, filter: storeFilter },
 		{ key: 'type', label: 'Filter by type', Icon: Tag, terms: types, filter: typeFilter },
 	];
 

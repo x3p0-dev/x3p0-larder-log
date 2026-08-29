@@ -93,19 +93,19 @@ const MOCK_STORES: Term[] = [
 const MOCK_ITEMS: Item[] = [
 	{
 		id: 'mock-beef', name: 'Ground Beef', locationId: 'loc-freezer',
-		qty: '12', threshold: '4', size: '1', unit: 'pound', offShoppingList: false, notes: '',
+		qty: '12', threshold: '4', size: '1', unit: 'pound', offShoppingList: false, seasonFrom: '', seasonTo: '', notes: '',
 		typeIds: ['type-protein'], storeIds: ['store-warehouse'], createdAt: '', addedAt: '', changedAt: '',
 	},
 	{
 		id: 'mock-apples', name: 'Apples', locationId: 'loc-fridge',
 		// No size, and that is the case worth drawing: loose fruit is counted, not
 		// packaged, so the meta line under the name is simply absent.
-		qty: '3', threshold: '6', size: '', unit: '', offShoppingList: false, notes: '',
+		qty: '3', threshold: '6', size: '', unit: '', offShoppingList: false, seasonFrom: '', seasonTo: '', notes: '',
 		typeIds: ['type-produce'], storeIds: ['store-grocery'], createdAt: '', addedAt: '', changedAt: '',
 	},
 	{
 		id: 'mock-oats', name: 'Rolled Oats', locationId: 'loc-pantry',
-		qty: '0', threshold: '2', size: '2', unit: 'pound', offShoppingList: false, notes: '',
+		qty: '0', threshold: '2', size: '2', unit: 'pound', offShoppingList: false, seasonFrom: '', seasonTo: '', notes: '',
 		typeIds: ['type-grain'], storeIds: ['store-grocery'], createdAt: '', addedAt: '', changedAt: '',
 	},
 ];

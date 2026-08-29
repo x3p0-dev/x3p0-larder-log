@@ -18,8 +18,9 @@ import { DisplayNameCard } from './components/DisplayNameCard';
 import { FirstRun } from './components/FirstRun';
 import { InviteLanding } from './components/InviteLanding';
 import { OutsideShell } from './components/OutsideShell';
-import { ShoppingList } from './components/ShoppingList';
-import { ShoppingListTrigger } from './components/ShoppingListTrigger';
+import { RunList } from './components/RunList';
+import { RunListTrigger } from './components/RunListTrigger';
+import { RunSegment } from './components/RunSegment';
 import { ToastStack } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { NewHouseholdDialog } from './components/NewHouseholdDialog';
@@ -45,11 +46,15 @@ import { normalizeCode } from '../shared/invite';
 import { wouldStrandHousehold } from '../shared/membership';
 import type { StatusKey } from '../shared/status';
 import { statusKeyFor } from '../shared/status';
+import type { SourceKind } from '../shared/source';
+import { sourceGroupWord } from '../shared/source';
 import type { Item, ItemDraft, Member, Term, TermKind, ThemeOverride } from '../shared/types';
 import { DEFAULT_ROLE, can } from '../shared/roles';
 import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
-import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
+import { runBands, runCount, runIds } from '../shared/runList';
+import { monthOf } from '../shared/season';
+import type { RunTab } from './components/RunSegment';
 import { countTermFilters, matchesTermFilters, pruneTermFilter, toggleTermFilter } from '../shared/filter';
 import type { TermFilters } from '../shared/filter';
 import type { TermBlock } from '../shared/term';
@@ -265,13 +270,19 @@ type EmptyFilters = {
 	locationNames: string[];
 	typeNames: string[];
 	storeNames: string[];
+	/**
+	 * `Store` or `Source`, from `sourceGroupWord()` — the copy names the group
+	 * the way the drawer's heading does (D58), or it sends someone to a *Store*
+	 * list that is labelled *Source* one panel over.
+	 */
+	sourceWord: 'Store' | 'Source';
 	status: StatusKey | null;
 };
 
 const STATUS_EMPTY: Record<StatusKey, { title: string; body: string }> = {
 	ok: {
 		title: 'Nothing’s fully stocked.',
-		body: 'Everything in the larder is low or out. The shopping list has it grouped by the store you buy it at.',
+		body: 'Everything in the larder is low or out. The run list has it grouped by where you get it from.',
 	},
 	low: {
 		title: 'Nothing’s running low.',
@@ -308,9 +319,9 @@ function emptyCopy(f: EmptyFilters): { title: string; body: string; clear: 'none
 	if (only && f.storeNames.length === 1) {
 		return {
 			title: `Nothing from ${f.storeNames[0]}.`,
-			body: 'No item names this store yet. Open any item and add it to its Store list.',
+			body: `No item names this ${f.sourceWord.toLowerCase()} yet. Open any item and add it to its ${f.sourceWord} list.`,
 			clear: 'one',
-			label: 'Clear the store filter',
+			label: `Clear the ${f.sourceWord.toLowerCase()} filter`,
 		};
 	}
 
@@ -780,6 +791,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const locations = pantry?.locations ?? [];
 	const types = pantry?.types ?? [];
 	const stores = pantry?.stores ?? [];
+
+	/*
+	 * `Store` while every source is a shop, `Source` once one of them is not
+	 * (D58). The drawer, the rail and the item sheet each derive this from the
+	 * same array themselves; `Pantry` needs its own copy for the empty-state
+	 * copy, which is the one place the word appears in a sentence.
+	 */
+	const sourceWord = sourceGroupWord(stores);
 	const defaultThreshold = household?.household.defaultThreshold ?? '1';
 	const householdName = household?.household.name ?? '';
 	/*
@@ -868,7 +887,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		create: api.createTerm,
 		update: api.updateTerm,
 		remove: api.deleteTerm,
-	}), [api.createTerm, api.updateTerm, api.deleteTerm]);
+		setKind: api.setSourceKind,
+	}), [api.createTerm, api.updateTerm, api.deleteTerm, api.setSourceKind]);
 
 	// --- Filtering / sorting -----------------------------------------------
 
@@ -1148,10 +1168,59 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * why there is no shopping-list tab and no way for the list and the pantry
 	 * to disagree.
 	 */
-	const shoppingGroupsForView = useMemo(() => shoppingGroups(filtered, stores), [filtered, stores]);
+	/**
+	 * The month, read once per mount rather than per render.
+	 *
+	 * A season only moves a row between groups on one card, so a tab left open
+	 * across midnight on the last of August showing an August season is a
+	 * cosmetic staleness that a reload fixes. Reading the clock in a `useMemo`
+	 * with no dependencies is what keeps every derivation below it stable.
+	 */
+	const month = useMemo(() => monthOf(Date.now()), []);
+
+	const bands = useMemo(() => runBands(filtered, stores, month), [filtered, stores, month]);
+
+	/**
+	 * Which tab of the segment is showing, and it resets to `All` on its own.
+	 *
+	 * Not persisted, unlike the mode itself (D41) and the filters (D51). `All`
+	 * is the whole design — it is the screen that puts the carrots for the stock
+	 * two bands above it — so coming back to a *narrowed* run list would be
+	 * restoring the state that hides things, which is the failure D45 exists to
+	 * prevent and this has no row 3 to make legible.
+	 */
+	const [runTab, setRunTab] = useState<RunTab>('all');
+
+	/**
+	 * The segment is a control only when there is more than one band.
+	 *
+	 * A household with nothing but shops sees no segment, no band headers, and
+	 * today's shopping list byte for byte — which is most of why this shape won.
+	 */
+	const banded = bands.length > 1;
+
+	/**
+	 * The tab actually in effect, which is not always the one that was pressed.
+	 *
+	 * A chosen band can empty out under you — tick the last thing on Harvest, or
+	 * narrow a filter until nothing you grow is low — and the honest answer is to
+	 * fall back to `All` rather than draw an empty screen for a tab that no
+	 * longer exists. **Resolved once and read everywhere**: the segment's
+	 * highlight, which bands render, and whether they carry headers all come from
+	 * this. Reading `runTab` in one place and the fallback in another is how the
+	 * screen ends up showing every band with no headers over them.
+	 */
+	const activeTab: RunTab = useMemo(() => (
+		! banded || runTab === 'all' || bands.some((b) => b.kind === runTab) ? runTab : 'all'
+	), [bands, banded, runTab]);
+
+	/** The chosen tab's bands, or all of them under `All`. */
+	const shownBands = useMemo(() => (
+		activeTab === 'all' ? bands : bands.filter((b) => b.kind === activeTab)
+	), [bands, activeTab]);
 
 	/** What is on this screen — the filtered count. */
-	const toBuyHere = useMemo(() => shoppingCount(filtered), [filtered]);
+	const toBuyHere = useMemo(() => runCount(filtered, stores, month), [filtered, stores, month]);
 
 	/**
 	 * What the household has to buy, filters or no filters.
@@ -1160,7 +1229,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * to do*, which is a fact about the household. The meta line answers *what
 	 * is on this screen*, and the two are allowed to disagree.
 	 */
-	const toBuyTotal = useMemo(() => shoppingCount(items), [items]);
+	const toBuyTotal = useMemo(() => runCount(items, stores, month), [items, stores, month]);
 
 	/**
 	 * The ids a tick can still belong to.
@@ -1170,8 +1239,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * out has not been bought.
 	 */
 	const buyableIds = useMemo(
-		() => new Set(items.filter(needsBuying).map((it) => it.id)),
-		[items]
+		() => runIds(items, stores, month),
+		[items, stores, month]
 	);
 
 	const trip = useTripChecks(tripKey, api.currentHouseholdId, buyableIds);
@@ -1207,12 +1276,28 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * that are no longer here. The line describes the screen, so it counts the
 	 * screen.
 	 */
-	const inCart = useMemo(
-		() => filtered.filter((it) => needsBuying(it) && trip.checked.has(it.id)).length,
-		[filtered, trip.checked]
-	);
+	const inCart = useMemo(() => {
+		// `hereIds` rather than `needsBuying`, so an out-of-season row — which has
+		// no checkbox to tick — cannot be counted as being in the cart.
+		const hereIds = runIds(filtered, stores, month);
+
+		return [...trip.checked].filter((id) => hereIds.has(id)).length;
+	}, [filtered, stores, month, trip.checked]);
 
 	const tripLine = useMemo(() => {
+		/*
+		 * **With a segment on screen this shrinks to the cart clause alone.**
+		 * `12 to buy · 4 stores` is what the segment now says, in tabs you can
+		 * press — and printing it twice a gap apart would be the app answering
+		 * one question two ways. What the segment cannot say is how much of it is
+		 * already in your hand, so that is what is left here.
+		 */
+		if (banded) {
+			const cart = inCart > 0 ? `${inCart} in the cart` : '';
+
+			return { short: cart, full: cart };
+		}
+
 		const parts: string[] = [];
 
 		if (storeFilterName) {
@@ -1220,7 +1305,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		} else {
 			parts.push(toBuyHere < toBuyTotal ? `${toBuyHere} of ${toBuyTotal} to buy` : `${toBuyHere} to buy`);
 
-			if (shoppingGroupsForView.length > 1) parts.push(plural(shoppingGroupsForView.length, 'store'));
+			const sources = bands[0]?.groups.length ?? 0;
+
+			if (sources > 1) parts.push(plural(sources, 'store'));
 		}
 
 		const short = parts.join(' · ');
@@ -1231,17 +1318,21 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		 * next to the control that acts on it.
 		 */
 		return { short, full: inCart > 0 ? `${short} · ${inCart} in the cart` : short };
-	}, [storeFilterName, toBuyHere, toBuyTotal, shoppingGroupsForView, inCart]);
+	}, [banded, storeFilterName, toBuyHere, toBuyTotal, bands, inCart]);
 
 	/**
 	 * What the rest of the household still has to buy, for the scoped empty
 	 * state. Multi-store items count as elsewhere only if they are not also here.
 	 */
-	const elsewhereCount = useMemo(() => (
-		activeStores.length
-			? items.filter((it) => needsBuying(it) && ! activeStores.some((id) => it.storeIds.includes(id))).length
-			: 0
-	), [items, activeStores]);
+	const elsewhereCount = useMemo(() => {
+		if (! activeStores.length) return 0;
+
+		const onList = runIds(items, stores, month);
+
+		return items.filter((it) => (
+			onList.has(it.id) && ! activeStores.some((id) => it.storeIds.includes(id))
+		)).length;
+	}, [items, stores, month, activeStores]);
 
 	/*
 	 * Escape leaves the mode. It is not an overlay, so nothing else claims the
@@ -1276,8 +1367,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		locationNames: activeLocations.map((id) => termNameFor(id, locations)),
 		typeNames: activeTypes.map((id) => termNameFor(id, types)),
 		storeNames: activeStores.map((id) => termNameFor(id, stores)),
+		sourceWord,
 		status: activeStatus,
-	}), [search, activeLocations, activeTypes, activeStores, activeStatus, locations, types, stores]);
+	}), [search, activeLocations, activeTypes, activeStores, activeStatus, locations, types, stores, sourceWord]);
 
 	/**
 	 * Clears the single filter the copy named.
@@ -1358,6 +1450,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					locationId: item.locationId,
 					typeIds: item.typeIds,
 					storeIds: item.storeIds,
+					seasonFrom: item.seasonFrom,
+					seasonTo: item.seasonTo,
 					qty: item.qty,
 					threshold: item.threshold,
 					size: item.size,
@@ -1407,7 +1501,12 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		// The same call the server refuses on, so the sentence on screen and the
 		// sentence the mutation would have thrown are one string.
-		const block = termBlock(kind, term.name, termUsageCount(items, kind, id));
+		const block = termBlock(
+			kind,
+			term.name,
+			termUsageCount(items, kind, id),
+			kind === 'store' ? sourceWord : kind
+		);
 
 		if (block) {
 			setPending({ kind: 'term-blocked', block, termKind: kind, termId: id });
@@ -1463,10 +1562,17 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * it was. The term is still genuinely re-created — same trade as D17 — but
 	 * nothing visible reveals that any more.
 	 */
-	async function restoreTerm(kind: TermKind, term: Term, wasActive: boolean) {
+	async function restoreTerm(kind: TermKind, term: Term & { kind?: SourceKind }, wasActive: boolean) {
 		const id = await taxonomy.create(
 			kind,
-			{ name: term.name, ink: term.ink },
+			/*
+			 * The source's own kind travels with it (D58). Undo is a re-insert
+			 * (D17) and a new source is always a shop, so without this a restored
+			 * garden would come back a shop — a silent change to a row somebody
+			 * asked to have back exactly as it was. The server ignores it for the
+			 * two taxonomies that have no column.
+			 */
+			{ name: term.name, ink: term.ink, kind: term.kind },
 			{ addedAt: addedAtOf(term), changedAt: changedAtOf(term) }
 		);
 
@@ -1563,6 +1669,11 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			size: '',
 			unit: '',
 			offShoppingList: false,
+			// Neither half of the season either, and for a firmer reason than the
+			// size's: the field is not even on screen until a **grow** source is
+			// picked (D58), so a new item cannot arrive holding one.
+			seasonFrom: '',
+			seasonTo: '',
 			notes: '',
 		};
 	}
@@ -1619,6 +1730,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			size: item.size,
 			unit: item.unit,
 			offShoppingList: item.offShoppingList,
+			seasonFrom: item.seasonFrom,
+			seasonTo: item.seasonTo,
 			notes: item.notes,
 		});
 	}
@@ -1870,10 +1983,11 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					onLeaveHousehold: requestLeave,
 					leaveLabel: members.length <= 1 ? 'Delete household' : 'Leave household',
 				}}
-				onCreateTerm={(kind, name, ink) => taxonomy.create(kind, { name, ink })}
+				onCreateTerm={(kind, name, ink, sourceKind) => taxonomy.create(kind, { name, ink, kind: sourceKind })}
 				onRenameTerm={(kind, id, name) => { void taxonomy.update(kind, id, { name }); }}
 				onRecolorTerm={(kind, id, ink) => { void taxonomy.update(kind, id, { ink }); }}
 				onDeleteTerm={(kind, id) => void requestDeleteTerm(kind, id)}
+				onSetSourceKind={(id, next) => { void taxonomy.setKind(id, next); }}
 				canEditTaxonomy={mayEditTaxonomy}
 				closeEditing={closeEditing}
 				theme={theme}
@@ -1963,7 +2077,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  */}
 					{! empty && toBuyTotal > 0 && (
 						<span class="ml-auto shrink-0">
-							<ShoppingListTrigger
+							<RunListTrigger
 								active={listMode}
 								count={toBuyTotal}
 								onToggle={() => setListMode(! listMode)}
@@ -2168,7 +2282,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 						  */}
 						{toBuyTotal > 0 && (
 							<span class="hidden md:inline-flex md:ml-0.5 shrink-0">
-								<ShoppingListTrigger
+								<RunListTrigger
 									active={listMode}
 									count={toBuyTotal}
 									onToggle={() => setListMode(! listMode)}
@@ -2177,6 +2291,27 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 									theme={theme}
 								/>
 							</span>
+						)}
+
+						{/*
+						  * The segment, and it lands in the room the sort trigger left.
+						  *
+						  * **Only above `compact`.** The left slot holds its width in
+						  * both modes so the trigger never moves when you press it, and
+						  * in compact that slot is `flex-1` — it owns the row's slack.
+						  * There is nothing here for a fourth control to take, so
+						  * squeezing one in would mean giving that width up and moving
+						  * the trigger, which is the one thing this row cannot do. It
+						  * gets its own scrolling row below instead.
+						  */}
+						{listMode && banded && ! compact && (
+							<RunSegment
+								bands={bands}
+								total={toBuyHere}
+								tab={activeTab}
+								onPick={setRunTab}
+								theme={theme}
+							/>
 						)}
 
 						{/*
@@ -2222,6 +2357,47 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					)}
 
 					{/*
+					  * The segment's own row, when row 2 has no width to spare.
+					  *
+					  * **A departure, and the design doc says as much**: mobile is not
+					  * drawn, and it guesses the segment "probably scrolls horizontally
+					  * like the applied-filter chips do". It does — and it does it in a
+					  * row of its own rather than inside row 2, because row 2's left
+					  * slot owns the slack there and giving it up would move the
+					  * trigger on press.
+					  *
+					  * The bleed is row 3's, exactly: `pr` past the gutter and a
+					  * matching negative margin, so the last tab does not stop dead at
+					  * the column edge while there is more of it to scroll to.
+					  *
+					  * It costs a row at 390 in list mode, which is worth watching on a
+					  * real phone — the top bar is already at a documented four-row
+					  * worst case, and this is a fifth.
+					  */}
+					{! empty && listMode && banded && compact && (
+						<div class="pb-4">
+							{/*
+							  * `py-1 -my-1` and `pl-1 -ml-1` are the pills' trick, split
+							  * per axis so they cannot collide with the bleed on the
+							  * right: `overflow-x-auto` clips on **both** axes, and a
+							  * focused tab's ring is a box-shadow outside its border box.
+							  * A single `p-1 -m-1` here would fight `-mr-[18px]` for the
+							  * right margin, and which won would be decided by the order
+							  * two rules happen to land in the compiled sheet.
+							  */}
+							<div class="flex overflow-x-auto py-1 -my-1 pl-1 -ml-1 pr-[18px] -mr-[18px]">
+								<RunSegment
+									bands={bands}
+									total={toBuyHere}
+									tab={activeTab}
+									onPick={setRunTab}
+									theme={theme}
+								/>
+							</div>
+						</div>
+					)}
+
+					{/*
 					  * The one thing on this screen whose failure mode is silence.
 					  *
 					  * It lives out here rather than inside `AppliedFilters` because
@@ -2259,8 +2435,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  * produce run, and a Store filter collapses it to one card.
 					  */}
 					{listMode ? (
-						<ShoppingList
-							groups={shoppingGroupsForView}
+						<RunList
+							bands={shownBands}
+							banded={banded && activeTab === 'all'}
 							checked={trip.checked}
 							onToggle={mayEditItems ? trip.toggle : undefined}
 							onClearChecks={mayEditItems ? clearChecks : undefined}

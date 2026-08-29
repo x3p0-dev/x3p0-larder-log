@@ -1,3 +1,4 @@
+import type { SourceKind } from '../../shared/source';
 import type { Stamps, TermDraft, TermKind } from '../../shared/types';
 
 /**
@@ -16,11 +17,24 @@ export type TaxonomyActions = {
 	 * `stamps` is supplied by **undo only**, carrying the deleted term's own
 	 * `addedAt` / `changedAt` so the restored row is not a brand-new one wearing
 	 * the same name (D44). Everything else omits it and the server stamps now.
+	 *
+	 * The draft's own `kind` is the **source group's** and is composed rather
+	 * than restored — every draft row that makes a source carries the glyph, so
+	 * a garden arrives a garden. Undo passes it too, for the same reason it
+	 * passes the stamps.
 	 */
-	create: (kind: TermKind, draft: TermDraft, stamps?: Stamps) => Promise<string | null>;
+	create: (kind: TermKind, draft: TermDraft & { kind?: SourceKind }, stamps?: Stamps) => Promise<string | null>;
 	update: (kind: TermKind, id: string, patch: { name?: string; ink?: string }) => Promise<void>;
 	/** True when the term is really gone — what arms its undo toast. */
 	remove: (kind: TermKind, id: string) => Promise<boolean>;
+	/**
+	 * What you do to get things from a source (D58) — stores only.
+	 *
+	 * Not folded into `update`, which is parameterized by taxonomy: the word
+	 * `kind` already means *which taxonomy* on that call, and it would mean
+	 * *shop, grow or make* in the patch beside it.
+	 */
+	setKind: (storeId: string, kind: SourceKind) => Promise<void>;
 };
 
 

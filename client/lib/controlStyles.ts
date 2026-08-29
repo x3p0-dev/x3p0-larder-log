@@ -251,6 +251,18 @@ export const PAGE_INPUT_CONFIRM =
  * the reason is the one thing worth having at that moment, so the press always
  * lands and the blocked dialog does the explaining.
  */
+/**
+ * The kind glyph on a source's editing row (D58).
+ *
+ * `DRAWER_TRASH`'s geometry with **no colour of its own**: the glyph's colour
+ * says which kind it is — the drawer's rest colour for a shop, a step brighter
+ * for grow and make — and it arrives as an inline style, which would beat this
+ * class's `:hover` colour and leave the hover with nothing to report. So the
+ * hover here is the fill alone, which is the half a coloured glyph can keep.
+ */
+export const DRAWER_KIND =
+	'transition-colors rounded-[9px] hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
+
 export const DRAWER_TRASH =
 	'transition-colors text-on-dark-faint hover:text-on-dark hover:bg-drawer-raised rounded-[9px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
 
@@ -538,6 +550,20 @@ export const PAGE_MENU =
 /** One row of it. Selection is a check, never a fill — so hover still reads on it. */
 export const PAGE_MENU_ROW =
 	'flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The source-kind glyph on the item sheet's composer panel — `DRAWER_KIND`'s
+ * light twin.
+ *
+ * **It fills to `surface`, not to `surface-alt`**, and that is the applied
+ * filter bar's rule met on a different ground: the composer panel *is*
+ * `surface-alt`, so the app's usual ghost hover would move the control to
+ * exactly the colour it is already sitting on. `surface` steps the other way —
+ * it is the field beside it, so the hover lands on a colour this panel already
+ * uses rather than inventing one.
+ */
+export const PAGE_KIND =
+	'transition-colors rounded-[9px] hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
 
 /**
  * The row a checkbox and its explanation share — *Keep off the shopping list*.

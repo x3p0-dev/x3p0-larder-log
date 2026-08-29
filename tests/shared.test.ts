@@ -31,13 +31,20 @@ import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
 import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
-import { needsBuying, shoppingCount, shoppingGroups } from '../shared/shoppingList';
+import { needsBuying, runBands, runCount } from '../shared/runList';
+import {
+	MONTHS, hasSeason, isInSeason, monthName, monthNumber, monthOf, normalizeSeason, readyPhrase,
+} from '../shared/season';
 import { formatSize, hasSize, MAX_SIZE_DIGITS, normalizeSize, UNITS, unitFor } from '../shared/size';
 import { STATUS_PHRASE, statusKeyFor } from '../shared/status';
 import { sha256, sha256Hex } from '../shared/sha256';
 import {
 	countTermFilters, matchesTermFilters, NO_TERM_FILTERS, pruneTermFilter, toggleTermFilter,
 } from '../shared/filter';
+import {
+	DEFAULT_SOURCE_KIND, SOURCE_KINDS, isSourceKind, itemSourceKinds, sourceGroupWord, toSourceKind,
+} from '../shared/source';
+import type { SourceKind } from '../shared/source';
 import type { Item, Term } from '../shared/types';
 
 let fail = 0;
@@ -272,6 +279,89 @@ check('one item is singular in the body', termBlock('type', 'Condiment', 1)?.bod
 check('one item drops the count from the action', termBlock('store', 'Costco', 1)?.action, 'Show the item');
 check('several items keep it', termBlock('store', 'Costco', 4)?.action, 'Show the 4 items');
 
+// D58: the dialog names the group the way the drawer's heading does, or it
+// contradicts the panel it opened from.
+check(
+	'a source household says source',
+	termBlock('store', 'The Garden', 2, 'Source')?.body,
+	'The Garden is on 2 items. A source can only be deleted once nothing uses it.'
+);
+check(
+	'the location branch ignores the noun',
+	termBlock('location', 'Pantry', 2, 'Source')?.body,
+	'Pantry holds 2 items. A location can only be deleted once nothing is stored there.'
+);
+
+// --- D58: a source carries a kind ---
+
+check('the three kinds, in band order', SOURCE_KINDS, ['shop', 'grow', 'make']);
+check('an unset column is a shop', toSourceKind(''), 'shop');
+check('and so is the default', DEFAULT_SOURCE_KIND, 'shop');
+check('a stored kind survives', toSourceKind('grow'), 'grow');
+check('so does make', toSourceKind('make'), 'make');
+// A kind from a future version, a typo, or a non-string all resolve rather
+// than throwing: this runs in a query, and a query that throws is invisible.
+check('an unknown kind is a shop', toSourceKind('forage'), 'shop');
+check('and so is a non-string', toSourceKind(null), 'shop');
+check('and so is a number', toSourceKind(3), 'shop');
+check('isSourceKind accepts the three', SOURCE_KINDS.every(isSourceKind), true);
+check('and refuses everything else', isSourceKind('shops'), false);
+check('including the empty string', isSourceKind(''), false);
+
+// The group's word. **The rule is "does anything here fail to be a shop"**, not
+// "how many distinct kinds are there" — a household whose every source is a
+// garden has exactly one kind, and calling that group *Store* is the precise
+// confusion the kind exists to remove.
+const src = (...kinds: SourceKind[]) => kinds.map((kind) => ({ kind }));
+
+check('no sources at all is Store', sourceGroupWord([]), 'Store');
+check('every source a shop is Store', sourceGroupWord(src('shop', 'shop', 'shop')), 'Store');
+check('one garden makes it Source', sourceGroupWord(src('shop', 'grow')), 'Source');
+check('one kitchen makes it Source', sourceGroupWord(src('shop', 'make')), 'Source');
+check('all three is Source', sourceGroupWord(src('shop', 'grow', 'make')), 'Source');
+check('nothing but gardens is still Source', sourceGroupWord(src('grow')), 'Source');
+check('gardens and kitchens with no shop is Source', sourceGroupWord(src('grow', 'make')), 'Source');
+
+// The item card's one glyph. It answers *is this something other than bought*,
+// so `null` — no glyph at all — is the common answer and the one worth getting
+// right: a marker on every card would mark nothing.
+const SOURCES = [
+	{ id: 'publix', kind: 'shop' as SourceKind },
+	{ id: 'garden', kind: 'grow' as SourceKind },
+	{ id: 'kitchen', kind: 'make' as SourceKind },
+	{ id: 'legacy', kind: undefined },
+	{ id: 'aldi', kind: 'shop' as SourceKind },
+];
+
+check('a bought item wears a cart', itemSourceKinds(['publix'], SOURCES), ['shop']);
+check('a grown item wears a sprout', itemSourceKinds(['garden'], SOURCES), ['grow']);
+check('a made item wears a pot', itemSourceKinds(['kitchen'], SOURCES), ['make']);
+// The counter-argument case the doc records: tomatoes bought in February and
+// picked in July. **Both**, because both are true and the tags cannot say it.
+check('grown-and-bought wears both', itemSourceKinds(['publix', 'garden'], SOURCES), ['shop', 'grow']);
+check('made-and-bought wears both', itemSourceKinds(['publix', 'kitchen'], SOURCES), ['shop', 'make']);
+check('all three is all three', itemSourceKinds(['publix', 'garden', 'kitchen'], SOURCES), ['shop', 'grow', 'make']);
+
+// Band order, never id order — two cards with the same two sources have to draw
+// the same two glyphs in the same two places or a grid has no rhythm.
+check('band order, not id order', itemSourceKinds(['kitchen', 'garden'], SOURCES), ['grow', 'make']);
+check('and the same the other way round', itemSourceKinds(['garden', 'kitchen'], SOURCES), ['grow', 'make']);
+
+// Two sources of one kind is one glyph: the cluster says *what kinds*, and the
+// tags below already say which sources.
+check('two shops is one cart', itemSourceKinds(['publix', 'aldi'], SOURCES), ['shop']);
+
+// **No source at all draws nothing**, even though the item lands on Buy. D58's
+// table splits an empty source three ways and the first is *not set yet* — a
+// gap, and a cart would answer a question nobody has answered.
+check('no source draws nothing', itemSourceKinds([], SOURCES), []);
+
+// A row written before the column, and a reference to nothing — `id()` is not a
+// foreign key, so both are reachable.
+check('an unset kind reads as a shop', itemSourceKinds(['legacy'], SOURCES), ['shop']);
+check('a dangling source id is skipped', itemSourceKinds(['gone'], SOURCES), []);
+check('and does not hide a real one beside it', itemSourceKinds(['gone', 'garden'], SOURCES), ['grow']);
+
 // --- color tokens ---
 //
 // A term stores `color-7`, never a hex, so re-theming does not mean rewriting
@@ -504,10 +594,14 @@ const STORES: Term[] = [
 	term('s-aldi', 'Aldi', 'color-14'),
 ];
 
-function item(name: string, qty: string, threshold: string, storeIds: string[], offShoppingList = false): Item {
+function item(
+	name: string, qty: string, threshold: string, storeIds: string[],
+	offShoppingList = false, season: [string, string] = ['', '']
+): Item {
 	return {
 		id: `i-${name}`, name, locationId: 'l-1', typeIds: [], storeIds,
-		qty, threshold, size: '', unit: '', offShoppingList, notes: '',
+		qty, threshold, size: '', unit: '', offShoppingList,
+		seasonFrom: season[0], seasonTo: season[1], notes: '',
 		createdAt: '2026-08-26T00:00:00.000Z', addedAt: '', changedAt: '',
 	};
 }
@@ -521,13 +615,22 @@ const BASKET: Item[] = [
 	item('Coffee', '1', '2', ['s-aldi', 's-costco']), // low, two stores
 ];
 
+// A month to run the bands in. Arbitrary and stated, so a season test can
+// choose one either side of it rather than depending on today.
+const JUNE = 6;
+
 check('an item at its threshold is on the list', needsBuying(item('x', '4', '4', [])), true);
 check('an item above its threshold is not', needsBuying(item('x', '5', '4', [])), false);
 
 // The count is *items*, not rows: Coffee draws twice and is one thing to buy.
-check('the count is items, not rows', shoppingCount(BASKET), 5);
+check('the count is items, not rows', runCount(BASKET, STORES, JUNE), 5);
 
-const groups = shoppingGroups(BASKET, STORES);
+// Every source here is a shop, so there is exactly one band and the screen is
+// today's shopping list byte for byte — no segment, no headers.
+const shopsOnly = runBands(BASKET, STORES, JUNE);
+check('all shops is one band', shopsOnly.map((b) => b.kind), ['buy']);
+
+const groups = shopsOnly[0].groups;
 
 // A–Z with the storeless group last — it is the one you cannot walk into.
 check('groups run A-Z with no-store last', groups.map((g) => g.name), ['Aldi', 'Costco', '']);
@@ -545,11 +648,184 @@ check('an item with two stores appears under both', groups[0].items.map((i) => i
 // drawing a card with no name.
 check(
 	'an unresolvable store falls into the storeless group',
-	shoppingGroups([item('Ghost', '0', '1', ['s-gone'])], STORES).map((g) => g.storeId),
+	runBands([item('Ghost', '0', '1', ['s-gone'])], STORES, JUNE)[0].groups.map((g) => g.storeId),
 	[null]
 );
 
-check('a fully stocked pantry produces no groups', shoppingGroups([item('Rice', '9', '2', ['s-costco'])], STORES), []);
+check('a fully stocked pantry produces no bands at all', runBands([item('Rice', '9', '2', ['s-costco'])], STORES, JUNE), []);
+
+// --- D58: the bands ---
+
+const SOURCED: (Term & { kind?: SourceKind })[] = [
+	term('s-costco', 'Costco', 'color-10'),
+	term('s-aldi', 'Aldi', 'color-14'),
+	{ ...term('s-garden', 'The Garden', 'color-3'), kind: 'grow' as SourceKind },
+	{ ...term('s-kitchen', 'The Kitchen', 'color-5'), kind: 'make' as SourceKind },
+];
+
+const RUN: Item[] = [
+	...BASKET,
+	item('Tomatoes', '1', '4', ['s-garden']),        // low, grown
+	item('Basil', '0', '1', ['s-garden']),           // out, grown
+	item('Chicken Stock', '1', '4', ['s-kitchen']),  // low, made
+];
+
+const bands = runBands(RUN, SOURCED, JUNE);
+
+// Always Buy · Harvest · Make, and only the ones holding something.
+check('bands come in order', bands.map((b) => b.kind), ['buy', 'harvest', 'make']);
+check('the buy band keeps its five', bands[0].count, 5);
+check('harvest holds two', bands[1].count, 2);
+check('make holds one', bands[2].count, 1);
+
+// A band groups by source exactly as the whole list used to.
+check('harvest draws one card', bands[1].groups.map((g) => g.name), ['The Garden']);
+check('and sorts it out-before-low', bands[1].groups[0].items.map((i) => i.name), ['Basil', 'Tomatoes']);
+
+// The storeless group is Buy's, and the test for it is against **every**
+// source: an item naming only The Garden has a source, so it must not also
+// turn up in Buy asking to be given a shop.
+check('the storeless card is on Buy', bands[0].groups.map((g) => g.storeId).includes(null), true);
+check('and harvest has no storeless card', bands[1].groups.some((g) => g.storeId === null), false);
+
+// One item, two kinds — the counter-argument case: bought in February, picked
+// in July. It draws on both bands and each counts it once, which is why the
+// bands need not add up to the total.
+const BOTH = [item('Tomatoes', '1', '4', ['s-costco', 's-garden'])];
+const split = runBands(BOTH, SOURCED, JUNE);
+check('an item with two kinds is on both bands', split.map((b) => b.kind), ['buy', 'harvest']);
+check('counted once by each', split.map((b) => b.count), [1, 1]);
+check('and once in total', runCount(BOTH, SOURCED, JUNE), 1);
+
+// A grow source with nothing low produces no Harvest band, which is what keeps
+// the segment away from a household that has one and never runs out.
+check(
+	'a band with nothing in it does not appear',
+	runBands([item('Basil', '9', '1', ['s-garden'])], SOURCED, JUNE),
+	[]
+);
+
+// The exclusion gates every band, not only Buy: what the checkbox says is
+// *never remind me about this*, and a harvest list is a reminder.
+check(
+	'an excluded grown item never reaches Harvest',
+	runBands([item('Basil', '0', '1', ['s-garden'], true)], SOURCED, JUNE),
+	[]
+);
+
+// A source written before the column resolves to a shop, so its items stay on
+// Buy rather than vanishing into a band that does not exist.
+check(
+	'an unset kind lands on Buy',
+	runBands([item('Bacon', '0', '2', ['s-costco'])], SOURCED, JUNE).map((b) => b.kind),
+	['buy']
+);
+
+// --- D58: seasons ---
+//
+// Months, not dates: a season repeats and a date does not, so there is no year,
+// no locale and no format here to get wrong.
+
+check('twelve months', MONTHS.length, 12);
+check('one-indexed', monthName('1'), 'January');
+check('and September is nine', monthName('9'), 'September');
+check('a number out of range is nothing', monthName('13'), '');
+check('zero is nothing', monthNumber('0'), 0);
+check('and so is a word', monthNumber('June'), 0);
+check('and a non-string', monthNumber(6), 0);
+check('whitespace is trimmed', monthNumber(' 6 '), 6);
+
+// A pair that is never half-set, exactly as `size` and `unit` are (D52). Half a
+// season is discarded rather than completed — completing it would mean guessing
+// a value the household never typed.
+check('a whole pair survives', normalizeSeason('6', '9'), { seasonFrom: '6', seasonTo: '9' });
+check('a start with no end is neither', normalizeSeason('6', ''), { seasonFrom: '', seasonTo: '' });
+check('an end with no start is neither', normalizeSeason('', '9'), { seasonFrom: '', seasonTo: '' });
+check('and rubbish is neither', normalizeSeason('June', '99'), { seasonFrom: '', seasonTo: '' });
+check('a one-month season is legal', normalizeSeason('7', '7'), { seasonFrom: '7', seasonTo: '7' });
+check('hasSeason wants both', hasSeason('6', ''), false);
+check('and is happy with both', hasSeason('6', '9'), true);
+
+// **An unset season is always in season.** The question the run list asks is
+// *should this row move to NOT YET*, and a household that has said nothing
+// about when its basil is ready has not said it is unavailable.
+check('no season is always in season', isInSeason(1, '', ''), true);
+check('half a season is too', isInSeason(1, '6', ''), true);
+
+check('June is inside June to September', isInSeason(6, '6', '9'), true);
+check('and so is September', isInSeason(9, '6', '9'), true);
+check('May is not', isInSeason(5, '6', '9'), false);
+check('nor is October', isInSeason(10, '6', '9'), false);
+
+// **The range wraps, and this is the case worth having a test for.** Read
+// literally as `11 <= m <= 2`, November to February is empty — which would move
+// an item to NOT YET in every month of the year, including the ones it is ready
+// in.
+check('December is inside November to February', isInSeason(12, '11', '2'), true);
+check('so is January', isInSeason(1, '11', '2'), true);
+check('and November itself', isInSeason(11, '11', '2'), true);
+check('and February itself', isInSeason(2, '11', '2'), true);
+check('June is not', isInSeason(6, '11', '2'), false);
+
+// A one-month season is exactly one month.
+check('July only, in July', isInSeason(7, '7', '7'), true);
+check('July only, in August', isInSeason(8, '7', '7'), false);
+
+// The row says what happens next, which is the start month.
+check('the phrase names the start', readyPhrase('9', '11'), 'Ready in September');
+check('and says nothing without a whole pair', readyPhrase('9', ''), '');
+
+// `monthOf` is what the client hands in, so it has to agree with the stored
+// numbering rather than with `Date`'s zero-indexed one.
+check('monthOf is one-indexed', monthOf(Date.UTC(2026, 0, 15, 12)), 1);
+check('and December is twelve', monthOf(Date.UTC(2026, 11, 15, 12)), 12);
+
+// --- D58: NOT YET ---
+//
+// An out-of-season row leaves the count and the checkboxes, and nothing else
+// about the item moves.
+
+const SQUASH = item('Butternut Squash', '0', '2', ['s-garden'], false, ['9', '11']);
+const seasonBands = runBands([...RUN, SQUASH], SOURCED, JUNE);
+const gardenCard = seasonBands[1].groups[0];
+
+check('the harvest card still draws', seasonBands[1].kind, 'harvest');
+check('the out-of-season row is not among its items', gardenCard.items.map((i) => i.name), ['Basil', 'Tomatoes']);
+check('it is in notYet instead', gardenCard.notYet.map((i) => i.name), ['Butternut Squash']);
+check('and it does not count', seasonBands[1].count, 2);
+check('nor toward the total', runCount([...RUN, SQUASH], SOURCED, JUNE), runCount(RUN, SOURCED, JUNE));
+
+// But it is still out, which is the one place the pills and the run list
+// deliberately disagree.
+check('the item is still out', statusKeyFor(SQUASH.qty, SQUASH.threshold), 'out');
+check('and still needs getting', needsBuying(SQUASH), true);
+
+// In September it is an ordinary harvest row again.
+check(
+	'come September it is an ordinary row',
+	runBands([SQUASH], SOURCED, 9)[0].groups[0].items.map((i) => i.name),
+	['Butternut Squash']
+);
+check('with nothing left in notYet', runBands([SQUASH], SOURCED, 9)[0].groups[0].notYet, []);
+
+// **Only the harvest card is affected.** An item you buy at Publix and pick in
+// July is still on the Buy card in February — the season says nothing about the
+// shop, and it is counted once, by the band it is really on.
+const BOUGHT_AND_GROWN = item('Tomatoes', '1', '4', ['s-costco', 's-garden'], false, ['7', '9']);
+const winter = runBands([BOUGHT_AND_GROWN], SOURCED, 2);
+
+check('the buy card keeps it out of season', winter[0].groups[0].items.map((i) => i.name), ['Tomatoes']);
+check('the harvest card holds it back', winter[1].groups[0].notYet.map((i) => i.name), ['Tomatoes']);
+check('buy counts it', winter[0].count, 1);
+check('harvest does not', winter[1].count, 0);
+check('and the total counts it once', runCount([BOUGHT_AND_GROWN], SOURCED, 2), 1);
+
+// A card whose every row is out of season still draws: seeing what is coming is
+// the whole point of the group.
+const allNotYet = runBands([SQUASH], SOURCED, JUNE);
+check('a card of nothing but notYet still draws', allNotYet[0].groups[0].notYet.length, 1);
+check('with an empty item list', allNotYet[0].groups[0].items, []);
+check('and a band count of zero', allNotYet[0].count, 0);
 
 // --- household identity (D42) ---
 //
@@ -679,7 +955,8 @@ check('an empty list is fine', byName([]), []);
 function filterable(id: string, locationId: string, typeIds: string[], storeIds: string[]): Item {
 	return {
 		id, name: id, locationId, typeIds, storeIds,
-		qty: '1', threshold: '1', size: '', unit: '', offShoppingList: false, notes: '',
+		qty: '1', threshold: '1', size: '', unit: '', offShoppingList: false,
+		seasonFrom: '', seasonTo: '', notes: '',
 		createdAt: '', addedAt: '', changedAt: '',
 	};
 }
@@ -815,8 +1092,8 @@ const KEPT_OFF = item('Black Beans', '0', '2', ['s-costco'], true);
 check('an excluded item never joins the list', needsBuying(KEPT_OFF), false);
 check('but it is still out', statusKeyFor(KEPT_OFF.qty, KEPT_OFF.threshold), 'out');
 check('an ordinary out item still joins', needsBuying(item('Bacon', '0', '2', ['s-costco'])), true);
-check('the count drops with it', shoppingCount([...BASKET, KEPT_OFF]), 5);
-check('and so does its store card', shoppingGroups([...BASKET, KEPT_OFF], STORES).map((g) => g.items.length), [2, 3, 1]);
+check('the count drops with it', runCount([...BASKET, KEPT_OFF], STORES, JUNE), 5);
+check('and so does its store card', runBands([...BASKET, KEPT_OFF], STORES, JUNE)[0].groups.map((g) => g.items.length), [2, 3, 1]);
 
 // --- the threshold boundary, said out loud ---
 //

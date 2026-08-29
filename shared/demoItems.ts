@@ -57,8 +57,24 @@ export type DemoItem = {
 	size?: string;
 	/** A unit **key** from `shared/size.ts` — `quart`, never `qt`. */
 	unit?: string;
-	/** D53. The card still reads *Out*; the shopping list drops the row. */
+	/**
+	 * D53, **retired by D60** — and the fixture keeps three rows carrying it on
+	 * purpose. Nothing in the UI can set this any more, so seeded rows are the
+	 * only way to reach the legacy state locally: the card's `ListX` marker, the
+	 * clear-only checkbox on the sheet, and the two-item gap between the status
+	 * pills and the run list's total.
+	 *
+	 * The card still reads *Out*; the run list drops the row.
+	 */
 	offShoppingList?: boolean;
+	/**
+	 * When a grown thing is ready, as month numbers — `'6'` and `'9'` (D58).
+	 *
+	 * Both, or neither. Only meaningful on a row naming a **grow** source, and
+	 * ignored everywhere else the way the sheet ignores it.
+	 */
+	seasonFrom?: string;
+	seasonTo?: string;
 	notes?: string;
 	/** How long ago this entered the household, in days. Spreads `addedAt`. */
 	daysAgo: number;
@@ -70,7 +86,7 @@ export type DemoItem = {
  * - **8 out, 13 low, 39 stocked**, across 16 refrigerator / 13 freezer / 31
  *   pantry. A real pantry is mostly fine, which is what makes the two pills
  *   that are not `ok` worth looking at.
- * - **The pills and the shopping list disagree by exactly two, on purpose.**
+ * - **The pills and the run list disagree by exactly two, on purpose.**
  *   21 rows are out or low; the list holds 19. The missing pair is `Sourdough
  *   Starter` and `Honey`, both low and both off the list — which is D53's whole
  *   split (the pills count stock, the list counts shopping) made countable.
@@ -254,6 +270,8 @@ export function resolveDemoItems(
 			size: demo.size ?? '',
 			unit: demo.unit ?? '',
 			offShoppingList: demo.offShoppingList ?? false,
+			seasonFrom: demo.seasonFrom ?? '',
+			seasonTo: demo.seasonTo ?? '',
 			notes: demo.notes ?? '',
 			addedAt: stamp,
 			changedAt: stamp,

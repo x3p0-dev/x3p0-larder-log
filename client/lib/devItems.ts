@@ -10,7 +10,7 @@
  * **The rows are real, and that is the whole design.** `?members` fakes its two
  * stand-ins in the client and refuses to let them near the network, because a
  * panel only has to be *seen*. Items are the opposite: the point is to exercise
- * `pantry`, `shared/filter.ts` and `shared/shoppingList.ts` against a real
+ * `pantry`, `shared/filter.ts` and `shared/runList.ts` against a real
  * collection, and a client-side fake would mean the thing under test is not the
  * thing that runs. So this writes through `addItem` — the same mutation the add
  * sheet calls, with the same validation and the same normalisation.

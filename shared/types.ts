@@ -10,6 +10,7 @@
  */
 
 import type { Role } from './roles';
+import type { SourceKind } from './source';
 
 export type TermKind = 'location' | 'type' | 'store';
 
@@ -50,6 +51,19 @@ export type Term = {
 export type TermDraft = Omit<Term, 'id' | 'createdAt' | 'addedAt' | 'changedAt'>;
 
 /**
+ * A store, plus the one thing that makes it a *source*: what you do to get
+ * things from it (D58).
+ *
+ * A separate type rather than a `kind` on `Term`, because the column is only on
+ * `stores` and a field that is meaningfully `''` on two taxonomies out of three
+ * is a field every reader has to remember not to trust. `Source` is a `Term`
+ * everywhere a `Term` is wanted — the filter chips, the item sheet's chip row
+ * and the applied-filter bar all take it unchanged, which is the whole point of
+ * putting the kind on the term rather than on the item.
+ */
+export type Source = Term & { kind: SourceKind };
+
+/**
  * A row's stamps, as undo hands them back to a create mutation.
  *
  * Both optional: a create with neither is stamped now, which is every path
@@ -78,14 +92,33 @@ export type Item = {
 	/** The size's unit **key** — a slug (`quart`), never its abbreviation (`qt`). */
 	unit: string;
 	/**
-	 * Keep this item off the shopping list, however low it gets.
+	 * Keep this item off the run list, however low it gets.
 	 *
-	 * For the things a household grows, brews or otherwise never shops for. It
-	 * hides the item from one *view* and changes nothing about what is true of
-	 * it: the card still reads *running low*, and the three status pills — which
-	 * count stock, not shopping — do not move.
+	 * **Retired (D60), and kept only for the rows that already hold it.** It was
+	 * written for the things a household grows or brews and never shops for; a
+	 * source's kind answers that better and says which, so nothing sets this any
+	 * more. `needsBuying` still reads it, the sheet still offers to *clear* it,
+	 * and the column stays for the reason `icon` does (D34).
+	 *
+	 * It hides the item from one *view* and changes nothing about what is true
+	 * of it: the card still reads *running low*, and the three status pills —
+	 * which count stock, not shopping — do not move.
 	 */
 	offShoppingList: boolean;
+	/**
+	 * When a grown thing is ready — two month numbers as strings, `''` for none.
+	 *
+	 * A pair that is never half-set (`shared/season.ts`), and asked for only
+	 * when the item names a source you **grow** (D58). It moves a row between
+	 * groups on the harvest card and changes nothing about the item: an
+	 * out-of-season tomato still reads *out* on its card and still counts toward
+	 * the three status pills.
+	 *
+	 * It is on the item because the item is the only object there is. It belongs
+	 * on a planting — D59.
+	 */
+	seasonFrom: string;
+	seasonTo: string;
 	notes: string;
 	/**
 	 * Zero's own insert stamp, ISO 8601 UTC — never written by this app, and it
@@ -155,7 +188,8 @@ export type PantryData = {
 	items: Item[];
 	locations: Term[];
 	types: Term[];
-	stores: Term[];
+	/** Stores carry a kind, and are the only taxonomy that does — see `Source`. */
+	stores: Source[];
 };
 
 export type HouseholdData = {

@@ -92,10 +92,16 @@ export function normalizeInk(value: unknown): string {
  * D16 originally guarded `location` alone, because a location is required and
  * Zero has no nullable column — deleting one in use would leave a dangling
  * reference that renders as a silent box. Types and stores are optional tags,
- * so deleting one merely dropped its join rows. That asymmetry is gone: the
- * item count now sits on every editing row, and a count that means "this will
- * be blocked" on one row and "these tags vanish" on the next is worse than no
- * count at all.
+ * so deleting one merely dropped its join rows. That asymmetry is gone: one
+ * rule for all three, because a trash that means "this will be blocked" on one
+ * row and "these tags vanish" on the next teaches nothing.
+ *
+ * **The count that argument was originally built on has since left the row**
+ * (D58) — a source's kind glyph took its slot, and at 340px a fifth control
+ * left the name field too narrow to read. The rule stands without it: what the
+ * count bought was predicting the outcome one press early, and this dialog is
+ * where that outcome is explained now. It still names the number and still
+ * offers to show you the items.
  */
 export type TermBlock = {
 	/** Dialog title — the instruction, not the refusal. */
@@ -111,7 +117,15 @@ function items(count: number): string {
 	return `${count} ${count === 1 ? 'item' : 'items'}`;
 }
 
-export function termBlock(kind: TermKind, name: string, count: number): TermBlock | null {
+/**
+ * @param noun What to call the group in the sentence, when it is not the kind's
+ *   own word. The source group renames itself to *Source* once a household
+ *   grows or cooks anything (D58), and a dialog that said *"A store can only be
+ *   deleted…"* under a heading reading `SOURCE` would contradict the drawer in
+ *   the space of one screen. Both callers pass it, so the refusal the server
+ *   throws and the explanation the client draws stay one sentence.
+ */
+export function termBlock(kind: TermKind, name: string, count: number, noun: string = kind): TermBlock | null {
 	if (count <= 0) return null;
 
 	const these = count === 1 ? 'this item' : `these ${items(count)}`;
@@ -130,7 +144,7 @@ export function termBlock(kind: TermKind, name: string, count: number): TermBloc
 
 	return {
 		title: `Untag ${these} first`,
-		body: `${name} is on ${items(count)}. A ${kind} can only be deleted once nothing uses it.`,
+		body: `${name} is on ${items(count)}. A ${noun.toLowerCase()} can only be deleted once nothing uses it.`,
 		action,
 	};
 }

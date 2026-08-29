@@ -1,7 +1,9 @@
-import { Plus, Minus, ChevronDown, Pencil, ShoppingCart, Slash, Trash2 } from 'lucide-preact';
+import { Plus, Minus, ChevronDown, CookingPot, ListX, Pencil, ShoppingCart, Sprout, Trash2 } from 'lucide-preact';
 
 import type { Theme, ThemedColor } from '../lib/theme';
 import { entityColorFor, statusFor, termNameFor } from '../lib/theme';
+import type { SourceKind } from '../../shared/source';
+import { SOURCE_KIND_ADJECTIVES, itemSourceKinds } from '../../shared/source';
 import type { Item, Term } from '../../shared/types';
 import { formatSize } from '../../shared/size';
 import {
@@ -13,7 +15,13 @@ type Props = {
 	open: boolean;
 	locations: Term[];
 	types: Term[];
-	stores: Term[];
+	/**
+	 * Sources, which carry a kind (D58) — but typed to accept a plain `Term`,
+	 * because the marketing hero passes two mock shops and has no business
+	 * inventing a column. An absent kind is a shop, so the hero draws no glyph,
+	 * which is exactly right for Grocery and Warehouse.
+	 */
+	stores: readonly (Term & { kind?: SourceKind })[];
 	dark: boolean;
 	theme: Theme;
 	/** `item:write`. False strips the steppers, edit, and remove — see D30. */
@@ -32,6 +40,9 @@ type Props = {
 	onRemove: () => void;
 	onStartEdit: () => void;
 };
+
+/** The kind glyphs, and the one place the three are named in pictures. */
+const KIND_GLYPHS = { shop: ShoppingCart, grow: Sprout, make: CookingPot };
 
 /**
  * One taxonomy chip: a dot in the term's own color, then its name.
@@ -58,6 +69,9 @@ export function ItemCard({
 }: Props) {
 	const s = statusFor(item.qty, item.threshold, dark);
 	const atZero = Number(item.qty) <= 0;
+
+	/** One glyph per kind the item's sources cover, in band order. */
+	const kinds = itemSourceKinds(item.storeIds, stores);
 
 	/*
 	 * The card's edge carries the status, so a shelf of cards reads as a
@@ -107,26 +121,77 @@ export function ItemCard({
 			  */}
 			<span class="relative top-px flex items-center gap-2 shrink-0 min-h-[21px] sm:min-h-[24px]">
 				{/*
-				  * A struck cart, left of the status, when the item is kept off the
-				  * shopping list. **The status itself does not change** — the card
-				  * still says running low, because it is. Without something here,
-				  * "why isn't the olive oil on my list" has no answer anywhere in
-				  * the grid.
+				  * What kind of thing this is, leftmost in the cluster (D58):
+				  * **glyph · dot · chevron** — what it is, what state it is in,
+				  * then the control. A bought item carries nothing here, and the
+				  * absence is the point: most of a pantry is bought, so the two
+				  * kinds that are not are the ones worth spotting across a grid.
 				  *
-				  * It is a glyph nobody has been taught, on a card that otherwise
-				  * carries no icons beside the name, so it is the first thing to
-				  * challenge if this reads as clutter.
+				  * **Meta grey, never the term's colour.** The status dot stays the
+				  * only coloured thing in this corner, because colour is what
+				  * status is for. A term's hue is whatever the household picked, so
+				  * tinting by it would imply the hue says something about the kind.
+				  *
+				  * It does not break the card's *no icons beside the name* rule —
+				  * that rule is about the name, and this corner already carries
+				  * two things. And unlike the struck cart below it, this glyph is
+				  * **taught three times before a card ever shows it**: the run
+				  * list's band headers, the segment tabs, and the source editing
+				  * row all draw the same two marks.
+				  *
+				  * A make item kept off the list draws both this and the cart, and
+				  * that pairing will be common — the things you make are often the
+				  * things you never shop for. Worth watching on a real grid.
+				  */}
+				{kinds.map((kind) => {
+					const Glyph = KIND_GLYPHS[kind];
+
+					return (
+						<span
+							key={kind}
+							role="img"
+							aria-label={SOURCE_KIND_ADJECTIVES[kind]}
+							title={SOURCE_KIND_ADJECTIVES[kind]}
+							class="inline-flex shrink-0"
+							style={{ color: theme.textMuted }}
+						>
+							<Glyph size={15} strokeWidth={1.7} />
+						</span>
+					);
+				})}
+				{/*
+				  * Kept off the list, right of the kinds and left of the status.
+				  * **The status itself does not change** — the card still says
+				  * running low, because it is. Without something here, "why isn't
+				  * the olive oil on my list" has no answer anywhere in the grid.
+				  *
+				  * **It is a legacy marker now** (D60). Nothing sets the flag any
+				  * more — a source's kind says what it said — so this draws only for
+				  * rows that were ticked before the control was retired, which is
+				  * exactly when the question it answers still gets asked. It goes
+				  * on its own when the last such row is cleared.
+				  *
+				  * **It was a struck cart and it cannot stay one** (D58), for two
+				  * reasons that arrived together. A cart is now the *shop* kind's
+				  * own glyph, and drawing a cart and a struck cart a gap apart in
+				  * one cluster is the worst pair of marks on the screen. And the
+				  * strike would be claiming the wrong thing anyway: `needsBuying`
+				  * gates every band, so this keeps an item off Harvest and Make as
+				  * well — it means *off the list*, not *never bought*.
+				  *
+				  * `ListX` says exactly that and collides with nothing. It is
+				  * fainter than the kind glyphs on purpose: the kinds are facts
+				  * about the item, this is a rule somebody set about it.
 				  */}
 				{item.offShoppingList && (
 					<span
 						role="img"
-						aria-label="Kept off the shopping list"
-						title="Kept off the shopping list"
-						class="relative inline-flex shrink-0"
+						aria-label="Kept off the list"
+						title="Kept off the list"
+						class="inline-flex shrink-0"
 						style={{ color: theme.textFaint }}
 					>
-						<ShoppingCart size={14} strokeWidth={1.9} />
-						<Slash size={14} strokeWidth={1.9} class="absolute inset-0" />
+						<ListX size={15} strokeWidth={1.7} />
 					</span>
 				)}
 				{/*
