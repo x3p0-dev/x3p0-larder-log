@@ -113,8 +113,8 @@ type Props = {
  * The one left drawer: filters and settings, docked on desktop and a slide-over
  * on mobile.
  *
- * It is the same component at both sizes, per the spec — a 328px slide-over
- * with a scrim under `md`, 340px docked above it. Two implementations would be
+ * It is the same component at both sizes, per the spec — a slide-over with a
+ * scrim under `md`, 340px docked above it. Two implementations would be
  * two things to keep in sync, and the only real difference is whether it
  * participates in the page's flow.
  *
@@ -246,7 +246,19 @@ export function Drawer({
 					 * below the fold with no scroll left to give.
 					 */
 					'fixed min-[1120px]:sticky top-0 left-0 z-40 h-dvh shrink-0 flex flex-col ' +
-					'w-[328px] min-[1120px]:w-[340px] transition-transform duration-200 ' +
+					/*
+					 * The slide-over is fluid and the docked drawer is not. A flat 328
+					 * left 62px of page beside it on a 390 screen and the pane itself
+					 * cramped — the Members pane, the invite composer and the term rows
+					 * are all specced against the docked 340 and were getting less than
+					 * the desktop they were drawn for. `min(360px, 100vw - 32px)` is
+					 * never narrower than the old flat value (they meet exactly at 360)
+					 * and gains 30px at 390. The 32px floor is what keeps it reading as
+					 * a panel over the page rather than a screen of its own: some of the
+					 * scrim has to stay visible, and it is also the only place left to
+					 * press to dismiss.
+					 */
+					'w-[min(360px,calc(100vw_-_32px))] min-[1120px]:w-[340px] transition-transform duration-200 ' +
 					(open ? 'translate-x-0' : '-translate-x-full min-[1120px]:translate-x-0') +
 					(collapsed ? ' min-[1120px]:hidden' : '')
 				}
@@ -396,7 +408,7 @@ export function Drawer({
 							label="Account"
 							role="dialog"
 							/* 292 as drawn, clamped: it does not fit inside the
-							 * 328px slide-over's gutters, and the gutter is the
+							 * narrowest slide-over's gutters, and the gutter is the
 							 * pane's own — the menu lines up with everything else
 							 * in the column rather than with the row it opens from. */
 							width="min(292px, calc(100% - 40px))"

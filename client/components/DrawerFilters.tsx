@@ -4,7 +4,7 @@ import { ChevronUp, Pencil, Plus } from 'lucide-preact';
 import { TermPanel, TermRow } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import { chipDot, proposeColor } from '../lib/theme';
-import { DRAWER_CHIP, DRAWER_CHIP_ADD, DRAWER_CHIP_ON, DRAWER_ICON } from '../lib/controlStyles';
+import { DRAWER_CHIP, DRAWER_CHIP_ADD, DRAWER_CHIP_ON, DRAWER_ICON, TERM_CHIP_SIZE, TERM_SECTION_ICON } from '../lib/controlStyles';
 import type { TermFilter } from '../lib/actions';
 import type { SourceKind } from '../../shared/source';
 import { toSourceKind } from '../../shared/source';
@@ -190,19 +190,19 @@ export function FilterSection({
 							 * the stronger request of the two: it opens.
 							 */
 							onClick={() => { setComposing(false); setEditing(true); setOpen(true); }}
-							class={`flex items-center justify-center w-7 h-7 ${DRAWER_ICON}`}
+							class={`flex items-center justify-center ${TERM_SECTION_ICON} ${DRAWER_ICON}`}
 							title={`Edit ${title.toLowerCase()}`}
 						>
-							<Pencil size={14} />
+							<Pencil size={15} />
 						</button>
 					)}
 					<button
 						onClick={() => setOpen((v) => ! v)}
-						class={`flex items-center justify-center w-7 h-7 ${DRAWER_ICON}`}
+						class={`flex items-center justify-center ${TERM_SECTION_ICON} ${DRAWER_ICON}`}
 						aria-expanded={open}
 						aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
 					>
-						<ChevronUp size={14} style={{ transform: open ? 'none' : 'rotate(180deg)', transition: 'transform .15s' }} />
+						<ChevronUp size={15} style={{ transform: open ? 'none' : 'rotate(180deg)', transition: 'transform .15s' }} />
 					</button>
 				</span>
 			</div>
@@ -215,7 +215,7 @@ export function FilterSection({
 						{leadingAll && (
 							<button
 								onClick={filter.clear}
-								class={`flex items-center gap-[7px] h-[34px] px-[13px] rounded-full text-[13.5px] ${none ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
+								class={`flex items-center gap-[7px] px-[13px] rounded-full text-[13.5px] ${TERM_CHIP_SIZE} ${none ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
 							>
 								{leadingAll.label}
 								<span style={{ color: none ? '#BE3346' : d.inkFaint }}>{leadingAll.count}</span>
@@ -231,7 +231,7 @@ export function FilterSection({
 									key={e.id}
 									onClick={() => filter.toggle(e.id)}
 									aria-pressed={isActive}
-									class={`flex items-center gap-[7px] h-[34px] px-[13px] rounded-full text-[13.5px] ${isActive ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
+									class={`flex items-center gap-[7px] px-[13px] rounded-full text-[13.5px] ${TERM_CHIP_SIZE} ${isActive ? DRAWER_CHIP_ON : DRAWER_CHIP}`}
 								>
 									{/*
 									  * The dot stays when the chip is on. It is the only
@@ -239,7 +239,7 @@ export function FilterSection({
 									  * selection stops the chip saying which term it is at
 									  * the moment you have picked it.
 									  */}
-									<span class="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: chipDot(e.ink, isActive) }} />
+									<span class="w-2 h-2 min-[1120px]:w-[7px] min-[1120px]:h-[7px] rounded-full shrink-0" style={{ background: chipDot(e.ink, isActive) }} />
 									{e.name}
 									{count !== undefined && <span style={{ color: isActive ? '#BE3346' : d.inkFaint }}>{count}</span>}
 								</button>
@@ -249,7 +249,7 @@ export function FilterSection({
 						{canEdit && ! composing && (
 							<button
 								onClick={startComposing}
-								class={`flex items-center gap-1.5 h-[34px] px-[13px] rounded-full text-[13.5px] ${DRAWER_CHIP_ADD}`}
+								class={`flex items-center gap-1.5 px-[13px] rounded-full text-[13.5px] ${TERM_CHIP_SIZE} ${DRAWER_CHIP_ADD}`}
 							>
 								<Plus size={13} strokeWidth={2.2} /> {title}
 							</button>
@@ -343,7 +343,7 @@ export function FilterSection({
 									: (
 										<button
 											onClick={() => { startDraft(); setAdding(true); }}
-											class={`flex items-center justify-center gap-[7px] h-9 rounded-[11px] text-[13px] ${DRAWER_CHIP_ADD}`}
+											class={`flex items-center justify-center gap-[7px] h-10 min-[1120px]:h-9 rounded-[11px] text-[13px] ${DRAWER_CHIP_ADD}`}
 										>
 											<Plus size={13} strokeWidth={2.2} />
 											Add a {title.toLowerCase()}

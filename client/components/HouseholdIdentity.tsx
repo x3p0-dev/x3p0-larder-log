@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 
 import { ColorPicker } from './ColorPicker';
 import { panelSkin } from './TermPanel';
+import { TERM_SWATCH } from '../lib/controlStyles';
 import type { Theme } from '../lib/theme';
 import { termColorFor } from '../lib/theme';
 
@@ -11,7 +12,7 @@ import { termColorFor } from '../lib/theme';
  *
  * It is the term composer, not a new component. A household is a coloured,
  * named thing in a list, which is exactly what every location, store and type
- * already is — so `TermRow`'s geometry is reused wholesale: a 26px swatch
+ * already is — so `TermRow`'s geometry is reused wholesale: the same swatch
  * ringed in its own colour, a 40–44px field at radius 11, and a picker that
  * pushes the panel taller rather than floating over it.
  *
@@ -58,7 +59,7 @@ export function HouseholdIdentity({
 				<button
 					type="button"
 					onClick={() => setPickerOpen((v) => ! v)}
-					class="shrink-0 w-[26px] h-[26px] rounded-full transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none"
+					class={`shrink-0 rounded-full transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none ${TERM_SWATCH}`}
 					style={{
 						background: swatch,
 						boxShadow: pickerOpen

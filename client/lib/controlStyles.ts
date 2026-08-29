@@ -574,3 +574,68 @@ export const PAGE_KIND =
  */
 export const PAGE_CHECKBOX_ROW =
 	'w-full text-left transition-colors rounded-xl hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+
+/*
+ * ---------------------------------------------------------------------------
+ * Touch sizes for the term composer
+ * ---------------------------------------------------------------------------
+ *
+ * The six constants below are **geometry, not interaction state**, which makes
+ * them the exception in this file. They are here because they all encode one
+ * rule and it is worth writing down once:
+ *
+ * **The term composer is compact only where it is docked.** Its controls were
+ * drawn against the docked 340px drawer — a 26px swatch, a 28px pencil, a 30px
+ * trash — and that is a sensible density for a pointer sitting a foot from a
+ * 1440 screen. It is not a sensible density for a thumb. Below the dock the
+ * drawer is a slide-over on a phone, and the composer is the one surface in the
+ * app where four controls share a 292px row.
+ *
+ * So the base value is the touch value and `min-[1120px]:` restores the drawn
+ * one. **1120 rather than `md`** because that is the number the drawer docks
+ * at: it is the moment the panel stops being a slide-over *and* the moment its
+ * column stops being able to afford the extra pixels. A `md:` (768) line would
+ * compact a tablet's slide-over, which is the case that wants this most, and it
+ * would compact it while the column is at its widest.
+ *
+ * **The row's name field pays for it**, and that is the trade taken knowingly.
+ * On a 390 screen a source's field goes 176 → 164px, and on a 360 screen
+ * 146 → 134. D58 records ~150px as where a long source name starts truncating
+ * — but that finding was about the *docked* row, which is untouched here, and
+ * a name you scroll to read is a smaller cost than a colour you cannot press.
+ * The chips above the panel still carry every name in full.
+ *
+ * These are class strings rather than numbers because Tailwind resolves a
+ * class by scanning for a static string — an interpolated size compiles to
+ * nothing. Same reason `DOCK_PX` is written out three times.
+ */
+
+/** The colour swatch that opens the sixteen. 30px on touch, 26 docked. */
+export const TERM_SWATCH =
+	'w-[30px] h-[30px] min-[1120px]:w-[26px] min-[1120px]:h-[26px]';
+
+/** The name field beside it. 44px on touch — the ordinary target — 40 docked. */
+export const TERM_FIELD =
+	'h-11 min-[1120px]:h-10';
+
+/** The row's trailing glyph buttons: the kind, the trash, the abandon. */
+export const TERM_ICON =
+	'w-[34px] h-[34px] min-[1120px]:w-[30px] min-[1120px]:h-[30px]';
+
+/** The panel header's *Done* pill. */
+export const TERM_DONE =
+	'h-8 px-3.5 min-[1120px]:h-7 min-[1120px]:px-3';
+
+/**
+ * A filter section header's pencil and chevron.
+ *
+ * These grow the most — 28 → 36 — because they are the only two that cost
+ * nothing: they sit alone in a header row opposite a micro-label, so there is
+ * no neighbour for them to squeeze.
+ */
+export const TERM_SECTION_ICON =
+	'w-9 h-9 min-[1120px]:w-7 min-[1120px]:h-7';
+
+/** A filter chip, and the dashed one that starts a new term. */
+export const TERM_CHIP_SIZE =
+	'h-9 min-[1120px]:h-[34px]';

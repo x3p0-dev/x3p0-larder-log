@@ -3,7 +3,7 @@ import { Check, Sprout, CookingPot, ShoppingCart } from 'lucide-preact';
 import { DrawerMenu } from './DrawerMenu';
 import { useDismiss } from '../hooks/useDismiss';
 import type { Theme } from '../lib/theme';
-import { DRAWER_KIND, DRAWER_MENU_ROW, PAGE_KIND, PAGE_MENU, PAGE_MENU_ROW } from '../lib/controlStyles';
+import { DRAWER_KIND, DRAWER_MENU_ROW, PAGE_KIND, PAGE_MENU, PAGE_MENU_ROW, TERM_ICON } from '../lib/controlStyles';
 import type { SourceKind } from '../../shared/source';
 import { SOURCE_KINDS, SOURCE_KIND_LABELS } from '../../shared/source';
 
@@ -92,7 +92,7 @@ export function SourceKindMenu({
 			<button
 				type="button"
 				onClick={() => setOpen(! open)}
-				class={`flex items-center justify-center w-[30px] h-[30px] ${onDark ? DRAWER_KIND : PAGE_KIND}`}
+				class={`flex items-center justify-center ${TERM_ICON} ${onDark ? DRAWER_KIND : PAGE_KIND}`}
 				style={open ? openStyle : { color: restColor }}
 				aria-haspopup="menu"
 				aria-expanded={open}

@@ -40,7 +40,17 @@ export function ColorPicker({ value, onChange, theme, onDark = false, well, clas
 	return (
 		<div
 			class={
-				'grid grid-cols-8 gap-[7px] px-3 py-[11px] rounded-xl ' +
+				/*
+				 * The gap and the gutter tighten below the dock, which is the only
+				 * lever a picker whose dots are `w-full` has: eight across in a
+				 * fixed column means a dot is whatever is left over. Trimming
+				 * 4px of gutter and 1px from each of the seven gaps hands all
+				 * eleven back to the circles — a 390 screen goes from 27.4px
+				 * dots to 28.8. The well grows a little taller in exchange, so
+				 * the sixteen still sit in a box rather than filling one.
+				 */
+				'grid grid-cols-8 gap-1.5 px-2.5 py-3 rounded-xl ' +
+				'min-[1120px]:gap-[7px] min-[1120px]:px-3 min-[1120px]:py-[11px] ' +
 				(onDark && ! well ? 'bg-drawer-well border border-drawer-line ' : '') +
 				className
 			}

@@ -5,7 +5,7 @@ import { ColorPicker } from './ColorPicker';
 import { SourceKindMenu } from './SourceKindMenu';
 import type { Theme } from '../lib/theme';
 import { themed } from '../lib/theme';
-import { DRAWER_TRASH, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK } from '../lib/controlStyles';
+import { DRAWER_TRASH, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK, TERM_DONE, TERM_FIELD, TERM_ICON, TERM_SWATCH } from '../lib/controlStyles';
 import type { SourceKind } from '../../shared/source';
 
 type Skin = {
@@ -116,7 +116,7 @@ export function TermPanel({
 				</span>
 				<button
 					onClick={onDone}
-					class="flex items-center h-7 px-3 rounded-full text-[12.5px] font-semibold transition-opacity hover:opacity-90 active:translate-y-px"
+					class={`flex items-center rounded-full text-[12.5px] font-semibold transition-opacity hover:opacity-90 active:translate-y-px ${TERM_DONE}`}
 					style={{ background: s.doneBg, color: s.doneInk }}
 				>
 					Done
@@ -200,7 +200,7 @@ export function TermRow({
 				<button
 					type="button"
 					onClick={() => setPickerOpen((v) => ! v)}
-					class="shrink-0 w-[26px] h-[26px] rounded-full transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none"
+					class={`shrink-0 rounded-full transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none ${TERM_SWATCH}`}
 					style={{
 						background: swatch,
 						boxShadow: pickerOpen
@@ -216,7 +216,7 @@ export function TermRow({
 					onInput={(e) => onName(e.currentTarget.value)}
 					placeholder={placeholder}
 					autoFocus={autoFocus}
-					class={`flex-1 min-w-0 h-10 px-3 rounded-[11px] text-sm ${s.halo}`}
+					class={`flex-1 min-w-0 px-3 rounded-[11px] text-sm ${TERM_FIELD} ${s.halo}`}
 					style={{ background: s.field, border: `1px solid ${s.fieldLine}`, color: s.ink }}
 					aria-label={placeholder ?? 'Term name'}
 				/>
@@ -244,13 +244,13 @@ export function TermRow({
 					type="button"
 					onClick={onAction}
 					class={
-						'shrink-0 flex items-center justify-center w-[30px] h-[30px] ' +
+						`shrink-0 flex items-center justify-center ${TERM_ICON} ` +
 						(action === 'delete' ? DRAWER_TRASH : 'rounded-[9px] transition-colors hover:opacity-80')
 					}
 					style={action === 'delete' ? undefined : { color: s.ghost }}
 					aria-label={action === 'delete' ? `Delete ${name || 'term'}` : 'Cancel'}
 				>
-					<Action size={15} />
+					<Action size={16} />
 				</button>
 			</div>
 
