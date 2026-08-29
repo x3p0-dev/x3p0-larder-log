@@ -183,7 +183,13 @@ export function FilterSection({
 				<span class="flex items-center gap-0.5">
 					{canEdit && ! editing && (
 						<button
-							onClick={() => { setComposing(false); setEditing(true); }}
+							/*
+							 * The panel it opens lives inside the collapsed
+							 * body, so a pencil pressed on a folded group
+							 * would set a state nothing renders. Editing is
+							 * the stronger request of the two: it opens.
+							 */
+							onClick={() => { setComposing(false); setEditing(true); setOpen(true); }}
 							class={`flex items-center justify-center w-7 h-7 ${DRAWER_ICON}`}
 							title={`Edit ${title.toLowerCase()}`}
 						>
