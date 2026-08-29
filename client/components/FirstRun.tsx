@@ -75,7 +75,7 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 			</h1>
 
 			<p class="text-[15px] leading-[1.55] mt-2.5" style={{ color: theme.text }}>
-				A household holds your items and the locations, stores and types you sort
+				A household holds your items and the locations, stores, and types you sort
 				them by. You can rename it later, and invite people once it exists.
 			</p>
 

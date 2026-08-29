@@ -234,7 +234,7 @@ function dialogCopy(pending: Pending, facts: DialogFacts): DialogCopy {
 				tone: 'danger',
 				icon: Trash2,
 				title: `Delete ${name}?`,
-				body: `You’re its only member, so leaving deletes it. ${plural(itemCount, 'item')}, ${plural(locationCount, 'location')}, ${plural(storeCount, 'store')} and ${plural(typeCount, 'type')} go permanently.`,
+				body: `You’re its only member, so leaving deletes it. ${plural(itemCount, 'item')}, ${plural(locationCount, 'location')}, ${plural(storeCount, 'store')}, and ${plural(typeCount, 'type')} go permanently.`,
 				confirmLabel: 'Delete household',
 				requireText: householdName,
 			};
@@ -2497,7 +2497,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							{empty ? (
 								<EmptyState
 									title="Nothing in the larder yet."
-									body="Add your first item. Your locations, stores and types are already set up in Filters — rename or recolor them whenever you like."
+									body="Add your first item. Your locations, stores, and types are already set up in Filters — rename or recolor them whenever you like."
 									action={mayEditItems ? { label: 'Add item', icon: Plus, onClick: openAddForm } : undefined}
 									theme={theme}
 								>

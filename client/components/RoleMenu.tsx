@@ -40,8 +40,8 @@ export const ROLE_LABELS: Record<Role, string> = {
  * - **viewer** — `pantry:read`, and nothing else at all.
  */
 export const ROLE_BLURBS: Record<Role, string> = {
-	owner: 'Can do everything you can, including inviting people, changing roles and renaming the pantry.',
-	editor: 'Can add and change items, locations, stores and types, and can invite viewers. Can’t manage members or rename the pantry.',
+	owner: 'Can do everything you can, including inviting people, changing roles, and renaming the pantry.',
+	editor: 'Can add and change items, locations, stores, and types, and can invite viewers. Can’t manage members or rename the pantry.',
 	viewer: 'Can see everything, and nothing they do changes it.',
 };
 

@@ -56,9 +56,9 @@ type Props = {
  */
 function RoleSentence({ inviter, role, theme }: { inviter: string; role: Role; theme: Theme }) {
 	const what = role === 'owner'
-		? 'add items, edit them, manage locations, stores and types, and invite other people'
+		? 'add items, edit them, manage locations, stores, and types, and invite other people'
 		: role === 'editor'
-			? 'add items, edit them, and manage locations, stores and types'
+			? 'add items, edit them, and manage locations, stores, and types'
 			: 'see everything, and nothing you do changes it';
 
 	// "an Owner", "an Editor", "a Viewer" — the only three the roles table has.

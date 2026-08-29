@@ -406,7 +406,7 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 					<div class="pt-[18px] md:pt-[22px]" style={{ borderTop: `1px solid ${theme.border}` }}>
 						<p class="text-[13.5px] md:text-sm leading-[1.5]" style={{ color: theme.textMuted }}>
 							Sixteen colors, yours to name and assign.
-							<span class="hidden md:inline"> Rename, recolor or remove any of them whenever you like.</span>
+							<span class="hidden md:inline"> Rename, recolor, or remove any of them whenever you like.</span>
 						</p>
 					</div>
 				</div>
@@ -422,7 +422,7 @@ export function MarketingPage({ dark, theme, pending, onSignIn }: {
 					Start with what&rsquo;s in the freezer right now.
 				</h2>
 				<p class="text-[13.5px] md:text-[14.5px] leading-[1.5]" style={{ color: theme.textMuted }}>
-					You&rsquo;ll land in a household with locations, types and stores already set up
+					You&rsquo;ll land in a household with locations, types, and stores already set up
 					<span class="hidden md:inline"> — rename them as you go</span>.
 				</p>
 				{/*
