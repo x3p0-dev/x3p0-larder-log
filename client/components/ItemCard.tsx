@@ -7,7 +7,7 @@ import { SOURCE_KIND_ADJECTIVES, itemSourceKinds } from '../../shared/source';
 import type { Item, Term } from '../../shared/types';
 import { formatSize } from '../../shared/size';
 import {
-	CARD_ACTION, CARD_ACTION_GHOST, CARD_HEADER, CARD_STEPPER, CARD_STEPPER_PRIMARY,
+	CARD_ACTION, CARD_ACTION_GHOST, CARD_CHEVRON, CARD_HEADER, CARD_STEPPER, CARD_STEPPER_PRIMARY,
 } from '../lib/controlStyles';
 
 type Props = {
@@ -209,11 +209,13 @@ export function ItemCard({
 					</span>
 				)}
 				{canExpand && (
-					<ChevronDown
-						size={17}
-						class="shrink-0 transition-[transform,color] text-ink-faint group-hover:text-ink-muted"
-						style={{ transform: open ? 'rotate(180deg)' : 'none' }}
-					/>
+					<span class={CARD_CHEVRON} aria-hidden="true">
+						<ChevronDown
+							size={17}
+							class="transition-transform"
+							style={{ transform: open ? 'rotate(180deg)' : 'none' }}
+						/>
+					</span>
 				)}
 			</span>
 		</>
@@ -239,6 +241,12 @@ export function ItemCard({
 		 * A card with more chips than that still comes out taller. Clamping the
 		 * rows would fix it and is not worth it — the chips are what the card is
 		 * for, and hiding one to square off a grid is the wrong trade.
+		 *
+		 * **The floor is the whole mechanism, so anything that grows the ordinary
+		 * card breaks the row.** The chevron's hover well did exactly that for one
+		 * round — 26px in flow where the glyph was 17 — and it now paints its
+		 * circle out of negative margins so it costs the layout nothing. See
+		 * `CARD_CHEVRON`.
 		 */
 		<div
 			class="flex flex-col min-h-[188px] p-5 rounded-[20px]"

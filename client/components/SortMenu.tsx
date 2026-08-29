@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks';
-import { ArrowUpDown, Check, ChevronDown } from 'lucide-preact';
+import { Check, ChevronDown } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
 import { PAGE_BUTTON_QUIET, PAGE_FOCUS } from '../lib/controlStyles';
@@ -46,7 +46,13 @@ type Props = {
 	setOpen: (open: boolean) => void;
 	sortBy: SortKey;
 	setSortBy: (key: SortKey) => void;
-	/** Short of room — drop the glyph and the word "Sort", and shorten the label. */
+	/**
+	 * Short of room — stand 44px rather than 40. **Geometry only.**
+	 *
+	 * It used to switch the trigger's whole form; the short form is the only
+	 * form now. Row 2's other controls read the same flag, so the trigger, the
+	 * exit, the segment and this share one height at both widths.
+	 */
 	compact: boolean;
 	theme: Theme;
 };
@@ -57,6 +63,14 @@ type Props = {
  * The trigger **names the current choice**, so the menu only ever gets opened
  * to change it — the old icon-only button meant the only way to find out how
  * the list was ordered was to open the thing that changes it.
+ *
+ * **It names it the short way at every width now** — `Restock`, not
+ * `Sort · Needs restocking`. The long form carried a glyph and the word *Sort*
+ * on top of the full option name, and all three are things the control can be
+ * read without: a chevron says it opens, its position at the row's end says what
+ * kind of control it is, and the option names are unambiguous on their own. The
+ * full name survives in `aria-label` and on the menu's own rows, which is where
+ * a word that long is actually read.
  *
  * It stays a popover at every size rather than becoming a sheet on mobile; six
  * rows do not earn one. They just grow to 44px.
@@ -87,18 +101,12 @@ export function SortMenu({ open, setOpen, sortBy, setSortBy, compact, theme }: P
 		<div class="relative" ref={ref}>
 			<button
 				onClick={() => setOpen(! open)}
-				class={`inline-flex items-center gap-2 h-10 ${compact ? 'px-2.5' : 'px-3'} rounded-[11px] text-[13.5px] border transition-colors active:translate-y-px ${PAGE_FOCUS} ${open ? TRIGGER_ON : TRIGGER}`}
+				class={`inline-flex items-center gap-2 ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] border transition-colors active:translate-y-px ${PAGE_FOCUS} ${open ? TRIGGER_ON : TRIGGER}`}
 				aria-haspopup="menu"
 				aria-expanded={open}
 				aria-label={`Sort: ${current.label}`}
 			>
-				{/*
-				  * The label alone carries it when space is short; "Sort" is the
-				  * widest word here and the one the chevron already implies.
-				  */}
-				{! compact && <ArrowUpDown size={15} style={{ color: theme.textFaint }} />}
-				{! compact && <span style={{ color: theme.textFaint }}>Sort</span>}
-				<span class="font-semibold">{compact ? current.short : current.label}</span>
+				<span class="font-semibold">{current.short}</span>
 				<ChevronDown size={15} style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
 			</button>
 

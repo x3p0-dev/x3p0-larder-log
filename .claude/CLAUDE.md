@@ -1457,16 +1457,17 @@ by **kind first, source second**, and **nothing about a card changed**: same
   and the fallback in another draws every band with no headers over them — built,
   caught, fixed before it shipped.
 
-**Two departures from the boards, both forced.** **The Make card is a Buy card**:
-the doc's own refinement says the row is 56px "until a recipe gives it something
-to say", and recipes are not being built (D59), so there is no second line and no
-*short 3 carrots*. **Board 1 draws it in the taller form and is drawing the
-mockup.** And **below the measured column the segment takes its own row**: row
-2's left slot holds its width in both modes so the trigger never moves when
-pressed, and in compact that slot *is* the slack — taking it would move the
-trigger, the one thing that row cannot do. So the segment drops to a scrolling
-row beneath with row 3's bleed. **That costs a fifth row at 390 in list mode and
-wants a real phone.**
+**One departure from the boards, and it is forced.** **The Make card is a Buy
+card**: the doc's own refinement says the row is 56px "until a recipe gives it
+something to say", and recipes are not being built (D59), so there is no second
+line and no *short 3 carrots*. **Board 1 draws it in the taller form and is
+drawing the mockup.**
+
+**The segment's own row lasted a day — see *Row 2 holds the whole run list*
+below.** It shipped beneath row 2 because row 2's left slot held its width in
+both modes so the trigger never moved when pressed, and in compact that slot
+*was* the slack. The answer was to spend both: the trigger leaves the row in
+list mode, and its 135px and the slot's 368 become the segment.
 
 **Verified without a browser**: typecheck clean, **368 assertions** (15 new,
 covering band order, the two-kind item counted once by each band, the storeless
@@ -1482,6 +1483,202 @@ all shops, so it draws one band and no segment. To see the bands locally:
 glyph → **Grow** → Done, then tag two low items with it. Extending `?demo` is
 the obvious fix and was not done: `DEMO_ITEMS`' distribution is pinned by
 `npm test` on purpose and adding rows moves eight assertions.
+
+### Row 2 holds the whole run list — 2026-08-29
+
+**Client only**: no schema change, no handler moved, no new utility class — every
+one it uses was already in the sheet. Ten tables, five queries, nineteen
+mutations.
+
+**Row 2 is one line at every width, the segment included.** The segment had
+shipped in a scrolling row of its own below the measured column, which was a
+**fifth** row at 390 in a top bar whose documented worst case was already four.
+
+- **The row's right end is the chrome, in both modes**: in grid mode the trigger
+  and the sort, in list mode the segment. Neither end is about the pantry — the
+  left is what you have, the right is how you are looking at it.
+- **List mode is two controls and a clause**: *Back to items* on the left, the
+  trip count, and the segment at the right end.
+- **The trigger is a glyph and a count at every width**, and it moved from after
+  the status pills to beside the sort. It wore *To get* with room; the count
+  pill already says how much and the glyph says what kind, and a word beside the
+  sort's own short label is the odd one out. The words survive in `aria-label`,
+  which reads *To get, 17 across every kind*. **What this gives up is the
+  on-ramp** — the eye crossing `9 in stock · 6 running low · 5 out` and landing
+  on the thing to do about it, which is the argument D41 used for placing it
+  there instead of colouring it.
+- **The sort names its choice the short way at every width** — `Restock`, not
+  `Sort · Needs restocking`. The glyph and the word *Sort* are gone with the
+  long form: a chevron says it opens, its position says what kind of control it
+  is, and the full name is still on the menu's own rows and in its accessible
+  name.
+- **`Showing 20 of 63` is deleted.** The pills to its left carry every count
+  that matters and the grid is directly below; its pair — rendered-so-far of
+  matching — was never the pair the live region announces (matching of
+  household), so the two disagreed on screen by design.
+- **`ROW2_FULL_PX` is 580, re-measured.** Three of the four parts the old 910
+  was derived from are gone or shrunk: the count line deleted, the trigger down
+  to ~72, the sort to ~100. **`compact` is now mostly a touch-geometry flag** —
+  the pills' short words and the row's shared 44px — since the two controls that
+  used to shed words have none left to shed. The cost is that a landscape phone
+  clears it and takes the 40px row; the gain is that a docked drawer on a 1280
+  desktop stops wearing a 390 layout with 300px of the row empty.
+- **The trigger is the way *in* only, on desktop.** Row 2 drops it in list mode.
+  *Back to items* is the way out and says so; a second exit whose count is the
+  **household's** would argue with a screen counting the **filtered** set; and
+  its 135px is what the segment wears its labels with. **So the press removes
+  the thing under the pointer** — the thing D41's amendment was written against
+  — and what it buys is the whole run list on one row with its words on.
+  **Below `md` none of that applies**: the trigger is in the mobile header in
+  both modes and never moves, which is the arrangement D41 was really
+  protecting, since the pair it replaced put the way in and the way out in
+  *different rows* on a phone.
+- **The pills' 368px reserved slot is gone with it.** They unmount rather than
+  going `invisible`; there is no longer an x to hold still. Three things paid
+  for the fifth row, in order: that slot, the trigger's 135, and then the trip
+  clause and the segment's words, which share one threshold.
+- **Every control on the row shares a height** — 44px compact, 40 full — off row
+  2's own `compact`. The segment was `h-10` at every width and stood 4px short
+  of its neighbours on a phone.
+- **`compact` was stuck `true` on every screen, and had been for as long as it
+  has existed — see *The observer never attached* below.** Everything row 2 has
+  ever been documented to do at full width was unreachable.
+- **Whether the segment wears its words is a different question from
+  `compact`.** `compact` is `< 910` measured on the content column, so a docked
+  drawer on a 1280 screen would drop the words with ~470px spare. `compact` is
+  geometry alone; `iconOnly` is `ROW2_LIST_PX + runSegmentPx(kinds, false)`, a
+  threshold that moves with the band count.
+- **`ROW2_LIST_PX` is 265** — the exit at ~145, `3 in the cart` at ~88, and the
+  row's gaps. It was 400 with the trigger in it, which put a three-band
+  household's labels at 820 of column and hid them on any window that was not
+  most of a 1440. At 265 that is ~685, and **the drawer does not dock below
+  1120** — so every desktop arrangement this app has wears the words.
+- **`runSegmentPx()` lives beside the markup it measures**, in `RunSegment.tsx`:
+  `ROW2_FULL_PX`'s method applied to a control with no single width.
+- **The observer stores the width now, not the boolean.** `compact` derives from
+  it, and still starts at 0 — which reads as compact — for the reason the
+  boolean started `true`.
+- **The segment's scroller bleeds right below `md` only.** Above `md` it never
+  scrolls at all: `iconOnly` guarantees it fits, which is D45's rule (a mouse
+  has no scroll gesture) satisfied by arithmetic rather than by a wrapper.
+
+**The glyphs changed twice and settled as a family.**
+
+- **The trigger is a basket once the household grows or makes anything.** The
+  cart is the **Buy band's** glyph — band header, segment tab, item card — so a
+  household with a garden had one cart meaning *the whole run* a gap from
+  another meaning *the shop part of it*. **The test is `sourceGroupWord`'s**,
+  not "has grow *and* make" as asked: the collision is with the cart, and one
+  garden creates it as well as a garden and a kitchen do. So the trigger is a
+  basket precisely when the drawer's group reads *Source* rather than *Store* —
+  one rule, already written down, both surfaces moving together. It follows the
+  **household's** sources, not the filtered set's bands, which is what its count
+  already does.
+- **`All` wears the basket too, reversing its own rule.** It carried no mark at
+  first, on the drawer's `All items` argument — the absence of a choice is not a
+  member of the set. What changed is that the basket became free: it already
+  means *everything to get* rather than *the shop part of it*, and with the
+  trigger off this row on desktop it had nowhere else to be. The segment now
+  reads as one family — the whole basket, then the three ways things get into
+  it. **And having a mark is what lets it drop its word** with the others, so
+  glyph-only is four glyphs rather than three and a word.
+- The band tabs take an `aria-label` carrying the word **and the count**, since
+  `aria-label` replaces what is under it rather than prefixing it.
+
+**The tabs hover on the edge and the words, never on the fill**, and that is
+forced rather than chosen. The selected tab is the *raised* one — `surface` on a
+`surface-alt` track — and `surface` is lighter than the track in **both** themes,
+so D45's *move away from the ground* means darker, and there is no darker step
+to take: light has `border` at `#E2D5C0` and works, while dark's track is
+already `#221C14` with only the `#1F1912` canvas beneath it, three units and
+invisible. A fill hover would have to run *toward* the selected fill, and a tab
+that looks half-selected on a control whose whole job is saying which one is
+selected is worse than no hover.
+
+So an unselected tab grows a `border` where it had a transparent one, and the
+selected tab deepens `borderStrong` to `textFaint` — **toward the text in
+whichever direction the theme requires**, darker in light and brighter in dark.
+One idea, both states, and **the selected tab gets feedback too**, which matters
+because pressing it is a no-op: a dead control beside three live ones reads as
+broken rather than as current. The words brighten to `textStrong` with it and
+the count follows on `group-hover`.
+
+**It goes through custom properties**, `--tab-line` / `--tab-ink` / `--tab-meta`
+and two hover twins, because the rest colours come off the `theme` object at
+runtime and **an inline `border-color` beats any `hover:` class** — which is
+exactly how the sort trigger once shipped with no hover at all.
+`HouseholdTile`'s `--tile` trio is the same trick. The arbitrary values need the
+`[color:var(…)]` type hint: a bare `text-[var(--x)]` is ambiguous between size
+and colour and compiles to nothing. All six rules were confirmed emitted, with
+the three hover rules landing after the bases they override — checked by line
+number, not assumed.
+
+#### The observer never attached — 2026-08-29
+
+**The bug under all of it, and it is older than any of this.** `Pantry` returns
+a loading screen while `api.status` is not `ready`, so `<main>` does not exist on
+the component's first render — and the column's `ResizeObserver` lived in a
+`useEffect(…, [])` that read `columnRef.current`, found `null`, and returned.
+**It never attached, on any load.** `compact` was therefore permanently `true`
+and **every control on row 2 has been wearing its 390 form on a 1440 desktop**:
+the status pills' short words, the sort trigger's, `Showing X of Y` hidden
+outright, and the run trigger as a bare glyph — which is why the trigger looked
+like "the shopping cart icon" on a desktop at all.
+
+**The fix is a callback ref**, so the effect depends on the element rather than
+on a theory about when it exists — and it is **the fix already written a few
+hundred lines below for `sentinel`**, whose comment calls it "the general fix:
+there is no longer a render path that can mount the sentinel without waking the
+observer." The same mistake was left in place one screen up.
+
+**The rule: an `[]` effect is only safe against a ref whose element is mounted
+on the component's first render.** `Pantry` has four early returns above
+`<main>`. A sweep found no third instance — the only other `[]` effects reading a
+ref are `DisplayNameCard`'s and `FirstRun`'s autofocus, and both fields are
+unconditional in components that do not return early.
+
+**This is the second time a browserless verification chain has certified a
+control that could not run.** Typecheck, assertions, an artifact read and a
+class-literal diff all pass on a component whose observer is inert; nothing
+short of a resize in a real browser can see it. It joins the D42 round in
+*Compiling, curling and reading the artifact prove a build is coherent, not that
+it is usable.*
+
+**And the item card's chevron got a hover state it only appeared to have.** It
+carried `text-ink-faint group-hover:text-ink-muted` — the rule fires, and it is
+`#9B8B75` to `#6F6049` on 17px of 1.5px stroke, from a header the width of the
+card. So the one element that responded was the one nobody was pointing at, and
+it read as a card with no hover at all. `CARD_CHEVRON` gives the glyph a 26px
+round well filling to `surface-alt`, **the card's own ghost step** — the move
+`CARD_ACTION_GHOST` makes a few pixels below it, and the opposite of what a
+control on the page ground does (D45). The whole row is still the button and
+the focus ring still wraps it; the well is only where the affordance is
+*drawn*.
+
+**It paints 25px and occupies 17, and that is load-bearing.** The first cut was
+26px in flow, which grew the header's cluster from the glyph's 17px to 26 and
+**pushed the ordinary card past its `min-h-[188px]` floor** — at which point
+every card is its own content height again and a row stops lining up, which is
+exactly how it was reported. Collapsed cards are equalised by that floor rather
+than by `align-items: stretch`, because a grid row is sized by its tallest
+item's content and stretch would let an open card drag its whole row down; a
+floor only equalises what fits under it. `-my-1` and `-mr-1` give back exactly
+the 8px the circle added on each axis, so the glyph's centre, the status badge
+and the card's height are all where they were, and the circle bleeds into the
+card's own padding. **Do not resize it without re-deriving the floor.**
+
+**Verified without a browser**: typecheck clean, 445 assertions, the dry-run
+artifact unchanged (ten tables, five queries, nineteen mutations,
+`db.migrations` empty), every class literal in the three touched files diffed
+against the freshly built `.spacefast/zero/public/zero.css` by unescaping the
+sheet's own selectors — printed, never hand-written — with `md:mr-0` confirmed
+by byte offset to land after the base `-mr-[18px]`, and the built `/client.js`
+carrying `shopping-basket` beside `shopping-cart`.
+
+**Nobody has clicked it**, and this one is entirely widths, heights and glyphs:
+it wants a real 390 phone, a docked drawer at 1280, and a household with all
+three bands. `?demo` still cannot produce a band — the seeded sources are all
+shops.
 
 ### The item side (Phase 4.15c, D58) — 2026-08-29
 

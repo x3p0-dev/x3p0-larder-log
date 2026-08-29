@@ -375,6 +375,44 @@ export const CARD_ACTION_GHOST =
 export const CARD_HEADER =
 	'group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
+/**
+ * The chevron's well, at the end of that row.
+ *
+ * **A colour step alone was not a hover state.** The glyph went `ink-faint` to
+ * `ink-muted` — `#9B8B75` to `#6F6049`, two greys on 17px of 1.5px stroke — and
+ * it fired from anywhere in a header the width of the card, so the one thing
+ * that *did* respond was the one thing nobody was pointing at. It read as a
+ * card with no hover at all, which is what it was reported as.
+ *
+ * So the glyph gets a 26px round well that fills to `surface-alt` on the
+ * header's hover. **That is the card's own ghost step** — a control on a
+ * `surface` card sinks to `surface-alt`, which is the same move `CARD_ACTION_GHOST`
+ * makes a few pixels below it, and the opposite of what a control on the page
+ * ground does (D45). The colour step stays and now has something to read
+ * against.
+ *
+ * **It does not claim to be the target.** The whole row is the button and the
+ * focus ring still wraps the whole row; the well is where the affordance is
+ * *drawn*, which is the ordinary accordion arrangement.
+ *
+ * **It paints 25px and occupies 17 — the glyph's own box — and that is
+ * load-bearing, not tidiness.** Collapsed cards are equalised by a
+ * `min-h-[188px]` floor rather than by `align-items: stretch`, because a grid
+ * row is sized by its tallest item's content and stretch would let an open card
+ * drag its whole row down. A floor only equalises what fits under it: the first
+ * cut of this well was 26px in flow, which grew the header's cluster from 17px
+ * to 26 and pushed the ordinary card past 188 — at which point every card is
+ * its own content height again and the row stops lining up. `-my-1` on a 25px
+ * box gives back exactly the 8px it added, and `-mr-1` does the same
+ * horizontally, so the glyph's centre, the status badge and the card's height
+ * are all where they were.
+ *
+ * **So do not resize this without re-deriving the floor.** The circle bleeds 4px
+ * into the card's own padding, which is what makes it free.
+ */
+export const CARD_CHEVRON =
+	'shrink-0 -my-1 -mr-1 inline-flex items-center justify-center w-[25px] h-[25px] rounded-full transition-colors text-ink-faint group-hover:bg-surface-alt group-hover:text-ink-muted';
+
 /* ---------- the shopping list ---------- */
 
 /**

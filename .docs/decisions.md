@@ -1586,7 +1586,8 @@ an ink label.
 **Placement is doing the work that colour was doing.** The eye crosses
 `9 in stock · 6 running low · 5 out` and lands on the thing to do about it. That
 sequence is the on-ramp, and it only exists because row 2 already summarises
-status.
+status. *(Superseded 2026-08-29: the trigger moved to the row's right end beside
+the sort — see the amendment below. The on-ramp is what that move gives up.)*
 
 **Rejected: the amber trigger, built first.** It wore the low tokens on the
 argument that it is the one control that exists because something is running
@@ -1652,6 +1653,73 @@ words at every width, which is the original argument unchanged — an unlabelled
 back arrow on a screen with no title is a guess. Escape and the ghost on the
 everything-is-checked card are still the other two ways out.
 
+#### Amended 2026-08-29: on desktop it is the way in, and the way out is the exit
+
+D58's segment is a fourth control on a row that was already full, and it shipped
+in a **row of its own** below the measured column — a fifth row at 390 in a top
+bar whose worst case was already four. Buying that row back cost this amendment
+most of its claim.
+
+**The trigger is a glyph and a count at every width, and it lives at the row's
+right end beside the sort.** Not after the status pills — that on-ramp is what
+this gives up. The right end is the pair of controls that are *chrome*: neither
+is about the pantry, both are about how you are looking at it, and in list mode
+the segment takes exactly that slot. The label went with the move: the count
+pill says how much, the glyph says what kind, and a word beside the sort's own
+short label would be the odd one out. *To get* survives in `aria-label`, where
+the whole sentence is read rather than the missing word.
+
+**The sort names its choice the short way at every width too** — `Restock`, not
+`Sort · Needs restocking`. A chevron says it opens and its position says what it
+is; the full name is on the menu's rows and in its accessible name.
+
+**Row 2 drops the trigger in list mode.** What is left is *Back to items* on the
+left, the trip clause, and the segment at the right end where the sort trigger
+stands in grid mode. **The pills' 368px reserved slot goes with it** — they
+unmount rather than going `invisible`, since there is no longer an x to hold
+still — and the two widths together are what the segment is built out of.
+
+**So a press does remove the thing under the pointer.** That is the failure this
+amendment was written against, conceded on one surface. Three things make it the
+right trade here:
+
+- **The exit is unambiguous and it is words.** The pair that was rejected swapped
+  one control for a *different* control that looked and measured differently and,
+  below `md`, lived in a different row. This is one control appearing and one
+  disappearing in two clearly different places, with the screen behind them
+  changed completely — nobody looks for the trigger where they pressed it,
+  because everything there has changed.
+- **A trigger in list mode is a second exit that argues with the screen.** Its
+  count is the household's by design, and the screen it would sit on counts the
+  filtered set. That pair is allowed to disagree beside the pills; beside a
+  segment whose counts *are* the filtered set it is just two numbers for one
+  question.
+- **Below `md` nothing moves at all.** The trigger is in the mobile header in
+  both modes, wearing its active fill, and that is the arrangement this
+  amendment was really protecting — the phone, where the pair put the way in and
+  the way out in different rows.
+
+**Every control on the row shares a height** — 44px compact, 40 with room — off
+row 2's `compact`, so the row has one baseline rather than three.
+
+**Whether the segment wears its words is a separate question from `compact`,**
+and conflating them is a bug rather than a nuance: `compact` is measured on the
+content column, so a docked drawer on a 1280 screen is compact while leaving the
+segment ~470px of spare room for labels it had already dropped. Geometry is one
+flag; the label threshold is `ROW2_LIST_PX` plus a segment width that moves with
+how many bands the household has.
+
+**And the glyphs became a family.** The cart is the *Buy* band's mark now, so the
+trigger is a **basket** once the household grows or makes anything — the test is
+`sourceGroupWord`'s, a basket exactly when the group reads *Source* rather than
+*Store*, because one garden creates the collision as well as a garden and a
+kitchen do, and it follows the household's sources rather than the filtered
+set's bands. **`All` wears the basket too**, reversing its own *the absence of a
+choice is not a member of the set* rule: the basket already means *everything to
+get*, and with the trigger off the row it was free. Having a mark is also what
+lets `All` drop its word with the others, so the glyph-only row is four glyphs
+rather than three and a word.
+
 ### Row 2 sizes off the column, not the viewport — 2026-08-26
 
 **Found by using it**, not by drawing it. The boards switch row 2's controls to
@@ -1660,10 +1728,15 @@ drawer costs **340px**, so a 1280 screen leaves 872 of content and is every bit
 as cramped as a phone while sitting well above every mobile breakpoint. The
 pills, the trigger and the sort all crushed together there.
 
-`ROW2_FULL_PX` is **910**, measured from the parts rather than chosen: three
-pills at full padding are 368, *Shopping list* with its pill is 165,
+`ROW2_FULL_PX` is measured from the parts rather than chosen. It was **910**:
+three pills at full padding are 368, *Shopping list* with its pill is 165,
 `Showing 20 of 20` is ~112, the sort naming *Recently added* is ~207, plus the
-row's gaps. A `ResizeObserver` on the content column decides it, because the
+row's gaps. **It is 580 as of 2026-08-29**, because three of those four parts
+changed — the count line is deleted, the trigger is a glyph and a count (~72),
+and the sort names its choice the short way at every width (~100). What the
+flag still governs is mostly touch geometry: the pills' short words, and the
+44px height every control on the row shares. A `ResizeObserver` on the content
+column decides it, because the
 drawer's three states change the available width without the viewport moving at
 all. It starts `true` — the compact row fits everywhere and the full one does
 not, so the one frame before the observer fires is the one that can only have
@@ -1680,9 +1753,12 @@ each width rather than a control that relocates on press. **The exit does not
 move either**: *Back to items* stays in row 2 with the list it exits, where it
 can keep its words; beside a 27px wordmark at 390 neither would have room.
 
-Row 2 gives up **`Showing X of Y`** first when compact — the pills already carry
-the counts that matter and the grid is directly below. The list's trip line
-never goes, because nothing else on screen says it.
+Row 2 gave up **`Showing X of Y`** first when compact — the pills already carry
+the counts that matter and the grid is directly below. **It is deleted outright
+as of 2026-08-29**: at no width was it saying anything the pills and the grid
+did not, and its pair (rendered-so-far of matching) was never the pair the live
+region announces (matching of household), so the two disagreed on screen by
+design. The list's trip line stays, because nothing else on screen says it.
 
 **Its count is the unfiltered total, always.** Scope to a store with nothing to
 buy and the meta line reads `0 to buy at Costco` while the trigger still holds

@@ -1,22 +1,46 @@
-import { ShoppingCart } from 'lucide-preact';
+import { ShoppingBasket, ShoppingCart } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
 import { statusColor } from '../lib/theme';
 import { PAGE_BUTTON_SECONDARY, PAGE_FOCUS, PAGE_TINT_HOVER } from '../lib/controlStyles';
 
 type Props = {
-	/** Whether the list is the mode you are in. The control stays put either way. */
+	/** Whether the list is the mode you are in. */
 	active: boolean;
 	/** Everything low or out in the household — never the filtered count. */
 	count: number;
 	onToggle: () => void;
 	/**
-	 * Short of room — drop the words for the cart glyph.
+	 * Short of room — stand 44px rather than 40. **Geometry only.**
 	 *
-	 * Measured from the content column rather than the viewport, so a docked
-	 * drawer on a 1280 screen gets the same treatment a phone does.
+	 * The label used to go with it; there is no label any more. Measured from
+	 * the content column rather than the viewport, so a docked drawer on a 1280
+	 * screen gets the same treatment a phone does, and every control on row 2
+	 * reads the same flag so the row has one height.
 	 */
 	compact: boolean;
+	/**
+	 * Whether the household sources anything it does not buy.
+	 *
+	 * **A basket rather than a cart, and it is the cart that forced it.** The
+	 * cart is the *Buy* band's glyph now — on the band header, on the segment's
+	 * tab, on an item card — so a household with a garden had one mark meaning
+	 * *the whole run* sitting a gap away from the same mark meaning *the shop
+	 * part of it*. The basket is the one thing in the same family that is not
+	 * already spoken for.
+	 *
+	 * **The test is `sourceGroupWord`'s**, not "has grow *and* make": the
+	 * collision is with the cart, and one garden creates it exactly as well as a
+	 * garden and a kitchen do. So the trigger is a basket precisely when the
+	 * drawer's group is called *Source* rather than *Store* — one rule, already
+	 * written down, and the two surfaces change together.
+	 *
+	 * It follows the **household's** sources rather than the filtered set's
+	 * bands, which is the same thing its count does: a glyph that changed when
+	 * you ticked a filter would be reporting on the screen instead of on the
+	 * pantry.
+	 */
+	basket: boolean;
 	dark: boolean;
 	theme: Theme;
 };
@@ -24,19 +48,22 @@ type Props = {
 /**
  * The way into the run list, and the light that says you are in it.
  *
- * **It does not move.** Row 2's left slot keeps its width in list mode — the
- * status pills go `invisible` rather than unmounting — so this sits at the same
- * x in both modes, and below `md` it stays in the mobile header. It was a pair
- * once, `Shopping list` trading places with `‹ Back to items`, and below `md`
- * the two lived in *different rows*: a press made the thing under your finger
- * vanish and put its replacement somewhere else. The exit is still there and
- * still says its words — it is the quiet control at the row's left now, where
- * the pills were.
+ * **It is a glyph and a count at every width**, and it sits at the row's right
+ * end beside the sort trigger — the two controls that are chrome rather than
+ * content, grouped. It used to sit immediately after the status pills, on the
+ * argument that the eye crossing `9 in stock · 6 running low · 5 out` lands on
+ * the thing to do about it; that on-ramp is what is given up, and what is bought
+ * is a row whose left is the state of the pantry and whose right is what you can
+ * do about looking at it.
  *
- * **Placement is doing the work that colour does elsewhere,** at rest. It sits
- * immediately after the three status pills, so the eye crosses `9 in stock ·
- * 6 running low · 5 out` and lands on the thing to do about it. That on-ramp is
- * why the control does not need a colour of its own to be *found*.
+ * **On desktop it is the way in and nothing else.** Row 2 drops it in list mode:
+ * *Back to items* is the way out and says so, a second exit whose count is the
+ * household's would be arguing with a screen that counts the filtered set, and
+ * the 135px is what the segment wears its labels with. **Below `md` it is the
+ * whole toggle**, sitting in the mobile header in both modes, wearing its active
+ * fill, never moving — which is the one arrangement D41's amendment was really
+ * protecting, since the pair it replaced put the way in and the way out in
+ * *different rows* on a phone.
  *
  * **Active is the low tint**, straight off the boards: `low.bg` filled,
  * `low.ink` for the border and the label, and the count pill inverted onto it.
@@ -56,7 +83,7 @@ type Props = {
  * 11: the trigger answers *is there shopping to do*, which is a fact about the
  * household, and the meta line answers *what is on this screen*.
  */
-export function RunListTrigger({ active, count, onToggle, compact, dark, theme }: Props) {
+export function RunListTrigger({ active, count, onToggle, compact, basket, dark, theme }: Props) {
 	const low = statusColor('low', dark);
 
 	return (
@@ -65,8 +92,8 @@ export function RunListTrigger({ active, count, onToggle, compact, dark, theme }
 			aria-pressed={active}
 			aria-label={`To get, ${count} across every kind`}
 			class={
-				'inline-flex items-center rounded-[13px] text-sm font-semibold shrink-0 ' +
-				(compact ? 'gap-2 h-11 pl-3 pr-[11px] ' : 'gap-[9px] h-10 pl-[15px] pr-3 ') +
+				'inline-flex items-center gap-2 pl-3 pr-[11px] rounded-[13px] text-sm font-semibold shrink-0 ' +
+				(compact ? 'h-11 ' : 'h-10 ') +
 				// A runtime fill has no literal hover shade to write against, so the
 				// active state borrows the status chips' brightness step — and the
 				// direction has to flip with the theme, since a tint is pale in light
@@ -82,29 +109,37 @@ export function RunListTrigger({ active, count, onToggle, compact, dark, theme }
 				: undefined}
 		>
 			{/*
-			  * The label goes when space is short and the cart carries it. This is
-			  * the only element on that row with a fixed cost, and the label is the
-			  * most expendable thing on the screen once the pill says 17 and the
-			  * glyph says what kind of 17.
+			  * **A glyph and a count, at every width.** It wore the words *To get*
+			  * with room and fell back to the mark on a phone; now it is the mark
+			  * everywhere. Three things make the label the right thing to spend:
+			  * the count pill already says how much, the glyph says what kind, and
+			  * the control now sits beside the sort trigger rather than after the
+			  * status pills — a group of two chrome controls at the row's end,
+			  * where a word would be the odd one out.
 			  *
-			  * **It says *To get*, not *Shopping list*** (D58). The old label stopped
-			  * being true the moment three of the seventeen were things you pick —
-			  * a control that opens a screen with a Harvest band on it cannot call
-			  * itself shopping. *To get* is honest across all three bands, and the
-			  * segment inside gives *Buy* its own name and its own count, so
-			  * nothing was lost by generalising the way in.
+			  * The words survive where they are load-bearing: `aria-label` reads
+			  * *To get, 17 across every kind*, which is the whole sentence and not
+			  * just the missing word.
 			  *
-			  * **The cart glyph stays** at the compact width, and it is the one
-			  * thing here still saying *shop*. It is what the control has always
-			  * been, it is what most households will only ever use it for, and the
-			  * alternative is a mark for *get* that does not exist. Recorded rather
-			  * than solved — the same place the collapsed rail's storefront is.
+			  * **The glyph is a cart until the household grows or makes something,
+			  * and then it is a basket.** A cart is what this control has always
+			  * been and is what most households will only ever use it for — but the
+			  * cart is also the *Buy* band's own mark, so the moment there is a
+			  * second band the same glyph is saying two different sizes of the same
+			  * thing a gap apart. The basket is near enough to still mean *the
+			  * things to get* and far enough to not be the Buy tab.
 			  *
-			  * The label does not change with the state. It names the thing you are
+			  * It is still a shopping mark for a list that is partly picking and
+			  * partly cooking, which is the compromise the collapsed rail's
+			  * storefront makes too. Recorded rather than solved.
+			  *
+			  * The glyph does not change with the state. It names the thing you are
 			  * looking at either way, and a control that renames itself on press is
 			  * a second thing to read at the moment the whole screen has changed.
 			  */}
-			{compact ? <ShoppingCart size={20} strokeWidth={1.8} /> : 'To get'}
+			{basket
+				? <ShoppingBasket size={20} strokeWidth={1.8} />
+				: <ShoppingCart size={20} strokeWidth={1.8} />}
 
 			{/*
 			  * The pill inverts with the button rather than keeping its own

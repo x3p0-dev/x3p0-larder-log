@@ -20,7 +20,7 @@ import { InviteLanding } from './components/InviteLanding';
 import { OutsideShell } from './components/OutsideShell';
 import { RunList } from './components/RunList';
 import { RunListTrigger } from './components/RunListTrigger';
-import { RunSegment } from './components/RunSegment';
+import { RunSegment, runSegmentPx } from './components/RunSegment';
 import { ToastStack } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { NewHouseholdDialog } from './components/NewHouseholdDialog';
@@ -88,19 +88,50 @@ const SR_ONLY = {
 const DOCK_PX = 1120;
 
 /**
- * The content width row 2 needs before its controls can wear their full labels.
+ * The content width row 2 needs before its controls can wear their full forms.
  *
- * Measured from the parts, not chosen: the three status pills at full padding
- * are 368, *Shopping list* with its count pill is 165, `Showing 20 of 20` is
- * ~112, and the sort trigger naming *Recently added* is ~207. With the row's
- * own gaps that is ~904, so 910 is the first width at which nothing is cramped.
+ * Measured from the parts, not chosen, and **re-measured on 2026-08-29 because
+ * three of the four parts changed**. It was 910: the three status pills at 368,
+ * *Shopping list* with its count pill at 165, `Showing 20 of 20` at ~112, and
+ * the sort trigger naming *Recently added* at ~207. Since then the count line
+ * is **deleted**, the trigger is a glyph and a count (~72), and the sort names
+ * its choice the short way at every width (~100). With the row's own gaps that
+ * is ~572, so 580 is the first width at which nothing is cramped.
+ *
+ * **What it still governs is now mostly touch geometry** — the pills' short
+ * words, and the 44px height every control on the row shares — since the two
+ * controls that used to shed words no longer have any to shed. Whether the
+ * *segment* wears its labels is a separate threshold; see `ROW2_LIST_PX`.
  *
  * **It is compared against the content column, not the viewport**, and that is
- * the whole point: a docked drawer costs 340px, so a 1280 screen leaves 872 and
- * is every bit as cramped as a phone. Sizing off `md:` got this wrong in both
- * directions.
+ * the whole point: a docked drawer costs 340px, so a 1280 screen leaves 872.
+ * Sizing off `md:` got this wrong in both directions. The cost of the new
+ * number is that a landscape phone clears it and takes the 40px row; the gain
+ * is that a docked drawer on a desktop stops wearing a 390 layout with 300px of
+ * the row empty.
  */
-const ROW2_FULL_PX = 910;
+const ROW2_FULL_PX = 580;
+
+/**
+ * What row 2 spends in list mode on everything that is not the segment.
+ *
+ * Measured the same way, and there is very little left to measure: *Back to
+ * items* is ~145, `3 in the cart` is ~88, and the row's own gaps are the rest.
+ * Add `runSegmentPx()` to it and you have the width at which the segment can
+ * wear its words.
+ *
+ * **Neither the pills' slot nor the trigger is in it**, and that is the whole
+ * reason the words fit. The pills unmount in list mode rather than going
+ * `invisible`, and the trigger is not on this row in list mode at all — so the
+ * only fixed costs are the exit and one short clause. At 265 a household with
+ * all three bands wears its labels from ~685 of column, which is every desktop
+ * arrangement this app has: the drawer does not dock below 1120, and undocked
+ * that is a 753px window.
+ *
+ * It stays a little conservative below `md`, where the trip clause goes with
+ * the words, rather than keeping a second constant for one band.
+ */
+const ROW2_LIST_PX = 265;
 
 /** What "needs restocking" means as an ordering. */
 const RESTOCK_RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
@@ -577,35 +608,51 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		return () => docked.removeEventListener('change', sync);
 	}, [drawerOpen]);
+
 	/**
-	 * Whether row 2's controls have to give up their words.
+	 * The measured content column — how wide row 2's controls actually are.
 	 *
-	 * A `ResizeObserver` on the content column rather than a media query,
-	 * because the drawer's three states change the available width by 340px
-	 * without the viewport moving at all.
+	 * A `ResizeObserver` on the column rather than a media query, because the
+	 * drawer's three states change the available width by 340px without the
+	 * viewport moving at all.
 	 *
-	 * **It starts `true`.** The first paint happens before the observer fires,
-	 * and the compact row fits everywhere while the full one does not — so the
-	 * one frame that might be wrong is the one that only ever has too much room.
+	 * **It starts at 0**, which reads as compact, and that is deliberate: the
+	 * observer cannot report before the first paint, and the compact row fits
+	 * everywhere while the full one does not — so the one frame that might be
+	 * wrong is the one that only ever has too much room.
+	 *
+	 * **The element is state, not a `useRef`, and that is a bug fix rather than
+	 * a style.** This component returns a loading screen above `<main>` until
+	 * `api.status` is `ready`, so an `[]` effect reading `ref.current` ran while
+	 * the column did not exist yet, bailed on the null, and **never attached the
+	 * observer at all** — leaving `compact` stuck `true` on every screen forever.
+	 * The status pills, the sort trigger, the run trigger and the segment were
+	 * all wearing their 390 forms on a 1440 desktop because of it.
+	 *
+	 * A callback ref fires on attach with the node itself, so the effect depends
+	 * on the element rather than on a theory about when it exists. **This is the
+	 * same fix `sentinel` carries a few hundred lines down**, and the same
+	 * mistake: an `[]` effect is only safe against a ref that is mounted on the
+	 * component's first render.
 	 */
-	const columnRef = useRef<HTMLElement>(null);
-	const [compact, setCompact] = useState(true);
+	const [column, setColumn] = useState<HTMLElement | null>(null);
+	const [columnPx, setColumnPx] = useState(0);
+
+	const compact = columnPx < ROW2_FULL_PX;
 
 	useEffect(() => {
-		const el = columnRef.current;
-
 		// Guarded like `useSystemTheme`'s `matchMedia`: the same absence of a
 		// browser would otherwise throw here rather than degrade.
-		if (! el || ! window.ResizeObserver) return;
+		if (! column || ! window.ResizeObserver) return;
 
 		const observer = new ResizeObserver(([entry]) => {
-			setCompact(entry.contentRect.width < ROW2_FULL_PX);
+			setColumnPx(entry.contentRect.width);
 		});
 
-		observer.observe(el);
+		observer.observe(column);
 
 		return () => observer.disconnect();
-	}, []);
+	}, [column]);
 
 	const [sortMenuOpen, setSortMenuOpen] = useState(false);
 	const [sortBy, setSortBy] = useState<SortKey>('default');
@@ -1260,6 +1307,20 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * way out is worse than one that lets go.
 	 */
 	const listMode = trip.listMode && toBuyTotal > 0;
+
+	/**
+	 * Whether the segment has to give up its three words for its three glyphs.
+	 *
+	 * **A different question from row 2's `compact`, and asking it separately is
+	 * the point.** `compact` is about touch geometry and the whole row answers
+	 * it together, so the segment stands exactly as tall as *Back to items* and
+	 * the trigger either side of it. Whether its labels fit depends on how many
+	 * bands the household has, which no constant knows — a docked drawer on a
+	 * 1280 screen is `compact` and still has ~470px spare for the words.
+	 */
+	const iconOnly = banded
+		&& columnPx < ROW2_LIST_PX + runSegmentPx(bands.map((band) => band.kind), false);
+
 
 	/*
 	 * Only named when the Store filter is a *single* store — the sentence it
@@ -2089,6 +2150,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 								count={toBuyTotal}
 								onToggle={() => setListMode(! listMode)}
 								compact
+								basket={sourceWord === 'Source'}
 								dark={dark}
 								theme={theme}
 							/>
@@ -2128,7 +2190,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			  */}
 			{/* `pt-3` is the second half of the header's 24px gap — see the note on it. `py-6`'s bottom half never applied: `pb-28` and `md:pb-[30px]` both overrode it. */}
 			<div class="px-[18px] md:px-[34px] pt-3 md:pt-[30px] pb-28 md:pb-[30px]">
-				<main ref={columnRef}>
+				<main ref={setColumn}>
 					{/*
 					  * The whole top bar is absent at zero items — search, the
 					  * status chips, the count and the sort trigger with them.
@@ -2173,36 +2235,50 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  *
 					  * **List:** the pills go, because you are already filtered to low
 					  * and out and `9 in stock` has nothing to say; the sort goes,
-					  * because the list has one fixed order. The trigger stays exactly
-					  * where it was and fills in, and the trip count takes the slot
-					  * `Showing X of Y` occupies.
+					  * because the list has one fixed order; and **the trigger goes**,
+					  * because *Back to items* is the way out. Two controls are left —
+					  * the exit on the left, the **segment** on the right where the
+					  * sort trigger stands in grid mode — with the trip count between
+					  * them.
 					  *
-					  * **It is one line at every width.** The trigger moves into the
-					  * mobile header below `md` — in both modes — which is exactly
-					  * what buys the pills and the sort room to share a row again at
-					  * 390.
+					  * **It is one line at every width**, the segment included. It had
+					  * a row of its own for a day and that was a fifth row at 390, in a
+					  * top bar whose documented worst case was already four. Three
+					  * things paid for it, in order: the pills' 368px reserved slot
+					  * (nothing is holding an x any more), the trigger's 135, and then
+					  * the trip clause and the segment's own words, which go together
+					  * on one threshold.
+					  *
+					  * **Every control on the row shares a height** — 44px compact, 40
+					  * full — off row 2's own `compact`.
+					  *
+					  * Below `md` the trigger is in the mobile header in both modes,
+					  * which is what buys the pills and the sort room to share a row
+					  * again at 390.
 					  */}
 					{! empty && (
 					<div class={`flex items-center pt-6 pb-4 px-0.5 ${compact ? 'gap-2' : 'gap-3.5'}`}>
 						{/*
-						  * The row's left slot, and it is **the same width in both
-						  * modes**. In list mode the pills go `invisible` rather than
-						  * unmounting, and *Back to items* is laid over them.
+						  * The row's left slot: the status pills in grid mode, the exit
+						  * in list mode, and never both.
 						  *
-						  * That is the whole reason for the wrapper: the trigger sits
-						  * immediately after this slot, and unmounting the pills slid it
-						  * a third of the way across the screen on every press. A
-						  * control that moves when you press it is the one thing this
-						  * row cannot do — you look back to where you pressed to see
-						  * what happened. `visibility: hidden` keeps the geometry and
-						  * takes the pills out of the tab order and the a11y tree, which
-						  * `opacity-0` would not.
-						  *
-						  * The overlay is absolute rather than a second flex child for
-						  * the same reason: in flow it would add its own width to the
-						  * slot. It sits outside the pills' scroll port, which clips.
+						  * **It used to hold the pills' width in both modes** —
+						  * `invisible` rather than unmounted, with the exit laid over
+						  * them absolutely — because the trigger sat immediately after
+						  * it and unmounting them slid the trigger a third of the way
+						  * across a 1440 screen on every press. The trigger is not on
+						  * this row in list mode at all now, so there is no x to hold
+						  * still and the 368px is simply gone: it is what the segment
+						  * is built out of.
 						  */}
-						<div class={compact ? 'relative flex-1 min-w-0 flex items-center' : 'relative flex items-center'}>
+						<div class={
+							// In list mode there is nothing to hold still — the trigger
+							// has gone to the row's right end — so the slot is the
+							// exit's own words and the segment takes everything else.
+							listMode
+								? 'flex items-center shrink-0'
+								: (compact ? 'flex-1 min-w-0 flex items-center' : 'flex items-center')
+						}>
 							{/*
 							 * When space is short the pills take the row's slack and
 							 * scroll inside it, so three counts can never wrap onto
@@ -2219,13 +2295,13 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							 * back the width it cost.
 							 */}
 							<div class={
-								compact
-									? (listMode
-										? 'invisible w-full min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1'
-										: 'w-full min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1')
-									: (listMode
-										? 'invisible flex items-center gap-3.5 flex-wrap'
-										: 'flex items-center gap-3.5 flex-wrap')
+								// They unmount now rather than going `invisible`. The
+								// width they were holding was the trigger's x, and the
+								// trigger is no longer measured from this slot.
+								(listMode ? 'hidden ' : '') +
+								(compact
+									? 'w-full min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1'
+									: 'flex items-center gap-3.5 flex-wrap')
 							}>
 								{STATUS_CHIPS.map(({ key, label, short }) => (
 									<StatusChip
@@ -2251,24 +2327,29 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 							{/*
 							  * The exit, and it is **quiet**. The trigger is the loud
-							  * half of this pair now — filled while the mode is on — so
-							  * the way out is the sort menu's resting treatment: a
-							  * chevron and its words on nothing, resolving under the
-							  * pointer. Two filled controls a gap apart would both be
-							  * asking to be pressed.
+							  * half of this pair — filled while the mode is on — so the
+							  * way out is the sort menu's resting treatment: a chevron
+							  * and its words on nothing, resolving under the pointer.
+							  * Two filled controls a gap apart would both be asking to
+							  * be pressed.
 							  *
-							  * **It is centred with auto margins, not `-translate-y-1/2`.**
-							  * Every control in this row presses with `active:translate-y-px`,
-							  * and Tailwind writes both of those to the same
-							  * `--tw-translate-y` — so a centring transform means the press
-							  * replaces `-50%` with `1px` and the button falls half its own
-							  * height the moment you touch it. `top-0 bottom-0 my-auto`
-							  * centres a definite height without spending the transform.
+							  * **It is an ordinary flex child now**, not an overlay on a
+							  * reserved slot: it owns the row's left, the trigger has
+							  * gone to the right, and nothing is holding a width for
+							  * anything. That retires the `top-0 bottom-0 my-auto`
+							  * centring, which existed because this row's
+							  * `active:translate-y-px` and a `-translate-y-1/2` are the
+							  * same custom property — a press replaced `-50%` with `1px`
+							  * and dropped the button half its own height.
+							  *
+							  * It stands `h-11` / `h-10` with the trigger and the
+							  * segment, so the three controls on this row share one
+							  * height at both widths.
 							  */}
 							{listMode && (
 								<button
 									onClick={() => setListMode(false)}
-									class={`absolute left-0 top-0 bottom-0 my-auto inline-flex items-center gap-1.5 whitespace-nowrap ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
+									class={`shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
 								>
 									<ChevronLeft size={16} strokeWidth={2.4} />
 									Back to items
@@ -2277,82 +2358,131 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 						</div>
 
 						{/*
-						  * The trigger, in **both** modes. One control with two homes —
-						  * here from `md` up, the mobile header below it — and never
-						  * both at once. It does not move when the mode changes: same
-						  * slot, same x, wearing its active fill, and pressing it again
-						  * is the way out.
-						  *
-						  * `ml-0.5` is the 2px the boards set it off the last pill by,
-						  * on top of the row's own gap — and it is measured off the same
-						  * slot in list mode, because the slot holds its width.
-						  */}
-						{toBuyTotal > 0 && (
-							<span class="hidden md:inline-flex md:ml-0.5 shrink-0">
-								<RunListTrigger
-									active={listMode}
-									count={toBuyTotal}
-									onToggle={() => setListMode(! listMode)}
-									compact={compact}
-									dark={dark}
-									theme={theme}
-								/>
-							</span>
-						)}
-
-						{/*
-						  * The segment, and it lands in the room the sort trigger left.
-						  *
-						  * **Only above `compact`.** The left slot holds its width in
-						  * both modes so the trigger never moves when you press it, and
-						  * in compact that slot is `flex-1` — it owns the row's slack.
-						  * There is nothing here for a fourth control to take, so
-						  * squeezing one in would mean giving that width up and moving
-						  * the trigger, which is the one thing this row cannot do. It
-						  * gets its own scrolling row below instead.
-						  */}
-						{listMode && banded && ! compact && (
-							<RunSegment
-								bands={bands}
-								total={toBuyHere}
-								tab={activeTab}
-								onPick={setRunTab}
-								theme={theme}
-							/>
-						)}
-
-						{/*
 						  * `ml-auto` rather than a spacer: with room it pushes the tail
 						  * right, and with none it collapses — where a second `flex-1`
 						  * would have taken half the slack off the pills.
 						  */}
-						<div class="ml-auto shrink-0 flex items-center gap-[18px]">
+						<div class={
+							'ml-auto flex items-center gap-[18px] ' +
+							// The segment scrolls inside the tail once its words have
+							// gone, so the tail has to be allowed to shrink; every other
+							// arrangement of this row is fixed-width.
+							(iconOnly && listMode ? 'min-w-0' : 'shrink-0')
+						}>
 							{/*
-							  * The grid's `X of Y` is what row 2 gives up first at 390 —
-							  * the pills already carry the counts that matter and the
-							  * grid itself is directly below. The list's trip line stays
-							  * at every width: nothing else on screen says it.
+							  * The trip clause, and **only in list mode**.
+							  *
+							  * `Showing 20 of 63` used to hold this slot in grid mode and
+							  * is gone: the three status pills to its left already carry
+							  * every count that matters, the grid is directly below to be
+							  * looked at, and its pair — rendered-so-far of matching — was
+							  * never the pair the live region announces (matching of
+							  * household), so the two disagreed on screen by design and
+							  * explained nothing to anyone.
+							  *
+							  * **The trip clause goes with the segment's words**, on the
+							  * same threshold: it is down to `3 in the cart` by then, the
+							  * segment says the rest in tabs you can press, and the trip
+							  * bar directly under the list says that sentence again. One
+							  * budget, spent in order.
 							  */}
-							<span
-								class={
-									'text-right ' + (compact ? 'text-[12.5px] ' : 'text-sm ') +
-									// Hidden on width, not on viewport: a docked drawer at
-									// 1280 is exactly as short of room as a phone is.
-									(listMode || ! compact ? '' : 'hidden')
-								}
-								style={{ color: theme.textMuted }}
-							>
-								{listMode
-									? (compact ? tripLine.short : tripLine.full)
-									: `Showing ${Math.min(visibleCount, sorted.length)} of ${sorted.length}`}
-							</span>
+							{listMode && ! iconOnly && (
+								<span
+									class={'text-right ' + (compact ? 'text-[12.5px]' : 'text-sm')}
+									style={{ color: theme.textMuted }}
+								>
+									{compact ? tripLine.short : tripLine.full}
+								</span>
+							)}
+
+							{/*
+							  * **The segment sits at the row's right edge**, which is
+							  * where the sort trigger stands out of list mode — so the
+							  * two modes put their one *how am I looking at this*
+							  * control in the same place, and the trigger and the exit
+							  * keep the left exactly as they were.
+							  *
+							  * Short of room it drops its words to its glyphs and
+							  * scrolls, rather than taking a row of its own. It had one
+							  * for a day: it cost a fifth row at 390 in a top bar whose
+							  * documented worst case was already four. The bleed is row
+							  * 3's — `pr` past the gutter with a matching negative
+							  * margin — so the last tab does not stop dead at the column
+							  * edge while there is more of it to reach.
+							  *
+							  * `py-1 -my-1` and `pl-1 -ml-1` are the pills' trick, split
+							  * per axis so they cannot collide with that bleed:
+							  * `overflow-x-auto` clips on **both** axes, and a focused
+							  * tab's ring is a box-shadow outside its border box. A
+							  * single `p-1 -m-1` would fight `-mr-[18px]` for the right
+							  * margin, and which won would be decided by the order two
+							  * rules happen to land in the compiled sheet.
+							  */}
+							{listMode && banded && (
+								<div class={
+									iconOnly
+										// The bleed is below `md` only, where the segment is
+										// the last thing before the gutter. Above it the
+										// trigger is, and 18px of negative margin there would
+										// slide the tabs under it. A base utility loses to a
+										// `md:` rule cleanly — it is *arbitrary variants* that
+										// cannot be ordered against a named breakpoint.
+										? 'min-w-0 flex overflow-x-auto py-1 -my-1 pl-1 -ml-1 pr-[18px] -mr-[18px] md:pr-0 md:mr-0'
+										: 'flex'
+								}>
+									<RunSegment
+										bands={bands}
+										total={toBuyHere}
+										tab={activeTab}
+										onPick={setRunTab}
+										compact={compact}
+										iconOnly={iconOnly}
+										theme={theme}
+									/>
+								</div>
+							)}
+
+							{/*
+							  * The trigger, and on desktop it is **the way in only**.
+							  *
+							  * It sits at the row's right end beside the sort, which is
+							  * the group of two: neither is about the pantry, both are
+							  * about how you are looking at it. It used to sit
+							  * immediately after the status pills — the on-ramp where the
+							  * eye crossing `9 in stock · 6 running low · 5 out` lands on
+							  * the thing to do about it — and that argument is what was
+							  * given up for the grouping.
+							  *
+							  * **In list mode there is no trigger on this row.** *Back to
+							  * items* is the way out and it is unambiguous about it; the
+							  * trigger would be a second exit, and a control whose count
+							  * is the household's on a screen already counting the
+							  * filtered set. The segment takes this slot instead, which
+							  * is the same trade: the right end is what you can do about
+							  * the view, whichever view it is.
+							  *
+							  * Below `md` none of this applies — the trigger is in the
+							  * mobile header in both modes and never moves at all.
+							  */}
+							{! listMode && toBuyTotal > 0 && (
+								<span class="hidden md:inline-flex shrink-0">
+									<RunListTrigger
+										active={listMode}
+										count={toBuyTotal}
+										onToggle={() => setListMode(! listMode)}
+										compact={compact}
+										basket={sourceWord === 'Source'}
+										dark={dark}
+										theme={theme}
+									/>
+								</span>
+							)}
 
 							{/*
 							  * The list has one fixed order — out before low, then A–Z —
 							  * so offering to change it would be a lie.
 							  *
-							  * Pulled to the edge so the trigger's padding does not read
-							  * as a gap.
+							  * Pulled to the edge so its padding does not read as a gap.
 							  */}
 							{! listMode && (
 								<div class="-mr-2 md:mr-0">
@@ -2361,47 +2491,6 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							)}
 						</div>
 					</div>
-					)}
-
-					{/*
-					  * The segment's own row, when row 2 has no width to spare.
-					  *
-					  * **A departure, and the design doc says as much**: mobile is not
-					  * drawn, and it guesses the segment "probably scrolls horizontally
-					  * like the applied-filter chips do". It does — and it does it in a
-					  * row of its own rather than inside row 2, because row 2's left
-					  * slot owns the slack there and giving it up would move the
-					  * trigger on press.
-					  *
-					  * The bleed is row 3's, exactly: `pr` past the gutter and a
-					  * matching negative margin, so the last tab does not stop dead at
-					  * the column edge while there is more of it to scroll to.
-					  *
-					  * It costs a row at 390 in list mode, which is worth watching on a
-					  * real phone — the top bar is already at a documented four-row
-					  * worst case, and this is a fifth.
-					  */}
-					{! empty && listMode && banded && compact && (
-						<div class="pb-4">
-							{/*
-							  * `py-1 -my-1` and `pl-1 -ml-1` are the pills' trick, split
-							  * per axis so they cannot collide with the bleed on the
-							  * right: `overflow-x-auto` clips on **both** axes, and a
-							  * focused tab's ring is a box-shadow outside its border box.
-							  * A single `p-1 -m-1` here would fight `-mr-[18px]` for the
-							  * right margin, and which won would be decided by the order
-							  * two rules happen to land in the compiled sheet.
-							  */}
-							<div class="flex overflow-x-auto py-1 -my-1 pl-1 -ml-1 pr-[18px] -mr-[18px]">
-								<RunSegment
-									bands={bands}
-									total={toBuyHere}
-									tab={activeTab}
-									onPick={setRunTab}
-									theme={theme}
-								/>
-							</div>
-						</div>
 					)}
 
 					{/*
