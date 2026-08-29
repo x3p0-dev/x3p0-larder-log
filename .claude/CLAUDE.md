@@ -1599,6 +1599,99 @@ neither is referenced back, so **a pantry item gains no recipe-shaped field at
 all**. Everything about recipes, ingredients, quantities and unit arithmetic in
 that design doc is a **marked mockup** and is not being built.
 
+### First run asks where your food comes from (D61) — 2026-08-29
+
+`.claude/docs/design/garden-and-kitchen.md`, *First run asks where your food
+comes from*, drawn on **board 1** of the boards file. **No schema change** —
+`stores.kind` shipped with D58 and this writes it at seed time. Ten tables, five
+queries, **nineteen mutations**; `createHousehold` gained an optional third
+argument and `db.migrations` is still empty.
+
+**Three checkboxes under the name field, on both creation surfaces.** Buy ticked,
+grow and make off. Buy seeds Grocery · Warehouse · Market as `shop`; grow seeds
+**Garden** (fern, `color-11`); make seeds **Kitchen** (mulberry, `color-5`).
+
+- **`SourceMixRows.tsx` is the whole component**, and it is on **both**
+  `FirstRun` and `NewHouseholdDialog` — the design doc draws only the first-run
+  card. The second household somebody makes is as likely to be the one with the
+  garden, and asking on only one surface leaves the other seeding three shops
+  and pointing back at a kind menu two levels into a drawer.
+- **It looks like it breaks *one field, one button, nothing else* and does
+  not.** That rule was written against a **preview** — fifteen seeded chips in a
+  recessed panel, explaining what a household is. This is a **question**, and
+  the answer changes what gets *written*. The test it passes: **Enter still
+  finishes the screen**, because the defaults are the household that existed
+  before the question did.
+- **It is not the prefill D48 forbids.** D48 is about a *name* — a name nobody
+  typed is not an answer and a filled field submits as though it were. A tick is
+  a closed question whose commonest answer is knowably yes, legible without
+  reading a field, with a hint under it saying what it will do.
+- **Nothing is required and nothing is disabled**, which is a **deliberate
+  departure from the brief that asked for it** — *maybe require at least one
+  checkbox* was raised and dropped in favour of the spec, which argues the
+  seed-nothing path is worth having. Untick all three and you get the locations
+  and types and no sources. **That is not a dead end the way no locations would
+  be**: `itemStores` is a join table so an item can name none, while
+  `locationId` is required and D16 refuses to delete the last one. Sources are
+  the one taxonomy that can start empty — and this is the cleanest version of
+  the *seed no stores* argument open since D40.
+- **An absent mix and an empty one are different answers**, and that is the
+  load-bearing line. `toSourceMix(undefined)` is the buy-only default — every
+  caller that predates the question. `{}` and an explicit all-false are somebody
+  unticking all three. Collapse them and you either force shops on a household
+  that refused them or drop the seed for every caller that omitted the argument.
+  Each field is compared against `true` rather than coerced, so `{buy:'yes'}` is
+  **not** a tick.
+- **No definite article** — *Garden*, not *The Garden*, which is a change from
+  how D58 and the design doc write them in prose. Every other seeded term is a
+  bare noun, and a chip reading *The Garden* beside one reading *Market* is one
+  term written as a phrase and the rest as labels. It also keeps
+  `householdLetter()`'s article rule off terms, where it was never meant to go.
+- **`SEED_STORES` is `SEED_SHOPS`**, and the seeded shops now carry
+  `kind: 'shop'` explicitly rather than leaning on `toSourceKind`'s `''`
+  fallback. Nothing behaves differently.
+- **`CARD_CHECKBOX_ROW` is `PAGE_CHECKBOX_ROW` with one token moved** — the ring
+  offsets against `surface` rather than `canvas`, because both creation cards
+  are `surface` while the item sheet's ground is a near-`canvas` gradient. The
+  hover is unchanged and still right: `surface-alt` is a real step from
+  `surface` in both themes (D45).
+- **The glyph beside each label is the run list's own**, so this is the
+  **fourth** place the sprout and the pot are taught before an item card draws
+  one. The label carries the weight of its own answer — 600 on `textStrong`
+  ticked, 500 on `text` not — so the block reads at a glance rather than by
+  inspecting three 22px boxes.
+- **The hint has four states, not the doc's three**: it also answers *nothing
+  ticked*, which the design's table treats as an aside and which is a real
+  answer here.
+- **This retires a settled D58 line.** *The seeded stores are all shops, so a
+  new household is a `STORE` household on day one* — that is now an answer
+  rather than a property of the seed, and a household that ticks grow reads
+  `SOURCE` before it holds a single item.
+- **A second step was drawn and lost** — `NEW HOUSEHOLD · STEP 2 OF 2`, *How do
+  you stock it?* It reads better and turns *one screen, not a wizard* into a
+  wizard, then grows a *Back* and a step count.
+
+**This reaches new households only**, as D50's types do — nothing backfills, and
+the published household keeps the three shops it has.
+
+**Verified without a browser**: typecheck clean, **445 assertions** (26 new,
+covering the absent-versus-empty pair, truthiness not being a tick, the band
+order, the article rule, and the group word flipping on the seed), the artifact
+shows ten tables, nineteen mutations, `db.migrations` empty and `/api/status` as
+the only endpoint, and **all 70 class literals** in the three touched components
+plus the new control style were diffed against a live `/zero.css` by unescaping
+the sheet's own selectors — printed, never hand-written. The **real handler** was
+driven over `POST /__spacefast/zero/run` on a throwaway `sf dev --port 4199`
+across all eight branches: buy-only, all three, grow-only, make-only, none,
+**the argument omitted** (three shops — backward compatible), a bogus non-object
+payload (three shops), and `{buy:'yes',grow:1,make:{}}` (none). Locations (3) and
+types (14) are untouched in every branch, and the group word reads `Source` for
+the grow household and `Store` for the other two.
+
+**Nobody has clicked it.** The three rows and the moving hint are the only new
+surface, and `?signedout` does not reach first run — a fresh `sf dev` with no
+household does, and the dialog is one press from the drawer's switcher.
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -2123,7 +2216,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D57, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour** |
+| `.docs/decisions.md` | D1–D61, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -2134,8 +2227,8 @@ most of it is already decided.
 | `.claude/docs/design/larderlogaddedititem.html` | **The 9 boards for that redesign** — the sheet in both themes, the size row and its unit menu, the two steppers, where the size shows, 390, and keeping an item off the list |
 | `.claude/docs/design/install-as-an-app.md` | **Install as an app** (28 Aug) — the one Settings row that offers it, the banner that was cut and why, and two contrast findings that leave the row. Its own doc for the reason `add-edit-item.md` is |
 | `.claude/docs/design/larderloginstallmockup.html` | **The 5 boards for it** — desktop 1440, the row's states with the panel-edge finding drawn both ways, Preferences in three states × both themes, 390, and the appears-where matrix |
-| `.claude/docs/design/garden-and-kitchen.md` | **Garden and Kitchen** (rev. 29 Aug) — a source carries a kind, the shopping list becomes a run list of three bands with a segment over it, and an item gains a season. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list* wholesale**. **Read its *what is in v1 and what is a mockup* callout first**: everything about recipes, ingredients, quantities and units is a marked mockup (D59). **Its lede is stale** — it still promises an item gains "ingredients with quantities", which the callout eight lines below and the *Ingredients — on the recipe, never on the item* section both contradict. **Built so far: D58** — the kind, the rename, the menu, the card glyph |
-| `.claude/docs/design/larderloggardenkitchenboards.html` | **The 8 boards for it** — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
+| `.claude/docs/design/garden-and-kitchen.md` | **Garden and Kitchen** (rev. 29 Aug) — a source carries a kind, the shopping list becomes a run list of three bands with a segment over it, and an item gains a season. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list* wholesale**. **Read its *what is in v1 and what is a mockup* callout first**: everything about recipes, ingredients, quantities and units is a marked mockup (D59). **Its lede is stale** — it still promises an item gains "ingredients with quantities", which the callout eight lines below and the *Ingredients — on the recipe, never on the item* section both contradict. **Built: all of v1** — D58 (the kind, the rename, the menu, the card glyph), the run list, the item side, and **D61**, its *First run asks where your food comes from* section |
+| `.claude/docs/design/larderloggardenkitchenboards.html` | **The 9 boards for it** — **board 1 is first run** (the card, the hint in four states, the rejected second step, and the three seeded drawers with `STORE` becoming `SOURCE`); its card still draws the pre-D48 prefilled name and hint, which the build does not have. Then — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
 | `.claude/docs/design/larderlogbetabadgeboards.html` | **The 5 boards for it** — anatomy and the four surface pairings, the drawer header, 390 with six filters applied, what lost, and the marketing nav and footer in both themes. **Its marketing nav still draws the pre-D47 *Sign in with Gravatar* button** |
 | `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
@@ -2224,7 +2317,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 419 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 445 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -2233,7 +2326,8 @@ Cheapest first:
   groups*, D46's display-name fallback chain, D52's size pair together with
   D53's split between `needsBuying` and `statusKeyFor`, and D55's `https:`-only
   avatar rule, D58's source-kind fallbacks, the group-word rule and the item card's
-  one-glyph resolver, and
+  one-glyph resolver, D61's source mix — including the absent-versus-empty pair
+  and what each answer seeds — and
   `?demo`'s fixture distribution and term resolution. **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
@@ -2249,6 +2343,21 @@ Cheapest first:
   ([D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)).
   Note that `--dry-run` is not read-only: it rewrites the build under
   `.spacefast/zero/`.
+
+  **The schema is at `server.schema`, keyed by table name — not `db.tables`,
+  not `server.schema.tables`.** `db` holds only `{ backend, migrations }`. Both
+  wrong reads return `undefined` rather than erroring, and the first prints an
+  empty table list, which looks exactly like the catastrophe the check exists to
+  catch. This has now cost two sessions:
+
+  ```js
+  const a = JSON.parse(readFileSync('.spacefast/zero/artifact.json', 'utf8'));
+  Object.keys(a.server.schema)   // table names
+  a.server.mutations             // array of { name }
+  a.server.queries               // likewise
+  a.server.endpoints             // [{ method, path }] — check nothing throwaway survived
+  a.db.migrations                // [] when nothing additive is pending
+  ```
 - **`sf dev`** compiles the capsule for real. A clean start plus `GET /` and
   `GET /api/status` proves the client and server entries both resolve.
 - **An unused `theme.json` token is pruned from `zero.css`, and that looks

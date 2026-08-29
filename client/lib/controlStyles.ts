@@ -575,6 +575,22 @@ export const PAGE_KIND =
 export const PAGE_CHECKBOX_ROW =
 	'w-full text-left transition-colors rounded-xl hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
+/**
+ * The same row, on a **card** rather than on the page ground.
+ *
+ * One token apart from `PAGE_CHECKBOX_ROW` and it is the ring's offset: the
+ * item sheet's ground is a near-`canvas` gradient, while the first-run card and
+ * the new-household dialog are both `surface`. A ring offset painted in the
+ * wrong ground draws a hairline of the page *through* the card it sits on.
+ *
+ * The hover is unchanged and still correct here — D45 asks that an interaction
+ * state move *away* from the ground, and `surface-alt` is a real step down from
+ * `surface` in both themes. It is only on a panel that already *is*
+ * `surface-alt` that the rule sends a control the other way (`PAGE_KIND`).
+ */
+export const CARD_CHECKBOX_ROW =
+	'w-full text-left transition-colors rounded-xl hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
 /*
  * ---------------------------------------------------------------------------
  * Touch sizes for the term composer

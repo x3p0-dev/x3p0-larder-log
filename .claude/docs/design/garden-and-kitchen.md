@@ -4,10 +4,10 @@
 >
 > It replaces **Shopping list** wholesale, amends *Structure*, *Collapsed rail*, *Chips and tags*, *Item card*, *Sample dataset*, *The marketing page* and *Gaps*, and adds one delta that reaches back into *Destructive actions*.
 
-Canvas — **Sources and Recipes**, eight boards on two pages, both drawn light-theme only:
-https://claude.ai/code/artifact/4062beb8-260b-4d73-906f-534fe813ed12
+Canvas — **Sources, Recipes and First Run**, nine boards on two pages, both drawn light-theme only:
+https://claude.ai/code/artifact/a7f0e31f-449d-4c10-8ae3-ce41a1b0ed0d
 
-> **This replaces the earlier *Garden and Kitchen Modes* canvas**, which took a save from somewhere this session could not read back and could no longer be merged onto. That one is stale from the ingredient-quantity work onward; nothing after it is on there. The name changed with it, because eight boards in the canvas now cover source kinds, the run list, ingredients and the recipe direction — more than the two modes it started as.
+> **Two earlier canvases are stale.** *Garden and Kitchen Modes* stopped at the ingredient-quantity work; *Sources and Recipes* (`4062beb8`) stopped before the first-run board. Both took saves this environment cannot read back to merge onto — the artifact content host is outside its network allowlist — so each stall costs a new URL. Adding `*.frame.claudeusercontent.com` under environment settings → Code → Network access would end that, and a plain "overwrite it" would too.
 
 > **What is in v1 and what is a mockup.** Source kinds, the run list with its bands and segment, the group's naming rule, the season field and the item-card glyph are **specced to build**. Everything about **recipes** — the ingredient panel, quantities, units, the picker, the *See recipe* link, and both models on board 6 — is a **marked mockup**. A make item ships with a `MADE BY` panel that says recipes are coming and explains what marking it as made already buys.
 
@@ -19,7 +19,7 @@ Four things, and they are all one thing: **a source carries a kind**, the shoppi
 
 **Shop · Grow · Make.** It is a property of the term, not of the item, not a fourth term group, and not a mode.
 
-*The Garden* is a source of kind **grow**. *The Kitchen* is a source of kind **make**. Both take a term colour, both appear in the filter group, both tag an item card exactly as Costco does. **The drawer never learns what a kind is** — filtering by The Garden works identically to filtering by Publix, and the chip, the dot, the count and the quick-filter flyout are all untouched.
+*Garden* is a source of kind **grow**. *Kitchen* is a source of kind **make**. Both take a term colour, both appear in the filter group, both tag an item card exactly as Costco does. **The drawer never learns what a kind is** — filtering by Garden works identically to filtering by Publix, and the chip, the dot, the count and the quick-filter flyout are all untouched.
 
 Everything below falls out of that one property.
 
@@ -56,11 +56,56 @@ A source is already a coloured, named thing in a list that you filter and tag wi
 
 It applies in four places at once — the Filter tab header, the dashed chip that ends the list, the editing panel's micro-label, and the same group's label on the Add / Edit sheet. They move together or the app contradicts itself in the space of one screen.
 
-**Nothing else in this app renames itself, so this is the exception and it has to earn it.** It does: the alternative is calling The Garden a store, which is exactly the confusion the kind exists to remove.
+**Nothing else in this app renames itself, so this is the exception and it has to earn it.** It does: the alternative is calling Garden a store, which is exactly the confusion the kind exists to remove.
 
 **And it changes only when you change the list.** Adding a grow or make source is a deliberate act inside the editing panel, and the heading directly above your hands is what changes. That is what separates it from a control that renames itself while you watch — the failure mode the shopping-list trigger is still stuck with under *Open questions*.
 
 > **`Source` is the working word, not the settled one.** *Where from* is the plainer alternative and reads closer to this app's voice, at the cost of being two words in a slot built for one; it has not been drawn. *Origin* and *Supply* were both colder than anything else in the interface.
+
+---
+
+## First run asks where your food comes from
+
+**Three checkboxes on the household-creation card**, under the name field and above *Create household*, under the micro-label `WHERE YOUR FOOD COMES FROM`:
+
+| Row | Description | Default |
+|---|---|---|
+| We buy it | *Groceries, the warehouse, the farm stand.* | **on** |
+| We grow some of it | *A garden, a plot, a few pots on the step.* | off |
+| We make some of it | *Stock, bread, jam — things you'd otherwise buy.* | off |
+
+Each label carries its band glyph — cart, sprout, pot — at 15px in meta, which is the fourth place those two new glyphs are taught before an item card ever shows one. The rows use the **shopping list's checkbox**, 22px on radius 7, rather than a switch: this app has no toggle component and does not need one for a question that means *tick what applies*.
+
+**What each tick seeds.** Buy gives the three shops the seed table already has — Grocery denim, Warehouse mustard, Market clay. Grow adds **Garden** at fern, make adds **Kitchen** at mulberry: the two assignments this doc had already settled, and neither collides with a seeded shop.
+
+**No definite article.** *Garden*, not *The Garden*; *Kitchen*, not *The Kitchen*. Every other seeded term is a bare noun — Pantry, Refrigerator, Freezer, Grocery, Warehouse, Market — and a chip that reads *The Garden* beside one that reads *Market* is one term written as a phrase and the rest written as labels. It also keeps the household-tile rule from having to fire on a term: *the first letter of the first word that is not an article* exists because household names are phrases people write; seeded terms should not need it.
+
+**The hint line under the rows is the only thing that moves.**
+
+| Answer | Hint |
+|---|---|
+| Buy only | *Most larders are stocked at a shop, so that is all we will set up. Tick anything else and you get a source for it.* |
+| Buy + grow | *We will add **Garden** to your sources. Rename it to whatever you call yours.* |
+| All three | *We will add **Garden** and **Kitchen** to your sources. Rename them to whatever you call yours.* |
+
+**Nothing is required and nothing is disabled.** Untick all three and *Create household* stays live; you get the locations and types and no sources at all — which is the cleanest version of the "seed no stores" argument *Gaps* has been making about Grocery / Warehouse / Market since before this doc existed. A disabled button could not explain itself here any more than the enabled trash could.
+
+### Why this is allowed on a card whose rule is "one field, one button, nothing else"
+
+That rule was written against a **preview**: a recessed panel showing fifteen seeded chips, explaining what a household is before you had made one. It went because the drawer explains itself a second later, and better.
+
+**This is a question, not an explanation.** It asks the one thing the app cannot infer and would otherwise never ask — and the answer changes what gets written, not just what gets shown.
+
+**The test it has to pass is that Enter still finishes the screen.** It does: buy on, grow and make off is exactly the household you would have got before the question existed. Someone who ignores the three rows loses nothing. Someone who reads them skips a trip into a drawer they do not yet know is there, to find a kind menu they do not yet know exists.
+
+> **A second step lost, and is drawn so the cost is visible.** `NEW HOUSEHOLD · STEP 2 OF 2` — *How do you stock it?* — reads better than three rows on a card, because a question with its own screen gets a title, a subtitle and all the room it wants. It costs *one screen, not a wizard*, and it grows a *Back*, a step count, and an argument for a third step. Not built.
+
+### What this changes elsewhere
+
+- **Whether a household ever meets the word *Source* is now an answer, not a property of the seed.** The delta below used to say the seeded stores are all shops, so every new household is a `STORE` household on day one. Tick *We grow some of it* and the drawer heading reads `SOURCE` before there is a single item in the larder.
+- **One answer the naming rule does not cover: grow only, no shop.** `Store` is the heading when shop is the only kind, `Source` when there is more than one — a household with exactly one kind that is *grow* falls through both. Rare, and a one-line rule away — *`Store` only when the single kind is shop, `Source` otherwise* — but this screen is what makes it reachable on day one.
+- **Every chip in the seeded drawer reads `0`.** True before this too; it is just more visible when the drawer is the payoff for a question asked ten seconds ago. Hiding counts at zero items is easy and is not decided here.
+- **The empty state's copy names the wrong groups for a grow or make household.** It says *your locations, stores and types are already set up in Filters*. Same rename, same rule, not redrawn.
 
 ---
 
@@ -279,7 +324,7 @@ That is the whole reason this is cheap. *Two cups of stock* would need a shared 
 1. Pressing it replaces the dashed row with a **40px search field** at radius 11 on `meta`, focused, carrying the composer's crimson halo `0 0 0 3px rgba(190,51,70,.14)` and a ghost `×` to abandon.
 2. A **menu drops below it** in the sort menu's construction — surface on `line`, radius 14, 6px padding, shadow `0 14px 30px rgba(36,30,23,.20)`. Each row reads **name · size · source** on the left and `have N` in meta on the right.
 	- **Rows are 40px here rather than the sort menu's 36.** Three pieces of text in one row need the extra four; nothing else about the construction changes.
-	- **The source appears only in the menu.** It is the tiebreaker when two items share a name and a similar size — *Tomatoes · 1 qt · The Garden* against *Tomatoes · 15 oz · Publix* — and it is dropped from the committed row, where you have already chosen.
+	- **The source appears only in the menu.** It is the tiebreaker when two items share a name and a similar size — *Tomatoes · 1 qt · Garden* against *Tomatoes · 15 oz · Publix* — and it is dropped from the committed row, where you have already chosen.
 3. **Picking lands the row at quantity 1 and puts the search back**, empty and still focused. Four ingredients is four keystrokes-and-a-tap, not four round trips to a dashed row.
 4. **Escape closes it** and the panel keeps everything already added.
 
@@ -320,7 +365,7 @@ Beneath the panel, a sunk strip repeats the make row's line, and with quantities
 
 **It does not go on the run list's row.** The row already sits inside a source card whose header names the source and whose band names the kind; a third statement of the same fact in one screen is noise.
 
-**The tags still do the work they always did.** A fern *The Garden* and a mulberry *The Kitchen* say *which* source, with no new component. What the glyph adds is *what kind* — and that matters because a household can call a grow source anything and colour it anything, so nothing about the tag says at a glance that it is something you pick.
+**The tags still do the work they always did.** A fern *Garden* and a mulberry *Kitchen* say *which* source, with no new component. What the glyph adds is *what kind* — and that matters because a household can call a grow source anything and colour it anything, so nothing about the tag says at a glance that it is something you pick.
 
 ---
 
@@ -330,8 +375,8 @@ Beneath the panel, a sunk strip repeats the make row's line, and with quantities
 
 | Part | Light |
 |---|---|
-| The Garden | **fern** — `#3F7A4C` / tint `#E8F0EA` / border `#D0DFD3` / text `#3C7549` |
-| The Kitchen | **mulberry** — `#8E4468` / tint `#F0E8EC` / border `#E0CFD7` / text `#8E4468` |
+| Garden | **fern** — `#3F7A4C` / tint `#E8F0EA` / border `#D0DFD3` / text `#3C7549` |
+| Kitchen | **mulberry** — `#8E4468` / tint `#F0E8EC` / border `#E0CFD7` / text `#8E4468` |
 | Band label + glyph | meta `#6F6049` |
 | Band rule | `line` `#E2D5C0` |
 | Segment track / border | `#F2EADC` on `#E2D5C0` |
@@ -372,7 +417,8 @@ Dark counterparts are a hex-for-hex map away and have not been rendered — the 
 2. **`Store` is not always the group's name** — amends *Structure*, *Chips and tags*, *Edit item + inline term creation*, and the seeded-terms table in *Flows outside the shell*.
 3. **The collapsed rail's storefront glyph means "shop"** and is wrong in a Source household. Not redrawn. A neutral glyph is needed, or the rail keeps a shop icon for a group that is no longer only shops.
 4. **The marketing page's band says *Location, Store, Type*** and its Store column describes shopping. Both are wrong for a household that grows anything. This is user-facing copy, which the 27 Aug merge note already identifies as the worst place for a contradiction.
-5. **The seeded stores are all shops** — Grocery, Warehouse, Market — so a new household is a `STORE` household on day one and stays one until it isn't. That is correct, and it means most people never meet the word *Source*.
+5. ~~**The seeded stores are all shops**, so a new household is a `STORE` household on day one and stays one until it isn't.~~ **Retired by first run.** The seed now depends on the buy / grow / make answer, so a household can be a `SOURCE` household before it has an item in it. What survives is the shape of the claim: a household that only ticks *We buy it* never meets the word.
+6. **First run gains a question** — amends *First run — name it, then land in it* and the seeded-terms table in *Flows outside the shell*, and needs a line in *The empty household* about which groups the empty state names.
 
 ---
 
@@ -382,29 +428,29 @@ Eleven items added to the twenty, so the bands have something real to draw. Tota
 
 | # | Item | On hand | Low at | Location | Source | Type | Size |
 |---|---|---|---|---|---|---|---|
-| 21 | Tomatoes | 1 | 4 | Pantry | The Garden | Produce | 1 qt |
-| 22 | Basil | 0 | 1 | Pantry | The Garden | Spice | — |
-| 23 | Green Beans | 2 | 6 | Chest Freezer | The Garden | Produce | 1 lb |
-| 24 | Butternut Squash | 0 | 2 | Pantry | The Garden | Produce | — |
-| 25 | Chicken Stock | 1 | 4 | Chest Freezer | The Kitchen | Condiment | 1 qt |
-| 26 | Yogurt | 0 | 2 | Refrigerator | The Kitchen | Dairy | 1 qt |
+| 21 | Tomatoes | 1 | 4 | Pantry | Garden | Produce | 1 qt |
+| 22 | Basil | 0 | 1 | Pantry | Garden | Spice | — |
+| 23 | Green Beans | 2 | 6 | Chest Freezer | Garden | Produce | 1 lb |
+| 24 | Butternut Squash | 0 | 2 | Pantry | Garden | Produce | — |
+| 25 | Chicken Stock | 1 | 4 | Chest Freezer | Kitchen | Condiment | 1 qt |
+| 26 | Yogurt | 0 | 2 | Refrigerator | Kitchen | Dairy | 1 qt |
 | 27 | Chicken Carcasses | 6 | 2 | Chest Freezer | — | Protein | — |
 | 28 | Carrots | 0 | 2 | Refrigerator | Publix | Produce | — |
 | 29 | Onion | 5 | 2 | Pantry | Publix | Produce | — |
 | 30 | Milk | 2 | 1 | Refrigerator | Publix | Dairy | 1 gal |
 | 31 | Tomatoes | 4 | 2 | Pantry | Publix | Produce | 15 oz |
 
-**Frozen Peaches (7) moves from no source to The Garden.** It is in stock, so it never appears on the run list — it exists to draw the assignment.
+**Frozen Peaches (7) moves from no source to Garden.** It is in stock, so it never appears on the run list — it exists to draw the assignment.
 
-**Marinara (8) moves from no source to The Kitchen** and is made from **2 Tomatoes · 1 qt · 1 Onion**. It is in stock at 6, so the Make band still holds two — it exists to draw an ingredient list whose items carry sizes.
+**Marinara (8) moves from no source to Kitchen** and is made from **2 Tomatoes · 1 qt · 1 Onion**. It is in stock at 6, so the Make band still holds two — it exists to draw an ingredient list whose items carry sizes.
 
-**Two items are called Tomatoes**, and that is the point of item 31: the quart jars from The Garden (have 1) and the 15 oz cans from Publix (have 4). They are the picker's hard case and the only reason the size is on the row.
+**Two items are called Tomatoes**, and that is the point of item 31: the quart jars from Garden (have 1) and the 15 oz cans from Publix (have 4). They are the picker's hard case and the only reason the size is on the row.
 
 **Butternut Squash is out and out of season** (ready in September), which is what puts a row in `NOT YET`. It is counted in the nine out and *not* counted in the seventeen — the one place those two numbers deliberately disagree.
 
 **Chicken Stock is made from 2 Chicken Carcasses · 3 Carrots · 1 Onion.** Carcasses (have 6) and onion (have 5) cover it three and five times over; carrots is out, so the line reads *Short 3 carrots — enough of everything else for 3 batches*. **Yogurt is made from 1 Milk** and milk is at 2, so it reads *Enough for 2 batches*.
 
-Source assignments: The Garden **fern**, The Kitchen **mulberry**. Chip counts — Aldi 3 · Calfee Cattle 3 · Costco 6 · Publix 8 · The Garden 5 · The Kitchen 3 · no source 3 = 31.
+Source assignments: Garden **fern**, Kitchen **mulberry**. Chip counts — Aldi 3 · Calfee Cattle 3 · Costco 6 · Publix 8 · Garden 5 · Kitchen 3 · no source 3 = 31.
 
 ---
 
@@ -587,16 +633,17 @@ The four questions worth answering before anything is drawn: whether the garden 
 
 Own canvas, two pages, desktop 1440, light theme only.
 
-**Settled** — five boards:
+**Settled** — six boards:
 
-1. **The run list — 1440.** Three bands, the segment on `All`, two rows checked, the trip bar.
-2. **Entry and the three cards.** Row 2 in grid mode with both trigger spellings, then Buy / Harvest / Make side by side with their anatomy.
-3. **Ingredients — marked mockup.** The recipe sheet: three kinds of row in one panel, the unit menu open on a measured ingredient, the two-door picker, and the conversion rules.
-4. **Setting the kind.** The source section at rest, in editing without counts, and the kind menu open — plus the `STORE` / `SOURCE` naming rule drawn as two households.
-5. **Item side.** The season panel on a grow item, the shipping *Recipes are coming* panel on a make item with the marked mockup of what it becomes beneath it, and three item cards — grown, made, and a bought one with no glyph at all.
+1. **First run — buy, grow, make.** The 440 card at rest with the three rows and the default answer; the hint in all four states; the rejected second step; and the three seeded drawers side by side, `STORE` becoming `SOURCE` across them.
+2. **The run list — 1440.** Three bands, the segment on `All`, two rows checked, the trip bar.
+3. **Entry and the three cards.** Row 2 in grid mode with both trigger spellings, then Buy / Harvest / Make side by side with their anatomy.
+4. **Ingredients — marked mockup.** The recipe sheet: three kinds of row in one panel, the unit menu open on a measured ingredient, the two-door picker, and the conversion rules.
+5. **Setting the kind.** The source section at rest, in editing without counts, and the kind menu open — plus the `STORE` / `SOURCE` naming rule drawn as two households.
+6. **Item side.** The season panel on a grow item, the shipping *Recipes are coming* panel on a make item with the marked mockup of what it becomes beneath it, and three item cards — grown, made, and a bought one with no glyph at all.
 
 **Where this goes, and what lost** — three boards:
 
-6. **Where this goes — marked mockup.** Model B settled as a direction, Model A kept as the record of what lost, a diagram of which way the references point, and what is missing from both.
-7. **Option B — separate modes.** Lost outright: row 2's composition would depend on the household.
-8. **Option C — one trigger, a segment inside.** Adopted in part. Its segment is on the settled run list; what it lacked was the `All` tab.
+7. **Where this goes — marked mockup.** Model B settled as a direction, Model A kept as the record of what lost, a diagram of which way the references point, and what is missing from both.
+8. **Option B — separate modes.** Lost outright: row 2's composition would depend on the household.
+9. **Option C — one trigger, a segment inside.** Adopted in part. Its segment is on the settled run list; what it lacked was the `All` tab.

@@ -297,14 +297,19 @@ Nothing product-shaped is blocking Phase 3; what remains open above is platform
 behavior and the source-exposure decision.
 
 Two more were opened and left open on purpose by the signed-out flows
-(D37, D40), both named in the design spec's own *Open questions*:
+(D37, D40), both named in the design spec's own *Open questions*. **One of them
+is now answered**:
 
 - **What does `/` do for someone already signed in?** Straight through to the
   app is what is built. Showing them the marketing page is the answer that lets
   them find the pitch again to send to somebody.
-- **Should a new household seed any stores at all?** Grocery / Warehouse /
-  Market may be three chips a new user deletes. The trade against seeding none
-  is a Store filter that opens empty on day one.
+- ~~**Should a new household seed any stores at all?**~~ **Settled by
+  [D61](decisions.md#d61-first-run-asks-where-your-food-comes-from-and-the-answer-is-what-seeds-the-sources)
+  on 2026-08-29 — the household answers it.** First run asks *where your food
+  comes from*, and unticking *We buy it* seeds no shops at all, which is the
+  version of "seed none" this note was reaching for. The trade it named —
+  a Store filter that opens empty on day one — is now a consequence somebody
+  chose rather than one imposed on everybody.
 
 One more was opened by the household colour (D42) and deliberately left for
 later:

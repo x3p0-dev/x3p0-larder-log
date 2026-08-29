@@ -22,7 +22,7 @@ import type {
 	ProfileResult,
 	TermKind,
 } from '../shared/types';
-import { SEED_LOCATIONS, SEED_TYPES, SEED_STORES } from '../shared/seed';
+import { SEED_LOCATIONS, SEED_TYPES, seedSourcesFor, toSourceMix } from '../shared/seed';
 import { householdInk, toHouseholdInk } from '../shared/household';
 import { normalizeDisplayName, pickDisplayName } from '../shared/profile';
 import { normalizeAvatarUrl } from '../shared/avatar';
@@ -721,7 +721,7 @@ export default capsule({
 		 * Kept out of `requireMembership()` so that helper stays resolve-or-throw
 		 * and remains usable from a read-only query context.
 		 */
-		createHousehold: mutation(async (ctx, name: string, ink?: string) => {
+		createHousehold: mutation(async (ctx, name: string, ink?: string, sources?: unknown) => {
 			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
 
 			const now = Date.now();
@@ -780,11 +780,22 @@ export default capsule({
 				});
 			}
 
-			for (const seed of SEED_STORES) {
+			// The one taxonomy the caller has a say in (D61). `toSourceMix`
+			// separates *never asked* from *asked and answered none*: an absent
+			// argument takes the buy-only default, an explicit all-false seeds
+			// nothing. A household with no sources is not a dead end the way one
+			// with no locations would be — `itemStores` is a join table, so an
+			// item can name none.
+			//
+			// Normalized here rather than trusted: the client is not an
+			// authority on anything, and `kind` reaches a column that decides
+			// which band a row lands in.
+			for (const seed of seedSourcesFor(toSourceMix(sources))) {
 				await ctx.db.stores.insert({
 					householdId: household.id,
 					name: seed.name,
 					ink: normalizeInk(seed.ink),
+					kind: toSourceKind(seed.kind),
 					...stamps,
 				});
 			}

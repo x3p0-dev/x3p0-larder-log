@@ -4,7 +4,10 @@ import type { Theme } from '../lib/theme';
 import { proposeColor } from '../lib/theme';
 import { HouseholdIdentity } from './HouseholdIdentity';
 import { Eyebrow, OutsideCard } from './OutsideShell';
+import { SourceMixRows } from './SourceMixRows';
 import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
+import type { SourceMix } from '../../shared/seed';
+import { DEFAULT_SOURCE_MIX } from '../../shared/seed';
 
 /**
  * A signed-in account with no household gets one screen, not a wizard.
@@ -17,13 +20,20 @@ import { PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
  * showed fifteen chips in a recessed panel, explaining what a household is
  * before you had made one. The screen asks for a name; the terms explain
  * themselves in the drawer a second later, where they are also editable.
+ *
+ * **One field, one button — and one question** (D61). `SourceMixRows` is the
+ * exception and the distinction it turns on is preview versus question: the
+ * panel that went was *explaining* something the drawer would show anyway,
+ * while the three ticks *ask* the one thing the app cannot infer. Its defaults
+ * are the household this screen made before it existed, so Enter still
+ * finishes here.
  */
 export function FirstRun({ displayName, email, picture, onCreate, onSignOut, theme }: {
 	displayName: string;
 	email: string;
 	/** The Gravatar avatar, when the identity carries one. */
 	picture?: string;
-	onCreate: (name: string, ink: string) => Promise<unknown>;
+	onCreate: (name: string, ink: string, sources: SourceMix) => Promise<unknown>;
 	onSignOut: () => void;
 	theme: Theme;
 }) {
@@ -42,6 +52,15 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 	 * households at all — so this is always the palette's first.
 	 */
 	const [ink, setInk] = useState(() => proposeColor([]));
+	/*
+	 * Buy on, grow and make off — and this is the one default on either name
+	 * screen, which is not the contradiction of D48 it looks like. D48 forbids
+	 * *prefilling a name*, because a name nobody typed is not an answer and
+	 * Enter would submit it as though it were. A tick is not a name: it is a
+	 * closed question whose commonest answer is knowably yes, it is legible
+	 * without reading a field, and the hint under it says what it will do.
+	 */
+	const [sources, setSources] = useState<SourceMix>(DEFAULT_SOURCE_MIX);
 	const [creating, setCreating] = useState(false);
 	const field = useRef<HTMLDivElement | null>(null);
 
@@ -59,7 +78,7 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 		if (blocked) return;
 
 		setCreating(true);
-		await onCreate(name.trim(), ink);
+		await onCreate(name.trim(), ink, sources);
 		setCreating(false);
 	}
 
@@ -75,8 +94,8 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 			</h1>
 
 			<p class="text-[15px] leading-[1.55] mt-2.5" style={{ color: theme.text }}>
-				A household holds your items and the locations, stores, and types you sort
-				them by. You can rename it later, and invite people once it exists.
+				A household holds your items and the locations, sources, and types you
+				sort them by. You can rename it later, and invite people once it exists.
 			</p>
 
 			<div class="mt-6" ref={field}>
@@ -104,6 +123,8 @@ export function FirstRun({ displayName, email, picture, onCreate, onSignOut, the
 			<p class="text-[12.5px] leading-[1.5] mt-[9px]" style={{ color: theme.textMuted }}>
 				The color is how you will tell it apart later.
 			</p>
+
+			<SourceMixRows value={sources} onChange={setSources} theme={theme} />
 
 			<button
 				type="button"

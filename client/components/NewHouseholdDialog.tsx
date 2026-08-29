@@ -3,8 +3,11 @@ import { useId, useState } from 'preact/hooks';
 import { DialogButtons, ModalShell } from './ModalShell';
 import { HouseholdIdentity } from './HouseholdIdentity';
 import { HouseholdTile } from './HouseholdTile';
+import { SourceMixRows } from './SourceMixRows';
 import type { Theme } from '../lib/theme';
 import { proposeColor } from '../lib/theme';
+import type { SourceMix } from '../../shared/seed';
+import { DEFAULT_SOURCE_MIX } from '../../shared/seed';
 
 /**
  * *New household*, from the switcher and from the rail's household flyout.
@@ -18,13 +21,21 @@ import { proposeColor } from '../lib/theme';
  * **Its header tile is the live preview**, so it needs no separate preview row
  * the way the Settings panel does: the thing being named is already at the top
  * of the card you are typing into.
+ *
+ * **It asks first run's question too** (D61), which the design doc does not
+ * draw — the board is the first-run card. It goes here because the two are one
+ * screen with two frames around it: the second household somebody makes is as
+ * likely to be the one with the garden as the first, and asking on only one of
+ * them would leave the other seeding three shops and pointing at a kind menu
+ * two levels into a drawer. The dialog grows by three rows and a line, which is
+ * what the 420px card has the room for.
  */
 export function NewHouseholdDialog({ open, taken, onCreate, onCancel, dark, theme }: {
 	open: boolean;
 	/** The colours already in use, so the default can be one that is not. */
 	taken: readonly string[];
 	/** Resolves to the new household's id, or null when the server refused. */
-	onCreate: (name: string, ink: string) => Promise<string | null>;
+	onCreate: (name: string, ink: string, sources: SourceMix) => Promise<string | null>;
 	onCancel: () => void;
 	dark: boolean;
 	theme: Theme;
@@ -37,6 +48,7 @@ export function NewHouseholdDialog({ open, taken, onCreate, onCancel, dark, them
 	 * default — though nothing stops you choosing one that has.
 	 */
 	const [ink, setInk] = useState(() => proposeColor(taken));
+	const [sources, setSources] = useState<SourceMix>(DEFAULT_SOURCE_MIX);
 	const [busy, setBusy] = useState(false);
 
 	const titleId = useId();
@@ -48,7 +60,7 @@ export function NewHouseholdDialog({ open, taken, onCreate, onCancel, dark, them
 		if (! armed) return;
 
 		setBusy(true);
-		const id = await onCreate(name.trim(), ink);
+		const id = await onCreate(name.trim(), ink, sources);
 		setBusy(false);
 
 		// A refusal is already in the error banner. Keep the card and the typing.
@@ -61,6 +73,7 @@ export function NewHouseholdDialog({ open, taken, onCreate, onCancel, dark, them
 	function focusFirst() {
 		setName('');
 		setInk(proposeColor(taken));
+		setSources(DEFAULT_SOURCE_MIX);
 		document.getElementById(`${titleId}-name`)?.focus();
 	}
 
@@ -101,6 +114,8 @@ export function NewHouseholdDialog({ open, taken, onCreate, onCancel, dark, them
 				fieldId={`${titleId}-name`}
 				theme={theme}
 			/>
+
+			<SourceMixRows value={sources} onChange={setSources} theme={theme} />
 
 			<DialogButtons
 				onCancel={onCancel}

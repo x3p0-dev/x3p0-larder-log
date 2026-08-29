@@ -104,245 +104,273 @@
 #b1 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b1 a { color: #BE3346; }
 #b1 a:hover { color: #9A2E3B; }
-#b1 .ll { width: 1440px; height: 1510px; display: flex; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); }
-#b1 .rail { width: 68px; flex-shrink: 0; background: linear-gradient(#2B2419, #1F1A13); display: flex; flex-direction: column; align-items: center; padding: 18px 0; gap: 10px; }
-#b1 .rbtn { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #9E8C74; }
-#b1 .rbtn.raised { background: #332B22; }
-#b1 .rdiv { width: 26px; height: 1px; background: #3B3126; margin: 4px 0; }
-#b1 .htile { width: 40px; height: 40px; border-radius: 12px; background: #A85E33; color: #FDFAF4; font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 17px; display: flex; align-items: center; justify-content: center; }
-#b1 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#b1 .topbar { padding: 24px 32px 18px; display: flex; flex-direction: column; gap: 14px; }
-#b1 .r1 { display: flex; gap: 12px; }
-#b1 .search { flex: 1; height: 52px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #6F6049; font-size: 16px; }
-#b1 .primary { height: 52px; border-radius: 15px; background: #241E17; color: #F2E9DA; font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 9px; padding: 0 20px; }
-#b1 .r2 { display: flex; align-items: center; gap: 12px; }
-#b1 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
-#b1 .r2meta { margin-left: auto; color: #6F6049; font-size: 13px; }
-#b1 .seg { height: 40px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 13px; padding: 3px; display: flex; gap: 3px; box-sizing: border-box; }
-#b1 .sgi { height: 32px; border-radius: 10px; display: flex; align-items: center; gap: 7px; padding: 0 13px; font-size: 13.5px; font-weight: 500; color: #4C4237; white-space: nowrap; }
-#b1 .sgi.on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
-#b1 .sgc { font-size: 12.5px; color: #6F6049; }
-#b1 .sgi.on .sgc { color: #241E17; }
-#b1 .body { flex: 1; padding: 6px 32px 40px; display: flex; flex-direction: column; gap: 34px; }
-#b1 .bandhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #6F6049; }
-#b1 .bandlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
-#b1 .bandrule { flex: 1; height: 1px; background: #E2D5C0; }
-#b1 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
-#b1 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
-#b1 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
-#b1 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
-#b1 .ccount { margin-left: auto; letter-spacing: 0.04em; }
-#b1 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
-#b1 .row:first-of-type { border-top: none; }
-#b1 .mkrow:first-of-type { border-top: none; }
-#b1 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-#b1 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b1 .bd { width: 1440px; height: 1424px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
+#b1 .cols { display: flex; justify-content: space-between; align-items: flex-start; }
+#b1 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
+#b1 /* the 440 card outside the shell */
+    .c440 { width: 440px; box-sizing: border-box; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 26px 26px 22px; box-shadow: 0 14px 34px rgba(36,30,23,.10); }
+#b1 .eyebrow { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
+#b1 .h1 { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 26px; color: #241E17; margin-top: 9px; }
+#b1 .lede { font-size: 15px; line-height: 1.6; color: #4C4237; margin-top: 8px; }
+#b1 .slab { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-top: 20px; margin-bottom: 9px; }
+#b1 .idrow { display: flex; align-items: center; gap: 10px; }
+#b1 .sw26 { width: 26px; height: 26px; border-radius: 999px; flex-shrink: 0; }
+#b1 .field { flex: 1; min-width: 0; height: 44px; box-sizing: border-box; border-radius: 11px; background: #FDFAF4; border: 1px solid #BE3346; box-shadow: 0 0 0 3px rgba(190,51,70,.15); display: flex; align-items: center; padding: 0 12px; font-size: 15px; color: #241E17; }
+#b1 .sel { background: rgba(190,51,70,.18); border-radius: 2px; padding: 1px 0; }
+#b1 .hint { font-size: 12.5px; line-height: 1.55; color: #6F6049; margin-top: 8px; }
+#b1 .hint b { color: #241E17; font-weight: 600; }
+#b1 .rule { height: 1px; background: #EEE4D2; margin: 20px 0 0; }
+#b1 .qrow { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; }
+#b1 .cb { width: 22px; height: 22px; box-sizing: border-box; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; flex-shrink: 0; margin-top: 1px; }
 #b1 .cb.on { background: #241E17; border-color: #241E17; display: flex; align-items: center; justify-content: center; }
-#b1 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
-#b1 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; white-space: nowrap; }
-#b1 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
-#b1 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; white-space: nowrap; padding-left: 14px; }
-#b1 .struck { color: #6F6049; text-decoration: line-through; }
-#b1 .tripbar { height: 52px; border-radius: 15px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; padding: 0 16px; margin-top: -10px; }
-#b1 .ghost { height: 34px; border-radius: 11px; display: flex; align-items: center; padding: 0 12px; color: #4C4237; font-weight: 600; font-size: 14px; }
-#b1 .subhead { display: flex; align-items: center; gap: 8px; padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
-#b1 .mkrow { height: 76px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
-#b1 .mkline { font-size: 12.5px; margin-top: 3px; }
+#b1 .qlab { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #241E17; }
+#b1 .qlab.off { color: #4C4237; font-weight: 500; }
+#b1 .qdesc { font-size: 13px; line-height: 1.5; color: #6F6049; margin-top: 3px; }
+#b1 .btn { height: 44px; border-radius: 13px; background: #241E17; color: #F2E9DA; font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; margin-top: 18px; }
+#b1 .btn.ghost { background: transparent; color: #4C4237; border: 1px solid #E2D5C0; }
+#b1 .who { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #EEE4D2; }
+#b1 .av { width: 30px; height: 30px; border-radius: 999px; background: #4A3E2E; color: #F2E9DA; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: .02em; }
+#b1 .wname { font-size: 14px; color: #241E17; font-weight: 500; }
+#b1 .wmail { font-size: 12.5px; color: #6F6049; margin-top: 1px; }
+#b1 .ghostlink { margin-left: auto; font-size: 13.5px; color: #4C4237; }
+#b1 /* sunk explanatory panel */
+    .sunk { background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 16px; padding: 16px 18px; box-sizing: border-box; }
+#b1 .htitle { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #6F6049; }
+#b1 .hvar { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid #E4D8C2; }
+#b1 .hvar:first-of-type { border-top: 0; padding-top: 2px; }
+#b1 .ticks { display: flex; gap: 5px; flex-shrink: 0; padding-top: 2px; }
+#b1 .tk { width: 16px; height: 16px; border-radius: 5px; border: 1.6px solid #C3B49B; background: #FDFAF4; display: flex; align-items: center; justify-content: center; color: #C3B49B; }
+#b1 .tk.on { background: #241E17; border-color: #241E17; color: #F2E9DA; }
+#b1 .hvtext { font-size: 13px; line-height: 1.55; color: #4C4237; }
+#b1 .hvtext b { color: #241E17; font-weight: 600; }
+#b1 /* drawers */
+    .drawer { width: 320px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 18px; padding: 16px 15px 18px; }
+#b1 .dhead { display: flex; align-items: center; margin-bottom: 13px; color: #9E8C74; }
+#b1 .dlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b1 .dicons { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+#b1 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+#b1 .chip { height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+#b1 .chip .cn { color: #6F6049; font-size: 12.5px; }
+#b1 .chip.new { box-shadow: 0 0 0 2.5px rgba(242,233,218,.22); }
+#b1 .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+#b1 .note { font-size: 13px; line-height: 1.62; color: #4C4237; }
+#b1 .note b { color: #241E17; font-weight: 600; }
+#b1 .note p { margin: 0 0 11px; }
+#b1 .note p:last-child { margin-bottom: 0; }
+#b1 .lostbar { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #6F6049; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 11px; padding: 9px 12px; margin-bottom: 12px; }
+#b1 .lostbar b { color: #241E17; font-weight: 700; }
 #b2 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b2 a { color: #BE3346; }
 #b2 a:hover { color: #9A2E3B; }
-#b2 .bd { width: 1440px; height: 668px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
-#b2 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
-#b2 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
-#b2 .pdot { width: 8px; height: 8px; border-radius: 999px; }
-#b2 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 9px; padding: 0 12px 0 14px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; }
-#b2 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 9px; }
+#b2 .ll { width: 1440px; height: 1510px; display: flex; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); }
+#b2 .rail { width: 68px; flex-shrink: 0; background: linear-gradient(#2B2419, #1F1A13); display: flex; flex-direction: column; align-items: center; padding: 18px 0; gap: 10px; }
+#b2 .rbtn { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #9E8C74; }
+#b2 .rbtn.raised { background: #332B22; }
+#b2 .rdiv { width: 26px; height: 1px; background: #3B3126; margin: 4px 0; }
+#b2 .htile { width: 40px; height: 40px; border-radius: 12px; background: #A85E33; color: #FDFAF4; font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+#b2 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#b2 .topbar { padding: 24px 32px 18px; display: flex; flex-direction: column; gap: 14px; }
+#b2 .r1 { display: flex; gap: 12px; }
+#b2 .search { flex: 1; height: 52px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #6F6049; font-size: 16px; }
+#b2 .primary { height: 52px; border-radius: 15px; background: #241E17; color: #F2E9DA; font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 9px; padding: 0 20px; }
+#b2 .r2 { display: flex; align-items: center; gap: 12px; }
+#b2 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+#b2 .r2meta { margin-left: auto; color: #6F6049; font-size: 13px; }
+#b2 .seg { height: 40px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 13px; padding: 3px; display: flex; gap: 3px; box-sizing: border-box; }
+#b2 .sgi { height: 32px; border-radius: 10px; display: flex; align-items: center; gap: 7px; padding: 0 13px; font-size: 13.5px; font-weight: 500; color: #4C4237; white-space: nowrap; }
+#b2 .sgi.on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
+#b2 .sgc { font-size: 12.5px; color: #6F6049; }
+#b2 .sgi.on .sgc { color: #241E17; }
+#b2 .body { flex: 1; padding: 6px 32px 40px; display: flex; flex-direction: column; gap: 34px; }
+#b2 .bandhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #6F6049; }
+#b2 .bandlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b2 .bandrule { flex: 1; height: 1px; background: #E2D5C0; }
+#b2 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
 #b2 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
 #b2 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
 #b2 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
 #b2 .ccount { margin-left: auto; letter-spacing: 0.04em; }
 #b2 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
 #b2 .row:first-of-type { border-top: none; }
+#b2 .mkrow:first-of-type { border-top: none; }
 #b2 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 #b2 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b2 .cb.on { background: #241E17; border-color: #241E17; display: flex; align-items: center; justify-content: center; }
 #b2 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
 #b2 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; white-space: nowrap; }
 #b2 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
 #b2 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; white-space: nowrap; padding-left: 14px; }
-#b2 .subhead { display: flex; align-items: center; padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b2 .struck { color: #6F6049; text-decoration: line-through; }
+#b2 .tripbar { height: 52px; border-radius: 15px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; padding: 0 16px; margin-top: -10px; }
+#b2 .ghost { height: 34px; border-radius: 11px; display: flex; align-items: center; padding: 0 12px; color: #4C4237; font-weight: 600; font-size: 14px; }
+#b2 .subhead { display: flex; align-items: center; gap: 8px; padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
 #b2 .mkrow { height: 76px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
-#b2 .mkrow:first-of-type { border-top: none; }
-#b2 .note { font-size: 13px; line-height: 1.55; color: #4C4237; margin-top: 14px; }
-#b2 .note b { color: #241E17; font-weight: 600; }
+#b2 .mkline { font-size: 12.5px; margin-top: 3px; }
 #b3 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b3 a { color: #BE3346; }
 #b3 a:hover { color: #9A2E3B; }
-#b3 .bd { width: 1440px; height: 1440px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 40px 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
-#b3 .mockbar { background: #F7EEDA; border: 1px solid #E9DAB9; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.5; color: #855A0F; }
-#b3 .mockbar b { color: #6B480C; font-weight: 700; }
-#b3 .cols { display: flex; gap: 34px; align-items: flex-start; }
+#b3 .bd { width: 1440px; height: 668px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
 #b3 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
-#b3 .sheet { width: 480px; box-sizing: border-box; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; }
-#b3 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
-#b3 .hint { font-size: 12.5px; color: #6F6049; margin-top: 8px; line-height: 1.55; }
-#b3 .panel { background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC; border-radius: 14px; padding: 12px; margin-top: 12px; }
-#b3 .irow { display: flex; align-items: center; gap: 8px; height: 46px; }
-#b3 .step { display: flex; align-items: center; height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; overflow: hidden; flex-shrink: 0; }
-#b3 .sbtn { width: 26px; height: 36px; display: flex; align-items: center; justify-content: center; color: #4C4237; }
-#b3 .snum { width: 30px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 14.5px; font-weight: 500; color: #241E17; font-variant-numeric: tabular-nums; border-left: 1px solid #EEE4D2; border-right: 1px solid #EEE4D2; }
-#b3 .unit { height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; color: #241E17; font-size: 13.5px; display: flex; align-items: center; gap: 5px; padding: 0 8px; flex-shrink: 0; }
-#b3 .unit.open { background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600; }
-#b3 .iname { flex: 1; min-width: 0; display: flex; align-items: baseline; }
-#b3 .inm { font-size: 14.5px; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-#b3 .isz { font-size: 12.5px; color: #6F6049; margin-left: 7px; white-space: nowrap; flex-shrink: 0; }
-#b3 .ihave { font-size: 12.5px; flex-shrink: 0; font-variant-numeric: tabular-nums; text-align: right; }
-#b3 .ix { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #9B8B75; flex-shrink: 0; }
-#b3 .urow { display: flex; align-items: center; gap: 8px; height: 46px; padding-left: 94px; }
-#b3 .utxt { flex: 1; min-width: 0; font-size: 14.5px; color: #4C4237; }
-#b3 .untr { font-size: 12.5px; color: #9B8B75; flex-shrink: 0; }
-#b3 .addrow { height: 38px; border: 1px dashed #C9B79B; border-radius: 10px; color: #6F6049; font-size: 13.5px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 4px; }
-#b3 .strip { margin-top: 14px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; color: #4C4237; }
-#b3 .sdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
-#b3 .searchfield { height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: center; gap: 9px; padding: 0 11px; }
-#b3 .caret { width: 1.5px; height: 17px; background: #241E17; }
-#b3 .menu { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 14px; padding: 6px; box-shadow: 0 14px 30px rgba(36,30,23,.20); margin-top: 6px; }
-#b3 .mrow { height: 36px; border-radius: 9px; display: flex; align-items: center; padding: 0 11px; font-size: 14px; color: #241E17; }
-#b3 .mrow.hov { background: #F2EADC; }
-#b3 .mrow.cur { font-weight: 600; }
-#b3 .mgrp { padding: 8px 11px 4px; font-weight: 700; font-size: 9.5px; letter-spacing: .15em; text-transform: uppercase; color: #9B8B75; }
-#b3 .mright { margin-left: auto; font-size: 12.5px; color: #6F6049; font-variant-numeric: tabular-nums; padding-left: 12px; }
-#b3 .mempty { padding: 9px 11px 4px; font-size: 12.5px; color: #6F6049; }
-#b3 .mdiv { height: 1px; background: #EEE4D2; margin: 5px 4px; }
-#b3 .note { font-size: 13px; line-height: 1.62; color: #4C4237; margin-top: 15px; }
+#b3 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
+#b3 .pdot { width: 8px; height: 8px; border-radius: 999px; }
+#b3 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 9px; padding: 0 12px 0 14px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; }
+#b3 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 9px; }
+#b3 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
+#b3 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+#b3 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b3 .ccount { margin-left: auto; letter-spacing: 0.04em; }
+#b3 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b3 .row:first-of-type { border-top: none; }
+#b3 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#b3 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b3 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
+#b3 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; white-space: nowrap; }
+#b3 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; white-space: nowrap; }
+#b3 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; white-space: nowrap; padding-left: 14px; }
+#b3 .subhead { display: flex; align-items: center; padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b3 .mkrow { height: 76px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b3 .mkrow:first-of-type { border-top: none; }
+#b3 .note { font-size: 13px; line-height: 1.55; color: #4C4237; margin-top: 14px; }
 #b3 .note b { color: #241E17; font-weight: 600; }
-#b3 .tbl { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 16px; padding: 14px 16px; margin-top: 16px; }
-#b3 .trow { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; line-height: 1.5; color: #6F6049; padding: 7px 0; border-top: 1px solid #EEE4D2; }
-#b3 .trow:first-of-type { border-top: none; }
-#b3 .trow b { color: #241E17; font-weight: 600; font-size: 13px; min-width: 66px; flex-shrink: 0; }
 #b4 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b4 a { color: #BE3346; }
 #b4 a:hover { color: #9A2E3B; }
-#b4 .bd { width: 1440px; height: 1000px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
-#b4 .cols { display: flex; justify-content: space-between; align-items: flex-start; }
-#b4 .colw { width: 340px; }
+#b4 .bd { width: 1440px; height: 1440px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 40px 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
+#b4 .mockbar { background: #F7EEDA; border: 1px solid #E9DAB9; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.5; color: #855A0F; }
+#b4 .mockbar b { color: #6B480C; font-weight: 700; }
+#b4 .cols { display: flex; gap: 34px; align-items: flex-start; }
 #b4 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
-#b4 .drawer { width: 340px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 18px; padding: 18px 16px 20px; }
-#b4 .dhead { display: flex; align-items: center; margin-bottom: 14px; color: #9E8C74; }
-#b4 .dlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
-#b4 .dicons { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-#b4 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-#b4 .chip { height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
-#b4 .chip .cn { color: #6F6049; font-size: 12.5px; }
-#b4 .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
-#b4 .chip.dash { background: transparent; border: 1px dashed #4A4031; color: #9E8C74; }
-#b4 .panel { background: #262019; box-shadow: inset 0 0 0 1px #3B3126; border-radius: 14px; padding: 12px; }
-#b4 .phead { display: flex; align-items: center; margin-bottom: 10px; }
-#b4 .donepill { margin-left: auto; height: 28px; border-radius: 10px; background: #F2E9DA; color: #241E17; font-weight: 600; font-size: 13px; display: flex; align-items: center; padding: 0 12px; }
-#b4 .erow { display: flex; align-items: center; gap: 9px; height: 40px; }
-#b4 .sw { width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0; box-shadow: 0 0 0 2px #262019, 0 0 0 3.5px currentColor; }
-#b4 .field { flex: 1; min-width: 0; height: 40px; border-radius: 11px; background: #191510; border: 1px solid #3B3126; color: #DCD0BA; font-size: 13.5px; display: flex; align-items: center; padding: 0 10px; overflow: hidden; white-space: nowrap; }
-#b4 .gbtn { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #9E8C74; flex-shrink: 0; }
-#b4 .gbtn.open { background: #F2E9DA; color: #241E17; }
-#b4 .addrow { height: 36px; border: 1px dashed #4A4031; border-radius: 11px; color: #9E8C74; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 8px; }
-#b4 .menu { width: 196px; background: #241E17; border: 1px solid #4A4031; border-radius: 14px; padding: 6px; box-shadow: 0 16px 40px rgba(10,8,5,.44); }
-#b4 .mrow { height: 36px; border-radius: 9px; display: flex; align-items: center; gap: 9px; padding: 0 10px; color: #DCD0BA; font-size: 14px; }
-#b4 .mrow.cur { color: #F2E9DA; font-weight: 600; }
-#b4 .note { font-size: 13px; line-height: 1.6; color: #4C4237; margin-top: 18px; }
+#b4 .sheet { width: 480px; box-sizing: border-box; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; }
+#b4 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
+#b4 .hint { font-size: 12.5px; color: #6F6049; margin-top: 8px; line-height: 1.55; }
+#b4 .panel { background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC; border-radius: 14px; padding: 12px; margin-top: 12px; }
+#b4 .irow { display: flex; align-items: center; gap: 8px; height: 46px; }
+#b4 .step { display: flex; align-items: center; height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; overflow: hidden; flex-shrink: 0; }
+#b4 .sbtn { width: 26px; height: 36px; display: flex; align-items: center; justify-content: center; color: #4C4237; }
+#b4 .snum { width: 30px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 14.5px; font-weight: 500; color: #241E17; font-variant-numeric: tabular-nums; border-left: 1px solid #EEE4D2; border-right: 1px solid #EEE4D2; }
+#b4 .unit { height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; color: #241E17; font-size: 13.5px; display: flex; align-items: center; gap: 5px; padding: 0 8px; flex-shrink: 0; }
+#b4 .unit.open { background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600; }
+#b4 .iname { flex: 1; min-width: 0; display: flex; align-items: baseline; }
+#b4 .inm { font-size: 14.5px; color: #241E17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#b4 .isz { font-size: 12.5px; color: #6F6049; margin-left: 7px; white-space: nowrap; flex-shrink: 0; }
+#b4 .ihave { font-size: 12.5px; flex-shrink: 0; font-variant-numeric: tabular-nums; text-align: right; }
+#b4 .ix { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #9B8B75; flex-shrink: 0; }
+#b4 .urow { display: flex; align-items: center; gap: 8px; height: 46px; padding-left: 94px; }
+#b4 .utxt { flex: 1; min-width: 0; font-size: 14.5px; color: #4C4237; }
+#b4 .untr { font-size: 12.5px; color: #9B8B75; flex-shrink: 0; }
+#b4 .addrow { height: 38px; border: 1px dashed #C9B79B; border-radius: 10px; color: #6F6049; font-size: 13.5px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 4px; }
+#b4 .strip { margin-top: 14px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; color: #4C4237; }
+#b4 .sdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b4 .searchfield { height: 38px; border-radius: 10px; background: #FDFAF4; border: 1px solid #6F6049; box-shadow: 0 0 0 3px rgba(190,51,70,.14); display: flex; align-items: center; gap: 9px; padding: 0 11px; }
+#b4 .caret { width: 1.5px; height: 17px; background: #241E17; }
+#b4 .menu { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 14px; padding: 6px; box-shadow: 0 14px 30px rgba(36,30,23,.20); margin-top: 6px; }
+#b4 .mrow { height: 36px; border-radius: 9px; display: flex; align-items: center; padding: 0 11px; font-size: 14px; color: #241E17; }
+#b4 .mrow.hov { background: #F2EADC; }
+#b4 .mrow.cur { font-weight: 600; }
+#b4 .mgrp { padding: 8px 11px 4px; font-weight: 700; font-size: 9.5px; letter-spacing: .15em; text-transform: uppercase; color: #9B8B75; }
+#b4 .mright { margin-left: auto; font-size: 12.5px; color: #6F6049; font-variant-numeric: tabular-nums; padding-left: 12px; }
+#b4 .mempty { padding: 9px 11px 4px; font-size: 12.5px; color: #6F6049; }
+#b4 .mdiv { height: 1px; background: #EEE4D2; margin: 5px 4px; }
+#b4 .note { font-size: 13px; line-height: 1.62; color: #4C4237; margin-top: 15px; }
 #b4 .note b { color: #241E17; font-weight: 600; }
-#b4 .namestrip { display: flex; gap: 34px; align-items: flex-start; }
-#b4 .mini { width: 300px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 16px; padding: 15px 14px; }
+#b4 .tbl { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 16px; padding: 14px 16px; margin-top: 16px; }
+#b4 .trow { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; line-height: 1.5; color: #6F6049; padding: 7px 0; border-top: 1px solid #EEE4D2; }
+#b4 .trow:first-of-type { border-top: none; }
+#b4 .trow b { color: #241E17; font-weight: 600; font-size: 13px; min-width: 66px; flex-shrink: 0; }
 #b5 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b5 a { color: #BE3346; }
 #b5 a:hover { color: #9A2E3B; }
-#b5 .bd { width: 1440px; height: 1340px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 48px 52px 48px 60px; box-sizing: border-box; display: flex; gap: 34px; align-items: flex-start; }
+#b5 .bd { width: 1440px; height: 1000px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 34px; }
+#b5 .cols { display: flex; justify-content: space-between; align-items: flex-start; }
+#b5 .colw { width: 340px; }
 #b5 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
-#b5 .sheet { width: 480px; flex-shrink: 0; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; box-sizing: border-box; }
-#b5 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
-#b5 .rule { height: 1px; background: #EEE4D2; margin: 22px 0 20px; }
-#b5 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+#b5 .drawer { width: 340px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 18px; padding: 18px 16px 20px; }
+#b5 .dhead { display: flex; align-items: center; margin-bottom: 14px; color: #9E8C74; }
+#b5 .dlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b5 .dicons { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+#b5 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 #b5 .chip { height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
-#b5 .chip.on { background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600; }
-#b5 .chip.dash { background: transparent; border: 1px dashed #C9B79B; color: #6F6049; }
+#b5 .chip .cn { color: #6F6049; font-size: 12.5px; }
 #b5 .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
-#b5 .hint { font-size: 12.5px; color: #6F6049; margin-top: 9px; line-height: 1.5; }
-#b5 .trig { height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; color: #241E17; font-size: 14.5px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
-#b5 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 18px; }
-#b5 .tag { height: 26px; border-radius: 999px; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12.5px; font-weight: 500; border: 1px solid; }
-#b5 .step { display: flex; align-items: center; border: 1px solid #E2D5C0; border-radius: 13px; overflow: hidden; height: 44px; }
-#b5 .minus { width: 44px; height: 44px; background: #F2EADC; color: #4C4237; display: flex; align-items: center; justify-content: center; }
-#b5 .plus { width: 44px; height: 44px; background: #241E17; color: #F2E9DA; display: flex; align-items: center; justify-content: center; }
-#b5 .note { font-size: 13px; line-height: 1.6; color: #4C4237; margin-top: 16px; }
+#b5 .chip.dash { background: transparent; border: 1px dashed #4A4031; color: #9E8C74; }
+#b5 .panel { background: #262019; box-shadow: inset 0 0 0 1px #3B3126; border-radius: 14px; padding: 12px; }
+#b5 .phead { display: flex; align-items: center; margin-bottom: 10px; }
+#b5 .donepill { margin-left: auto; height: 28px; border-radius: 10px; background: #F2E9DA; color: #241E17; font-weight: 600; font-size: 13px; display: flex; align-items: center; padding: 0 12px; }
+#b5 .erow { display: flex; align-items: center; gap: 9px; height: 40px; }
+#b5 .sw { width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0; box-shadow: 0 0 0 2px #262019, 0 0 0 3.5px currentColor; }
+#b5 .field { flex: 1; min-width: 0; height: 40px; border-radius: 11px; background: #191510; border: 1px solid #3B3126; color: #DCD0BA; font-size: 13.5px; display: flex; align-items: center; padding: 0 10px; overflow: hidden; white-space: nowrap; }
+#b5 .gbtn { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #9E8C74; flex-shrink: 0; }
+#b5 .gbtn.open { background: #F2E9DA; color: #241E17; }
+#b5 .addrow { height: 36px; border: 1px dashed #4A4031; border-radius: 11px; color: #9E8C74; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 8px; }
+#b5 .menu { width: 196px; background: #241E17; border: 1px solid #4A4031; border-radius: 14px; padding: 6px; box-shadow: 0 16px 40px rgba(10,8,5,.44); }
+#b5 .mrow { height: 36px; border-radius: 9px; display: flex; align-items: center; gap: 9px; padding: 0 10px; color: #DCD0BA; font-size: 14px; }
+#b5 .mrow.cur { color: #F2E9DA; font-weight: 600; }
+#b5 .note { font-size: 13px; line-height: 1.6; color: #4C4237; margin-top: 18px; }
 #b5 .note b { color: #241E17; font-weight: 600; }
+#b5 .namestrip { display: flex; gap: 34px; align-items: flex-start; }
+#b5 .mini { width: 300px; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); border-radius: 16px; padding: 15px 14px; }
 #b6 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b6 a { color: #BE3346; }
 #b6 a:hover { color: #9A2E3B; }
-#b6 .bd { width: 1440px; height: 2100px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
-#b6 .mockbar { background: #F7EEDA; border: 1px solid #E9DAB9; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.5; color: #855A0F; }
-#b6 .mockbar b { color: #6B480C; font-weight: 700; }
-#b6 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
-#b6 .cols { display: flex; gap: 44px; align-items: flex-start; }
-#b6 .col { width: 648px; flex-shrink: 0; }
-#b6 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; }
+#b6 .bd { width: 1440px; height: 1340px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 48px 52px 48px 60px; box-sizing: border-box; display: flex; gap: 34px; align-items: flex-start; }
+#b6 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 12px; }
+#b6 .sheet { width: 480px; flex-shrink: 0; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; box-sizing: border-box; }
 #b6 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
-#b6 .rule { height: 1px; background: #EEE4D2; margin: 17px 0 15px; }
-#b6 .pf { font-family: "Playfair Display", Georgia, serif; }
-#b6 .rt { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 23px; color: #241E17; }
-#b6 .rmeta { font-size: 13px; color: #6F6049; margin-top: 4px; }
-#b6 .field { height: 40px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 12px; font-size: 14.5px; color: #241E17; }
-#b6 .stepsbox { background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC; border-radius: 14px; padding: 12px 14px; margin-top: 10px; }
-#b6 .sline { display: flex; gap: 11px; padding: 7px 0; font-size: 14px; color: #4C4237; line-height: 1.5; }
-#b6 .snum { width: 20px; height: 20px; border-radius: 999px; background: #E2D5C0; color: #4C4237; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
-#b6 .ing { display: flex; align-items: baseline; padding: 7px 0; font-size: 14px; color: #241E17; border-top: 1px solid #EEE4D2; }
-#b6 .ing:first-of-type { border-top: none; }
-#b6 .iq { width: 84px; flex-shrink: 0; color: #4C4237; font-variant-numeric: tabular-nums; }
-#b6 .ihave { margin-left: auto; font-size: 12.5px; padding-left: 12px; }
-#b6 .link { height: 46px; border-radius: 12px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 11px; padding: 0 14px; margin-top: 10px; }
-#b6 .strip { margin-top: 14px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; color: #4C4237; display: flex; align-items: center; gap: 10px; }
-#b6 .sdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
-#b6 .tag { height: 24px; border-radius: 999px; display: flex; align-items: center; gap: 6px; padding: 0 9px; font-size: 12px; font-weight: 500; border: 1px solid; }
-#b6 .note { font-size: 13.5px; line-height: 1.62; color: #4C4237; margin-top: 14px; }
+#b6 .rule { height: 1px; background: #EEE4D2; margin: 22px 0 20px; }
+#b6 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+#b6 .chip { height: 32px; border-radius: 999px; background: #FDFAF4; border: 1px solid #E2D5C0; color: #241E17; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+#b6 .chip.on { background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600; }
+#b6 .chip.dash { background: transparent; border: 1px dashed #C9B79B; color: #6F6049; }
+#b6 .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+#b6 .hint { font-size: 12.5px; color: #6F6049; margin-top: 9px; line-height: 1.5; }
+#b6 .trig { height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; color: #241E17; font-size: 14.5px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+#b6 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 18px; }
+#b6 .tag { height: 26px; border-radius: 999px; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12.5px; font-weight: 500; border: 1px solid; }
+#b6 .step { display: flex; align-items: center; border: 1px solid #E2D5C0; border-radius: 13px; overflow: hidden; height: 44px; }
+#b6 .minus { width: 44px; height: 44px; background: #F2EADC; color: #4C4237; display: flex; align-items: center; justify-content: center; }
+#b6 .plus { width: 44px; height: 44px; background: #241E17; color: #F2E9DA; display: flex; align-items: center; justify-content: center; }
+#b6 .note { font-size: 13px; line-height: 1.6; color: #4C4237; margin-top: 16px; }
 #b6 .note b { color: #241E17; font-weight: 600; }
-#b6 .verdict { display: flex; gap: 44px; }
-#b6 .vbox { flex: 1; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 18px 20px; }
 #b7 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b7 a { color: #BE3346; }
 #b7 a:hover { color: #9A2E3B; }
-#b7 .bd { width: 1440px; height: 782px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b7 .bd { width: 1440px; height: 2100px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b7 .mockbar { background: #F7EEDA; border: 1px solid #E9DAB9; border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.5; color: #855A0F; }
+#b7 .mockbar b { color: #6B480C; font-weight: 700; }
 #b7 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
-#b7 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
-#b7 .pdot { width: 8px; height: 8px; border-radius: 999px; }
-#b7 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 8px; padding: 0 11px 0 13px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; white-space: nowrap; }
-#b7 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 8px; }
-#b7 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
-#b7 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
-#b7 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
-#b7 .ccount { margin-left: auto; letter-spacing: 0.04em; }
-#b7 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
-#b7 .row:first-of-type { border-top: none; }
-#b7 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-#b7 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
-#b7 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
-#b7 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; }
-#b7 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; }
-#b7 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; padding-left: 14px; }
-#b7 .subhead { padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
-#b7 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
-#b7 .note { font-size: 13.5px; line-height: 1.65; color: #4C4237; }
+#b7 .cols { display: flex; gap: 44px; align-items: flex-start; }
+#b7 .col { width: 648px; flex-shrink: 0; }
+#b7 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; padding: 20px; }
+#b7 .slabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; }
+#b7 .rule { height: 1px; background: #EEE4D2; margin: 17px 0 15px; }
+#b7 .pf { font-family: "Playfair Display", Georgia, serif; }
+#b7 .rt { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 23px; color: #241E17; }
+#b7 .rmeta { font-size: 13px; color: #6F6049; margin-top: 4px; }
+#b7 .field { height: 40px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; display: flex; align-items: center; padding: 0 12px; font-size: 14.5px; color: #241E17; }
+#b7 .stepsbox { background: #F3EBDD; box-shadow: inset 0 0 0 1px #DFD2BC; border-radius: 14px; padding: 12px 14px; margin-top: 10px; }
+#b7 .sline { display: flex; gap: 11px; padding: 7px 0; font-size: 14px; color: #4C4237; line-height: 1.5; }
+#b7 .snum { width: 20px; height: 20px; border-radius: 999px; background: #E2D5C0; color: #4C4237; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+#b7 .ing { display: flex; align-items: baseline; padding: 7px 0; font-size: 14px; color: #241E17; border-top: 1px solid #EEE4D2; }
+#b7 .ing:first-of-type { border-top: none; }
+#b7 .iq { width: 84px; flex-shrink: 0; color: #4C4237; font-variant-numeric: tabular-nums; }
+#b7 .ihave { margin-left: auto; font-size: 12.5px; padding-left: 12px; }
+#b7 .link { height: 46px; border-radius: 12px; background: #F2EADC; border: 1px solid #E2D5C0; display: flex; align-items: center; gap: 11px; padding: 0 14px; margin-top: 10px; }
+#b7 .strip { margin-top: 14px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; color: #4C4237; display: flex; align-items: center; gap: 10px; }
+#b7 .sdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b7 .tag { height: 24px; border-radius: 999px; display: flex; align-items: center; gap: 6px; padding: 0 9px; font-size: 12px; font-weight: 500; border: 1px solid; }
+#b7 .note { font-size: 13.5px; line-height: 1.62; color: #4C4237; margin-top: 14px; }
 #b7 .note b { color: #241E17; font-weight: 600; }
-#b7 .sortish { color: #4C4237; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+#b7 .verdict { display: flex; gap: 44px; }
+#b7 .vbox { flex: 1; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 18px; padding: 18px 20px; }
 #b8 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #b8 a { color: #BE3346; }
 #b8 a:hover { color: #9A2E3B; }
-#b8 .bd { width: 1440px; height: 722px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b8 .bd { width: 1440px; height: 782px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
 #b8 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
 #b8 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
 #b8 .pdot { width: 8px; height: 8px; border-radius: 999px; }
-#b8 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 9px; padding: 0 12px 0 14px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; white-space: nowrap; }
-#b8 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 9px; }
-#b8 .seg { height: 40px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 13px; padding: 3px; display: flex; gap: 3px; box-sizing: border-box; }
-#b8 .sgi { height: 32px; border-radius: 10px; display: flex; align-items: center; gap: 7px; padding: 0 13px; font-size: 13.5px; font-weight: 500; color: #4C4237; white-space: nowrap; }
-#b8 .sgi.on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
-#b8 .sgc { font-size: 12.5px; color: #6F6049; }
+#b8 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 8px; padding: 0 11px 0 13px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; white-space: nowrap; }
+#b8 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 8px; }
 #b8 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
 #b8 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
 #b8 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
@@ -360,6 +388,36 @@
 #b8 .note { font-size: 13.5px; line-height: 1.65; color: #4C4237; }
 #b8 .note b { color: #241E17; font-weight: 600; }
 #b8 .sortish { color: #4C4237; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+#b9 { margin: 0; font-family: Karla, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+#b9 a { color: #BE3346; }
+#b9 a:hover { color: #9A2E3B; }
+#b9 .bd { width: 1440px; height: 722px; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 44px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 30px; }
+#b9 .mlabel { font-weight: 700; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; color: #6F6049; margin-bottom: 11px; }
+#b9 .pill { height: 40px; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid; font-size: 14px; font-weight: 500; }
+#b9 .pdot { width: 8px; height: 8px; border-radius: 999px; }
+#b9 .trigger { height: 40px; border-radius: 13px; display: flex; align-items: center; gap: 9px; padding: 0 12px 0 14px; background: #F7EEDA; border: 1.5px solid #855A0F; color: #855A0F; font-weight: 600; font-size: 14px; white-space: nowrap; }
+#b9 .tcount { background: #855A0F; color: #F7EEDA; border-radius: 999px; font-size: 12.5px; font-weight: 700; padding: 2px 9px; }
+#b9 .seg { height: 40px; background: #F2EADC; border: 1px solid #E2D5C0; border-radius: 13px; padding: 3px; display: flex; gap: 3px; box-sizing: border-box; }
+#b9 .sgi { height: 32px; border-radius: 10px; display: flex; align-items: center; gap: 7px; padding: 0 13px; font-size: 13.5px; font-weight: 500; color: #4C4237; white-space: nowrap; }
+#b9 .sgi.on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
+#b9 .sgc { font-size: 12.5px; color: #6F6049; }
+#b9 .card { background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; }
+#b9 .chead { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+#b9 .cdot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+#b9 .ccount { margin-left: auto; letter-spacing: 0.04em; }
+#b9 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; padding-right: 16px; }
+#b9 .row:first-of-type { border-top: none; }
+#b9 .cbcell { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#b9 .cb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #6F6049; background: #FDFAF4; }
+#b9 .nm { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 17px; color: #241E17; white-space: nowrap; }
+#b9 .sz { font-size: 13px; color: #6F6049; margin-left: 8px; }
+#b9 .badge { margin-left: 10px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; border: 1px solid; }
+#b9 .cnt { margin-left: auto; font-size: 13px; color: #6F6049; padding-left: 14px; }
+#b9 .subhead { padding: 9px 16px 9px 56px; border-top: 1px solid #EEE4D2; background: #F2EADC; color: #6F6049; font-weight: 700; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+#b9 .backbtn { height: 40px; border-radius: 13px; background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+#b9 .note { font-size: 13.5px; line-height: 1.65; color: #4C4237; }
+#b9 .note b { color: #241E17; font-weight: 600; }
+#b9 .sortish { color: #4C4237; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -374,11 +432,257 @@
 
 <section class="page"><h2 class="ph">Settled</h2>
 <div class="note"><h3 class="nh">OPTION A + C — ONE LIST, THREE BANDS, AND A SEGMENT</h3>
-<p>The rule this rests on: a source carries a KIND — Shop, Grow, Make. Nothing else in the model changes. The Garden is a source you pick from; The Kitchen is a source you cook from.</p>
+<p>The rule this rests on: a source carries a KIND — Shop, Grow, Make. Nothing else in the model changes. Garden is a source you pick from; Kitchen is a source you cook from.</p>
 <p>The list opens on ALL, which is A&#x27;s banded screen — so the adjacency that decided A is what you see first: &quot;you&#x27;re out of stock, and the carrots for it are on the Publix card two bands up.&quot; The segment then buys C&#x27;s focused views for the moments the activities separate — at the shop, in the garden, at the stove.</p>
 <p>It costs nothing for a household with no grow or make source: no second kind, no segment, no bands.</p>
 <p>The group is named for what it holds — Store with one kind, Source with more. Drawn light-theme only; the dark counterparts are a hex-for-hex map away.</p></div>
-<figure class="board"><figcaption class="bc"><span class="bn">1</span>The run list — 1440</figcaption><div class="fit" style="--h:1510px"><div class="frame" id="b1" style="height:1510px"><div class="ll">
+<figure class="board"><figcaption class="bc"><span class="bn">1</span>First run — buy, grow, make</figcaption><div class="fit" style="--h:1424px"><div class="frame" id="b1" style="height:1424px"><div class="bd">
+
+  <div class="cols">
+
+    <!-- ============ 1. THE CARD ============ -->
+    <div style="width:440px">
+      <div class="mlabel">First run &mdash; the card, at rest</div>
+      <div class="c440">
+        <div class="eyebrow">New household</div>
+        <div class="h1">Name your household</div>
+        <div class="lede">This is the name everyone you invite will see.</div>
+
+        <div class="slab">Household name and colour</div>
+        <div class="idrow">
+          <span class="sw26" style="background:#456B80"></span>
+          <div class="field"><span class="sel">Justin's Household</span></div>
+        </div>
+        <div class="hint">Built from your display name &mdash; change it to whatever you call the place.</div>
+
+        <div class="rule"></div>
+
+        <div class="slab" style="margin-top:16px">Where your food comes from</div>
+
+        <div class="qrow" style="padding-top:0">
+          <div class="cb on"><svg width="13" height="11" viewBox="0 0 14 12" fill="none" stroke="#F2E9DA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+          <div>
+            <div class="qlab">
+              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>
+              We buy it
+            </div>
+            <div class="qdesc">Groceries, the warehouse, the farm stand.</div>
+          </div>
+        </div>
+
+        <div class="qrow">
+          <div class="cb"></div>
+          <div>
+            <div class="qlab off">
+              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg>
+              We grow some of it
+            </div>
+            <div class="qdesc">A garden, a plot, a few pots on the step.</div>
+          </div>
+        </div>
+
+        <div class="qrow">
+          <div class="cb"></div>
+          <div>
+            <div class="qlab off">
+              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg>
+              We make some of it
+            </div>
+            <div class="qdesc">Stock, bread, jam &mdash; things you'd otherwise buy.</div>
+          </div>
+        </div>
+
+        <div class="hint" style="margin-top:6px">Most larders are stocked at a shop, so that is all we will set up. Tick anything else and you get a source for it.</div>
+
+        <div class="btn">Create household</div>
+
+        <div class="who">
+          <div class="av">JT</div>
+          <div>
+            <div class="wname">Justin Tadlock</div>
+            <div class="wmail">justin@example.com</div>
+          </div>
+          <span class="ghostlink">Sign out</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 2. THE HINT IS THE ONLY THING THAT MOVES ============ -->
+    <div style="width:396px">
+      <div class="mlabel">The answer, and the one line that answers back</div>
+
+      <div class="sunk">
+        <div class="htitle" style="margin-bottom:12px">Hint, by answer</div>
+
+        <div class="hvar">
+          <div class="ticks">
+            <div class="tk on"><svg width="9" height="8" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+            <div class="tk"></div><div class="tk"></div>
+          </div>
+          <div class="hvtext">Most larders are stocked at a shop, so that is all we will set up. Tick anything else and you get a source for it.</div>
+        </div>
+
+        <div class="hvar">
+          <div class="ticks">
+            <div class="tk on"><svg width="9" height="8" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+            <div class="tk on"><svg width="9" height="8" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+            <div class="tk"></div>
+          </div>
+          <div class="hvtext">We will add <b>Garden</b> to your sources. Rename it to whatever you call yours.</div>
+        </div>
+
+        <div class="hvar">
+          <div class="ticks">
+            <div class="tk on"><svg width="9" height="8" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+            <div class="tk on"><svg width="9" height="8" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+            <div class="tk on"><svg width="9" height="8" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+          </div>
+          <div class="hvtext">We will add <b>Garden</b> and <b>Kitchen</b> to your sources. Rename them to whatever you call yours.</div>
+        </div>
+
+        <div class="hvar">
+          <div class="ticks">
+            <div class="tk"></div><div class="tk"></div><div class="tk"></div>
+          </div>
+          <div class="hvtext">Untick everything and <i>Create household</i> stays enabled &mdash; you get the locations and types and no sources at all. <b>Nothing here is required</b>, because a disabled button cannot explain itself.</div>
+        </div>
+      </div>
+
+      <div class="mlabel" style="margin-top:26px">Why it fits on the card and not on a second screen</div>
+      <div class="note">
+        <p><b>The rule it looks like it breaks:</b> <i>one field, one button, nothing else</i> &mdash; written when a draft of this screen previewed fifteen seeded chips in a recessed panel. That panel was <b>explaining</b> something the drawer would show a second later. This is <b>asking</b> something the app cannot infer and would otherwise never ask.</p>
+        <p>The test that keeps first run one screen: <b>the defaults are already right, so Enter still finishes it.</b> Buy on, grow and make off is exactly the household you would have got before this question existed. Someone who ignores the three rows loses nothing; someone who reads them saves a trip into the drawer they do not yet know is there.</p>
+        <p><b>One answer the naming rule does not cover:</b> grow only, no shop. <i>Store</i> is the heading when shop is the only kind and <i>Source</i> when there is more than one &mdash; a household with exactly one kind that is <i>grow</i> falls through both. Rare, and a one-line rule away (<i>Store</i> only when the single kind is shop, <i>Source</i> otherwise), but this screen is what makes it reachable on day one.</p>
+      </div>
+    </div>
+
+    <!-- ============ 3. WHAT LOST ============ -->
+    <div style="width:396px">
+      <div class="mlabel">What lost &mdash; a second step</div>
+      <div class="lostbar">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="8" cy="8" r="6.2"/><path d="M4.4 11.6 11.6 4.4"/></svg>
+        <span><b>Not built.</b> Drawn so the cost is visible.</span>
+      </div>
+
+      <div class="c440" style="width:396px;box-shadow:0 8px 22px rgba(36,30,23,.07)">
+        <div class="eyebrow">New household &middot; step 2 of 2</div>
+        <div class="h1" style="font-size:24px">How do you stock it?</div>
+        <div class="lede">So we can set up the right sources for <b style="color:#241E17;font-weight:600">Justin's Household</b>.</div>
+
+        <div style="height:14px"></div>
+
+        <div class="qrow">
+          <div class="cb on"><svg width="13" height="11" viewBox="0 0 14 12" fill="none" stroke="#F2E9DA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.7 2.9L11.6 2.6"/></svg></div>
+          <div><div class="qlab">We buy it</div><div class="qdesc">Groceries, the warehouse, the farm stand.</div></div>
+        </div>
+        <div class="qrow">
+          <div class="cb"></div>
+          <div><div class="qlab off">We grow some of it</div><div class="qdesc">A garden, a plot, a few pots on the step.</div></div>
+        </div>
+        <div class="qrow">
+          <div class="cb"></div>
+          <div><div class="qlab off">We make some of it</div><div class="qdesc">Stock, bread, jam &mdash; things you'd otherwise buy.</div></div>
+        </div>
+
+        <div class="btn">Finish</div>
+        <div class="btn ghost" style="margin-top:9px">Back</div>
+      </div>
+
+      <div class="note" style="margin-top:16px">
+        <p><b>It reads better and costs more.</b> A question with its own screen gets a title, a subtitle and all the room it wants &mdash; and it turns <i>one screen, not a wizard</i> into a wizard, over a question most households answer by leaving the defaults alone.</p>
+        <p>It also has to grow a <i>Back</i> and a step count, and the moment there are two steps there is an argument for a third.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ ROW 2: WHAT EACH ANSWER SEEDS ============ -->
+  <div class="cols">
+
+    <div>
+      <div class="mlabel">What lands in the drawer, one second later</div>
+      <div style="display:flex;gap:26px">
+
+        <div>
+          <div class="drawer">
+            <div class="dhead">
+              <span class="dlabel">Store</span>
+              <div class="dicons">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg>
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+              </div>
+            </div>
+            <div class="chips">
+              <div class="chip">All items <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#42618F"></span>Grocery <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#8C7C22"></span>Warehouse <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#87694C"></span>Market <span class="cn">0</span></div>
+            </div>
+          </div>
+          <div class="note" style="width:320px;margin-top:12px">Buy only. <b>Identical to today</b> &mdash; three shops, and the group is still called <b>Store</b>.</div>
+        </div>
+
+        <div>
+          <div class="drawer">
+            <div class="dhead">
+              <span class="dlabel">Source</span>
+              <div class="dicons">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg>
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+              </div>
+            </div>
+            <div class="chips">
+              <div class="chip">All items <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#42618F"></span>Grocery <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#8C7C22"></span>Warehouse <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#87694C"></span>Market <span class="cn">0</span></div>
+              <div class="chip new"><span class="cdot" style="background:#3F7A4C"></span>Garden <span class="cn">0</span></div>
+            </div>
+          </div>
+          <div class="note" style="width:320px;margin-top:12px">Buy and grow. One fern chip, and the heading has already become <b>Source</b> &mdash; before there is a single item.</div>
+        </div>
+
+        <div>
+          <div class="drawer">
+            <div class="dhead">
+              <span class="dlabel">Source</span>
+              <div class="dicons">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg>
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg>
+              </div>
+            </div>
+            <div class="chips">
+              <div class="chip">All items <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#42618F"></span>Grocery <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#8C7C22"></span>Warehouse <span class="cn">0</span></div>
+              <div class="chip"><span class="cdot" style="background:#87694C"></span>Market <span class="cn">0</span></div>
+              <div class="chip new"><span class="cdot" style="background:#3F7A4C"></span>Garden <span class="cn">0</span></div>
+              <div class="chip new"><span class="cdot" style="background:#8E4468"></span>Kitchen <span class="cn">0</span></div>
+            </div>
+          </div>
+          <div class="note" style="width:320px;margin-top:12px">All three. Fern and mulberry are the assignments already settled, and neither collides with the seeded shops.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="width:290px">
+      <div class="mlabel">Consequences worth naming</div>
+      <div class="note">
+        <p><b>This retires a settled line.</b> The doc said <i>the seeded stores are all shops, so a new household is a</i> Store <i>household on day one</i> &mdash; and therefore that most people never meet the word <i>Source</i>. That is now the answer to a question rather than a property of the seed.</p>
+        <p><b>The seeded shops are the weak part, not the new sources.</b> <i>Grocery / Warehouse / Market</i> were already flagged as three chips a new user deletes. The tick makes that worse in one direction and better in another: someone who unticks <i>We buy it</i> gets no shops at all, which is the cleanest version of &ldquo;seed nothing&rdquo; anyone has argued for.</p>
+        <p><b>Every chip reads 0.</b> True today as well &mdash; it is just more visible when the drawer is the payoff for a question you were asked ten seconds ago. Hiding counts at zero items is an easy fix and is not decided here.</p>
+      </div>
+    </div>
+
+  </div>
+
+</div></div></div></figure>
+<div class="note"><h3 class="nh">FIRST RUN ASKS THE QUESTION THAT SEEDS THE SOURCES</h3>
+<p>Three checkboxes under the name field, on the same card, with Buy already ticked. The defaults are the household you would have got before the question existed, so Enter still finishes the screen and nobody is stopped by it.</p>
+<p>The screen&#x27;s own rule — &quot;one field, one button, nothing else&quot; — was written against a panel that EXPLAINED the seeded terms. This ASKS something the app cannot infer. That is the whole distinction the card rests on, and the second-step version is drawn beside it so the cost of disagreeing is visible.</p>
+<p>It retires the settled line that a new household is a STORE household on day one: whether you ever meet the word Source is now an answer, not a property of the seed.</p></div>
+<figure class="board"><figcaption class="bc"><span class="bn">2</span>The run list — 1440</figcaption><div class="fit" style="--h:1510px"><div class="frame" id="b2" style="height:1510px"><div class="ll">
 
   <!-- collapsed rail -->
   <div class="rail">
@@ -479,7 +783,7 @@
         </div>
         <div class="grid">
           <section class="card">
-            <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+            <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>Garden<span class="ccount">3</span></header>
             <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
             <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
             <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
@@ -498,7 +802,7 @@
         </div>
         <div class="grid">
           <section class="card">
-            <header class="chead" style="background:#F0E8EC;border-bottom:1px solid #E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>The Kitchen<span class="ccount">2</span></header>
+            <header class="chead" style="background:#F0E8EC;border-bottom:1px solid #E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>Kitchen<span class="ccount">2</span></header>
             <div class="mkrow">
               <div class="cbcell"><div class="cb"></div></div>
               <div style="min-width:0">
@@ -528,7 +832,7 @@
 </div></div></div></figure>
 <div class="note"><p>The Harvest and Make bands each hold one card in a two-column grid, and the card stays 642px rather than stretching across the column.</p>
 <p>That is auto-fill doing exactly what Shopping list says it is there for: &quot;with one store card left after a filter, auto-fit would stretch it across the whole screen.&quot; The bands got that behaviour for free.</p></div>
-<figure class="board"><figcaption class="bc"><span class="bn">2</span>Entry and the three cards</figcaption><div class="fit" style="--h:668px"><div class="frame" id="b2" style="height:668px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">3</span>Entry and the three cards</figcaption><div class="fit" style="--h:668px"><div class="frame" id="b3" style="height:668px"><div class="bd">
 
   <div>
     <div class="mlabel">The way in &mdash; row 2 in grid mode, unchanged except its count</div>
@@ -571,7 +875,7 @@
 
       <div>
         <section class="card">
-          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>Garden<span class="ccount">3</span></header>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
@@ -583,7 +887,7 @@
 
       <div>
         <section class="card">
-          <header class="chead" style="background:#F0E8EC;border-bottom:1px solid #E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>The Kitchen<span class="ccount">2</span></header>
+          <header class="chead" style="background:#F0E8EC;border-bottom:1px solid #E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>Kitchen<span class="ccount">2</span></header>
           <div class="mkrow">
             <div class="cbcell"><div class="cb"></div></div>
             <div style="min-width:0">
@@ -608,7 +912,7 @@
   </div>
 
 </div></div></div></figure>
-<figure class="board"><figcaption class="bc"><span class="bn">3</span>Ingredients — quantities and the picker</figcaption><div class="fit" style="--h:1440px"><div class="frame" id="b3" style="height:1440px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">4</span>Ingredients — quantities and the picker</figcaption><div class="fit" style="--h:1440px"><div class="frame" id="b4" style="height:1440px"><div class="bd">
 
   <div class="mockbar">
     <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#855A0F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 2.8 18 16.4H2Z"/><path d="M10 7.8v3.6M10 13.8v.1"/></svg>
@@ -748,7 +1052,7 @@
 
   </div>
 </div></div></div></figure>
-<figure class="board"><figcaption class="bc"><span class="bn">4</span>Setting the kind</figcaption><div class="fit" style="--h:1000px"><div class="frame" id="b4" style="height:1000px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">5</span>Setting the kind</figcaption><div class="fit" style="--h:1000px"><div class="frame" id="b5" style="height:1000px"><div class="bd">
 
   <div class="cols">
 
@@ -769,12 +1073,12 @@
           <div class="chip"><span class="cdot" style="background:#A03B36"></span>Calfee Cattle <span class="cn">3</span></div>
           <div class="chip"><span class="cdot" style="background:#5F7542"></span>Costco <span class="cn">6</span></div>
           <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix <span class="cn">8</span></div>
-          <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>The Garden <span class="cn">5</span></div>
-          <div class="chip"><span class="cdot" style="background:#8E4468"></span>The Kitchen <span class="cn">3</span></div>
+          <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>Garden <span class="cn">5</span></div>
+          <div class="chip"><span class="cdot" style="background:#8E4468"></span>Kitchen <span class="cn">3</span></div>
           <div class="chip dash">+ Source</div>
         </div>
       </div>
-      <div class="note">The Garden and The Kitchen are <b>terms like any other</b> &mdash; a colour, a name, a count, a chip that filters. Filtering by either works exactly as filtering by Costco does. <b>Counts stay here</b>, where the chip is the thing you press and the number is what it will do.</div>
+      <div class="note">Garden and Kitchen are <b>terms like any other</b> &mdash; a colour, a name, a count, a chip that filters. Filtering by either works exactly as filtering by Costco does. <b>Counts stay here</b>, where the chip is the thing you press and the number is what it will do.</div>
     </div>
 
     <!-- 2: editing -->
@@ -790,8 +1094,8 @@
           <div class="erow"><div class="sw" style="background:#A03B36;color:#A03B36"></div><div class="field">Calfee Cattle</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
           <div class="erow"><div class="sw" style="background:#5F7542;color:#5F7542"></div><div class="field">Costco</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
           <div class="erow"><div class="sw" style="background:#456B80;color:#456B80"></div><div class="field">Publix</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
-          <div class="erow"><div class="sw" style="background:#3F7A4C;color:#3F7A4C"></div><div class="field">The Garden</div><div class="gbtn" style="color:#D8CBB6"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
-          <div class="erow"><div class="sw" style="background:#8E4468;color:#8E4468"></div><div class="field">The Kitchen</div><div class="gbtn" style="color:#D8CBB6"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#3F7A4C;color:#3F7A4C"></div><div class="field">Garden</div><div class="gbtn" style="color:#D8CBB6"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#8E4468;color:#8E4468"></div><div class="field">Kitchen</div><div class="gbtn" style="color:#D8CBB6"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4h12v4.2a3.4 3.4 0 0 1-3.4 3.4H6.4A3.4 3.4 0 0 1 3 11.6Z"/><path d="M15 8.6h1.4a1.5 1.5 0 0 1 0 3H15"/><path d="M6.4 4.6V3M9 4.6V3M11.6 4.6V3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
           <div class="addrow">+ Add a source</div>
         </div>
       </div>
@@ -808,7 +1112,7 @@
             <div class="donepill">Done</div>
           </div>
           <div class="erow"><div class="sw" style="background:#456B80;color:#456B80"></div><div class="field">Publix</div><div class="gbtn"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
-          <div class="erow"><div class="sw" style="background:#3F7A4C;color:#3F7A4C"></div><div class="field">The Garden</div><div class="gbtn open"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
+          <div class="erow"><div class="sw" style="background:#3F7A4C;color:#3F7A4C"></div><div class="field">Garden</div><div class="gbtn open"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 16.4V8.6"/><path d="M9 8.6C9 5.6 6.6 3.2 3.6 3.2c0 3 2.4 5.4 5.4 5.4Z"/><path d="M9 10.4c0-2.6 2.1-4.7 4.7-4.7 0 2.6-2.1 4.7-4.7 4.7Z"/></svg></div><div class="gbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4h10.8M6 4.4V3h4v1.4M4 4.4l.7 8.6h6.6l.7-8.6"/></svg></div></div>
           <div style="display:flex;justify-content:flex-end;margin-top:6px">
             <div class="menu">
               <div class="mrow"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 2.2h2.1l2 8.4h8.2l1.9-6.2H5.1"/><circle cx="7.2" cy="14.6" r="1.3"/><circle cx="13.4" cy="14.6" r="1.3"/></svg>Shop</div>
@@ -844,7 +1148,7 @@
           <div class="dhead" style="margin-bottom:12px"><span class="dlabel">Source</span><div class="dicons"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8l-3.2.8.8-3.2z"/></svg><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6.5 4 4 4-4"/></svg></div></div>
           <div class="chips">
             <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix <span class="cn">8</span></div>
-            <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>The Garden <span class="cn">5</span></div>
+            <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>Garden <span class="cn">5</span></div>
             <div class="chip dash">+ Source</div>
           </div>
         </div>
@@ -852,7 +1156,7 @@
       </div>
 
       <div style="flex:1;min-width:0;padding-left:10px">
-        <div class="note" style="margin-top:0"><b>The rule: the group is named for what it holds.</b> One kind and it is a Store; more than one and it is a Source. Nothing else in the app renames itself, so this is the exception and it earns it &mdash; the alternative is calling The Garden a store, which is the confusion the kind exists to remove.</div>
+        <div class="note" style="margin-top:0"><b>The rule: the group is named for what it holds.</b> One kind and it is a Store; more than one and it is a Source. Nothing else in the app renames itself, so this is the exception and it earns it &mdash; the alternative is calling Garden a store, which is the confusion the kind exists to remove.</div>
         <div class="note"><b>It changes only when you change the list.</b> Adding a grow or make source is a deliberate act in the editing panel, and the heading above your hands is what changes. That is what separates this from a control that renames itself while you watch.</div>
         <div class="note"><b>&ldquo;Source&rdquo; is the working word, not the settled one.</b> <i>Where from</i> is the plainer alternative and reads closer to this app&rsquo;s voice &mdash; it is two words in a slot built for one, and it has not been drawn. <i>Origin</i> and <i>Supply</i> were both colder than anything else in the interface.</div>
         <div class="note" style="color:#855A0F"><b style="color:#855A0F">Knock-on, not yet drawn:</b> the collapsed rail&rsquo;s storefront glyph means &ldquo;shop&rdquo;, and the marketing page&rsquo;s band says <i>Location, Store, Type</i>. Both are wrong in a Source household.</div>
@@ -861,7 +1165,7 @@
   </div>
 
 </div></div></div></figure>
-<figure class="board"><figcaption class="bc"><span class="bn">5</span>Item side — season and made-from</figcaption><div class="fit" style="--h:1340px"><div class="frame" id="b5" style="height:1340px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">6</span>Item side — season and made-from</figcaption><div class="fit" style="--h:1340px"><div class="frame" id="b6" style="height:1340px"><div class="bd">
 
   <!-- grow item -->
   <div style="width:480px">
@@ -880,8 +1184,8 @@
       <div class="chips">
         <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix</div>
         <div class="chip"><span class="cdot" style="background:#5F7542"></span>Costco</div>
-        <div class="chip on">The Garden</div>
-        <div class="chip"><span class="cdot" style="background:#8E4468"></span>The Kitchen</div>
+        <div class="chip on">Garden</div>
+        <div class="chip"><span class="cdot" style="background:#8E4468"></span>Kitchen</div>
         <div class="chip dash">+ Source</div>
       </div>
 
@@ -910,8 +1214,8 @@
       <div class="chips">
         <div class="chip"><span class="cdot" style="background:#456B80"></span>Publix</div>
         <div class="chip"><span class="cdot" style="background:#5F7542"></span>Costco</div>
-        <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>The Garden</div>
-        <div class="chip on">The Kitchen</div>
+        <div class="chip"><span class="cdot" style="background:#3F7A4C"></span>Garden</div>
+        <div class="chip on">Kitchen</div>
         <div class="chip dash">+ Source</div>
       </div>
 
@@ -961,7 +1265,7 @@
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
         <span class="tag" style="background:#ECEFE9;border-color:#D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Pantry</span>
-        <span class="tag" style="background:#E8F0EA;border-color:#D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden</span>
+        <span class="tag" style="background:#E8F0EA;border-color:#D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>Garden</span>
         <span class="tag" style="background:#ECEFE9;border-color:#D8DED1;color:#5B703F"><span class="cdot" style="background:#5F7542"></span>Produce</span>
       </div>
       <div style="display:flex;align-items:flex-end;margin-top:14px">
@@ -990,7 +1294,7 @@
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
         <span class="tag" style="background:#E9EFEE;border-color:#D1DEDD;color:#3E6D68"><span class="cdot" style="background:#3E6D68"></span>Chest Freezer</span>
-        <span class="tag" style="background:#F0E8EC;border-color:#E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>The Kitchen</span>
+        <span class="tag" style="background:#F0E8EC;border-color:#E0CFD7;color:#8E4468"><span class="cdot" style="background:#8E4468"></span>Kitchen</span>
         <span class="tag" style="background:#EEEAEE;border-color:#DCD3DB;color:#6D4A69"><span class="cdot" style="background:#6D4A69"></span>Condiment</span>
       </div>
       <div style="display:flex;align-items:flex-end;margin-top:14px">
@@ -1054,7 +1358,7 @@
 <div class="note"><h3 class="nh">WHERE THIS GOES, AND WHAT LOST</h3>
 <p>The first board is not an exploration of the past — it is the next question. Recipes and gardening are the destination, so the test is no longer &quot;does this belong in a pantry app&quot; but &quot;does today&#x27;s design leave room&quot;. Two models for turning a make item into a recipe card, drawn side by side because the choice is not obvious.</p>
 <p>Below them, the two structures that lost. B gave each activity its own mode and lost outright: row 2&#x27;s composition would depend on the household. C is a record rather than a proposal — its segment was adopted onto the settled run list, but with an All tab in front of it.</p></div>
-<figure class="board"><figcaption class="bc"><span class="bn">6</span>Where this goes — two ways a make item becomes a recipe</figcaption><div class="fit" style="--h:2100px"><div class="frame" id="b6" style="height:2100px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">7</span>Where this goes — two ways a make item becomes a recipe</figcaption><div class="fit" style="--h:2100px"><div class="frame" id="b7" style="height:2100px"><div class="bd">
 
   <div class="mockbar">
     <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#855A0F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 2.8 18 16.4H2Z"/><path d="M10 7.8v3.6M10 13.8v.1"/></svg>
@@ -1068,7 +1372,7 @@
       <div class="mlabel">Model A &mdash; kept as the record of what lost</div>
       <div class="card">
         <div class="rt">Chicken Stock</div>
-        <div class="rmeta">1 qt &middot; The Kitchen &middot; have 1, low at 4</div>
+        <div class="rmeta">1 qt &middot; Kitchen &middot; have 1, low at 4</div>
 
         <div class="rule"></div>
         <div class="slabel">Made from</div>
@@ -1239,7 +1543,7 @@
   </div>
 
 </div></div></div></figure>
-<figure class="board"><figcaption class="bc"><span class="bn">7</span>Option B — separate modes</figcaption><div class="fit" style="--h:782px"><div class="frame" id="b7" style="height:782px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">8</span>Option B — separate modes</figcaption><div class="fit" style="--h:782px"><div class="frame" id="b8" style="height:782px"><div class="bd">
 
   <div>
     <div class="mlabel">Option B &mdash; three peers in row 2, grid mode</div>
@@ -1280,7 +1584,7 @@
           <div style="margin-left:auto;color:#6F6049;font-size:13px">3 to pick &middot; 1 not yet</div>
         </div>
         <section class="card">
-          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>Garden<span class="ccount">3</span></header>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>
@@ -1298,7 +1602,7 @@
   </div>
 
 </div></div></div></figure>
-<figure class="board"><figcaption class="bc"><span class="bn">8</span>Option C — one trigger, a segment inside</figcaption><div class="fit" style="--h:722px"><div class="frame" id="b8" style="height:722px"><div class="bd">
+<figure class="board"><figcaption class="bc"><span class="bn">9</span>Option C — one trigger, a segment inside</figcaption><div class="fit" style="--h:722px"><div class="frame" id="b9" style="height:722px"><div class="bd">
 
   <div>
     <div class="mlabel">Option C &mdash; adopted in part: the segment moved to Settled, with an All tab</div>
@@ -1333,7 +1637,7 @@
       <div class="mlabel">Harvest selected &mdash; the focused view the segment buys you</div>
       <div style="background:#FDFAF4;border:1px solid #E2D5C0;border-radius:16px;padding:18px">
         <section class="card">
-          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>The Garden<span class="ccount">3</span></header>
+          <header class="chead" style="background:#E8F0EA;border-bottom:1px solid #D0DFD3;color:#3C7549"><span class="cdot" style="background:#3F7A4C"></span>Garden<span class="ccount">3</span></header>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Basil</span><span class="badge" style="background:#F6E2DD;border-color:#EBCFC5;color:#9A2E3B">Out</span><span class="cnt">have 0 &middot; low at 1</span></div>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Green Beans</span><span class="sz">1 lb</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 2 &middot; low at 6</span></div>
           <div class="row"><div class="cbcell"><div class="cb"></div></div><span class="nm">Tomatoes</span><span class="sz">1 qt</span><span class="badge" style="background:#F7EEDA;border-color:#E9DAB9;color:#855A0F">Low</span><span class="cnt">have 1 &middot; low at 4</span></div>

@@ -3847,3 +3847,41 @@ Three things make this worse than an ordinary rename:
    deliberately not wanted.
 
 Fixed on our side in `.claude/CLAUDE.md`, which named the old URL.
+
+## 2026-08-29 (second) — the artifact-shape trap caught a second session the same day
+
+No new platform behaviour; one data point on an entry already above.
+
+### ❓ `artifact.json`'s schema location cost two more round trips
+
+Verifying a change with no schema edit (D61 — first run seeds the sources from
+three checkboxes), the first two reads of the artifact were `db.tables` and then
+`server.schema.tables`. **Both returned `undefined` rather than erroring**, and
+the first printed a cheerful `tables:` with an empty string after it — which
+reads as *the artifact has no tables*, i.e. as the catastrophic version of the
+thing the check exists to catch, rather than as a wrong key.
+
+That is the same trap the entry above logs, hit again a few hours later by
+somebody who had written that entry. It is not a memory problem: the shape is
+guessable in two plausible ways and neither errors.
+
+**What would fix it, cheapest first:**
+
+1. **A `schemaVersion` or `format` note in the docs naming the layout.** The
+   file already carries `"format"` at the top; nothing says what that format is.
+2. **Make a wrong key loud.** `a.server.schema` is an object keyed by table
+   name, so `.tables` on it is `undefined` — unavoidable in plain JSON, but a
+   `sf publish --dry-run --print-schema` (or `sf schema show`) would mean nobody
+   has to shape-match the file by hand at all.
+
+The working reads are in the entry above. Repeating the one that matters most
+after any publish-affecting change, since it is the one with a false-friendly
+failure:
+
+```js
+Object.keys(a.server.schema)   // the table names — NOT a.db.tables, NOT a.server.schema.tables
+a.db.migrations                // [] when the change is additive-free
+```
+
+Logged rather than filed as a bug: nothing is broken, and the cost is entirely
+in discoverability.

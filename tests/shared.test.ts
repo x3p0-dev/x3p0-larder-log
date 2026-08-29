@@ -27,7 +27,10 @@ import { householdInk, householdLetter, toHouseholdInk } from '../shared/househo
 import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplayName } from '../shared/profile';
 import { normalizeAvatarUrl } from '../shared/avatar';
 import { buildJoinUrl, readJoinCode, readJoinInput, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
-import { SEED_LOCATIONS, SEED_STORES, SEED_TYPES } from '../shared/seed';
+import {
+	DEFAULT_SOURCE_MIX, SEED_GROW, SEED_LOCATIONS, SEED_MAKE, SEED_SHOPS, SEED_TYPES,
+	seedSourcesFor, toSourceMix,
+} from '../shared/seed';
 import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
@@ -548,7 +551,7 @@ check(
 // legacy-hex derivation and the term renders in *some* colour, so nothing
 // crashes and nothing looks obviously broken. It also has to hold for every
 // seed, because a household is created once and lived in afterwards.
-const SEEDS = [...SEED_LOCATIONS, ...SEED_TYPES, ...SEED_STORES];
+const SEEDS = [...SEED_LOCATIONS, ...SEED_TYPES, ...SEED_SHOPS];
 
 check('every seed carries a defined colour token', SEEDS.filter((t) => ! isColorSlot(t.ink)), []);
 check('every seed carries a usable name', SEEDS.filter((t) => ! isValidName(t.name)), []);
@@ -564,7 +567,7 @@ check('locations are seeded', SEED_LOCATIONS.length > 0, true);
 for (const [label, group] of [
 	['locations', SEED_LOCATIONS],
 	['types', SEED_TYPES],
-	['stores', SEED_STORES],
+	['stores', SEED_SHOPS],
 ] as const) {
 	check(`seeded ${label} have distinct keys`, new Set(group.map((t) => termKey(t.name))).size, group.length);
 
@@ -578,6 +581,67 @@ for (const [label, group] of [
 // falls back to `color-1` once every one is taken, so a household that added a
 // type would get a colour already on screen.
 check('seeded types leave colours for a household to claim', SEED_TYPES.length < COLOR_SLOT_COUNT, true);
+
+// --- D61: where your food comes from, asked once on the creation card ---
+//
+// Every rule here is invisible when wrong. A mix that resolves the wrong way
+// seeds a household that looks plausible — three shops, or none — and nobody
+// can tell it was the question rather than the answer that failed.
+
+// The two seeded non-shop sources are real terms with real tokens, and neither
+// may collide with a seeded shop: they are drawn in one chip list.
+const SEED_SOURCES = [...SEED_SHOPS, SEED_GROW, SEED_MAKE];
+
+check('every seeded source carries a defined colour token', SEED_SOURCES.filter((t) => ! isColorSlot(t.ink)), []);
+check('every seeded source carries a usable name', SEED_SOURCES.filter((t) => ! isValidName(t.name)), []);
+check('seeded sources have distinct keys', new Set(SEED_SOURCES.map((t) => termKey(t.name))).size, SEED_SOURCES.length);
+check('seeded sources have distinct colours', new Set(SEED_SOURCES.map((t) => t.ink)).size, SEED_SOURCES.length);
+check('seeded sources leave colours for a household to claim', SEED_SOURCES.length < COLOR_SLOT_COUNT, true);
+
+// The kinds are what put a row on a band. A shop seeded as `grow` would file
+// Grocery under Harvest, which is the whole feature backwards.
+check('the seeded shops are all shops', SEED_SHOPS.every((s) => s.kind === 'shop'), true);
+check('the grow seed grows', SEED_GROW.kind, 'grow');
+check('the make seed makes', SEED_MAKE.kind, 'make');
+
+// No definite article: every other seeded term in the file is a bare noun, and
+// `The Garden` beside `Market` is one term written as a phrase.
+check('no seeded source starts with an article', SEED_SOURCES.filter((t) => /^(the|a|an)\s/i.test(t.name)), []);
+
+// The default is the household that existed before the question did, which is
+// what lets Enter still finish the card.
+check('the default mix is buy alone', DEFAULT_SOURCE_MIX, { buy: true, grow: false, make: false });
+check('the default mix seeds exactly the shops', seedSourcesFor(DEFAULT_SOURCE_MIX), SEED_SHOPS);
+
+// **Absent and empty are different answers**, and this is the pair worth the
+// test: `undefined` is a caller that never asked and takes the default, while
+// an explicit all-false is somebody unticking all three and means *no sources*.
+// Collapsing them either forces shops on a household that refused them or
+// drops the seed for every caller that omitted the argument.
+check('an absent mix is the default', toSourceMix(undefined), DEFAULT_SOURCE_MIX);
+check('a null mix is the default', toSourceMix(null), DEFAULT_SOURCE_MIX);
+check('a non-object mix is the default', toSourceMix('buy'), DEFAULT_SOURCE_MIX);
+check('an empty object is not the default', toSourceMix({}), { buy: false, grow: false, make: false });
+check('an all-false mix survives', toSourceMix({ buy: false, grow: false, make: false }), { buy: false, grow: false, make: false });
+check('an all-false mix seeds nothing', seedSourcesFor({ buy: false, grow: false, make: false }), []);
+
+// Truthiness is not a tick. A string or a number in the payload reads as *not
+// ticked* rather than as yes.
+check('a truthy non-boolean is not a tick', toSourceMix({ buy: 'yes', grow: 1, make: {} }), { buy: false, grow: false, make: false });
+
+// The three ticks, and the order they seed in — shop, grow, make, which is the
+// run list's band order.
+check('buy and grow seeds the shops and the garden', seedSourcesFor({ buy: true, grow: true, make: false }), [...SEED_SHOPS, SEED_GROW]);
+check('all three seeds everything in band order', seedSourcesFor({ buy: true, grow: true, make: true }), [...SEED_SHOPS, SEED_GROW, SEED_MAKE]);
+check('grow alone seeds only the garden', seedSourcesFor({ buy: false, grow: true, make: false }), [SEED_GROW]);
+check('make alone seeds only the kitchen', seedSourcesFor({ buy: false, grow: false, make: true }), [SEED_MAKE]);
+
+// The group word follows the seed, so a household is a `SOURCE` household
+// before it holds a single item — the line D61 retires from the design doc.
+check('buy alone seeds a Store household', sourceGroupWord(seedSourcesFor(DEFAULT_SOURCE_MIX)), 'Store');
+check('ticking grow seeds a Source household', sourceGroupWord(seedSourcesFor({ buy: true, grow: true, make: false })), 'Source');
+check('ticking make seeds a Source household', sourceGroupWord(seedSourcesFor({ buy: true, grow: false, make: true })), 'Source');
+check('seeding nothing leaves a Store household', sourceGroupWord(seedSourcesFor({ buy: false, grow: false, make: false })), 'Store');
 
 // --- the shopping list, which is a view of the items rather than a table ---
 //
@@ -1161,7 +1225,7 @@ check(
 );
 check(
 	'every store named is a seeded store',
-	DEMO_ITEMS.every((i) => i.storeNames.every((s) => SEED_STORES.some((x) => x.name === s))),
+	DEMO_ITEMS.every((i) => i.storeNames.every((s) => SEED_SHOPS.some((x) => x.name === s))),
 	true
 );
 
@@ -1205,7 +1269,7 @@ const demoTerm = (id: string, name: string): Term =>
 
 const DEMO_LOCS = SEED_LOCATIONS.map((l, n) => demoTerm(`loc${n}`, l.name));
 const DEMO_TYPES = SEED_TYPES.map((t, n) => demoTerm(`type${n}`, t.name));
-const DEMO_STORES = SEED_STORES.map((s, n) => demoTerm(`store${n}`, s.name));
+const DEMO_STORES = SEED_SHOPS.map((s, n) => demoTerm(`store${n}`, s.name));
 const NOW = Date.parse('2026-08-28T12:00:00.000Z');
 
 const full = resolveDemoItems(DEMO_LOCS, DEMO_TYPES, DEMO_STORES, NOW);

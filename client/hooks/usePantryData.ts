@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@spacefast/zero/client';
 
 import type { Role } from '../../shared/roles';
 import type { SourceKind } from '../../shared/source';
+import type { SourceMix } from '../../shared/seed';
 import type {
 	HouseholdData,
 	HouseholdListResult,
@@ -68,7 +69,7 @@ export type PantryApi = {
 	dismissError: () => void;
 
 	/** Resolves to the new household's id, so the caller can switch to it. */
-	createHousehold: (name: string, ink: string) => Promise<string | null>;
+	createHousehold: (name: string, ink: string, sources: SourceMix) => Promise<string | null>;
 	updateHousehold: (patch: { name?: string; defaultThreshold?: string; ink?: string }) => Promise<void>;
 
 	/**
@@ -137,7 +138,7 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 
 	const [error, setError] = useState<string | null>(null);
 
-	const rawCreateHousehold = useMutation<[string, string], { householdId: string }>('createHousehold');
+	const rawCreateHousehold = useMutation<[string, string, SourceMix], { householdId: string }>('createHousehold');
 	const rawUpdateHousehold = useMutation<[string, { name?: string; defaultThreshold?: string; ink?: string }], void>('updateHousehold');
 	const rawAddItem = useMutation<[string, ItemDraft & Stamps], { id: string }>('addItem');
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
@@ -213,8 +214,8 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 		error,
 		dismissError: useCallback(() => setError(null), []),
 
-		createHousehold: useCallback(async (name, ink) => {
-			const result = await run(() => rawCreateHousehold(name, ink));
+		createHousehold: useCallback(async (name, ink, sources) => {
+			const result = await run(() => rawCreateHousehold(name, ink, sources));
 
 			return result ? result.householdId : null;
 		}, [run, rawCreateHousehold]),

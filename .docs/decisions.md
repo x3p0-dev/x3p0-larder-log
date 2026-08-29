@@ -4225,3 +4225,149 @@ countable in the first place.
 - **Removing the control outright, legacy rows included.** Cheapest, and it
   strands every ticked row off every band with no way back. The escape hatch is
   three lines.
+
+---
+
+## D61. First run asks where your food comes from, and the answer is what seeds the sources
+
+**Amends [D40](#d40-seeded-terms-are-generic-and-there-are-still-three-stores)
+and [D58](#d58-a-source-carries-a-kind), and retires D58's line that a new
+household is a `STORE` household on day one.**
+
+Spec: `.claude/docs/design/garden-and-kitchen.md`, *First run asks where your
+food comes from*, drawn on board 1 of
+`.claude/docs/design/larderloggardenkitchenboards.html`.
+
+**Three checkboxes on the household-creation card**, under the name field and
+above the primary, under the micro-label `WHERE YOUR FOOD COMES FROM`:
+
+| Row | Description | Default | Seeds |
+|---|---|---|---|
+| We buy it | *Groceries, the warehouse, the farm stand.* | **on** | Grocery, Warehouse, Market — all `shop` |
+| We grow some of it | *A garden, a plot, a few pots on the step.* | off | **Garden**, `grow`, fern (`color-11`) |
+| We make some of it | *Stock, bread, jam — things you'd otherwise buy.* | off | **Kitchen**, `make`, mulberry (`color-5`) |
+
+### Why the question exists at all
+
+D58 gave a source a kind and then left every household to discover it. The kind
+is not something you learn about your own pantry afterwards: saying *Garden* is
+a garden meant naming it, pressing *Done*, re-opening the group with the pencil
+and finding the row again — a detour into a drawer you do not yet know is
+there, to reach a menu you do not yet know exists.
+
+**It is the one thing about a new household the app cannot infer and would
+otherwise never ask.** Everything else on the card is a name and a colour, both
+of which the household supplies by existing.
+
+### Why it is allowed on a card whose rule is "one field, one button, nothing else"
+
+That rule was written against a **preview** — a recessed panel showing fifteen
+seeded chips, explaining what a household is before you had made one. It went
+because the drawer explains itself a second later and better.
+
+**This is a question, not an explanation.** The answer changes what gets
+*written*, not what gets shown.
+
+**The test it has to pass is that Enter still finishes the screen**, and it
+does: buy on, grow and make off is exactly the household that existed before the
+question did. Someone who ignores the three rows loses nothing.
+
+**This is not the prefill [D48](#d48-a-name-nobody-typed-is-not-an-answer)
+forbids.** D48 is about a *name*: a name nobody typed is not an answer, and a
+filled field submits as though it were. A tick is not a name — it is a closed
+question whose commonest answer is knowably yes, it is legible without reading
+a field, and the hint under it says what it will do.
+
+### Nothing is required and nothing is disabled
+
+Untick all three and the primary stays live: you get the locations and types and
+no sources at all. **That is not a dead end the way no locations would be** —
+`itemStores` is a join table, so an item can name no source, while `locationId`
+is a required column and D16 refuses to delete the last location anything
+references. Sources are the one taxonomy that can start empty.
+
+It is also the cleanest version of the *seed no stores* argument that has been
+open since D40: someone who does not want Grocery / Warehouse / Market now has a
+way to not be given them, rather than three chips to delete.
+
+A disabled primary could not explain itself here any more than the editing row's
+trash could ([D36](#d36-undo-what-comes-back-confirm-what-doesnt)).
+
+### What is on both creation surfaces, which the design doc does not draw
+
+The board is the first-run card. The rows also go in **`NewHouseholdDialog`** —
+the switcher's and the rail's *New household* — because the second household
+somebody makes is as likely to be the one with the garden as the first, and
+asking on only one of them leaves the other seeding three shops and pointing
+back at the kind menu. One component, `SourceMixRows`, on both.
+
+### An absent answer and an empty one are different, and the distinction is load-bearing
+
+`toSourceMix(undefined)` is the buy-only default — a caller that never asked the
+question, which is every caller that predates it. `toSourceMix({})` and an
+explicit all-false are **somebody unticking all three**, and mean *seed no
+sources*. Collapsing the two would either force shops on a household that
+refused them or drop the seed for every caller that omitted the argument. Each
+field is compared against `true` rather than coerced, so a string or a number in
+the payload reads as *not ticked* rather than as yes.
+
+Normalized server-side, like every other client-supplied value: `kind` reaches
+the column that decides which band a row lands in.
+
+### No definite article
+
+*Garden*, not *The Garden*; *Kitchen*, not *The Kitchen* — a change from how
+this doc and D58 wrote them in prose. Every other seeded term is a bare noun —
+Pantry, Refrigerator, Freezer, Grocery, Warehouse, Market — and a chip reading
+*The Garden* beside one reading *Market* is one term written as a phrase and the
+rest written as labels. It also keeps `householdLetter()`'s article rule where it
+belongs: that exists because household names are phrases people write, and a
+seeded term should never need it.
+
+### What this changes elsewhere
+
+- **Whether a household ever meets the word *Source* is an answer, not a
+  property of the seed.** D58 said the seeded stores are all shops, so every new
+  household is a `STORE` household on day one. Tick *We grow some of it* and the
+  drawer heading reads `SOURCE` before there is a single item in the larder —
+  verified against the real handler.
+- **No schema change.** `stores.kind` shipped with D58; this writes it at seed
+  time. Ten tables, five queries, nineteen mutations, `db.migrations` empty.
+- **`createHousehold` gained a third argument**, optional, so a caller that
+  omits it gets exactly today's household.
+- **The seeded shops now carry `kind: 'shop'` explicitly** rather than leaning
+  on `toSourceKind`'s `''` fallback. Nothing behaves differently; the seed table
+  is read beside two rows that state their kind, and a row that states its own
+  is one less thing to reason about.
+- **This reaches new households only.** Nothing backfills, exactly as D50's
+  types do not — the published household keeps the three shops it has.
+
+### Open
+
+- **The naming rule does not cover grow-only, no shop.** `Store` is the heading
+  when everything is a shop and `Source` once anything is not, so a household
+  whose only source is a garden reads `Source` — correct, and reached by the
+  `sourceGroupWord` table rather than by the doc's prose about counting kinds.
+  A household that ticked *nothing* reads `Store` on an empty list, which is the
+  word it has always shown before anything exists.
+- **`?demo` needs a buy household.** Its sixty items name Grocery, Warehouse and
+  Market, so a household that unticked *We buy it* gets demo rows with no source.
+  Not fixed: `DEMO_ITEMS`' distribution is pinned by `npm test` on purpose.
+- **Every chip in the seeded drawer still reads `0`.** True before this too, and
+  more visible when the drawer is the payoff for a question asked ten seconds
+  ago. Hiding counts at zero items is easy and is not decided here.
+
+### Rejected
+
+- **A second step** — `NEW HOUSEHOLD · STEP 2 OF 2`, *How do you stock it?*
+  Drawn on the board so the cost is visible. It reads better, because a question
+  with its own screen gets a title, a subtitle and all the room it wants. It
+  turns *one screen, not a wizard* into a wizard, over a question most
+  households answer by leaving the defaults alone — and it has to grow a *Back*
+  and a step count, after which there is an argument for a third step.
+- **Requiring at least one tick.** Considered and dropped: it removes the
+  seed-nothing path this decision argues for, and buys almost nothing, since Buy
+  ships ticked and only a deliberate untick-all could reach the block.
+- **A fourth term group, or a mode.** Both are D58's rejected list, unchanged.
+- **Backfilling the published household.** Same reasoning as D50: it would have
+  to reason about terms a household has already renamed, recoloured or deleted.

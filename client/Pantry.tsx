@@ -47,6 +47,7 @@ import { wouldStrandHousehold } from '../shared/membership';
 import type { StatusKey } from '../shared/status';
 import { statusKeyFor } from '../shared/status';
 import type { SourceKind } from '../shared/source';
+import type { SourceMix } from '../shared/seed';
 import { sourceGroupWord } from '../shared/source';
 import type { Item, ItemDraft, Member, Term, TermKind, ThemeOverride } from '../shared/types';
 import { DEFAULT_ROLE, can } from '../shared/roles';
@@ -769,9 +770,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		return householdId;
 	}
 
-	/** First run and the dialog both create; both then switch to what they made. */
-	async function createHousehold(name: string, ink: string): Promise<string | null> {
-		const householdId = await api.createHousehold(name, ink);
+	/**
+	 * First run and the dialog both create; both then switch to what they made.
+	 *
+	 * `sources` is the three ticks from either card (D61) — which of shop, grow
+	 * and make this household stocks from. The server turns it into the seeded
+	 * source list and normalizes it on the way, so this only carries it.
+	 */
+	async function createHousehold(name: string, ink: string, sources: SourceMix): Promise<string | null> {
+		const householdId = await api.createHousehold(name, ink, sources);
 
 		if (householdId) selectNewHousehold(householdId);
 
@@ -2706,7 +2713,7 @@ function Gate({
 	displayName: string;
 	email: string;
 	picture?: string;
-	onCreateHousehold: (name: string, ink: string) => Promise<string | null>;
+	onCreateHousehold: (name: string, ink: string, sources: SourceMix) => Promise<string | null>;
 	onSignOut: () => void;
 	/** A refused household creation. The app shell's banner isn't mounted here. */
 	error: string | null;

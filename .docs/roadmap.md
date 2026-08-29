@@ -1604,3 +1604,40 @@ brighter than the `Dark dot` column — confirmed by the mockup, where the same
 value appears in the light and dark artboards alike. The eight colors the
 sample data uses are pinned down; the other eight fall back to `Dark dot` and
 read slightly dim. `client/lib/palette.ts` marks which.
+
+### First run asks where your food comes from ✅ (2026-08-29)
+
+[D61](decisions.md#d61-first-run-asks-where-your-food-comes-from-and-the-answer-is-what-seeds-the-sources),
+amending D40 and D58. **Client and one handler argument; no schema change** —
+`stores.kind` shipped with D58 and this writes it at seed time. Ten tables, five
+queries, nineteen mutations, `db.migrations` empty.
+
+D58 gave a source a kind and left every household to discover it. **Three
+checkboxes on the creation card** ask instead, under `WHERE YOUR FOOD COMES
+FROM`: *We buy it* (ticked) seeds Grocery · Warehouse · Market as shops, *We
+grow some of it* seeds **Garden** at fern, *We make some of it* seeds
+**Kitchen** at mulberry.
+
+- **`SourceMixRows.tsx` is on both creation surfaces** — `FirstRun` and
+  `NewHouseholdDialog` — though the boards draw only the first. The second
+  household is as likely to be the one with the garden.
+- **It does not break *one field, one button, nothing else***: that rule was
+  written against a preview that *explained* the seeded terms, and this *asks*
+  the one thing the app cannot infer. **Enter still finishes the screen**,
+  because the defaults are the household that existed before the question did.
+- **Nothing is required.** Untick all three and you get the locations and types
+  and no sources — not a dead end, because `itemStores` is a join table, and the
+  cleanest version of the *seed no stores* question open in `notes.md` since
+  D40. That note is now closed.
+- **An absent mix and an empty one are different answers.** `undefined` takes
+  the buy-only default; an explicit all-false seeds nothing. Truthiness is not a
+  tick.
+- **No definite article** — *Garden*, not *The Garden*, unlike how D58 and the
+  design doc write them in prose.
+- **This retires D58's line** that a new household is a `STORE` household on day
+  one. Whether anyone meets the word *Source* is now an answer.
+
+**445 assertions** (26 new), typecheck clean, the artifact shows no migration,
+all 70 class literals diffed against a live `/zero.css`, and `createHousehold`
+was driven over `POST /__spacefast/zero/run` across all eight branches including
+**the argument omitted**, which still seeds exactly three shops.
