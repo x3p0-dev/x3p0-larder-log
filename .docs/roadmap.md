@@ -244,10 +244,12 @@ household.
 ## Phase 5 — Ship
 
 - ✅ **`sf publish` to a real space** — live at
-  <https://larderlog.view.fast/>. **v11** as of 2026-08-27
-  (`ver_1c0448898da744d3b2b42a89c4272e21`, 93 files, 16 seconds) carries
-  everything through Phase 4.12 and D51, and took the `profiles` table live.
-  Publishing still needs the `x-spacefast-rationale` shim — see
+  <https://larderlog.view.fast/>. **v13** as of 2026-08-29
+  (`ver_cb18bde5f0e44c5db5fa37f75c9d4470`, 125 files, 16 seconds) carries all of
+  `garden-and-kitchen.md`'s v1 — D58, the run list, the item side, D60 and D61 —
+  and took `stores.kind`, `items.seasonFrom` and `items.seasonTo` live.
+  **Publishing no longer needs the `x-spacefast-rationale` shim**: the CLI was
+  upgraded 0.0.26 → 0.2.2 and a plain `npx sf publish` now works first try. See
   [CLAUDE.md](../.claude/CLAUDE.md) before attempting one.
 - ✅ **The app is installable** — `site.webmanifest` serves as
   `application/manifest+json` with the 192, 512 and maskable-512 icons.
@@ -266,13 +268,19 @@ household.
 
 **Done when:** we stop keeping a mental list.
 
-**The gap now is clicking, not building.** Every phase through 4.12 is built,
+**The gap now is clicking, not building.** Every phase through 4.15 is built,
 published and verified by compiling, curling and reading the artifact — and the
 Phase 4.9 entry records what that is worth: a single real session on a phone
-found six defects none of those checks could have caught. v11 is the first
-build carrying 4.10, 4.11 and 4.12 into production, and **nobody has used any
-of it**. The applied filter bar, the display-name gate, the redesigned drawer,
-the members pane and the restored view state are all unexercised by a human.
+found six defects none of those checks could have caught. v13 carries
+Garden and Kitchen's whole v1 into production and **nobody has used any of
+it**. The unexercised list keeps growing rather than shrinking: the applied
+filter bar, the display-name gate, the redesigned drawer, the members pane and
+the restored view state from v11; the item sheet's size and steppers and the
+install row from v12; and now the source-kind menu, the run list's bands and
+segment, the season panel and the first-run source mix. **The published
+household still holds three shop sources and the old nine types**, so the
+bands, the segment and the `SOURCE` rename are not even visible there until a
+source is given a kind by hand.
 
 ## Later, maybe
 

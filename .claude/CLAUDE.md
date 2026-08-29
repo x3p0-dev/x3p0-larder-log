@@ -20,17 +20,29 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phases 3 and 4 are built and published.** **v12 is live** as of 2026-08-28
-(`ver_50b38d7b92f2450a999c7835726c6411`, 121 files, 18 seconds) — it carries
-Phases 4.13 and 4.14 and D52–D57, and it is **the publish that took four
-columns live in one go**: `items.size`, `items.unit`, `items.offShoppingList`
-(D52/D53) and `memberships.picture` (D55), the fourth, fifth and sixth additive
-schema changes since Phase 2. Verified after the fact the usual way:
-`applied: true`, `pendingOperationCount: 0`, a `migrations` array naming all
-four `add_column` ops with their defaults, and `data.schemaHash` equal to
-`data.plan.appliedSchemaHash` — read at their two different depths. **Nobody has
-clicked v12** — everything below that says "nobody has clicked it" is still
-true, and is now true *in production* rather than only locally.
+**Phases 3 and 4 are built and published.** **v13 is live** as of 2026-08-29
+(`ver_cb18bde5f0e44c5db5fa37f75c9d4470`, 125 files, 16 seconds) — it carries
+**all of `garden-and-kitchen.md`'s v1**: D58 (a source's kind, the STORE/SOURCE
+rename, the kind menu, the item card's glyphs), the run list's three bands,
+the item side's season, D60's retirement of the off-list checkbox, and D61's
+first-run source mix. It took **three** columns live — `stores.kind` and
+`items.seasonFrom` / `items.seasonTo` — the seventh and eighth additive schema
+changes since Phase 2. Verified the usual way: `applied: true`,
+`pendingOperationCount: 0`, a `migrations` array naming all three `add_column`
+ops with their defaults, and `data.schemaHash` equal to
+`data.plan.appliedSchemaHash` — read at their two different depths.
+
+**v13 is also the publish that ended the rationale blockade.** It went out with
+a plain `npx sf publish`, first try, no shim and no `NODE_OPTIONS` — see
+*Publishing works* below, which is rewritten. **Nobody has clicked v13** —
+everything below that says "nobody has clicked it" is still true, and is now
+true *in production* rather than only locally.
+
+v12 (`ver_50b38d7b92f2450a999c7835726c6411`, 121 files) carried Phases 4.13 and
+4.14 and D52–D57, and is **the publish that took four columns live in one go**:
+`items.size`, `items.unit`, `items.offShoppingList` (D52/D53) and
+`memberships.picture` (D55), the fourth, fifth and sixth additive schema changes
+since Phase 2.
 
 v11 (`ver_1c0448898da744d3b2b42a89c4272e21`, 93 files) carried Phases 4.10–4.12
 and D45–D51, and took the `profiles` table live (D46).
@@ -44,7 +56,8 @@ the schema:
 everything through D44 — the nine stamp columns, the A–Z term order, and the
 device fixes. The v4 publish on 2026-08-26 ended a three-day blockade; v5–v7
 were the probe rounds that found the hosted-runtime divergences. Publishing
-still needs a rationale-header shim, re-checked against npm on 2026-08-27.
+needed a rationale-header shim from v4 through v12; **it does not any more** —
+see *Publishing works plainly again* below.
 
 **The hosted runtime is a different JS engine from the one `sf dev` runs**,
 which broke `createInvite` in production while it worked locally — read *The
@@ -1924,7 +1937,7 @@ term both restored with **both** stamps byte-identical and a visibly newer
 `createdAt`; a renamed store re-sorting alphabetically. **Nobody has clicked
 it.**
 
-### Publishing works, and v12 is live — 2026-08-28
+### Publishing works plainly again, and v13 is live — 2026-08-29
 
 **Phases 3 through 4.9 are published.** `sf publish` completed for the first
 time since v2: **v4**, `ver_d80a395f07144ce6863ba75b212a1486`, 71 files, 18
@@ -1932,15 +1945,22 @@ seconds. The platform's `finalize` / `runtime_api_not_found` failure — which
 killed v3 on 2026-08-25 and wedged three spaces on 2026-08-24 — **is fixed on
 their side**. Nothing here changed to cause that.
 
-Verified again on **v12**, and this is the standing checklist: `GET /` 200,
-`/api/status` → `ok`, `/client.js` (352 KB) and `/zero.css` (77 KB) serve,
+Verified again on **v13**, and this is the standing checklist: `GET /` 200,
+`/api/status` → `ok`, `/client.js` (378 KB) and `/zero.css` (77 KB) serve,
 `/site.webmanifest` serves as `application/manifest+json` with all seven
 `/icons/*`, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md`,
 `/.env.server`, `/.spacefast/state.json` all 403), `theme.json` and `sf.jsonc`
 404 while `LICENSE.md` and `package-lock.json` serve, every class literal in
-`client/` is in the **live** `/zero.css`, and all four new columns migrated
-additively with no flag — as D44's nine columns, `households.ink` and the
-`profiles` table did before them.
+`client/` is in the **live** `/zero.css`, and all three new columns migrated
+additively with no flag — as D44's nine columns, `households.ink`, the
+`profiles` table and v12's four did before them.
+
+**Cheaper than curling the live space for the bytes: hash the payload against
+it.** `.spacefast/zero/public/` holds the *real* `zero.css` and `client.js` that
+ship, so a class check can read that file rather than bootstrapping `sf dev` —
+and after the publish, `shasum` on both sides proves the live space is serving
+exactly what was built. All three of `client.js`, `zero.css` and
+`site.webmanifest` matched byte for byte on v13.
 
 **The maskable icon is `icon-maskable-512.png`.** A check that curls
 `/icons/maskable-512.png` gets a 404 that looks like a missing asset and is
@@ -1966,47 +1986,64 @@ than assuming them. `invitePreview` answers an unauthenticated caller
 over `POST /__spacefast/zero/run`, which **exists in production too**, not just
 under `sf dev`.
 
-**The `x-spacefast-rationale` blocker is NOT gone.** A plain `npx sf publish`
-still dies at *Creating version*. Re-checked **2026-08-28, before the v12
-publish**: npm's `latest` is still `spacefast@0.0.26` (no `next`/`beta`;
-`@spacefast/zero` tops out there too), the binary channel is still 0.0.27, and
-that binary still cannot compile a Zero capsule. Two greps settle it faster than
-reading release notes — dumping every `SPACEFAST_[A-Z_]+` literal out of
-`node_modules/spacefast/dist` gives 86 variables with **no `SPACEFAST_RATIONALE`
-among them**, and the CLI's whole `x-spacefast-*` header vocabulary is `client`,
-`client-capabilities`, `country`, `idempotency-principal`, `language`,
-`mcp-token`, `runtime`, `version` — **`rationale` is not a header this CLI can
-send at all.**
+**The `x-spacefast-rationale` blockade is over, as of 2026-08-29.** A plain
+`npx sf publish` now works, first try. **v13 went out with no shim, no
+`NODE_OPTIONS` and no out-of-band header**, ending a four-day workaround that
+every publish from v4 to v12 depended on.
 
-The publish only completed because the header was attached out-of-band: a
-`fetch` wrapper loaded with `NODE_OPTIONS=--import`, adding a **truthful**
-rationale to `*.spacefast.com` requests. The shim is not in the repo — it lives
-in the session scratchpad and has to be rewritten each time.
+**It was not fixed the way this file predicted.** The prediction was that npm
+would ship a CLI with `--rationale` or `SPACEFAST_RATIONALE`. **Neither
+exists**, and both were checked against the new release *before* publishing:
+`spacefast@0.2.2` still has no `SPACEFAST_RATIONALE` among its env vars, its
+whole `x-spacefast-*` vocabulary is `client`, `client-capabilities`, `country`,
+`idempotency-principal`, `language`, `runtime`, `version` — **`rationale` is
+still not a header this CLI can send** — and `sf publish --help` lists no flag
+for one. So **the platform stopped asking**; the requirement was dropped or is
+now satisfied server-side. Do not read this as "the CLI caught up".
 
-**Two things the rewrite must get right**, both learned on v11. Match the host
-with `/(^|\.)spacefast\.com$/` and not a bare `includes('spacefast.com')`, or
-a lookalike domain would be handed the rationale too. And seed a `Headers` from
+**The CLI is on `spacefast@0.2.2` now**, up from 0.0.26, and `@spacefast/zero`
+moved with it. That jump is what to re-do if this ever regresses — and it was
+safe for a reason worth repeating: **the compiled capsule was diffed across both
+compilers before publishing** (tables, every column with its type and default,
+indexes, queries, mutations, endpoints, migrations, runtime) and came back
+**byte-identical**. The only payload difference was the content-hash directory
+holding the platform modules. **Diff the artifact across a toolchain change
+before trusting it**; it costs one dry run.
+
+**The shim is retired, and this is what it was**, kept only so it can be rebuilt
+if the requirement returns: a `fetch` wrapper loaded with `NODE_OPTIONS=--import`
+that added a **truthful** rationale to `*.spacefast.com` requests. Two things
+the rewrite had to get right, both learned on v11. Match the host with
+`/(^|\.)spacefast\.com$/` and not a bare `includes('spacefast.com')`, or a
+lookalike domain would be handed the rationale too. And seed a `Headers` from
 the incoming `Request`'s own headers before setting anything, because passing
 `init.headers` to `fetch` **replaces** rather than merges — get that wrong and
 the CLI's `authorization` is silently dropped, which presents as an auth failure
-rather than a shim bug. Test it against a stubbed transport before pointing it
-at a real publish; it takes one command and proves auth, content-type, method
-and body all survive. **The v12 rewrite is worth reproducing**: it reads the
-rationale from an env var and *throws* when it is unset, so there is no path
-that publishes without one; and its stub test is 22 assertions covering the
-authorization-drop case, three lookalike hosts, apex and subdomain matching, and
-`Request` / `URL` / string inputs. Spec-faithfulness matters in one place — when
-`init.headers` is present it must win outright, because that is what `fetch`
-itself does; seed from the `Request` only when `init` names no headers.
+rather than a shim bug. Spec-faithfulness matters in one place: when
+`init.headers` *is* present it must win outright, because that is what `fetch`
+itself does. Test against a stubbed transport before pointing it at a real
+publish.
 
-Two things to know before publishing again:
+**If it ever comes back, the rationale must be true.** It exists so an
+agent-driven mutation is attributable. Do not misrepresent the caller to dodge
+it — `SPACEFAST_CLIENT` feeds `x-spacefast-client` and would do exactly that.
+Supplying the metadata is compliance; hiding it is not.
 
-1. **You will need the shim**, until npm ships 0.0.27 or 0.0.26 gains
-   `--rationale` / `SPACEFAST_RATIONALE`. Check npm first — it may have landed.
-2. **The rationale must be true.** It exists so an agent-driven mutation is
-   attributable. Do not misrepresent the caller to dodge it — `SPACEFAST_CLIENT`
-   feeds `x-spacefast-client` and would do exactly that. Supplying the metadata
-   is compliance; hiding it is not.
+**Two things the new CLI does that the old one did not.** Uploads are
+**incremental** — v13 reported `Files 125` and `Uploading files 34 files`, so
+those two numbers disagreeing is normal and not a truncated payload. And the
+version record carries **git provenance nothing was asked for**: the commit URL,
+branch and repository, with the commit message used as the changelog when `-m`
+is omitted. Pass `-m` to say what the version actually carries, since one commit
+message rarely describes a whole publish.
+
+**`--dry-run` still is not sufficient, in a new way.** The real publish printed
+`Warning: ignored 2 unsupported file(s) on this plan:
+.claude/docs/pantry-tracker-mockup.jsx, .idea/x3p0-larder-log.iml` — *after*
+creating the version, and the dry run said nothing about it. Neither file
+matters here, but the rule is unstated and the warning arrives too late to act
+on. This is the second documented case of a dry run being necessary and not
+sufficient, after staged-but-404ing `theme.json`.
 
 The full write-up is in [`.claude/docs/spacefast.md`](docs/spacefast.md).
 
@@ -2293,6 +2330,11 @@ npm test             # unit tests over shared/ — compiles with tsc, runs on no
 `sf` is a pinned devDependency, **not** a global install — use the npm scripts
 or `npx sf …`. Do not run the `curl … install.sh | bash` installer; the CLI
 ships on npm as the `spacefast` package and the pinned version is deliberate.
+**It is `spacefast@0.2.2`, pinned exactly** (no `^`), together with
+`@spacefast/zero@0.2.2` — upgraded from 0.0.26 on 2026-08-29, immediately
+before the v13 publish. The two must move together: the CLI bundles
+`@spacefast/zero-compile` at its own version, and that is what compiles the
+capsule.
 
 `sf --help` does not list `dev`, `db`, `logs`, or `storage`, but they all exist,
 as do `sf db migrate`, `sf db export`, `sf db dump`, and `sf db console`.
@@ -2350,11 +2392,18 @@ Cheapest first:
   empty table list, which looks exactly like the catastrophe the check exists to
   catch. This has now cost two sessions:
 
+  **`queries` and `mutations` are arrays of plain strings**, not objects — a
+  `.map(q => q.name)` over them prints a row of blanks that looks exactly like
+  an empty capsule. A table's fields are `columns`, not `fields`, so a lookup
+  through the wrong key reports every column as absent. Both cost a round trip
+  on the v13 check.
+
   ```js
   const a = JSON.parse(readFileSync('.spacefast/zero/artifact.json', 'utf8'));
   Object.keys(a.server.schema)   // table names
-  a.server.mutations             // array of { name }
-  a.server.queries               // likewise
+  a.server.schema.items.columns  // [{ name, type, nullable, default }] — NOT .fields
+  a.server.mutations             // array of plain STRINGS — NOT objects with .name
+  a.server.queries               // likewise, plain strings
   a.server.endpoints             // [{ method, path }] — check nothing throwaway survived
   a.db.migrations                // [] when nothing additive is pending
   ```

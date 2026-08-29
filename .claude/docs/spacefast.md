@@ -3885,3 +3885,154 @@ a.db.migrations                // [] when the change is additive-free
 
 Logged rather than filed as a bug: nothing is broken, and the cost is entirely
 in discoverability.
+
+## 2026-08-29 (third) — `spacefast@0.2.2` ships, and the rationale blockade is over
+
+The single best platform day this project has had. **`sf publish` now works
+plainly**, with no shim, no `NODE_OPTIONS` and no out-of-band header.
+
+### ✅ The CLI jumped 0.0.26 → 0.2.2 and the whole family moved with it
+
+npm's `latest` had been pinned at `spacefast@0.0.26` for the life of this
+project. It is now **0.2.2**, and — the part that mattered — `@spacefast/zero`
+and `@spacefast/zero-compile` are published at 0.2.2 too. That is the thing the
+old **0.0.27 binary channel got wrong**: it existed, and it could not compile a
+Zero capsule, so it was useless here. This release does not have that gap.
+
+```
+0.0.23  0.0.24  0.0.26  0.2.2
+```
+
+There is no `next` or `beta` tag; 0.2.2 is simply `latest`, and the jump skips
+every intermediate number.
+
+### ✅ The `x-spacefast-rationale` blockade is gone — and it was NOT fixed the expected way
+
+For four days this project could not run a plain `npx sf publish`: it died at
+*Creating version* demanding an `x-spacefast-rationale` header that **the CLI
+had no vocabulary to send**. Every publish from v4 to v12 went out behind a
+`fetch` wrapper loaded with `NODE_OPTIONS=--import`, rewritten from scratch each
+session because it deliberately lives outside the repo.
+
+The obvious fix would have been a `--rationale` flag or a `SPACEFAST_RATIONALE`
+env var. **Neither shipped.** Both were checked against 0.2.2 before publishing:
+
+```
+$ grep -rhoE "SPACEFAST_[A-Z_]+" node_modules/spacefast/dist | sort -u | grep -i rat
+(nothing — 0.0.26 and 0.2.2 alike)
+
+$ grep -rhoE "x-spacefast-[a-z-]+" .../0.2.2/dist | sort -u
+x-spacefast-client   x-spacefast-client-capabilities   x-spacefast-country
+x-spacefast-idempotency-principal   x-spacefast-language   x-spacefast-runtime
+x-spacefast-version
+```
+
+`rationale` is still not a header this CLI can send, and `sf publish --help` on
+0.2.2 lists no flag for one. **The requirement was dropped or satisfied
+server-side instead.** So the correct read of the old entries is not "the CLI
+caught up" but "the platform stopped asking" — worth knowing, because it means
+the *mechanism* that decides an agent-driven mutation is attributable has
+changed and is no longer visible from the client at all.
+
+On the evidence here that is an improvement: the old failure was a hard block
+with no supported way through, which is what pushed every publish onto an
+unsupported workaround. **A requirement no client can satisfy is worse for
+attribution than no requirement**, because what it actually produced was four
+days of hand-written `fetch` patching.
+
+### ✅ v13 published first try, 16 seconds
+
+```
+✓ Updating space    larderlog (spc_7770744a870a43f5927213fa397c780e)
+✓ Creating version  ver_cb18bde5f0e44c5db5fa37f75c9d4470
+✓ Uploading files   34 files
+✓ Finalizing version  v13
+Files 125   Duration 16s
+```
+
+**Uploads are incremental now** — 125 files in the payload, **34 actually
+uploaded**. Earlier publishes reported the full count at both steps. Nothing
+announces this; it is visible only by reading the two numbers.
+
+The version record also carries **git provenance nothing was asked for** — the
+commit URL, branch and repository, detected from the working tree, and the
+commit message used as the changelog when `-m` is omitted. That is a genuinely
+nice touch and it is new since 0.0.26.
+
+### ✅ The upgrade was surface-compatible with the capsule, exactly
+
+The compiled capsule was diffed across the two compiler versions before
+publishing — tables, every column with its type and default, indexes, queries,
+mutations, endpoints, migrations, runtime — and came back **byte-identical**.
+The only payload difference was the content-hash directory holding the platform
+modules:
+
+```
+_spacefast/platform/148a7ff3ce1fe948/…   (0.0.26)
+_spacefast/platform/6748ddd78ae62a91/…   (0.2.2)
+```
+
+Same 125 files, same `SPA false`, same target. For a 0.0.x → 0.2.x jump on a
+project this far along, that is a much better outcome than expected, and it is
+what made the upgrade safe to do immediately before a publish.
+
+### ❓ Two files were "ignored" with no way to know that in advance
+
+New warning, printed *after* the version was created:
+
+```
+Warning: ignored 2 unsupported file(s) on this plan:
+  .claude/docs/pantry-tracker-mockup.jsx, .idea/x3p0-larder-log.iml
+```
+
+Neither file matters here — one is a design reference, the other an editor
+leftover. But three things about this are unhelpful:
+
+1. **"on this plan"** implies a billing or tier limit, and nothing says which
+   limit, what the rule is, or what the other 123 files did to qualify. A
+   `.jsx` and an `.iml` have no obvious property in common.
+2. **`--dry-run` did not mention it.** The dry run reported `Files 125` with no
+   warning; the real publish reported the same 125 and then said two of them
+   were dropped. The dry run is supposed to be the way to see what a publish
+   would do — this is the second documented case of it being necessary but not
+   sufficient, after staged-but-404ing `theme.json`.
+3. **It arrives too late to act on**, printed between *Creating version* and
+   *Uploading files*.
+
+**What would fix it:** emit the same warning from `--dry-run`, and name the rule
+(`unsupported extension`, `size`, `plan limit`) rather than the plan.
+
+### ✅ Auth and credentials survived the version jump
+
+`sf whoami` answered correctly on 0.2.2 with no re-authentication — the
+credential store format is compatible across the jump. Worth recording because
+it was the main risk in upgrading a CLI immediately before a publish.
+
+### ❓ `sf spaces` with no subcommand prints help and exits 0
+
+Minor: `sf spaces` alone prints the help topic rather than listing spaces, which
+is defensible for a topic command, but it does so on stdout with a success exit
+code — so a script that expected a list gets a help page and no error. `sf
+spaces list` is presumably the real form.
+
+### Still open from earlier entries
+
+- **`sf db dump` is still the documented route for things it cannot do** — not
+  re-tested this session.
+- **The `plan` / footer contradiction is unchanged.** `sf db --json` again
+  needed `data.plan.applied` + `pendingOperationCount` + the two hashes at
+  *different depths* (`data.schemaHash` vs `data.plan.appliedSchemaHash`) to
+  confirm the three `add_column` ops landed. The trap is exactly as logged.
+
+### ✅ The version-pinned URL is team-private, and a 403 there is correct
+
+`sf publish` prints a `Version URL` beside the live one —
+`https://v13--larderlog.view.fast/`. It answers **403 "This space is private"**
+to an anonymous request, with `vary: Cookie` and `x-robots-tag: noindex`, while
+the live URL is public and serving the same version. That is sensible (a version
+preview should not be crawlable) but the publish output presents the two URLs
+side by side with nothing to say one needs a signed-in team member. The
+`x-spacefast-version` response header is the useful part: it names the version
+id even on the 403, so it still confirms which build is behind that hostname.
+
+**Do not read that 403 as a failed publish.** Verify against the live URL.
