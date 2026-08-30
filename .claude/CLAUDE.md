@@ -20,8 +20,17 @@ WordPress, say so rather than building it.
 
 ## Current state
 
-**Phases 3 and 4 are built and published.** **v13 is live** as of 2026-08-29
-(`ver_cb18bde5f0e44c5db5fa37f75c9d4470`, 125 files, 16 seconds) — it carries
+**Phases 3 and 4 are built and published.** **v14 is live** as of 2026-08-29
+(`ver_baf737f272f144f59de420f12f8c2c55`, 125 files, 7 uploaded, 18 seconds) —
+**the first publish that is client-only**: no schema change, `db.migrations`
+empty, and `schemaHash` byte-identical to v13's. It carries the run list's row-2
+rework, the `ResizeObserver` fix, and the two hover states — see *Row 2 holds
+the whole run list*. Verified the usual way plus the payload hash: `client.js`,
+`zero.css` and `site.webmanifest` all `shasum`-match
+`.spacefast/zero/public/`. **The first thing worth clicking on it is a resize**
+— `compact` has never once been false in production before this version.
+
+**v13** (`ver_cb18bde5f0e44c5db5fa37f75c9d4470`, 125 files, 16 seconds) carries
 **all of `garden-and-kitchen.md`'s v1**: D58 (a source's kind, the STORE/SOURCE
 rename, the kind menu, the item card's glyphs), the run list's three bands,
 the item side's season, D60's retirement of the off-list checkbox, and D61's
@@ -32,11 +41,12 @@ changes since Phase 2. Verified the usual way: `applied: true`,
 ops with their defaults, and `data.schemaHash` equal to
 `data.plan.appliedSchemaHash` — read at their two different depths.
 
-**v13 is also the publish that ended the rationale blockade.** It went out with
+**v13 was the publish that ended the rationale blockade**, and **v14 confirmed
+it**: a second plain `npx sf publish`, first try, no shim. It went out with
 a plain `npx sf publish`, first try, no shim and no `NODE_OPTIONS` — see
-*Publishing works* below, which is rewritten. **Nobody has clicked v13** —
-everything below that says "nobody has clicked it" is still true, and is now
-true *in production* rather than only locally.
+*Publishing works* below, which is rewritten. **Nobody has clicked v13 or
+v14** — everything below that says "nobody has clicked it" is still true, and is
+now true *in production* rather than only locally.
 
 v12 (`ver_50b38d7b92f2450a999c7835726c6411`, 121 files) carried Phases 4.13 and
 4.14 and D52–D57, and is **the publish that took four columns live in one go**:
@@ -2134,7 +2144,7 @@ term both restored with **both** stamps byte-identical and a visibly newer
 `createdAt`; a renamed store re-sorting alphabetically. **Nobody has clicked
 it.**
 
-### Publishing works plainly again, and v13 is live — 2026-08-29
+### Publishing works plainly again, and v14 is live — 2026-08-29
 
 **Phases 3 through 4.9 are published.** `sf publish` completed for the first
 time since v2: **v4**, `ver_d80a395f07144ce6863ba75b212a1486`, 71 files, 18
@@ -2142,7 +2152,7 @@ seconds. The platform's `finalize` / `runtime_api_not_found` failure — which
 killed v3 on 2026-08-25 and wedged three spaces on 2026-08-24 — **is fixed on
 their side**. Nothing here changed to cause that.
 
-Verified again on **v13**, and this is the standing checklist: `GET /` 200,
+Verified again on **v14**, and this is the standing checklist: `GET /` 200,
 `/api/status` → `ok`, `/client.js` (378 KB) and `/zero.css` (77 KB) serve,
 `/site.webmanifest` serves as `application/manifest+json` with all seven
 `/icons/*`, **D29 holds** (`/.claude/CLAUDE.md`, `/.docs/decisions.md`,

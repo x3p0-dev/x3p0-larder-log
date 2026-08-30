@@ -4036,3 +4036,55 @@ side by side with nothing to say one needs a signed-in team member. The
 id even on the 403, so it still confirms which build is behind that hostname.
 
 **Do not read that 403 as a failed publish.** Verify against the live URL.
+
+## 2026-08-29 — v14, the first client-only publish
+
+### ✅ A plain publish worked a second time
+
+`npx sf publish -m "…"` on `spacefast@0.2.2`, first try, no shim and no
+`NODE_OPTIONS`. That is now **two** consecutive plain publishes, so the
+rationale requirement being dropped (or satisfied server-side) looks settled
+rather than lucky. 125 files, **7 uploaded**, 18 seconds.
+
+### ✅ Incremental upload is doing real work
+
+`Files 125` / `Uploading files 7 files` on a change that touched five client
+modules. The two numbers disagreeing is normal and not a truncated payload —
+worth restating because it looks alarming the first time.
+
+### ✅ A no-op migration reports cleanly
+
+First publish here with **no schema change at all**. `sf db --json` came back
+`applied: true`, `pendingOperationCount: 0`, `migrations: []`, and
+`data.schemaHash` byte-identical to the previous version's. Nothing surprising,
+which is the point: the honest signal for "nothing to migrate" is legible.
+
+### ⚠️ The unsupported-file warning is still post-hoc, second occurrence
+
+```
+Warning: ignored 2 unsupported file(s) on this plan:
+.claude/docs/pantry-tracker-mockup.jsx, .idea/x3p0-larder-log.iml
+```
+
+Printed **after** `Creating version` succeeded, and **`--dry-run` said nothing
+about it** — same as v13. Neither file matters here, but the rule is unstated
+(what makes a `.jsx` or an `.iml` "unsupported on this plan"?) and the warning
+arrives too late to act on. This is the second logged case of a dry run being
+necessary but not sufficient, after staged-but-404ing `theme.json`.
+
+**Suggestion:** surface it in `--dry-run`, and name the rule or link it.
+
+### ✅ Payload hashing is a better publish check than curling for strings
+
+`shasum` on `.spacefast/zero/public/{client.js,zero.css,site.webmanifest}`
+against the live URLs matched byte for byte. It proves the live space is serving
+exactly what was built, in three commands, with no guessing at which string
+should be present.
+
+### ⚠️ `data.plan` still has no `schemaHash`, confirmed by printing its keys
+
+`Object.keys(data.plan)` is exactly `applied, appliedSchemaHash,
+pendingOperationCount`. So `data.plan.schemaHash` is `undefined` and comparing
+it against `appliedSchemaHash` reports a **spurious mismatch on a clean
+migration**. The trap is unchanged from v11/v12/v13; printing the keys rather
+than assuming them is the fix.
