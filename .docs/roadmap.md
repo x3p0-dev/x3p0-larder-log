@@ -1841,3 +1841,41 @@ about a biased sample. See D65's *Open* and the note in D64.
 **Both phases were used on 2026-08-31 and read correctly** — on the first pass,
 which no phase of this size has managed before. **390 and a twenty-row put-away
 are what that session did not cover.**
+
+### Claims are shared, and that stops the double-buy ✅ (2026-08-31)
+
+[D66](decisions.md#d66-a-claim-says-whose-and-that-is-what-stops-the-double-buy),
+completing D64 and replacing D41's *checks are local* outright. **Two schema
+changes**: `trips` and `claims`. Fourteen tables, fourteen queries, twenty-eight
+mutations, `db.migrations` empty.
+
+D41 refused to share ticks because *a tick that means "in my cart" cannot be
+read by someone else without saying whose*. **So it says whose** — and the
+collision that rule was avoiding is the feature, because it is what stops the
+double-buy.
+
+- **A claim is not a write**, which is what makes sharing safe: it says somebody
+  intends to get the item and the count is still written once, at the put-away.
+- **The trip is a row** so the twenty-four hours run from the last tick rather
+  than the first, and so `restocks.tripId` becomes a real id.
+- **Neither table stores a name.** A `userId` and the `household` query's members
+  are enough, so nothing in the larder records who touched a thing and a trip
+  goes with the account.
+- **`claims` is its own query** — a tick must not refetch every member's pantry.
+- **Yours only** for `Hide N checked`, `Put N away` and `N in your cart`. You
+  cannot put away what you do not have.
+- **The tick column became the answer** — empty box, your check, or their face —
+  which is a knowing departure from the design's *leave it empty*, and the thing
+  that finally made the row read.
+- **A real Gravatar with an initial fallback** (D55), which the first pass got
+  wrong by drawing a letter unconditionally.
+
+**745 assertions** (26 new), typecheck clean, the artifact showing both tables
+with no migration pending, and the real handlers driven **as two named dev
+guests at once**: the refusal on somebody else's row, the no-op on your own, a
+put-away ending one trip and leaving the other standing, and every cascade
+watched to actually delete.
+
+**Trends tier 2 is the last unbuilt piece of `restock.md` and is decided
+against for now** — the log records put-aways, and two of the three ways to
+raise a count write nothing.

@@ -68,6 +68,7 @@ import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
 import { runBands, runCount, runIds } from '../shared/runList';
 import { putAwayRows, restockEntry } from '../shared/restock';
+import type { ClaimOwner } from '../shared/claim';
 import type { PutAwayRow } from '../shared/restock';
 import { monthOf } from '../shared/season';
 import type { RunTab } from './components/RunSegment';
@@ -1078,6 +1079,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ready]);
 	const myMembershipId = household?.me.membershipId ?? '';
+	/**
+	 * Your account id — what a claim is keyed by (D66).
+	 *
+	 * `''` until the household query answers, which `indexClaims` reads as
+	 * *nothing is mine*. That is the safe direction: the alternative is briefly
+	 * offering to put away somebody else's shopping.
+	 */
+	const myUserId = household?.me.userId ?? '';
 
 	/*
 	 * Your own avatar, reconciled into the copy the rest of the household reads.
@@ -1584,8 +1593,40 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		[items, stores, month]
 	);
 
-	const trip = useTripChecks(tripKey, api.currentHouseholdId, buyableIds);
+	const trip = useTripChecks(
+		tripKey,
+		api.currentHouseholdId,
+		myUserId,
+		api.claims,
+		buyableIds,
+		api.claimItem,
+		api.releaseClaims
+	);
 	const { setListMode } = trip;
+
+	/**
+	 * Item id to the **name** of whoever else has claimed it (D66).
+	 *
+	 * Resolved here, where the members are, rather than in `RunList` — a row
+	 * should not have to know that a claim is keyed by an account id.
+	 *
+	 * **A missing member still draws.** She can leave the household between the
+	 * claim and the read, and *In someone else's cart* is still true and still
+	 * stops the double-buy, which is the entire job.
+	 */
+	const claimedBy = useMemo(() => {
+		const people = new Map(members.map((m) => [m.userId, { name: m.displayName, picture: m.picture }]));
+		const out = new Map<string, ClaimOwner>();
+
+		for (const [itemId, userId] of trip.claims.theirs) {
+			// A face wherever there is one (D55). `picture` is '' for an account
+			// with no Gravatar, which the avatar reads as *draw the initial*.
+			out.set(itemId, people.get(userId) ?? { name: '', picture: '' });
+		}
+
+		return out;
+	}, [members, trip.claims]);
+
 
 	/*
 	 * The mode is only meaningful while there is something to buy. It survives a
@@ -1680,7 +1721,11 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		 * already in your hand, so that is what is left here.
 		 */
 		if (banded) {
-			const cart = inCart > 0 ? `${inCart} in the cart` : '';
+			// **`your` cart, not `the` cart** (D66) — there may be somebody else's
+			// now. It counts yours only: a second number for rows you cannot act
+			// on would be chrome about somebody else's afternoon, and hers are
+			// visible where they matter, on the rows themselves.
+			const cart = inCart > 0 ? `${inCart} in your cart` : '';
 
 			return { short: cart, full: cart };
 		}
@@ -1704,7 +1749,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		 * is the half a glance can spare — the trip bar below already says it,
 		 * next to the control that acts on it.
 		 */
-		return { short, full: inCart > 0 ? `${short} · ${inCart} in the cart` : short };
+		return { short, full: inCart > 0 ? `${short} · ${inCart} in your cart` : short };
 	}, [banded, storeFilterName, toBuyHere, toBuyTotal, bands, inCart]);
 
 	/**
@@ -1984,7 +2029,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		setSaving(true);
 
-		const ok = await api.restockItems(trip.tripId, entries);
+		// The trip is the server's to name (D66) — it is holding the row, and
+		// asking the client which trip it is in would be asking it to tell us
+		// something we already know better.
+		const ok = await api.restockItems(entries);
 
 		setSaving(false);
 
@@ -1995,7 +2043,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		setPutAwayRows(null);
 		setJustPutAway(entries.length);
-		trip.end();
+		// The trip ended server-side, with the same write — `restockItems` drops
+		// it and its claims, which is what frees every row it held.
 
 		/*
 		 * **What is left is counted here rather than read off `toBuyTotal`.**
@@ -3077,6 +3126,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							bands={shownBands}
 							banded={banded && activeTab === 'all'}
 							checked={trip.checked}
+							claimedBy={claimedBy}
 							onToggle={mayEditItems ? trip.toggle : undefined}
 							onClearChecks={mayEditItems ? clearChecks : undefined}
 							onPutAway={mayEditItems ? openPutAway : undefined}

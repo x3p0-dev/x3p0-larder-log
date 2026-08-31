@@ -10,6 +10,8 @@ import { SOURCE_KIND_ICONS } from './SourceKindMenu';
 import type { BandKind, RunBand, ShoppingGroup } from '../../shared/runList';
 import type { Item } from '../../shared/types';
 import { isExtra } from '../../shared/listRule';
+import { claimInitial, claimPhrase } from '../../shared/claim';
+import type { ClaimOwner } from '../../shared/claim';
 import { toInt } from '../../shared/qty';
 import { formatSize } from '../../shared/size';
 import { readyPhrase } from '../../shared/season';
@@ -36,8 +38,17 @@ type Props = {
 	bands: RunBand[];
 	/** False while one tab is showing: one band needs no header naming it. */
 	banded: boolean;
-	/** Item ids currently in the cart. Local to this device — see `useTripChecks`. */
+	/** Item ids **you** have claimed. Shared now — see `useTripChecks`. */
 	checked: ReadonlySet<string>;
+	/**
+	 * Item id to the name of whoever else has claimed it (D66).
+	 *
+	 * A **name**, resolved by the caller against the household's members, rather
+	 * than a `userId` this component would have to look up. Empty when nobody
+	 * else is shopping, which is most of the time and every single-member
+	 * household.
+	 */
+	claimedBy: ReadonlyMap<string, ClaimOwner>;
 	/** Absent for a viewer, who gets no checkboxes. */
 	onToggle?: (id: string) => void;
 	/**
@@ -89,7 +100,7 @@ type Props = {
  * and its badge crowd the counts on the right, and the row wraps.
  */
 export function RunList(props: Props) {
-	const { bands, banded, checked, onToggle, onClearChecks, onPutAway, dark, theme } = props;
+	const { bands, banded, checked, claimedBy, onToggle, onClearChecks, onPutAway, dark, theme } = props;
 
 	const [hideChecked, setHideChecked] = useState(false);
 
@@ -145,7 +156,7 @@ export function RunList(props: Props) {
 		? 'Run list, nothing to get'
 		: `Run list, ${plural(total, 'item')} to get across `
 			+ (banded ? plural(bands.length, 'kind') : plural(groups.length, 'source'))
-			+ (checkedCount > 0 ? `, ${checkedCount} in the cart` : '');
+			+ (checkedCount > 0 ? `, ${checkedCount} in your cart` : '');
 
 	return (
 		<div>
@@ -209,6 +220,7 @@ export function RunList(props: Props) {
 											key={group.storeId ?? ''}
 											group={group}
 											checked={checked}
+											claimedBy={claimedBy}
 											onToggle={onToggle}
 											dark={dark}
 											theme={theme}
@@ -285,6 +297,8 @@ function plural(count: number, noun: string): string {
 type CardProps = {
 	group: ShoppingGroup;
 	checked: ReadonlySet<string>;
+	/** Item id to the name of whoever else has claimed it (D66). */
+	claimedBy: ReadonlyMap<string, ClaimOwner>;
 	onToggle?: (id: string) => void;
 	dark: boolean;
 	theme: Theme;
@@ -302,7 +316,7 @@ type CardProps = {
  * colour, so it reads quieter by having no hue at all rather than by being
  * dimmer.
  */
-function StoreCard({ group, checked, onToggle, dark, theme }: CardProps) {
+function StoreCard({ group, checked, claimedBy, onToggle, dark, theme }: CardProps) {
 	const term = group.storeId ? themed(group.ink, dark) : null;
 	const headingId = `shopping-${group.storeId ?? 'none'}`;
 
@@ -345,6 +359,7 @@ function StoreCard({ group, checked, onToggle, dark, theme }: CardProps) {
 						item={item}
 						first={index === 0}
 						checked={checked.has(item.id)}
+						claimedBy={claimedBy.get(item.id)}
 						onToggle={onToggle}
 						dark={dark}
 						theme={theme}
@@ -397,6 +412,15 @@ type RowProps = {
 	/** The header's own border does the job of a rule above the first row. */
 	first: boolean;
 	checked: boolean;
+	/**
+	 * The name of whoever else has claimed this, if anybody (D66).
+	 *
+	 * `undefined` is the ordinary row. A **claimed row is not a checked row**,
+	 * and that distinction is load-bearing: `Hide N checked` and `Put N away`
+	 * both count yours only, so hers stay visible — they are still on the list
+	 * until she buys them, and you cannot put away what you do not have.
+	 */
+	claimedBy?: ClaimOwner;
 	onToggle?: (id: string) => void;
 	dark: boolean;
 	theme: Theme;
@@ -419,8 +443,9 @@ type RowProps = {
  * already get the butter?" is a question you ask *about* the checked rows, and
  * the filled box has already said it is done.
  */
-function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
+function ListRow({ item, first, checked, claimedBy, onToggle, dark, theme }: RowProps) {
 	const status = statusFor(item.qty, item.threshold, dark);
+	const claimed = Boolean(claimedBy);
 	const extra = isExtra(item);
 	const counts = `have ${toInt(item.qty)} · low at ${toInt(item.threshold)}`;
 
@@ -428,7 +453,13 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 		<span
 			class="font-disp font-semibold text-[17px] whitespace-nowrap truncate"
 			style={{
-				color: checked ? theme.textMuted : theme.textStrong,
+				/*
+				 * **Claimed drops to meta and is *not* struck.** A strike says
+				 * *done*, and nothing is done — somebody has said they are getting
+				 * it, which is the opposite of finished. The colour is what says
+				 * *this one is not yours to think about*.
+				 */
+				color: checked || claimed ? theme.textMuted : theme.textStrong,
 				textDecoration: checked ? 'line-through' : 'none',
 				textDecorationThickness: '1.5px',
 			}}
@@ -466,14 +497,41 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 				background: extra ? theme.surfaceAlt : status.bg,
 				border: `1px solid ${extra ? theme.border : status.ring}`,
 				color: extra ? theme.textMuted : status.ink,
-				opacity: checked ? 0.55 : 1,
+				// A claimed row holds its status at 55% exactly as a checked one
+				// does: it is still out, and that is still the reason it is here.
+				opacity: checked || claimed ? 0.55 : 1,
 			}}
 		>
 			{extra ? 'Extra' : status.label}
 		</span>
 	);
 
-	const meta = (
+	/*
+	 * **The count slot is where the claim goes**, and that is the right trade:
+	 * *have 0 · low at 4* is the reason the row is on the list, and once somebody
+	 * has said they are getting it, who that is matters more than why.
+	 */
+	/*
+	 * **The sentence, where the counts would be.** The face has moved to the tick
+	 * column, which is what says *taken*; this says *by whom, and why it is
+	 * sitting there* — a bare name does not, and an 18px circle cannot carry
+	 * either half on its own, since an account with no Gravatar draws a letter
+	 * and three of those in one household look alike.
+	 *
+	 * **It fits now because the avatar left**, taking a circle and its gap with
+	 * it. Reduced to a first name the sentence is two characters longer than the
+	 * whole name was and some twenty-five pixels narrower than the pair it
+	 * replaces.
+	 *
+	 * One span, and **not** `aria-hidden` with a spoken twin beside it: the
+	 * visible words *are* the sentence a screen reader should hear, so the row's
+	 * accessible name ends with the claim by simply reading what is there.
+	 */
+	const meta = claimedBy ? (
+		<span class="text-[13px] whitespace-nowrap md:pr-5" style={{ color: theme.textMuted }}>
+			{claimPhrase(claimedBy.name)}
+		</span>
+	) : (
 		<span
 			class="text-[13px] whitespace-nowrap md:pr-5"
 			style={{ color: theme.textMuted }}
@@ -533,8 +591,28 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	 */
 	const inner = (
 		<>
+			{/*
+			  * **One column, three answers: nobody, you, them.**
+			  *
+			  * This slot has always meant *who is getting this* — normally the
+			  * answer is you, and you tick it. A claimed row left it **empty**,
+			  * which threw away the one position on the row where the eye already
+			  * looks for that answer and then re-explained it on the far right.
+			  *
+			  * A face here is not the box the design refused. Its reason was that
+			  * *a box you cannot fill reads as unchecked*, which is true of a box
+			  * and not of a person: the slot is visibly **occupied** rather than
+			  * visibly empty. Scanning the column top to bottom now answers *what
+			  * is left for me* in one pass, which is what you do in a shop.
+			  *
+			  * **A knowing departure from the design**, which says *Checkbox
+			  * column: Empty. It is not yours to tick.* The second sentence still
+			  * holds — there is nothing to press here.
+			  */}
 			<span class="w-[52px] md:w-14 shrink-0 flex items-center justify-center self-stretch">
-				<CheckBox checked={checked} theme={theme} />
+				{claimedBy
+					? <ClaimAvatar owner={claimedBy} theme={theme} />
+					: <CheckBox checked={checked} theme={theme} />}
 			</span>
 			<span class={`${bodyClass} pr-4 md:pr-0`}>{body}</span>
 		</>
@@ -545,11 +623,17 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 			class={`flex items-center h-16 md:h-14 ${onToggle ? LIST_ROW : ''}`}
 			style={first ? undefined : { borderTop: `1px solid ${theme.divider}` }}
 		>
-			{onToggle ? (
+			{onToggle && ! claimed ? (
 				/*
 				 * No `aria-label`: the row's own text names the checkbox, so it
 				 * announces as *Butter, OUT, have 0 · low at 2, checkbox, not
 				 * checked*. A label would have replaced all of that with the name.
+				 *
+				 * **A claimed row is not a button and not in the tab order**, for
+				 * the reason a `NOT YET` row is not: there is nothing on it to
+				 * press. Its text still reads, and it ends with the claim —
+				 * *Tortillas, 10 ct, out, In Sarah's cart* — because the row is
+				 * built from spans in source order.
 				 */
 				<button
 					role="checkbox"
@@ -561,6 +645,73 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 				</button>
 			) : inner}
 		</li>
+	);
+}
+
+/**
+ * The face in a claimed row's tick column.
+ *
+ * **A real Gravatar wherever there is one** (D55) — a person in this app has a
+ * face on the Members pane, in the Settings trio, on the drawer's foot row and
+ * across the admin console, and a claimed row is no different. It was drawn as
+ * a letter first, on the argument that 18px is too small for a photograph; that
+ * is a reason to accept a smudge, not a reason to invent a rule the rest of the
+ * app does not follow.
+ *
+ * **`onError` is load-bearing and not defensive**, exactly as `DrawerAvatar`'s
+ * is. The platform's URL carries `d=404` deliberately, so an account *without* a
+ * Gravatar serves no image at all and the consumer draws its own initial —
+ * without this, that account gets the browser's broken-image glyph, which is the
+ * one outcome worse than the letter. It holds the URL that **failed** rather
+ * than a boolean, so a changed picture retries with no effect to reset a flag.
+ *
+ * It cannot reuse `DrawerAvatar`, which is theme-independent because the drawer
+ * is dark in both themes and hard-codes that palette. This sits on a cream card.
+ *
+ * The fallback fill is neutral rather than a term colour: term colours mean
+ * *term* everywhere else, and a person is not a term — `DrawerAvatar`'s own
+ * argument, one surface over.
+ */
+function ClaimAvatar({ owner, theme }: { owner: ClaimOwner; theme: Theme }) {
+	const [failed, setFailed] = useState('');
+
+	/*
+	 * **22px, matching the checkbox it stands in for**, not the 18 the design
+	 * gave it — that number was for the count slot, beside 13px text. Here it
+	 * shares a column with `CheckBox`, and a circle four pixels shy of the boxes
+	 * above it reads as floating rather than as the same answer in a different
+	 * state.
+	 *
+	 * The letter is 0.44 of the side, which is `DrawerAvatar`'s rule and the
+	 * reason a fifth size would be a number rather than a table entry.
+	 */
+	const box = 'w-[22px] h-[22px] rounded-full shrink-0';
+
+	if (owner.picture && failed !== owner.picture) {
+		return (
+			<img
+				src={owner.picture}
+				alt=""
+				aria-hidden="true"
+				class={`${box} object-cover`}
+				style={{ border: `1px solid ${theme.borderStrong}` }}
+				onError={() => setFailed(owner.picture)}
+			/>
+		);
+	}
+
+	return (
+		<span
+			aria-hidden="true"
+			class={`inline-flex items-center justify-center font-semibold text-[10px] ${box}`}
+			style={{
+				background: theme.surfaceAlt,
+				border: `1px solid ${theme.borderStrong}`,
+				color: theme.textMuted,
+			}}
+		>
+			{claimInitial(owner.name)}
+		</span>
 	);
 }
 

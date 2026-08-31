@@ -5810,3 +5810,194 @@ cluster the design *prices but does not solve* is therefore not created here.
   reminds them. `EXTRA` says *why* it is there and never *how long* it has been.
   The `restocks` log now has the data to notice, which is the shape of an answer
   rather than one.
+
+---
+
+## D66. A claim says whose, and that is what stops the double-buy
+
+**Decided:** 2026-08-31. Completes
+[D64](#d64-a-check-is-a-claim-and-the-count-is-written-once-at-the-shelf) and
+replaces [D41](#d41-the-shopping-list-is-a-mode-and-its-checks-are-local)'s
+*checks are local* outright.
+
+**The design document is
+[`restock.md`](../.claude/docs/design/restock.md)**, *Claims are shared, and
+that is the feature*. **Built, all of it** except the two things it lists as
+open — taking over somebody else's claim, and offline.
+
+**Two schema changes**: `trips` and `claims`, the thirteenth and fourteenth
+tables. Fourteen queries, twenty-eight mutations.
+
+### The rule D41 got backwards
+
+D41 refused to share ticks, and its reason reads well: *a tick that means "in my
+cart" cannot be read by someone else without saying whose.*
+
+**So it says whose.** And the collision that rule was avoiding turns out to be
+the entire feature: two people at two shops was the failure mode, and it is now
+the case the screen is for. **A claim is what stops the double-buy.**
+
+It is safe to share for the reason D64 established: **a claim is not a write.**
+It says somebody intends to get the item and touches nothing about the item
+itself; the count is written once, at the put-away. Sharing an intent costs
+nothing that sharing a quantity would.
+
+### Two tables, and why the trip is one of them
+
+`claims` alone would have done, with expiry per row. `trips` exists for three
+reasons and the first is the real one:
+
+- **The twenty-four hours run from the *last* tick**, which is D41's own rule
+  and the thing per-claim expiry cannot express without rewriting every claim on
+  every tick. One row, one field, refreshed on each.
+- **`restocks.tripId` becomes a real row id**, which is exactly what that
+  column's note predicted when it was a client-minted opaque string.
+- A put-away has something to **name** — it ends a trip rather than deleting a
+  set of rows that happen to be yours.
+
+**Neither table stores a name.** A claim carries a `userId`, and the `household`
+query already returns every member with a display name and a picture, so the
+face is resolved client-side from an id we already have. That is the privacy
+position in one decision: **nothing in the larder records who touched a thing**,
+a trip is transient, and deleting an account takes its live trips with it rather
+than becoming a scrubbing job.
+
+### Its own query, deliberately
+
+`claims` is **not** part of `pantry`. Every tick by anybody invalidates it, and
+`pantry` carries the items, both join tables and all three taxonomies — folding
+claims in would refetch the whole pantry for every member each time somebody
+ticked a row in a shop.
+
+### Yours only, everywhere it counts
+
+**A claimed row is not a checked row**, and the distinction is load-bearing.
+`Hide N checked`, `Put N away` and row 2's `N in your cart` all count **yours**.
+Hers stay visible because they are still on the list until she buys them, and
+**you cannot put away something you do not have** — verified against the real
+handlers, where a put-away ended one trip and left the other standing.
+
+- **You cannot claim a row somebody else holds.** The server refuses with
+  *Someone else is already getting that.* Taking one over is not drawn and is
+  under *Open* below.
+- **Re-claiming your own row is a no-op, not an error.** Two devices, or a double
+  tap, should not produce a refusal for a state that is already what was asked
+  for.
+- **Nothing you can press releases somebody else's cart**, and the server
+  refuses it a second time.
+
+### The tick column is the answer, not the count slot
+
+The design puts an 18px avatar and *In Sarah's cart* in the **count slot** and
+leaves the checkbox column **empty** — *it is not yours to tick*. Built that way
+it read as wordy, and the reason was structural rather than verbal: **the empty
+gutter threw away the one position on the row where the eye already looks for
+that answer**, and then re-explained it on the far right.
+
+So the column carries it, and becomes one question with three answers:
+
+| tick column | means |
+|---|---|
+| empty box | nobody |
+| checked box | **you** |
+| a face | **them** |
+
+**A face is not the box the design refused.** Its reason was that *a box you
+cannot fill reads as unchecked* — true of a box, false of a person: the slot is
+visibly **occupied** rather than visibly empty. The second half of that sentence
+still holds, since there is nothing there to press.
+
+**The avatar is 22px, not 18.** That number was written for the count slot,
+beside 13px text; in the tick column it shares space with `CheckBox`, and a
+circle four pixels shy of the boxes above it reads as floating rather than as
+the same answer in a different state.
+
+**And the count slot keeps the sentence.** *In Justin's cart*, at a first name —
+which fits only because the face left, taking a circle and its gap with it. It
+is one span and not a visible name with a spoken twin: the words on screen *are*
+the sentence a screen reader should hear, so the row's accessible name ends with
+the claim by reading what is there.
+
+**Three passes went into that slot** — full sentence, name only, sentence again
+— and the thing that actually unlocked it was none of the wordings. It was
+moving the face into a column that was already asking the same question.
+
+### A face, because a person in this app has one
+
+`ClaimAvatar` draws the real Gravatar and falls back to the initial. It was
+built as a letter first, on the argument that 18px is too small for a
+photograph; **that is a reason to accept a smudge, not to invent an exception**
+to [D55](#d55-a-member-has-a-face-and-it-is-a-url-not-an-address), which every
+other surface in the app follows.
+
+**`onError` is load-bearing and not defensive**, as `DrawerAvatar`'s comment
+already says: the platform's URL carries `d=404` on purpose, so an account
+without a Gravatar serves no image and the consumer draws its own initial.
+Without it that account gets the browser's broken-image glyph — the one outcome
+worse than a letter. It cannot reuse `DrawerAvatar`, which hard-codes the
+drawer's palette because the drawer is dark in both themes; this sits on a cream
+card.
+
+### `localStorage` shrank rather than becoming a queue
+
+The design predicted it would stop being the storage and become the queue.
+Instead the server made it **redundant for ticks**: they survive a reload, a
+second device and a flat battery, which is strictly better than what D41 kept it
+for. What is left there is **list mode alone**, per household — a fact about
+this device.
+
+A tick still paints instantly, through an optimistic echo held in component
+state; the write goes out underneath and a refusal rolls the echo back with the
+server's own sentence on screen. **A durable offline outbox is not built** and
+is one of the design's own open questions.
+
+### The server names the trip
+
+`restockItems` took a `tripId` from the client and now resolves its own. The
+client was telling the server something the server was holding — the same
+instinct that makes a household id a selector rather than an authority.
+
+### Cascades
+
+Zero has no cascading deletes, and a claim is somebody's intent — **it has to go
+when they do**, or a row reads *In Sarah's cart* after Sarah has left and nobody
+can clear it.
+
+| when | goes |
+|---|---|
+| the item is deleted | every claim on it |
+| the trip is put away | that trip and its claims |
+| twenty-four hours pass | pruned at the next write, filtered on every read |
+| somebody leaves or is removed | their trips in that household |
+| an account is deleted | its trips everywhere |
+| the household is deleted | `claims` then `trips`, children first |
+
+**Pruning is append-time** for the reason the audit log's is — there is no
+scheduler — so a household nobody shops in keeps stale rows until somebody
+starts a trip. **The query filters on read as well**, which is what makes that
+invisible rather than wrong.
+
+### Rejected
+
+- **A cart or basket glyph on a claimed row.** The cart is the **shop kind's**
+  mark (band header, segment tab, item card) and the basket is the run trigger's;
+  either would gain a third meaning on the one screen that teaches the first two,
+  and on a **Harvest** card a cart is plainly wrong — she is picking, not
+  shopping.
+- **Denormalising the name onto the claim.** It would go stale on a rename and
+  put a second copy of a person's name in the database to be scrubbed.
+- **Folding claims into `pantry`.** A tick would refetch every member's pantry.
+- **Showing her count beside yours in row 2.** A second number for rows you
+  cannot act on is chrome about somebody else's afternoon.
+
+### Open
+
+- **Can you take over a claim?** She is at Publix, she ticked the butter, she has
+  gone home. Nothing releases it but twenty-four hours or her own *Clear checks*.
+- **Two people put the same item away** five minutes apart. Last write wins is
+  wrong and a merge is worse.
+- **Twenty-four hours is still a guess**, and now a guess other people can see.
+- **Offline.** A tick that fails rolls back; there is no outbox, and a car park
+  is exactly where this happens.
+- **A claim on an item somebody deletes mid-trip.** The cascade removes it; what
+  the person holding it should be told is unanswered.

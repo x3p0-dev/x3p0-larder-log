@@ -5,7 +5,9 @@ import type { Role } from '../../shared/roles';
 import type { SourceKind } from '../../shared/source';
 import type { SourceMix } from '../../shared/seed';
 import type { RestockEntry } from '../../shared/restock';
+import type { Claim } from '../../shared/claim';
 import type {
+	ClaimsResult,
 	HouseholdData,
 	HouseholdListResult,
 	HouseholdResult,
@@ -83,6 +85,21 @@ export type PantryApi = {
 	/** True when the server accepted the edit. False leaves the sheet open. */
 	updateItem: (id: string, patch: Partial<ItemDraft>) => Promise<boolean>;
 	adjustQty: (id: string, delta: number) => Promise<void>;
+
+	/**
+	 * Every live claim in the household — who is getting what (D66).
+	 *
+	 * An array rather than a `QueryState`, because there is nothing useful for a
+	 * caller to do with *loading* here: an empty list reads as *nobody has
+	 * claimed anything*, which is what the screen should show while the answer
+	 * is in flight and is the safe direction — the alternative is briefly
+	 * offering to put away somebody else's shopping.
+	 */
+	claims: Claim[];
+	/** Tick a row. False when the server refused — somebody else holds it. */
+	claimItem: (id: string) => Promise<boolean>;
+	/** Untick rows. Yours only; nothing you can press releases somebody else's. */
+	releaseClaims: (ids: readonly string[]) => Promise<boolean>;
 	/**
 	 * A whole trip's counts, written once (D64).
 	 *
@@ -91,7 +108,7 @@ export type PantryApi = {
 	 * to prevent. True when the server took them; false leaves the sheet open
 	 * with the numbers somebody typed still in it.
 	 */
-	restockItems: (tripId: string, entries: RestockEntry[]) => Promise<boolean>;
+	restockItems: (entries: RestockEntry[]) => Promise<boolean>;
 	/** True when the row is really gone — the undo toast is armed on this. */
 	removeItem: (id: string) => Promise<boolean>;
 
@@ -145,6 +162,13 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	const listResult = useQuery<HouseholdListResult>('households');
 	const pantryResult = useQuery<PantryResult>('pantry', preferred);
 	const householdResult = useQuery<HouseholdResult>('household', preferred);
+	/*
+	 * Its own subscription, and that is the point of it (D66): every tick by
+	 * anybody invalidates this, and `pantry` above carries the items, both join
+	 * tables and all three taxonomies. Folding claims into it would refetch the
+	 * whole pantry for every member each time somebody ticked a row in a shop.
+	 */
+	const claimsResult = useQuery<ClaimsResult>('claims', preferred);
 
 	const [error, setError] = useState<string | null>(null);
 
@@ -153,8 +177,10 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	const rawAddItem = useMutation<[string, ItemDraft & Stamps], { id: string }>('addItem');
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
 	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
-	const rawRestockItems = useMutation<[string, string, RestockEntry[]], { count: number }>('restockItems');
+	const rawRestockItems = useMutation<[string, RestockEntry[]], { count: number }>('restockItems');
 	const rawRemoveItem = useMutation<[string, string], void>('removeItem');
+	const rawClaimItem = useMutation<[string, string], { claimed: boolean }>('claimItem');
+	const rawReleaseClaims = useMutation<[string, string[]], { released: number }>('releaseClaims');
 	const rawCreateTerm = useMutation<[string, TermKind, TermDraft & Stamps & { kind?: SourceKind }], { id: string }>('createTerm');
 	const rawUpdateTerm = useMutation<[string, TermKind, string, { name?: string; ink?: string }], void>('updateTerm');
 	const rawDeleteTerm = useMutation<[string, TermKind, string], void>('deleteTerm');
@@ -218,6 +244,16 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	 */
 	const currentHouseholdId = status.state === 'ready' ? status.household.household.id : '';
 
+	/*
+	 * `[]` while the query is in flight or refused, which reads as *nobody has
+	 * claimed anything*. That is the safe direction: the opposite would briefly
+	 * paint somebody else's rows as yours.
+	 */
+	const claims = useMemo(
+		() => (claimsResult.state === 'ready' ? claimsResult.claims : []),
+		[claimsResult]
+	);
+
 	return {
 		status,
 		households,
@@ -250,8 +286,21 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			await run(() => rawAdjustQty(currentHouseholdId, id, delta));
 		}, [run, rawAdjustQty, currentHouseholdId]),
 
-		restockItems: useCallback(async (tripId, entries) => (
-			(await run(() => rawRestockItems(currentHouseholdId, tripId, entries).then(() => true))) === true
+		claims,
+
+		// A refusal has to be distinguishable from success: the optimistic tick
+		// is rolled back on false, and the server's own sentence — *Someone else
+		// is already getting that.* — is what `run` puts on screen.
+		claimItem: useCallback(async (id) => (
+			(await run(() => rawClaimItem(currentHouseholdId, id).then(() => true))) === true
+		), [run, rawClaimItem, currentHouseholdId]),
+
+		releaseClaims: useCallback(async (ids) => (
+			(await run(() => rawReleaseClaims(currentHouseholdId, [...ids]).then(() => true))) === true
+		), [run, rawReleaseClaims, currentHouseholdId]),
+
+		restockItems: useCallback(async (entries) => (
+			(await run(() => rawRestockItems(currentHouseholdId, entries).then(() => true))) === true
 		), [run, rawRestockItems, currentHouseholdId]),
 
 		// `void` here is what armed the undo toast for removals the server had

@@ -11,6 +11,7 @@
 
 import type { Role } from './roles';
 import type { SourceKind } from './source';
+import type { Claim } from './claim';
 
 export type TermKind = 'location' | 'type' | 'store';
 
@@ -249,6 +250,25 @@ export type HouseholdSummary = {
 export type HouseholdListData = {
 	households: HouseholdSummary[];
 };
+
+/**
+ * Every live claim in the household — who is getting what, right now (D66).
+ *
+ * **Its own query, deliberately not part of `pantry`.** A tick by anybody
+ * invalidates this, and `pantry` carries the items, both join tables and all
+ * three taxonomies; folding claims in would refetch the whole pantry for every
+ * member each time somebody ticked a row in a shop.
+ *
+ * The claims carry a `userId` and no name. The `household` query already
+ * returns every member with a display name and a picture, so the client
+ * resolves a face from the id it already has — which is what keeps a second
+ * copy of somebody's name out of the database entirely.
+ */
+export type ClaimsData = {
+	claims: Claim[];
+};
+
+export type ClaimsResult = QueryState<ClaimsData>;
 
 export type PantryResult = QueryState<PantryData>;
 export type HouseholdResult = QueryState<HouseholdData>;

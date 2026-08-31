@@ -40,6 +40,7 @@ import type {
 	AdminSummaryResult,
 	HouseholdListResult,
 	HouseholdResult,
+	ClaimsResult,
 	HouseholdSummary,
 	InvitePreviewResult,
 	PantryResult,
@@ -366,6 +367,56 @@ export const schema = {
 		.index('by_store', ['storeId'])
 		.index('by_household', ['householdId']),
 
+	// A person's shopping trip in one household (D66). **The thirteenth table.**
+	//
+	// One live row per person per household. It exists so the twenty-four hours
+	// run **from the last tick rather than from the first** — D41's rule, which
+	// per-claim expiry could not express without rewriting every claim on every
+	// tick — and so a put-away has something to name.
+	//
+	// **`restocks.tripId` becomes a real row id with this**, which is what that
+	// column's own note predicted: it was a client-minted opaque string, kept so
+	// the rows written before trips existed could still be grouped afterwards.
+	//
+	// No `displayName` and no `picture`. The claim carries a `userId` and the
+	// name is resolved from `memberships` at read time, so there is no second
+	// copy of a person's name to go stale or to scrub. **That is the whole
+	// privacy position**: a trip is transient, dies when it is put away or
+	// abandoned, and goes with the account when it is deleted — nothing in the
+	// larder itself ever records who touched a thing.
+	trips: table({
+		householdId: id('households'),
+		userId: string(),
+		at: string(),
+	})
+		.index('by_household', ['householdId'])
+		.index('by_user', ['userId']),
+
+	// One row: *I am getting this* (D66). **The fourteenth table.**
+	//
+	// **A claim is not a write.** It says somebody intends to get the item and
+	// touches nothing about the item itself — the count is written once, at the
+	// put-away. That is what makes it safe to share: the collision D41 rejected
+	// sharing to avoid is the whole feature, because it is what stops the
+	// double-buy.
+	//
+	// `householdId` is denormalised off the trip so the run list's read is one
+	// indexed scan rather than a join, and so the cascade can find these rows
+	// without walking trips first — the same trade `itemTypes` already makes.
+	//
+	// Expiry lives on the trip, not here, so a row is live exactly while its
+	// trip is.
+	claims: table({
+		householdId: id('households'),
+		tripId: id('trips'),
+		itemId: id('items'),
+		userId: string(),
+		at: string(),
+	})
+		.index('by_household', ['householdId'])
+		.index('by_trip', ['tripId'])
+		.index('by_item', ['itemId']),
+
 	// One trip's worth of counts, written once each by the put-away (D64). **The
 	// twelfth table, and the second added for a reader that does not exist yet.**
 	//
@@ -558,6 +609,48 @@ export default capsule({
 		 * Separate from `pantry` so an item edit does not refetch the member
 		 * list — the one split `invalidate()` actually makes worthwhile (D26).
 		 */
+		/**
+		 * Every live claim in this household (D66) — who is getting what.
+		 *
+		 * **Its own query rather than a corner of `pantry`.** A tick by anybody
+		 * invalidates this, and `pantry` carries the items, both join tables and
+		 * all three taxonomies; folding claims in would refetch that for every
+		 * member each time somebody ticked a row in a shop.
+		 *
+		 * **Expiry is applied on read as well as on write** — a trip older than
+		 * the window simply is not returned. Pruning happens at write time (there
+		 * is no scheduler, so a table nothing is adding to is a table nothing is
+		 * pruning), and that means a household nobody is shopping in keeps its
+		 * stale rows until somebody starts a trip. Filtering here is what makes
+		 * that invisible rather than wrong.
+		 *
+		 * It carries no names. `household` already returns every member with a
+		 * display name and a picture, so the client resolves a face from the id —
+		 * which is what keeps a second copy of a person's name out of the
+		 * database.
+		 */
+		claims: query(async (ctx, householdId: string): Promise<ClaimsResult> => {
+			const state = await membershipState(ctx, householdId);
+
+			if (state.kind === 'guest') return { state: 'guest' };
+			if (state.kind === 'none') return { state: 'no-household' };
+
+			const { membership } = state;
+			const live = await liveTripsIn(ctx.db, membership.householdId, Date.now());
+			const byTrip = new Set(live.map((t) => t.id));
+
+			const rows = await ctx.db.claims
+				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
+				.collect();
+
+			return {
+				state: 'ready',
+				claims: rows
+					.filter((row) => byTrip.has(row.tripId))
+					.map((row) => ({ itemId: row.itemId, userId: row.userId, tripId: row.tripId })),
+			};
+		}),
+
 		household: query(async (ctx, householdId: string): Promise<HouseholdResult> => {
 			const state = await membershipState(ctx, householdId);
 
@@ -1655,7 +1748,7 @@ export default capsule({
 				});
 			}
 
-			ctx.invalidate('households', 'household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry', 'claims');
 
 			return { householdId: household.id };
 		}),
@@ -1888,6 +1981,86 @@ export default capsule({
 			ctx.invalidate('pantry');
 		}),
 
+		/*
+		 * --- claims: the shared trip (D66) ---
+		 *
+		 * A claim says *I am getting this* and touches nothing about the item.
+		 * The count is written once, at the put-away — which is what makes a
+		 * claim safe to share, and what makes the two people at two shops that
+		 * D41 rejected sharing to avoid into the case this screen is for.
+		 */
+
+		/** Tick a row. Refuses one somebody else already holds. */
+		claimItem: mutation(async (ctx, householdId: string, itemId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'item:write');
+
+			assertInHousehold(await ctx.db.items.get(itemId), membership);
+
+			const now = Date.now();
+			const live = await liveTripsIn(ctx.db, membership.householdId, now);
+			const held = await liveClaimOn(ctx.db, itemId, live);
+
+			/*
+			 * **You cannot claim a row somebody else holds.** Taking one over is
+			 * not drawn — *she is at Publix and forgot* is a real case and a
+			 * small pile of etiquette, and it is under D66's open questions.
+			 *
+			 * Your own row is a no-op rather than an error: two devices, or a
+			 * double tap, should not produce a refusal for a state that is
+			 * already what was asked for.
+			 */
+			if (held) {
+				if (held.userId !== membership.userId) {
+					throw new AccessError('Someone else is already getting that.');
+				}
+
+				return { claimed: true };
+			}
+
+			const trip = await openTrip(ctx.db, membership.householdId, membership.userId, live, now);
+
+			await ctx.db.claims.insert({
+				householdId: membership.householdId,
+				tripId: trip.id,
+				itemId,
+				// Denormalised off the trip so the run list's read is one indexed
+				// scan and no join — the trade `itemTypes` already makes.
+				userId: membership.userId,
+				at: stampFrom(now),
+			});
+
+			ctx.invalidate('claims');
+
+			return { claimed: true };
+		}),
+
+		/**
+		 * Untick rows — one, or everything `Clear checks` had on screen.
+		 *
+		 * **It releases only your own**, and nothing you can press releases
+		 * somebody else's cart. A list of ids rather than one, because the client
+		 * knows which rows are in front of you and this does not: with a Store
+		 * filter on, the trip holds claims for rows nobody can see, and a control
+		 * beside `Hide 3 checked` must not quietly clear seven.
+		 */
+		releaseClaims: mutation(async (ctx, householdId: string, itemIds: string[]) => {
+			const membership = await requireCapability(ctx, householdId, 'item:write');
+
+			if (! Array.isArray(itemIds) || itemIds.length === 0) return { released: 0 };
+
+			const wanted = new Set(itemIds);
+			const mine = await myClaimsIn(ctx.db, membership.householdId, membership.userId, Date.now());
+			const going = mine.filter((c) => wanted.has(c.itemId));
+
+			for (const claim of going) await ctx.db.claims.delete(claim.id);
+
+			// Only when something moved: an unconditional invalidate would refetch
+			// every member's claims for a press that did nothing.
+			if (going.length > 0) ctx.invalidate('claims');
+
+			return { released: going.length };
+		}),
+
 		/**
 		 * The put-away — a whole trip's counts, written once (D64).
 		 *
@@ -1915,12 +2088,6 @@ export default capsule({
 			async (
 				ctx,
 				householdId: string,
-				/**
-				 * The trip these counts came from, so several rows can be seen to
-				 * have arrived together. Minted client-side and opaque here —
-				 * there is no trip table yet and this is the id there will be.
-				 */
-				tripId: string,
 				entries: {
 					itemId: string;
 					/** What is on the shelf now, not what was added. */
@@ -1960,7 +2127,22 @@ export default capsule({
 
 				// One clock read for the whole trip: rows that arrived together
 				// should say so, and two calls can straddle a millisecond.
-				const at = stampFrom(Date.now());
+				const now = Date.now();
+				const at = stampFrom(now);
+
+				/*
+				 * **The trip is resolved here, not sent** (D66). It was a
+				 * client-minted opaque string, because there was no trip table to
+				 * name; there is now, and the server is holding the row. Asking
+				 * the client which trip it is in would be asking it to tell us
+				 * something we already know better — and it is the same instinct
+				 * that makes a household id a selector rather than an authority.
+				 *
+				 * `''` when nothing was claimed: putting away a row you never
+				 * ticked is legal, and it belongs to no trip.
+				 */
+				const live = await liveTripsIn(ctx.db, membership.householdId, now);
+				const tripId = live.find((t) => t.userId === membership.userId)?.id ?? '';
 
 				for (const row of resolved) {
 					/*
@@ -1981,7 +2163,7 @@ export default capsule({
 					await ctx.db.restocks.insert({
 						householdId: membership.householdId,
 						itemId: row.item.id,
-						tripId: typeof tripId === 'string' ? tripId.slice(0, 64) : '',
+						tripId,
 						fromQty: row.item.qty,
 						toQty: row.qty,
 						// '' is a real answer here — a storeless row — so this
@@ -1992,7 +2174,19 @@ export default capsule({
 					});
 				}
 
-				ctx.invalidate('pantry');
+				/*
+				 * **The put-away ends the trip** (D64's rule 2, now a real row).
+				 * The counts are written and the trip is over, so its claims go
+				 * with it — which is also what frees every row it held for
+				 * somebody else.
+				 *
+				 * It ends **your** trip and never anybody else's: two people can
+				 * be shopping the same list, and putting your half away must not
+				 * empty her cart.
+				 */
+				await endTripsFor(ctx.db, membership.householdId, membership.userId);
+
+				ctx.invalidate('pantry', 'claims');
 
 				return { count: resolved.length };
 			}
@@ -2009,9 +2203,14 @@ export default capsule({
 
 			await clearJoinsForItem(ctx.db, item.id);
 			await clearRestocksForItem(ctx.db, item.id);
+			// A claim on a row that no longer exists is invisible to every read
+			// and impossible to clear — see D66's own open question about what
+			// happens to a claim when somebody deletes the item mid-trip. This is
+			// the half of it that is not a question.
+			await clearClaimsForItem(ctx.db, item.id);
 			await ctx.db.items.delete(item.id);
 
-			ctx.invalidate('pantry', 'households');
+			ctx.invalidate('pantry', 'households', 'claims');
 		}),
 
 		// --- taxonomy ---
@@ -2389,9 +2588,14 @@ export default capsule({
 			}
 
 			await revokeInvitesBy(ctx.db, membership.householdId, target.userId);
+			// **A claim goes with the person who made it.** A row reading *In
+			// Sarah's cart* after Sarah has left is a row nobody can clear —
+			// which is the state D66's own refusal (*you cannot claim a row
+			// somebody else holds*) would otherwise make permanent.
+			await endTripsFor(ctx.db, membership.householdId, target.userId);
 			await ctx.db.memberships.delete(target.id);
 
-			ctx.invalidate('households', 'household');
+			ctx.invalidate('households', 'household', 'claims');
 		}),
 
 		leaveHousehold: mutation(async (ctx, householdId: string) => {
@@ -2408,11 +2612,16 @@ export default capsule({
 			}
 
 			await revokeInvitesBy(ctx.db, membership.householdId, membership.userId);
+			// **A claim goes with the person who made it.** A row reading *In
+			// Sarah's cart* after Sarah has left is a row nobody can clear —
+			// which is the state D66's own refusal (*you cannot claim a row
+			// somebody else holds*) would otherwise make permanent.
+			await endTripsFor(ctx.db, membership.householdId, membership.userId);
 			await ctx.db.memberships.delete(membership.id);
 
 			// The list is what the client falls back through: losing this row is
 			// how it learns to show one of the others, or the first-run screen.
-			ctx.invalidate('households', 'household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry', 'claims');
 		}),
 
 		/** Owner only. Deletes every row scoped to the household, children first. */
@@ -2425,6 +2634,8 @@ export default capsule({
 				'itemTypes',
 				'itemStores',
 				'restocks',
+				'claims',
+				'trips',
 				'items',
 				'locations',
 				'types',
@@ -2441,7 +2652,7 @@ export default capsule({
 
 			await ctx.db.households.delete(membership.householdId);
 
-			ctx.invalidate('households', 'household', 'pantry');
+			ctx.invalidate('households', 'household', 'pantry', 'claims');
 		}),
 
 		/*
@@ -2544,6 +2755,11 @@ export default capsule({
 			const household = await ctx.db.households.get(householdId);
 
 			await revokeInvitesBy(ctx.db, householdId, target.userId);
+			// **A claim goes with the person who made it.** A row reading *In
+			// Sarah's cart* after Sarah has left is a row nobody can clear —
+			// which is the state D66's own refusal (*you cannot claim a row
+			// somebody else holds*) would otherwise make permanent.
+			await endTripsFor(ctx.db, householdId, target.userId);
 			await ctx.db.memberships.delete(target.id);
 
 			await logActivity(ctx, {
@@ -2876,6 +3092,18 @@ export default capsule({
 				if (! still) continue;
 
 				await revokeInvitesBy(ctx.db, m.householdId, userId);
+				/*
+				 * **Live trips go with the account** (D66), which is the promise
+				 * the design makes in so many words: *delete account still removes
+				 * a display name, an email, an avatar, membership rows and invites
+				 * — plus any live trips, which nobody will miss.*
+				 *
+				 * It is also what keeps the privacy line true. A claim is the one
+				 * row in this database that records who touched what, and it is
+				 * transient precisely so that deleting an account stays a clean
+				 * operation rather than a scrubbing job.
+				 */
+				await endTripsFor(ctx.db, m.householdId, userId);
 				await ctx.db.memberships.delete(m.id);
 			}
 
@@ -2891,7 +3119,7 @@ export default capsule({
 
 			ctx.invalidate(
 				'adminAccount', 'adminPeople', 'adminSummary', 'adminHouseholds', 'adminHousehold',
-				'adminActivity', 'households', 'household', 'pantry', 'profile'
+				'adminActivity', 'households', 'household', 'pantry', 'profile', 'claims'
 			);
 		}),
 	},
@@ -3114,6 +3342,8 @@ async function deleteHouseholdRows(db: WriteDb, householdId: string): Promise<vo
 		'itemTypes',
 		'itemStores',
 		'restocks',
+		'claims',
+		'trips',
 		'items',
 		'locations',
 		'types',
@@ -3456,6 +3686,139 @@ async function keepOwned(
 	}
 
 	return kept;
+}
+
+/**
+ * How long a trip lives without a put-away (D41, carried into D66).
+ *
+ * **A shopping trip does not last a day**, and under shared claims a week-old
+ * claim is a lie somebody else is reading. The window runs from the **last
+ * tick**, not the first, which is the whole reason a trip is a row: refreshing
+ * one field beats rewriting every claim on it.
+ *
+ * Still a guess, and now a guess other people can see — D66's open questions.
+ */
+const TRIP_MS = 24 * 60 * 60 * 1000;
+
+/** A household's trips that have not been abandoned. */
+async function liveTripsIn(db: ReadDb, householdId: string, now: number) {
+	const trips = await db.trips
+		.withIndex('by_household', (r) => r.eq('householdId', householdId))
+		.collect();
+
+	return trips.filter((t) => now - Date.parse(t.at) <= TRIP_MS);
+}
+
+/** Whoever currently holds this row, or nothing. */
+async function liveClaimOn(db: ReadDb, itemId: string, live: readonly { id: string }[]) {
+	const ids = new Set(live.map((t) => t.id));
+	const rows = await db.claims.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+
+	return rows.find((row) => ids.has(row.tripId));
+}
+
+/** Your live claims in this household. */
+async function myClaimsIn(db: ReadDb, householdId: string, userId: string, now: number) {
+	const live = await liveTripsIn(db, householdId, now);
+	const ids = new Set(live.filter((t) => t.userId === userId).map((t) => t.id));
+
+	const rows = await db.claims
+		.withIndex('by_household', (r) => r.eq('householdId', householdId))
+		.collect();
+
+	return rows.filter((row) => ids.has(row.tripId));
+}
+
+/**
+ * Your open trip in this household, or a new one — and the moment it prunes.
+ *
+ * **The refresh is what makes the window run from activity**: every tick moves
+ * `at`, so a slow shop cannot expire underneath somebody still walking it.
+ *
+ * **Pruning is append-time, for the reason the audit log's is** — there is no
+ * scheduler, so a table nothing is adding to is a table nothing is pruning. A
+ * household nobody shops in keeps its stale rows until somebody starts a trip,
+ * which is why the `claims` query filters on read as well.
+ */
+async function openTrip(
+	db: WriteDb,
+	householdId: string,
+	userId: string,
+	live: readonly { id: string; userId: string }[],
+	now: number
+) {
+	await pruneTrips(db, householdId, live, now);
+
+	const mine = live.find((t) => t.userId === userId);
+
+	if (mine) {
+		await db.trips.update(mine.id, { at: stampFrom(now) });
+
+		return mine;
+	}
+
+	return db.trips.insert({ householdId, userId, at: stampFrom(now) });
+}
+
+/** Drops abandoned trips and everything claimed on them. */
+async function pruneTrips(
+	db: WriteDb,
+	householdId: string,
+	live: readonly { id: string }[],
+	now: number
+): Promise<void> {
+	void now;
+
+	const all = await db.trips
+		.withIndex('by_household', (r) => r.eq('householdId', householdId))
+		.collect();
+
+	const keep = new Set(live.map((t) => t.id));
+
+	for (const trip of all) {
+		if (keep.has(trip.id)) continue;
+
+		await endTrip(db, trip.id);
+	}
+}
+
+/**
+ * Ends one trip: its claims, then the trip.
+ *
+ * Children first, because Zero has no cascading deletes — and a claim whose
+ * trip is gone is invisible to every read, which is worse than absent.
+ */
+async function endTrip(db: WriteDb, tripId: string): Promise<void> {
+	const claims = await db.claims.withIndex('by_trip', (r) => r.eq('tripId', tripId)).collect();
+
+	for (const claim of claims) await db.claims.delete(claim.id);
+
+	await db.trips.delete(tripId);
+}
+
+/** Every claim on an item, whatever trip it belongs to — the item's cascade. */
+async function clearClaimsForItem(db: WriteDb, itemId: string): Promise<void> {
+	const rows = await db.claims.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+
+	for (const row of rows) await db.claims.delete(row.id);
+}
+
+/**
+ * Every trip a person holds in one household, ended.
+ *
+ * Leaving a household, being removed from one, and deleting an account all
+ * reach this: **a claim is somebody's intent, and it has to go when they do** —
+ * a row reading *In Sarah's cart* after Sarah has left is a row nobody can
+ * clear.
+ */
+async function endTripsFor(db: WriteDb, householdId: string, userId: string): Promise<void> {
+	const trips = await db.trips
+		.withIndex('by_household', (r) => r.eq('householdId', householdId))
+		.collect();
+
+	for (const trip of trips) {
+		if (trip.userId === userId) await endTrip(db, trip.id);
+	}
 }
 
 /** Deletes every join row belonging to an item. */

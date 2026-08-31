@@ -375,11 +375,84 @@ itemStores: table({
 be loaded without walking through `items` first, and so orphan cleanup is a
 scoped scan rather than a full-table one.
 
+### `trips`
+
+One person's shopping trip in one household
+([D66](decisions.md#d66-a-claim-says-whose-and-that-is-what-stops-the-double-buy)).
+**The thirteenth table.**
+
+```ts
+trips: table({
+  householdId: id("households"),
+  userId: string(),
+  at: string(),                  // ISO 8601 UTC — refreshed on every tick
+})
+  .index("by_household", ["householdId"])
+  .index("by_user", ["userId"])
+```
+
+One live row per person per household. It exists so the **twenty-four hours run
+from the last tick rather than the first** — D41's rule, which per-claim expiry
+cannot express without rewriting every claim on every tick. `at` moves on each
+claim, so a slow shop cannot expire underneath somebody still walking it.
+
+It also gives `restocks.tripId` a real row id, which is what that column's own
+note predicted, and gives the put-away something to **name**: it ends a trip
+rather than deleting whichever rows happen to be yours.
+
+**No `displayName` and no `picture`.** See `claims` below.
+
+### `claims`
+
+*I am getting this.* **The fourteenth table.**
+
+```ts
+claims: table({
+  householdId: id("households"),   // denormalized off the trip; see note
+  tripId: id("trips"),
+  itemId: id("items"),
+  userId: string(),                // denormalized off the trip; see note
+  at: string(),
+})
+  .index("by_household", ["householdId"])
+  .index("by_trip", ["tripId"])
+  .index("by_item", ["itemId"])
+```
+
+**A claim is not a write.** It says somebody intends to get the item and touches
+nothing about the item itself — the count is written once, at the put-away
+(D64). That is what makes it safe to share, and sharing is the whole feature:
+D41 refused to, on the grounds that *a tick that means "in my cart" cannot be
+read by someone else without saying whose*. It says whose, and **the collision
+that rule was avoiding is what stops the double-buy**.
+
+`householdId` and `userId` are denormalized off the trip so the run list's read
+is one indexed scan rather than a join, and so the cascades can find these rows
+without walking trips first — the same trade `itemTypes` already makes.
+
+**Neither table stores a name.** The `household` query already returns every
+member with a `displayName` and a `picture`, so a face is resolved client-side
+from the `userId`. That is the privacy line in one sentence: **nothing in the
+larder records who touched a thing.** A trip is transient, dies when it is put
+away or abandoned, and goes with the account when it is deleted — which is what
+keeps account deletion a clean operation rather than a scrubbing job.
+
+**Expiry lives on the trip**, so a claim is live exactly while its trip is.
+Pruning is **append-time** (there is no scheduler, so a table nothing is adding
+to is a table nothing is pruning), which means a household nobody shops in keeps
+stale rows until somebody starts a trip — and the `claims` query filters on read
+as well, which is what makes that invisible rather than wrong.
+
+**One claim per item.** The server refuses a claim on a row somebody else holds;
+re-claiming your own is a no-op rather than an error, because two devices or a
+double tap should not produce a refusal for a state that is already what was
+asked for.
+
 ### `restocks`
 
 One trip's worth of counts, written once each by the put-away
 ([D64](decisions.md#d64-a-check-is-a-claim-and-the-count-is-written-once-at-the-shelf)).
-**The twelfth table, and the second added for a reader that does not exist yet.**
+**The twelfth table**, and the second added for a reader that does not exist yet. `trips` and `claims` above are the thirteenth and fourteenth.
 
 ```ts
 restocks: table({
@@ -582,13 +655,14 @@ dependents, in this order:
 
 | Deleting a… | Also delete | Also do |
 |---|---|---|
-| `item` | its `itemTypes`, `itemStores` **and `restocks`** rows | — |
+| `item` | its `itemTypes`, `itemStores`, `restocks` **and `claims`** rows | — |
 | `type` | its `itemTypes` rows | — |
 | `store` | its `itemStores` rows | — |
 | `location` | — | **refused** if any item references it; see [D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it) |
-| `member` (demote or remove) | — | revoke the `invites` they created ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) |
+| `member` (demote or remove) | **their `trips` in that household, and its `claims`** | revoke the `invites` they created ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) |
+| `trip` (put away, abandoned, or cleared) | its `claims`, then the trip | pruned at the next write, filtered on every read |
 | `household` | everything scoped to it, `memberships` and `invites` included | last, after all children. **Its `activity` rows survive** |
-| `account` (console only) | every `membership` it holds, and its `profiles` row | its solely-owned households are transferred or deleted first, one decision each. **Its `activity` rows survive** |
+| `account` (console only) | every `membership` it holds, its `profiles` row, **and its live `trips` everywhere** | its solely-owned households are transferred or deleted first, one decision each. **Its `activity` rows survive** |
 
 The location case is not a cascade at all. Zero has no nullable fields, so an
 item cannot be left without a location; `deleteTerm` refuses to delete a
@@ -609,6 +683,11 @@ clock and on nothing else's.
 its item and with its household, because there is nothing to say about how often
 you restock a row that no longer exists. The audit log denormalises so it can
 outlive its subject; this does not, and does not need to.
+
+**A claim goes when its owner does**, which is the one cascade that is about a
+person rather than a row: a list reading *In Sarah's cart* after Sarah has left
+the household is a row nobody can clear, and the server's own refusal — *you
+cannot claim a row somebody else holds* — would make that permanent.
 
 **Deleting an account is a cascade this app can perform and a deletion it cannot
 complete.** It removes every row keyed to a `userId` — the memberships, the
@@ -635,7 +714,10 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `addItem` | mutation | Create an item and its join rows. Takes optional `addedAt` / `changedAt` — **undo only** |
 | `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |
-| `restockItems` | mutation | A whole trip's counts at once, plus one `restocks` row each. Resolves every entry before writing any — a put-away must not half-commit |
+| `restockItems` | mutation | A whole trip's counts at once, plus one `restocks` row each, and it **ends the trip**. Resolves every entry before writing any — a put-away must not half-commit. It names its own trip rather than taking one from the client |
+| `claims` | query | Every live claim in the household — item, who, and which trip. **Its own subscription**: a tick by anybody invalidates it, and folding it into `pantry` would refetch the items, both join tables and all three taxonomies for every member |
+| `claimItem` | mutation | Tick a row. Refuses one somebody else holds; your own is a no-op |
+| `releaseClaims` | mutation | Untick rows — **yours only**, and it takes a list because the client knows what is on screen |
 | `removeItem` | mutation | Delete an item, its joins and its `restocks` rows |
 | `createTerm` / `updateTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind. `createTerm` takes the same optional stamps, plus a source's `kind` — **undo only** |
 | `setSourceKind` | mutation | A store's `shop` / `grow` / `make` — [D58](decisions.md#d58-a-source-carries-a-kind-and-the-group-is-named-for-what-it-holds). Stores only, and a no-op write invalidates nothing |

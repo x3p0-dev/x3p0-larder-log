@@ -51,6 +51,7 @@ import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/sta
 import { needsBuying, runBands, runCount } from '../shared/runList';
 import { putAwayMeta, putAwayRows, restockEntry, restockPrefill } from '../shared/restock';
 import { isExtra, listNameFor, listRuleHint, listRuleLabel, listRuleOf, toListRule } from '../shared/listRule';
+import { NO_CLAIMS, claimInitial, claimPhrase, firstName, indexClaims } from '../shared/claim';
 import {
 	MONTHS, hasSeason, isInSeason, monthName, monthNumber, monthOf, normalizeSeason, readyPhrase,
 } from '../shared/season';
@@ -2191,6 +2192,75 @@ check(
 // The prefill's second half, on the row it exists for: already above its
 // threshold, so `low at + 1` alone would be a step **down**.
 check('its prefill steps up, not down', restockPrefill('3', '2'), 4);
+
+
+// --- D66: claims are shared, and that is the feature ---
+//
+// D41 rejected sharing because *a tick that means "in my cart" cannot be read
+// by someone else without saying whose*. So it says whose — and the collision
+// that rule was avoiding is the feature, because it is what stops the
+// double-buy. Invisible when wrong in the worst way: a screen that looks right
+// and lets you buy the butter twice.
+
+const CLAIMS = [
+	{ itemId: 'i-Butter', userId: 'account:justin', tripId: 't1' },
+	{ itemId: 'i-Bacon', userId: 'account:sarah', tripId: 't2' },
+	{ itemId: 'i-Coffee', userId: 'account:justin', tripId: 't1' },
+];
+
+const ours = indexClaims(CLAIMS, 'account:justin');
+check('your claims are yours', [...ours.mine].sort(), ['i-Butter', 'i-Coffee']);
+check('and hers are hers', [...ours.theirs.entries()], [['i-Bacon', 'account:sarah']]);
+check('nothing appears in both', [...ours.mine].some((id) => ours.theirs.has(id)), false);
+
+// **The unknown-caller case is the one that matters.** `me` is '' until the
+// household query answers, and reading that as *everything is mine* would
+// briefly offer to put away somebody else's shopping.
+const anon = indexClaims(CLAIMS, '');
+check('an unknown caller owns nothing', anon.mine.size, 0);
+check('and sees every claim as somebody else\u2019s', anon.theirs.size, 3);
+
+// Seen from the other side, the same rows split the other way.
+const hers = indexClaims(CLAIMS, 'account:sarah');
+check('the split is symmetric', [...hers.mine], ['i-Bacon']);
+check('and hers counts two of yours', hers.theirs.size, 2);
+
+check('no claims at all is an empty split', indexClaims([], 'account:justin').mine.size, 0);
+check('and NO_CLAIMS is the same shape', NO_CLAIMS.mine.size + NO_CLAIMS.theirs.size, 0);
+
+// *In Sarah's cart* — a possessive, because the row is about a person.
+check('a plain name', claimPhrase('Sarah'), 'In Sarah\u2019s cart');
+check('a name ending in s takes the bare apostrophe', claimPhrase('Chris'), 'In Chris\u2019 cart');
+check('and case does not fool it', claimPhrase('BEATRIS'), 'In BEATRIS\u2019 cart');
+// **The sentence is the whole of the right-hand slot**, seen and heard — the
+// face in the tick column says *taken*, this says by whom and why it is there.
+// It keeps the first name: *In Justin Tadlock's cart* is clumsy to hear as well
+// as to fit, and the design's own sample row is *In Sarah's cart*.
+check('a full name is cut to the first', claimPhrase('Sarah Tadlock'), 'In Sarah\u2019s cart');
+check(
+	'and the sentence stays close to a bare name in width',
+	claimPhrase('Justin Tadlock').length - 'Justin Tadlock'.length <= 3,
+	true
+);
+check('the possessive still follows the name it kept', claimPhrase('Chris Ferreira'), 'In Chris\u2019 cart');
+check('firstName takes the first word', firstName('Justin Tadlock'), 'Justin');
+check('a single name is already first', firstName('Madonna'), 'Madonna');
+check('extra whitespace does not become a name', firstName('   Bea   Nwosu '), 'Bea');
+check('and nothing is nothing', firstName('   '), '');
+
+// **A missing name still says something true.** A claim can outlive the moment
+// its owner's membership is readable — she leaves the household — and *In
+// someone else's cart* still stops the double-buy, which is the entire job.
+check('an empty name falls back rather than inventing one', claimPhrase(''), 'In someone else\u2019s cart');
+check('and so does whitespace', claimPhrase('   '), 'In someone else\u2019s cart');
+
+// The 18px avatar's letter — `householdLetter`'s rule, so a leading emoji or a
+// stray space does not become somebody's face.
+check('the initial is the first letter', claimInitial('Sarah'), 'S');
+check('it skips a leading emoji', claimInitial('\u{1F955} Nora'), 'N');
+check('it skips leading whitespace', claimInitial('   bea'), 'B');
+check('and a nameless claim still draws a circle', claimInitial(''), '?');
+check('as does one with no letters in it', claimInitial('123 !'), '?');
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

@@ -41,20 +41,29 @@ control has its states now*, which also lists what is left in its *Gaps*.
 both screens that hold them, so the first look at the console cannot delete
 anything. See *The writes are held, and the console is read-only*.
 
-**Built and unpublished: restock (D64) and the list override (D65).** A check on the run list is a **claim**
+**Built and unpublished: restock (D64), the list override (D65) and shared claims (D66).** A check on the run list is a **claim**
 now, and the count is written once, at the put-away — the trip bar's right half,
 empty since the list was first drawn. Built from
 `.claude/docs/design/restock.md` on 2026-08-31. **One schema change**: `restocks`,
 the twelfth table, and **twenty-six mutations** — the new one is `restockItems`.
-**Shared claims are deferred by request** — *in Sarah's cart*, the half that makes
-a trip the household's. **D65 then built the first of the two things restock
-unblocked**: the `Always` / `Never` tri-state, which adds `items.listRule` and
-finally gives D60's retired column a control that can set it. **Trends tier 2 is
-the one still unbuilt**, and the `restocks` log is collecting for it. See
-*Restock — the trip that ends (D64)* and *The list override is a tri-state
-(D65)* below. **Both have been clicked and both work** — a real session on
-2026-08-31, on the first pass, which no phase of this size has managed before.
-**390 and a twenty-row put-away are the two things it did not cover.**
+**D65 built the first of the two things restock unblocked**: the `Always` /
+`Never` tri-state, which adds `items.listRule` and finally gives D60's retired
+column a control that can set it. **D66 then built shared claims** — the half
+deferred at the start, and the one that makes the list a shared list: `trips`
+and `claims`, the thirteenth and fourteenth tables, so a row somebody else has
+ticked draws **their face in the tick column** and cannot be taken. **Trends
+tier 2 is the one part of `restock.md` still unbuilt**, and it is
+**decided against for now** — the log records put-aways, and two of the three
+ways to raise a count write nothing, so *you restock this every three weeks*
+would be a confident sentence about a biased sample. See *Restock — the trip
+that ends (D64)*, *The list override is a tri-state (D65)* and *Claims are
+shared (D66)* below.
+
+**D64 and D65 have been clicked and both work** — a real session on 2026-08-31,
+on the first pass, which no phase of this size has managed before; **390 and a
+twenty-row put-away are what it did not cover**. **D66 has been clicked in part**
+— two named guests on one machine, the claimed row and its face confirmed — and
+its copy went through three passes on the strength of that.
 
 **Live as of v18: autofill (D63) and three fixes.** Two suggestion menus — one under
 the item name on the Add / Edit sheet, one under the top-bar search — built from
@@ -218,9 +227,10 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, **thirteen** live queries, and **twenty-six** mutations
-across **twelve** tables. `restockItems`, the `restocks` table and
-`items.listRule` are restock's (D64, D65) and are **unpublished** — built and verified locally, not yet in a
+`.docs/data-model.md`, **fourteen** live queries, and **twenty-eight** mutations
+across **fourteen** tables. The `restocks`, `trips` and `claims` tables,
+`items.listRule` and four mutations are restock's (D64, D65, D66) and are
+**unpublished** — built and verified locally, not yet in a
 version. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
@@ -3187,6 +3197,114 @@ three read correctly. **To see it locally**: `?demo` — Peanut Butter is pinned
 so it is on the run list wearing `EXTRA` — then open any item and the segment is
 under the two steppers.
 
+### Claims are shared, and that stops the double-buy (D66) — 2026-08-31
+
+`restock.md`'s *Claims are shared, and that is the feature* — the half deferred
+when D64 was built, and the one that makes the run list a **shared** list.
+**Two schema changes**: `trips` and `claims`, the thirteenth and fourteenth
+tables. **Fourteen queries, twenty-eight mutations**, `db.migrations` still
+empty.
+
+**D41 refused to share ticks and its reason reads well** — *a tick that means
+"in my cart" cannot be read by someone else without saying whose.* So it says
+whose, and **the collision that rule was avoiding is the entire feature**: two
+people at two shops was the failure mode and it is now the case the screen is
+for.
+
+- **A claim is not a write**, which is what makes sharing safe (D64). It says
+  somebody intends to get the item and touches nothing about it; the count is
+  written once, at the put-away.
+- **Two tables, and the trip is the one that needs justifying.** It exists so
+  the twenty-four hours run from the **last** tick rather than the first —
+  D41's rule, which per-claim expiry cannot express without rewriting every
+  claim on every tick. It also makes `restocks.tripId` a real row id, exactly as
+  that column's note predicted, and gives the put-away something to *name*.
+- **Neither table stores a name.** A claim carries a `userId`; `household`
+  already returns every member with a display name and a picture, so the face is
+  resolved client-side from an id we have. **Nothing in the larder records who
+  touched a thing** — a trip is transient and goes with the account, which is
+  what keeps account deletion a clean operation rather than a scrubbing job.
+- **`claims` is its own query, deliberately.** A tick by anybody invalidates it,
+  and `pantry` carries the items, both join tables and all three taxonomies —
+  folding it in would refetch that for every member each time somebody ticked a
+  row in a shop.
+- **Yours only, everywhere it counts.** `Hide N checked`, `Put N away` and row
+  2's `N in your cart` all count yours; hers stay visible because they are still
+  on the list until she buys them, and **you cannot put away what you do not
+  have**. Driven for real: a put-away ended one trip and left the other standing.
+- **The server names the trip.** `restockItems` took a `tripId` from the client
+  and now resolves its own — the client was telling the server something the
+  server was holding, which is the instinct that makes a household id a selector
+  rather than an authority.
+- **`localStorage` shrank rather than becoming the queue** the design predicted.
+  The server made it redundant for ticks — they survive a reload, a second
+  device and a flat battery — so what is left there is **list mode alone**, per
+  household. A tick still paints instantly through an optimistic echo in
+  component state, and a refusal rolls it back with the server's own sentence on
+  screen. **No durable outbox**, which is one of the design's open questions.
+
+#### The tick column is the answer, not the count slot
+
+The design puts an 18px avatar and *In Sarah's cart* in the **count slot** and
+leaves the checkbox column **empty**. Built that way it read as wordy, and the
+cause was structural rather than verbal: **the empty gutter threw away the one
+position on the row where the eye already looks for that answer**, then
+re-explained it on the far right.
+
+| tick column | means |
+|---|---|
+| empty box | nobody |
+| checked box | **you** |
+| a face | **them** |
+
+- **A face is not the box the design refused.** Its reason was that *a box you
+  cannot fill reads as unchecked* — true of a box, false of a person: the slot
+  is visibly **occupied** rather than visibly empty. There is still nothing
+  there to press, so the rest of that sentence holds. **A knowing departure.**
+- **22px, not the design's 18.** That number was for the count slot beside 13px
+  text; here it shares a column with `CheckBox` and a circle four pixels shy of
+  the boxes above it reads as floating.
+- **The count slot keeps the sentence** — *In Justin's cart*, at a first name,
+  which fits only because the face left and took a circle and its gap with it.
+  One span and **not** a visible name with a spoken twin: the words on screen
+  *are* the sentence a screen reader should hear.
+- **Three passes went into that slot** — full sentence, name only, sentence
+  again — and none of the wordings is what unlocked it. **Moving the face into a
+  column that was already asking the same question** is.
+- **No cart or basket glyph, and the reason generalises.** The cart is the shop
+  kind's mark and the basket is the run trigger's; either would gain a third
+  meaning on the one screen that teaches the first two, and on a **Harvest** card
+  a cart is plainly wrong — she is picking, not shopping.
+
+#### A face, because a person in this app has one
+
+`ClaimAvatar` draws the real Gravatar and falls back to the initial. **It was
+built as a letter first and that was a rule broken**: 18px being small for a
+photograph is a reason to accept a smudge, not to invent an exception to D55,
+which every other surface follows. **`onError` is load-bearing** — the
+platform's URL carries `d=404`, so an account without a Gravatar serves no image
+and the consumer draws its own initial; without it that account gets the
+browser's broken-image glyph. It cannot reuse `DrawerAvatar`, which hard-codes
+the drawer's palette because the drawer is dark in both themes.
+
+**Verified**: typecheck clean, **745 assertions** (26 new, covering the split
+in both directions, the unknown-caller case that must read as *nothing is mine*,
+the possessive including the `s`-ending form, and the nameless fallback that
+still says something true), the artifact at fourteen tables / fourteen queries /
+twenty-eight mutations / `db.migrations: []` with `/api/status` still the only
+endpoint, and every class literal in the touched files diffed against the
+freshly built sheet.
+
+The **real handlers** were driven over `POST /__spacefast/zero/run` as **two
+named dev guests at once**: both saw both claims correctly attributed; a claim
+on somebody else's row **refused**; re-claiming your own a no-op; releasing
+somebody else's **0 released**; a put-away ending one trip and leaving the other
+standing; the restock rows carrying the **server-resolved** trip id, shared
+across the trip; leaving a household taking the leaver's claims; and
+`deleteHousehold` clearing trips, claims and restocks together.
+
+**Nobody has clicked it**, and this is the one that most wants two browsers open.
+
 ### The console's two seams land where they were aimed — 2026-08-31
 
 **Client only**: no schema change, no handler moved, no new class. Eleven
@@ -4018,7 +4136,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D63, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be** |
+| `.docs/decisions.md` | D1–D63, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -4033,7 +4151,7 @@ most of it is already decided.
 | `.claude/docs/design/larderloggardenkitchenboards.html` | **The 9 boards for it** — **board 1 is first run** (the card, the hint in four states, the rejected second step, and the three seeded drawers with `STORE` becoming `SOURCE`); its card still draws the pre-D48 prefilled name and hint, which the build does not have. Then — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
 | `.claude/docs/design/autofill.md` | **Autofill — the name field and search** (31 Aug) — the two suggestion menus, what each group holds, the matching rule, what picking carries, and the four questions it closes under *Gaps*. Its own doc for the reason `add-edit-item.md` is. **Built, all of it** (D63) — **and four of its rules were reversed the same day, in the build rather than in the document**, so read D63 beside it: the search menu's item row **fills the field** instead of opening an Edit sheet (so **the chevron and the whole *a chevron means the row leaves the screen* section describe a build that does not exist**), a term row **clears the query** instead of keeping the menu open, the group is **`FILTERS`** rather than `TERMS`, and a catalog row now carries a **type and a shelf**. On geometry the build went past both: the boards draw the sheet's item row at 50 and the search term row at 44, the doc's table reconciles them at 56 and 38/48, and **what shipped is 38/48 for all three kinds** — the item row was restyled to the term row's single line on 31 Aug, so **every drawn item row in this file is two-line and the build's is not** |
 | `.claude/docs/design/larderlognameautofill.html` | **The 12 boards for it** — name field at 480 in both themes, row anatomy, 390, the rules, the settled picking behaviour, search at 1372 in both themes, search at 390 with the no-match state, what the search menu does, and two explorations. **The search boards draw a stale top bar** — `Showing 2 of 20`, a `Shopping list` trigger and `Sort · Recently added`, all three of which row 2's rework replaced — **and every item row on them carries a chevron the build does not draw**. **Explorations A and C are not a spec**; C is the answer to reach for if the duplicate watch-out bites |
-| `.claude/docs/design/restock.md` | **Restock — the trip that ends** (31 Aug) — a check becomes a claim, the trip bar's reserved right half becomes *Put N away*, and the put-away sheet writes a whole trip's counts at once. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list → Checks are local, and they expire* wholesale**. **Read its *what is specced and what is a consequence* callout first**: the claim, the trip, the bar, the sheet and the `Clear checks` delta are specced; the **`Always` / `Never` tri-state** and **trends tier 2** are separate features it merely unblocks. **Built** (D64) — **except shared claims**, deferred by request, so no row ever draws *In Sarah's cart* and `N in the cart` keeps its wording rather than becoming `N in your cart`. **Its `Always` / `Never` section is built too** (D65) — **but not its hint copy**: all three sentences were rewritten on the first look at the built control, because *the list* names nothing a person can point at, *until you buy it* is false for anything you pick, and *count* is the wrong noun for what is on a shelf. **Its hint table therefore describes copy that does not ship**, and its segment is drawn without the sub-label the build gives it. **Trends tier 2 is the one part still unbuilt**, and the `restocks` log is collecting for it |
+| `.claude/docs/design/restock.md` | **Restock — the trip that ends** (31 Aug) — a check becomes a claim, the trip bar's reserved right half becomes *Put N away*, and the put-away sheet writes a whole trip's counts at once. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list → Checks are local, and they expire* wholesale**. **Read its *what is specced and what is a consequence* callout first**: the claim, the trip, the bar, the sheet and the `Clear checks` delta are specced; the **`Always` / `Never` tri-state** and **trends tier 2** are separate features it merely unblocks. **Built** (D64) — **except shared claims**, deferred by request, so no row ever draws *In Sarah's cart* and `N in the cart` keeps its wording rather than becoming `N in your cart`. **Its *Claims are shared* section is built** (D66) — **but not its row layout**: the face moved from the count slot into the checkbox column the doc says to leave **empty**, and grew 18px → 22 to match the `CheckBox` it stands in for. **Its `Always` / `Never` section is built too** (D65) — **but not its hint copy**: all three sentences were rewritten on the first look at the built control, because *the list* names nothing a person can point at, *until you buy it* is false for anything you pick, and *count* is the wrong noun for what is on a shelf. **Its hint table therefore describes copy that does not ship**, and its segment is drawn without the sub-label the build gives it. **Trends tier 2 is the one part still unbuilt**, and the `restocks` log is collecting for it |
 | `.claude/docs/design/larderlogrestockmockup.html` | **The 6 boards for it** — the run list with three checked, the put-away sheet, the screen after, the trip bar's anatomy with its undo toast, the tri-state, and trends tier 2. Light theme, desktop; **mobile is not drawn at all** — the bar's three controls at 390 are specced in prose and the sheet as a bottom sheet is asserted rather than drawn. **Boards 1, 2 and 3 all draw a row claimed by Sarah**, which is the deferred half; **board 4's "where the green belongs" card is drawn left-aligned at 440** and the build takes `EmptyState`'s centred shape instead, since the two empty states share one slot. **Board 5 is built** (D65); **board 6 is not** |
 | `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
 | `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
@@ -4153,7 +4271,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 719 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 745 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -4173,7 +4291,9 @@ Cheapest first:
   same way: a prefill one out is still a plausible number and a row filed under
   the wrong band still puts something away — and D65's list override, where
   reading the retired column wrong puts a muted item back on a list months after
-  anybody last thought about it.
+  anybody last thought about it — and D66's claim split, where reading *whose*
+  backwards hands back a screen that looks right and lets you buy the butter
+  twice.
   **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
