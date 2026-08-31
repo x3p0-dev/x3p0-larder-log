@@ -657,10 +657,37 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		setAdminOpenUserId('');
 	}
 
+	/**
+	 * The drawer's own nav rows, and Overview's *Needs attention*. Both mean
+	 * *the list, from the top*, so both clear whichever page was open.
+	 */
 	function goAdmin(next: AdminSection) {
 		setAdminOpenId('');
 		setAdminOpenUserId('');
 		setAdminSection(next);
+	}
+
+	/*
+	 * The seam between the console's two halves, and it cannot go through
+	 * `goAdmin`: these move the section *and* carry an id, and `goAdmin` clears
+	 * exactly the id they have just set — which is what put a member row on the
+	 * People list and a household row on the Households list.
+	 *
+	 * The section has to move with the id either way, because landing on an
+	 * account page while the nav block still lit *Households* would be the
+	 * drawer saying something untrue. The other half is cleared for the same
+	 * reason it is on the way in: nothing behind you should still be open.
+	 */
+	function goAdminPerson(userId: string) {
+		setAdminOpenId('');
+		setAdminOpenUserId(userId);
+		setAdminSection('people');
+	}
+
+	function goAdminHousehold(householdId: string) {
+		setAdminOpenUserId('');
+		setAdminOpenId(householdId);
+		setAdminSection('households');
 	}
 
 	/*
@@ -2357,6 +2384,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					onPeopleFilter={setAdminPeopleFilter}
 					openUserId={adminOpenUserId}
 					onOpenPerson={setAdminOpenUserId}
+					onCrossToPerson={goAdminPerson}
+					onCrossToHousehold={goAdminHousehold}
 					theme={theme}
 					dark={dark}
 				/>

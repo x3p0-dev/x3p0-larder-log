@@ -26,7 +26,8 @@ import type { AdminHouseholdFilter, AdminPeopleFilter } from '../../shared/types
  */
 export function AdminConsole({
 	section, onSection, filter, onFilter, openId, onOpen,
-	peopleFilter, onPeopleFilter, openUserId, onOpenPerson, theme, dark,
+	peopleFilter, onPeopleFilter, openUserId, onOpenPerson,
+	onCrossToPerson, onCrossToHousehold, theme, dark,
 }: {
 	section: AdminSection;
 	onSection: (section: AdminSection) => void;
@@ -48,6 +49,17 @@ export function AdminConsole({
 	onPeopleFilter: (filter: AdminPeopleFilter) => void;
 	openUserId: string;
 	onOpenPerson: (userId: string) => void;
+	/**
+	 * The seam between the two halves — a member row opening an account page,
+	 * and a household row on an account page opening that household.
+	 *
+	 * They are their own props rather than an `onOpen*` beside an `onSection`,
+	 * because the host's section handler means *the list, from the top* and
+	 * clears both open ids. Composing the two at this level set an id and then
+	 * wiped it, so both rows landed on the list they were leaving.
+	 */
+	onCrossToPerson: (userId: string) => void;
+	onCrossToHousehold: (householdId: string) => void;
 	theme: Theme;
 	dark: boolean;
 }) {
@@ -66,7 +78,7 @@ export function AdminConsole({
 				 * person's account page, so the section moves with the id for the
 				 * same reason the account page's household rows move it back.
 				 */
-				onOpenPerson={(id) => { onOpen(''); onOpenPerson(id); onSection('people'); }}
+				onOpenPerson={onCrossToPerson}
 				theme={theme}
 				dark={dark}
 			/>
@@ -84,7 +96,7 @@ export function AdminConsole({
 				 * household page while the drawer still lit *People* would be the
 				 * nav block saying something untrue.
 				 */
-				onOpenHousehold={(id) => { onOpenPerson(''); onOpen(id); onSection('households'); }}
+				onOpenHousehold={onCrossToHousehold}
 				theme={theme}
 				dark={dark}
 			/>
