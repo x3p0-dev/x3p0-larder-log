@@ -41,7 +41,7 @@ control has its states now*, which also lists what is left in its *Gaps*.
 both screens that hold them, so the first look at the console cannot delete
 anything. See *The writes are held, and the console is read-only*.
 
-**Unpublished, on `master`: autofill (D63).** Two suggestion menus — one under
+**Live as of v18: autofill (D63) and three fixes.** Two suggestion menus — one under
 the item name on the Add / Edit sheet, one under the top-bar search — built from
 `.claude/docs/design/autofill.md` on 2026-08-31. No schema change; the artifact
 is unchanged. It also brings the item grid's search into line with the menu's
@@ -49,9 +49,39 @@ matching, gives the search field the `×` D45 has claimed since it was written,
 and adds `shared/suggest.ts` and `shared/catalog.ts`. **`Dry Goods` is a
 fifteenth seeded type** with it (D50, amended), which reaches new households
 only. See *Autofill — the name field and search (D63)* below. **Nobody has
-clicked it.**
+clicked it in production.**
 
-**Live as of v17: the auth model is rebuilt.** Local is a named
+**Three fixes rode with it, all found by using the app.** The console's two
+cross-links landed on a list rather than on the row that was pressed; the
+Members card's last row overflowed its own corner; and `useAvatarSync` had never
+run, because a membership written before `memberships.picture` existed reads
+back as **`null`** rather than the declared `''` and the row type says `string`
+either way. The last is a **capsule** change and the only one of the three that
+is not client-only. See *The console's two seams land where they were aimed* and
+*An old row reads back `null`, and the avatar sync never ran* below.
+
+**v18 is live** as of 2026-08-31 (`ver_f8f24058016d4a5bb1b9ea8900ec94f6`, 134
+files, **16** uploaded, 22 seconds), and it is **non-migrating**: no schema
+change, `db.migrations` empty, eleven tables. It carries autofill and the three
+fixes above — **the capsule moved**, so it is the first publish since v14 that
+is not client-only. Verified the usual way: `GET /` 200, `/api/status` `ok`, all
+three payload hashes `shasum`-matching `.spacefast/zero/public/`, D29 holding
+(`.claude/`, `.docs/`, `.env.server`, `.spacefast/` all 403), `theme.json` and
+`sf.jsonc` 404 while `LICENSE.md` and `package-lock.json` serve, and all seven
+icons 200. **The anonymous probe answers byte-identically to v17** — `households`
+and `profile` `guest`, `adminAccess` `{admin:false, writesHeld:true}`,
+`adminSummary` `denied`, `createHousehold` refused — so the capsule change
+moved nothing about who may do what.
+
+**It took two attempts, and the first failed after the payload was staged.**
+`Creating version` died on `Runtime API request timed out after 10000ms`, a
+client-side 10s cap rather than a server refusal. **Nothing was created** —
+`sf versions list` still showed v17 live with no v18 — and the plain retry
+succeeded. **Check `sf versions list` before retrying a publish that dies at
+that step**, rather than assuming either outcome. Logged in
+`.claude/docs/spacefast.md`.
+
+**v17 rebuilt the auth model.** Local is a named
 `?guest=` identity, production is authenticated accounts only, `guest:local` is
 refused everywhere, and the admin hold now exempts dev guests so the deletion
 flows are testable locally and unreachable live. **Two people can be tested on
@@ -2845,6 +2875,95 @@ find one that is really there *and* one that is really absent.
 keyboard-time: the arrows, the two Escapes, the pick, the chevron's navigation,
 and the term row that stays open. **To see it locally**: any two characters in
 the item name field, or in the top bar's search.
+
+### The console's two seams land where they were aimed — 2026-08-31
+
+**Client only**: no schema change, no handler moved, no new class. Eleven
+tables, thirteen queries, twenty-five mutations, `db.migrations` still empty.
+
+**Both cross-links between the console's two halves went to the wrong screen.**
+A member row opening an account, and an account page's household row opening
+that household, were each composed at the `AdminConsole` level out of the host's
+own handlers — `onOpen('')`, then `onOpenPerson(id)`, then `onSection('people')`.
+**`onSection` is `goAdmin`, and `goAdmin` means *the list, from the top***: it
+clears both open ids, including the one that had just been set a line above. So
+a member row landed on the People **list** and a household row on the Households
+**list** — the right section every time, and never the row you pressed.
+
+- **`goAdminPerson` and `goAdminHousehold` are their own handlers in `Pantry`**,
+  beside `goAdmin` rather than built out of it. They set the section *and* the
+  id together and clear only the other half. **The section still has to move**:
+  landing on an account page while the drawer's nav block lit *Households* would
+  be the drawer saying something untrue.
+- **`onCrossToPerson` and `onCrossToHousehold` are separate props** rather than
+  a second use of `onSection`, so the seam cannot be reassembled at a call site
+  out of parts that fight. This is *A handler written twice is a handler that
+  will be changed once*, one rung up: a handler **composed** twice is a handler
+  that will be composed wrongly.
+
+**And the last member row's hover overflowed the card.** The Members card is the
+one card in the console that does not clip — `clip={false}` is what buys the
+role menu its popover, since a popover inside `overflow-hidden` is cropped at
+the card's edge — and the price is that nothing rounds the rows inside it. The
+bottom row's `hover:bg-surface-alt` squared off past the card's 20px radius.
+**Only the bottom left showed it**: the role trigger's own `<span>` is unfilled,
+so the right corner is the card's. The last row takes `rounded-bl-[19px]` — the
+card's radius less its 1px border, which is where the inner edge actually is.
+
+**A hover fill is the second thing `clip={false}` costs, and the first was
+known.** Anything full-bleed added to that card has to round its own corners;
+the rows are inset otherwise, which is why this took a real pointer to find.
+
+Verified: typecheck clean, the artifact unchanged, and `.rounded-bl-\[19px\]` in
+the freshly built `zero.css` — printed from the sheet's own selectors and proved
+to discriminate against a bogus radius.
+
+### An old row reads back `null`, and the avatar sync never ran — 2026-08-31
+
+**No schema change** — eleven tables, thirteen queries, twenty-five mutations —
+but this one touches the capsule, and it is the platform finding that matters
+most since the dev-guest identity.
+
+**`.default('')` applies to an insert and does not backfill.** Every membership
+written before `memberships.picture` shipped (D55, live in v12) reads back as
+**`null`**, not the schema's `''` — read off the published space through the
+app's own `household` query. **And the generated row type says `string`**, with
+no `| null`, so `typecheck` cannot see it: the `null` travelled through the DTO
+into a Preact prop also declared `string`. Logged in
+`.claude/docs/spacefast.md`.
+
+- **It disabled the one thing written to fix exactly those rows.**
+  `useAvatarSync` reads `null` as *the query has not answered* — `''` is a real
+  value meaning no picture — so `?.picture ?? null` collapsed the two meanings
+  and short-circuited the hook forever, **on precisely the rows it exists to
+  reconcile**. The absence is now read off the **row** (`myMembership ? … : null`)
+  rather than off the column, which is the distinction that was missing.
+- **Four DTOs coalesce with `?? ''` at the capsule boundary**, so the `null`
+  stops at the one place that can see the column at all rather than at each of
+  the client's readers. Every additive column this project has shipped assumed a
+  declared default is what an old row reads back as; ours all normalize `''` and
+  `null` identically **by luck**, and this one did not.
+- **The rule that generalises: a column added after rows exist is nullable, and
+  the type will not say so.** Coalesce it where it is read out of the database.
+
+**And `sf dev` now populates the column, so it can be looked at.** `sf dev`
+issues no `picture`, so every local membership held `''` — which left the
+drawer's foot row (drawn from the client's own identity) showing a face while
+the Members pane, the Settings trio and all four admin surfaces showed letters.
+That reads as an intermittent bug and was a missing dev switch.
+`devAvatarUrl()` in `shared/avatar.ts` is the fifth, **fenced on a named dev
+guest**, an identity a published space cannot mint — the same guarantee
+`adminWritesHeldFor()` already rests on. **A hash, never an address**: the
+finished digest, read off the live space's own `auth.picture`, so no address is
+compiled into the capsule and nothing needs `shared/sha256.ts`. It must stay
+equal to what `client/lib/devIdentity.ts` hashes at boot, or the two faces
+differ and `useAvatarSync` writes on every load instead of settling. Only a
+guest named `justin…` gets one, so `?members` still shows the mixed row a real
+household is. **Take it out with D14.**
+
+**It reveals rather than invents** (D56's rule): `ctx.auth.picture` **is**
+populated on the hosted runtime, confirmed against the live space on
+2026-08-31, so what renders locally is the value production really writes.
 
 ### Empty results — 2026-08-26
 

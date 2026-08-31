@@ -279,10 +279,11 @@ export function AdminHousehold({
 								Nobody is in this household. Its rows are still here and nothing can reach them.
 							</Blank>
 						) : (
-							members.map((m) => (
+							members.map((m, i) => (
 								<MemberRow
 									key={m.id}
 									member={m}
+									last={i === members.length - 1}
 									held={held}
 									menuOpen={roleOpen === m.id}
 									setMenuOpen={(open) => setRoleOpen(open ? m.id : '')}
@@ -582,10 +583,12 @@ function Boundary({ theme }: { theme: Theme }) {
  * sentence rather than hidden behind a disabled row (D36).
  */
 function MemberRow({
-	member, menuOpen, setMenuOpen, onOpen, onChangeRole, onRemove, held, theme,
+	member, last, menuOpen, setMenuOpen, onOpen, onChangeRole, onRemove, held, theme,
 }: {
 	member: AdminMember;
 	held: boolean;
+	/** The last row rounds its own bottom-left corner — see the comment below. */
+	last: boolean;
 	menuOpen: boolean;
 	setMenuOpen: (open: boolean) => void;
 	onOpen: () => void;
@@ -607,9 +610,18 @@ function MemberRow({
 			  * outside it, which is also what stops a press on *Owner* from
 			  * navigating away from the menu it just opened.
 			  */}
+			{/*
+			  * **The last row rounds its own bottom-left corner**, because the
+			  * Members card is the one card that does not clip: `clip={false}`
+			  * buys the role menu its popover, and the price is that a hover
+			  * fill on the bottom row squares off past the card's 20px radius.
+			  * Only the left corner shows it — the trigger's own `<span>` is
+			  * unfilled, so the right one is the card's. 19px is the card's
+			  * radius less its 1px border, which is where the inner edge is.
+			  */}
 			<button
 				onClick={onOpen}
-				class={`flex-1 min-w-0 flex items-center gap-3 text-left px-5 py-3 ${ADMIN_ROW}`}
+				class={`flex-1 min-w-0 flex items-center gap-3 text-left px-5 py-3 ${last ? 'rounded-bl-[19px] ' : ''}${ADMIN_ROW}`}
 				aria-label={`${member.name || 'Someone'} — open this account`}
 			>
 				<DrawerAvatar name={member.name} picture={member.picture} size={34} />

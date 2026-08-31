@@ -4530,3 +4530,39 @@ which is not always populated.
 `{"op":"auth.get"}` over that same route is a genuinely useful and undocumented
 thing: it returns the identity the runtime constructed, which is the only
 supported way we have found to read one's own `account:` id on a live space.
+
+### 🐛 `sf publish` timed out client-side at `Creating version`, having already staged the payload
+
+First attempt at v18:
+
+```
+✓ Updating space  larderlog (spc_7770744a870a43f5927213fa397c780e)
+⠋ Creating version
+Runtime API request failed: Runtime API request timed out after 10000ms.
+Learn more: https://spacefast.com/docs/errors/internal_error
+Check your connection or the SPACEFAST_API_URL setting.
+Run `sf doctor` to diagnose.
+```
+
+Exit non-zero. The space update had already succeeded and four server variables
+had already synced, so this is a partial failure in the middle of a multi-step
+command — and **the message does not say which side gave up**. The 10000ms is a
+client-side cap; the error page it links is `internal_error`; the advice offered
+is *check your connection* and `sf doctor`. Nothing in it says whether a version
+was created.
+
+`sf versions list` answered that, and the answer was **no** — v17 still live,
+no v18 row. A plain retry with no changes succeeded in 22 seconds
+(`ver_f8f24058016d4a5bb1b9ea8900ec94f6`). So the operation is safely retryable
+here, but only because it turned out to be atomic; nothing in the CLI's output
+promises that.
+
+What would help, cheapest first: say whether the version was created before the
+timeout, or tell the operator to run `sf versions list` before retrying; make
+the timeout distinguishable from a network failure, since the advice for the two
+is different; and consider a longer cap on `Creating version` specifically,
+which is the step that does real work.
+
+Worth noting the retry printed the unsupported-file warning again, so that
+warning is emitted at version creation and the first attempt died before
+reaching it.
