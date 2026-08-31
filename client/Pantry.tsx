@@ -1057,12 +1057,21 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 	/*
 	 * Your own avatar, reconciled into the copy the rest of the household reads.
-	 * `null` until the query answers — '' is a real value meaning no picture.
+	 *
+	 * `null` means the query has not answered. That has to be read off the
+	 * **row**, never off the column: a membership written before
+	 * `memberships.picture` existed holds `null` rather than the schema's `''`
+	 * — a default applies to an insert and nothing backfills (D44) — so a
+	 * `?.picture ?? null` collapsed the two meanings and short-circuited the
+	 * hook forever, on exactly the rows it exists to reconcile.
+	 *
 	 * See client/hooks/useAvatarSync.ts.
 	 */
+	const myMembership = realMembers.find((m) => m.id === myMembershipId);
+
 	useAvatarSync(
 		picture ?? '',
-		realMembers.find((m) => m.id === myMembershipId)?.picture ?? null,
+		myMembership ? myMembership.picture ?? '' : null,
 	);
 
 	/**

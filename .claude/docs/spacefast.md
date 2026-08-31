@@ -4479,3 +4479,54 @@ Fourth time logged. `--dry-run` says nothing; the real publish prints
 .idea/x3p0-larder-log.iml"* **after** `Creating version` has succeeded. Neither
 file matters to us, but the dry run is the place a warning about the payload
 belongs, and the rule for what a plan supports is still unstated anywhere.
+
+## 2026-08-31
+
+### 🐛 `.default('')` does not backfill, and the column then serves `null` against a `string` type
+
+`memberships.picture` was added as `string().default('')` (D55, live in v12).
+Rows written **before** that migration hold **`null`**, not `''` — read back off
+the published space through the app's own `household` query:
+
+```json
+[ { "name": "Justin Tadlock", "picture": null },
+  { "name": "Ashley Tadlock",  "picture": null } ]
+```
+
+Two separate problems in that one value.
+
+**The default is documented as a default and behaves as an insert-time default
+only.** That is a defensible choice — a backfill over a large table is not free
+— but it is not stated anywhere, and every additive column this project has
+shipped (nine stamp columns, `households.ink`, `items.size` / `unit` /
+`offShoppingList`, `stores.kind`, `items.seasonFrom` / `seasonTo`) was written
+on the assumption that the declared default is what an old row reads back as.
+Ours all happen to normalize `''` and `null` identically; this one did not.
+
+**Worse, the generated row type says `string`.** `TableColumns<T>` for a
+`string()` column is `string`, with no `| null`, so `typecheck` cannot see it
+and a handler that calls a string method on the value compiles and throws in
+production. The DTO in our `household` query passed the column straight through
+to a client type also declared `string`, and the `null` travelled all the way to
+a Preact component.
+
+What would fix it, cheapest first: type a column added after rows exist as
+`string | null` unless the migration backfills; or backfill on migrate and say
+so; or, at minimum, document that a default applies to inserts alone so an app
+can normalize at the read.
+
+### 🤔 The hosted client authenticates with a cookie, and the docs' curl recipe implies a bearer token
+
+`POST /__spacefast/zero/run` against a published space is documented here (and
+in our own notes) with an `authorization: Bearer …` header, which is the **`sf
+dev` capability token** and has no production equivalent. The real client
+(`@spacefast/zero/dist/client.js`, `requestHttpRun`) sends no `authorization` at
+all — `credentials: 'same-origin'`, `accept` and `content-type` only. Anything
+scripted against a live space from outside the browser therefore cannot
+authenticate as a signed-in visitor, and the failure mode from inside one is a
+confusing `undefined` token read out of `localStorage['stattic_zero_identity']`,
+which is not always populated.
+
+`{"op":"auth.get"}` over that same route is a genuinely useful and undocumented
+thing: it returns the identity the runtime constructed, which is the only
+supported way we have found to read one's own `account:` id on a live space.

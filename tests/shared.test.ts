@@ -39,7 +39,7 @@ import {
 } from '../shared/activity';
 import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
 import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplayName } from '../shared/profile';
-import { normalizeAvatarUrl } from '../shared/avatar';
+import { devAvatarUrl, normalizeAvatarUrl } from '../shared/avatar';
 import { buildJoinUrl, readJoinCode, readJoinInput, stripJoinParam, formatCode, JOIN_PARAM } from '../shared/joinLink';
 import {
 	DEFAULT_SOURCE_MIX, SEED_GROW, SEED_LOCATIONS, SEED_MAKE, SEED_SHOPS, SEED_TYPES,
@@ -1225,6 +1225,22 @@ check('a script URL is refused', normalizeAvatarUrl('javascript:alert(1)'), '');
 check('a data URL is refused', normalizeAvatarUrl('data:image/png;base64,AAAA'), '');
 check('a protocol-relative URL is refused', normalizeAvatarUrl('//gravatar.com/avatar/x'), '');
 check('an absurd length is refused', normalizeAvatarUrl(`https://x/${'a'.repeat(600)}`), '');
+
+/*
+ * The dev guest's stand-in avatar. `sf dev` issues no `picture`, so without it
+ * every local membership row holds '' and only the surfaces drawn from the
+ * client's own identity show a face — which reads as an intermittent bug.
+ *
+ * The assertions that matter are the two negative ones: this must never answer
+ * for a name that is not a dev guest's, and what it returns must survive
+ * `normalizeAvatarUrl`, since that is what actually writes the column.
+ */
+check('the dev guest gets a face', devAvatarUrl('justin-9bfb4160').startsWith('https://gravatar.com/avatar/'), true);
+check('and it survives normalization', normalizeAvatarUrl(devAvatarUrl('justin-9bfb4160')), devAvatarUrl('justin-9bfb4160'));
+check('it carries d=404, so the letter stays reachable', devAvatarUrl('justin-1').includes('d=404'), true);
+check('another dev guest gets the letter', devAvatarUrl('alice-a9a293b4'), '');
+check('an empty name gets nothing', devAvatarUrl(''), '');
+check('a name that merely contains it is refused', devAvatarUrl('notjustin'), '');
 
 
 // --- ?demo's fixture and its resolution (client/lib/devItems.ts) ---

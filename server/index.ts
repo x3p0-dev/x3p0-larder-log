@@ -48,7 +48,8 @@ import type {
 import { SEED_LOCATIONS, SEED_TYPES, seedSourcesFor, toSourceMix } from '../shared/seed';
 import { householdInk, toHouseholdInk } from '../shared/household';
 import { normalizeDisplayName, pickDisplayName } from '../shared/profile';
-import { normalizeAvatarUrl } from '../shared/avatar';
+import { devAvatarUrl, normalizeAvatarUrl } from '../shared/avatar';
+import { DEV_GUESTS_VAR, guestName, isDevGuest } from '../shared/identity';
 
 /**
  * The Larder Log capsule.
@@ -126,8 +127,22 @@ async function accountName(ctx: { auth: AuthContext; db: ReadDb | WriteDb }): Pr
  * a membership row is written are the two moments the value is in reach —
  * which is why `syncAccountAvatar` exists for every moment after them.
  */
-function accountAvatar(ctx: { auth: AuthContext }): string {
-	return normalizeAvatarUrl(ctx.auth.picture);
+function accountAvatar(ctx: {
+	auth: AuthContext;
+	env: Record<string, string | undefined>;
+}): string {
+	const stored = normalizeAvatarUrl(ctx.auth.picture);
+
+	if (stored) return stored;
+
+	// `sf dev` issues no `picture`, so without this every local membership row
+	// holds '' and only the surfaces drawn from the client's own identity show a
+	// face. Fenced on a *named* dev guest, which a published space cannot mint.
+	const raw = ctx.env[DEV_GUESTS_VAR];
+
+	return isDevGuest(ctx.auth, raw)
+		? normalizeAvatarUrl(devAvatarUrl(guestName(ctx.auth.userId)))
+		: '';
 }
 
 /**
@@ -521,7 +536,7 @@ export default capsule({
 					id: m.id,
 					userId: m.userId,
 					displayName: m.displayName,
-					picture: m.picture,
+					picture: m.picture ?? '',
 					role: toRole(m.role),
 				})),
 				// Live codes only. A revoked or expired invite is noise in the UI,
@@ -863,7 +878,7 @@ export default capsule({
 					ink: householdInk(h.ink, h.id),
 					// Three faces then a count — the stacked trio's existing cap
 					// (D55), applied before the DTO leaves rather than after.
-					faces: members.slice(0, 3).map((m) => ({ name: m.displayName, picture: m.picture })),
+					faces: members.slice(0, 3).map((m) => ({ name: m.displayName, picture: m.picture ?? '' })),
 					members: members.length,
 					items: count,
 					lastActive: active,
@@ -1015,7 +1030,7 @@ export default capsule({
 					id,
 					name: household.name,
 					ink: householdInk(household.ink, id),
-					faces: memberships.slice(0, 3).map((m) => ({ name: m.displayName, picture: m.picture })),
+					faces: memberships.slice(0, 3).map((m) => ({ name: m.displayName, picture: m.picture ?? '' })),
 					members: memberships.length,
 					items: items.length,
 					lastActive,
@@ -1033,7 +1048,7 @@ export default capsule({
 					id: m.id,
 					userId: m.userId,
 					name: m.displayName,
-					picture: m.picture,
+					picture: m.picture ?? '',
 					role: toRole(m.role),
 					joinedAt: m.createdAt,
 				})),
