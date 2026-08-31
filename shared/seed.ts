@@ -27,7 +27,7 @@ import type { SourceKind } from './source';
  * **Types are seeded for coverage, not for taste** (D50). A location is a
  * shelf you name yourself and a store is where *you* shop, but a type is a
  * kind of food, and those are the same in every kitchen. So the list is long
- * enough that adding the first twenty items needs no new types at all: fourteen
+ * enough that adding the first twenty items needs no new types at all: fifteen
  * that between them hold a supermarket. Renaming a type you would have worded
  * differently costs one edit; discovering mid-add that there is nowhere to put
  * canned tomatoes costs a detour through a composer.
@@ -46,7 +46,7 @@ export const SEED_LOCATIONS: SeedTerm[] = [
 ];
 
 /*
- * Fourteen, in the order they were reasoned about rather than the order they
+ * Fifteen, in the order they were reasoned about rather than the order they
  * render — the app sorts terms A–Z (D44), so this order is never seen.
  *
  * The test each one had to pass: *would a real household hold two or more
@@ -55,15 +55,28 @@ export const SEED_LOCATIONS: SeedTerm[] = [
  * `Sweets` (cookies and candy are snacks), `Soups` (canned), `Deli`, `Baby`
  * and `Pet`.
  *
+ * **`Dry Goods` is the fifteenth, added 2026-08-31**, and it is the bulk
+ * shelf: dried beans and lentils, nuts and seeds bought by the bag, dried
+ * fruit — the things that are neither a *grain* (rice, pasta, oats) nor a
+ * *baking* ingredient (flour, sugar, leaveners) and had nowhere else to go.
+ * Lentils passed D50's own test on the first pass and were put in `Grains`
+ * because that was the closest thing there was. **Grains, Baking and Canned
+ * Goods keep everything they already held** — this is the gap beside them, not
+ * a rename of any of them, and an item can carry two types where the line is
+ * genuinely blurred (a 5lb sack of rice is a grain *and* a dry good).
+ *
  * `Frozen Meals` is a kind of food and not a repeat of the Freezer *location*:
  * meat, frozen vegetables and ice cream all live in a freezer and all belong
  * somewhere else on this list. What is left — pizza, burritos, dinners — has
  * nowhere else to go.
  *
- * Two tokens are deliberately left unused, `color-11` and `color-16`, so the
- * first two types a household adds still arrive in a colour of their own:
+ * **One token is left unused now, `color-16`** — it was two until `Dry Goods`
+ * spent `color-11`, and the reason for keeping any is unchanged:
  * `proposeColor()` hands out the first unused token and falls back to
- * `color-1` once they are all spoken for.
+ * `color-1` once they are all spoken for, so a household whose own first type
+ * arrived wearing Produce's olive would be the app's fault. **Spending the last
+ * one is a decision, not a list edit** — a sixteenth seeded type takes the
+ * headroom to nothing.
  */
 export const SEED_TYPES: SeedTerm[] = [
 	{ name: 'Produce', ink: 'color-10' },
@@ -80,6 +93,7 @@ export const SEED_TYPES: SeedTerm[] = [
 	{ name: 'Snacks', ink: 'color-14' },
 	{ name: 'Beverages', ink: 'color-12' },
 	{ name: 'Frozen Meals', ink: 'color-13' },
+	{ name: 'Dry Goods', ink: 'color-11' },
 ];
 
 /**

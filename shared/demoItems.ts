@@ -154,7 +154,10 @@ export const DEMO_ITEMS: readonly DemoItem[] = [
 	{ name: 'Canola Oil', locationName: 'Pantry', typeNames: ['Oils & Vinegars'], storeNames: ['Grocery'], qty: '2', threshold: '1', size: '48', unit: 'fluid-ounce', daysAgo: 38 },
 	{ name: 'Apple Cider Vinegar', locationName: 'Pantry', typeNames: ['Oils & Vinegars'], storeNames: ['Grocery'], qty: '0', threshold: '1', size: '32', unit: 'fluid-ounce', daysAgo: 37 },
 	{ name: 'Spaghetti', locationName: 'Pantry', typeNames: ['Grains'], storeNames: ['Grocery', 'Warehouse'], qty: '4', threshold: '2', size: '1', unit: 'pound', daysAgo: 20 },
-	{ name: 'Long-Grain White Rice', locationName: 'Pantry', typeNames: ['Grains'], storeNames: ['Warehouse'], qty: '1', threshold: '1', size: '5', unit: 'pound', daysAgo: 31 },
+	// Two types on purpose: a 5lb sack is a grain *and* the bulk shelf, and this
+	// is the fixture's only `Dry Goods` row — without one, that filter chip is
+	// dead under `?demo` and the Type group looks broken rather than empty.
+	{ name: 'Long-Grain White Rice', locationName: 'Pantry', typeNames: ['Grains', 'Dry Goods'], storeNames: ['Warehouse'], qty: '1', threshold: '1', size: '5', unit: 'pound', daysAgo: 31 },
 	{ name: 'Rolled Oats', locationName: 'Pantry', typeNames: ['Grains', 'Breakfast'], storeNames: ['Warehouse'], qty: '2', threshold: '1', size: '42', unit: 'ounce', daysAgo: 28 },
 	{ name: 'Diced Tomatoes', locationName: 'Pantry', typeNames: ['Canned Goods'], storeNames: ['Grocery', 'Warehouse'], qty: '6', threshold: '3', size: '28', unit: 'ounce', daysAgo: 23 },
 	{ name: 'Whole Peeled San Marzano Tomatoes', locationName: 'Pantry', typeNames: ['Canned Goods'], storeNames: ['Market'], qty: '2', threshold: '1', size: '28', unit: 'ounce', notes: 'For sauce. Not interchangeable with the diced.', daysAgo: 30 },

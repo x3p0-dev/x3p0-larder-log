@@ -9,7 +9,12 @@ import { StatusChip } from './components/StatusChip';
 import { SortMenu } from './components/SortMenu';
 import type { SortKey } from './components/SortMenu';
 import { ItemSheet } from './components/ItemSheet';
-import { PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_BUTTON_QUIET, PAGE_CHIP_ADD, PAGE_FOCUS, PAGE_INPUT } from './lib/controlStyles';
+import { SuggestMenu, useSuggest } from './components/SuggestMenu';
+import type { SuggestGroup, SuggestRow } from './components/SuggestMenu';
+import {
+	PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_BUTTON_QUIET, PAGE_CHIP_ADD, PAGE_FIELD_HALO_WITHIN,
+	PAGE_FIELD_HALO_WITHIN_DARK, PAGE_FOCUS, PAGE_ICON_IN_FIELD, PAGE_INPUT,
+} from './lib/controlStyles';
 import { AppliedFilters } from './components/AppliedFilters';
 import type { AppliedFilter } from './components/AppliedFilters';
 import { ItemCard } from './components/ItemCard';
@@ -64,6 +69,7 @@ import { runBands, runCount, runIds } from '../shared/runList';
 import { monthOf } from '../shared/season';
 import type { RunTab } from './components/RunSegment';
 import { countTermFilters, matchesTermFilters, pruneTermFilter, toggleTermFilter } from '../shared/filter';
+import { matchesQuery, searchSuggestions, sizeSearchText } from '../shared/suggest';
 import type { TermFilters } from '../shared/filter';
 import type { TermBlock } from '../shared/term';
 import { termBlock, termUsageCount } from '../shared/term';
@@ -93,6 +99,9 @@ const SR_ONLY = {
  * floor — see the note in `Drawer`.
  */
 const DOCK_PX = 1120;
+
+/** The listbox the search field points `aria-controls` at. */
+const SEARCH_SUGGEST_ID = 'search-suggestions';
 
 /**
  * The content width row 2 needs before its controls can wear their full forms.
@@ -376,7 +385,7 @@ function emptyCopy(f: EmptyFilters): { title: string; body: string; clear: 'none
 	if (only && searching) {
 		return {
 			title: `Nothing matches “${f.search.trim()}”.`,
-			body: 'Search reads item names only, so a shorter word usually finds more.',
+			body: 'Search reads item names and sizes, and matches the start of a word — so a shorter word usually finds more.',
 			clear: 'one',
 			label: 'Clear the search',
 		};
@@ -1080,9 +1089,124 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		[activeLocations, activeTypes, activeStores]
 	);
 
+	/*
+	 * The search field's suggestion menu — the name field's, re-pointed.
+	 *
+	 * Two groups and one extra rule: **a chevron means the row leaves the screen
+	 * you are on**. An item row opens that item's Edit sheet and closes the menu,
+	 * because it has taken you somewhere. A term row applies the term, appears in
+	 * the applied-filter row where *Clear filters* can already take it off again,
+	 * and **does not close** — terms are a set you work through, which is the
+	 * rule the rail's quick filters already hold.
+	 *
+	 * **It searches past the applied filters on purpose.** Filtered to *Pantry*
+	 * and searching for something in the freezer, the menu still finds it and the
+	 * grid does not. A search that cannot reach past a filter you forgot you set
+	 * is the worse failure — recorded as an open question in `autofill.md`,
+	 * because nothing on screen says so.
+	 */
+	const searchHits = useMemo(() => searchSuggestions(
+		search,
+		items,
+		[
+			{ kind: 'location' as const, terms: locations },
+			{ kind: 'store' as const, terms: stores },
+			{ kind: 'type' as const, terms: types },
+		],
+		[
+			...activeLocations.map((id) => `location:${id}`),
+			...activeStores.map((id) => `store:${id}`),
+			...activeTypes.map((id) => `type:${id}`),
+		]
+	), [search, items, locations, stores, types, activeLocations, activeStores, activeTypes]);
+
+	const searchGroups = useMemo<SuggestGroup[]>(() => ([
+		{
+			label: 'In your pantry',
+			rows: searchHits.items.map((h) => ({
+				kind: 'item' as const,
+				id: `search-item-${h.item.id}`,
+				item: h.item,
+				place: termNameFor(h.item.locationId, locations),
+				at: h.at,
+				sizeAt: h.sizeAt,
+			})),
+		},
+		{
+			/*
+			 * **`FILTERS`, not `TERMS`.** *Terms* is what these are and it is the
+			 * app's own word everywhere else — but this menu is the one place a
+			 * term is not a thing you are looking at so much as a thing you are
+			 * about to *do*, and the row does the same job as a chip in the drawer
+			 * two panes away. The two menus stopped sharing a vocabulary here, and
+			 * that is fine: they no longer share a group.
+			 */
+			label: 'Filters',
+			rows: searchHits.terms.map((h) => ({
+				kind: 'term' as const,
+				id: `search-term-${h.kind}-${h.term.id}`,
+				term: h.term,
+				group: h.kind,
+				// The source group renames itself once one source is not a shop
+				// (D58). This is the sixth place that moves with it.
+				groupWord: h.kind === 'location' ? 'Location' : h.kind === 'type' ? 'Type' : sourceWord,
+				count: h.count,
+				at: h.at,
+			})),
+		},
+	]), [searchHits, locations, sourceWord]);
+
+	const searchSuggest = useSuggest(search, searchGroups);
+
+	/**
+	 * The two things a search row does, and **neither of them leaves this
+	 * screen**.
+	 *
+	 * **An item row finishes the query for you.** It fills the field with that
+	 * item's name, which narrows the grid to it — the row is a shortcut through
+	 * typing, not a way into the item. It used to open that item's Edit sheet,
+	 * which put a form over the pantry from a control whose whole job is finding
+	 * things in it, and it is what the chevron existed to warn about. Both are
+	 * gone.
+	 *
+	 * **A term row applies the filter and clears the query**, because the two
+	 * are alternative ways of narrowing the same grid and leaving a stale query
+	 * on top of a fresh filter narrows it twice — usually to nothing. Clearing
+	 * also empties the menu, which is what closes it: with no query there are no
+	 * rows.
+	 */
+	function pickSearchSuggestion(row: SuggestRow) {
+		if (row.kind === 'item') {
+			setSearch(row.item.name);
+			searchSuggest.close(row.item.name);
+			return;
+		}
+
+		if (row.kind !== 'term') return;
+
+		const toggle = row.group === 'location'
+			? setActiveLocations
+			: row.group === 'type' ? setActiveTypes : setActiveStores;
+
+		// Functional, for the reason every late path in this file is: nothing
+		// guarantees this write lands before the next render reads the array.
+		toggle((prev) => toggleTermFilter(prev, row.term.id));
+		setSearch('');
+	}
+
+	/*
+	 * **The grid matches the way the suggestion menu does** — a word prefix in
+	 * the name or the size, never a substring anywhere and never the notes. It
+	 * was `includes` on the name alone, so `eef` found Ground Beef and typing
+	 * `pint` found nothing at all.
+	 *
+	 * The two have to agree: the menu is a shortcut into results that are
+	 * already on screen underneath it, and a menu listing a row the grid has
+	 * ruled out is a menu nobody can trust.
+	 */
 	const preStatusFiltered = useMemo(() => items.filter((it) => (
 		matchesTermFilters(it, termFilters)
-			&& it.name.toLowerCase().includes(search.toLowerCase())
+			&& (matchesQuery(it.name, search) || matchesQuery(sizeSearchText(it.size, it.unit), search))
 	)), [items, termFilters, search]);
 
 	const statusCounts = useMemo(() => {
@@ -2378,17 +2502,73 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  */}
 					{! empty && (
 					<div class="flex items-center gap-3.5">
-						<label class={`flex-1 min-w-0 flex items-center gap-[11px] h-[50px] px-[18px] rounded-[15px] focus-within:border-ink-muted ${PAGE_INPUT}`}>
-							<Search size={18} style={{ color: theme.textFaint }} />
-							<input
-								value={search}
-								onInput={(e) => setSearch(e.currentTarget.value)}
-								placeholder="What are you looking for?"
-								aria-label="Search items"
-								class="text-[15px] outline-none flex-1 min-w-0 bg-transparent"
-								style={{ color: theme.text }}
+						{/*
+						  * The field and its menu, in one positioned box — the menu is
+						  * `absolute` under the field's own bottom edge, and at 390 it
+						  * takes the column's width from this wrapper rather than
+						  * naming a number.
+						  */}
+						<div class="relative flex-1 min-w-0">
+							<label class={`flex items-center gap-[11px] h-[50px] px-[18px] rounded-[15px] focus-within:border-line-strong ${PAGE_INPUT} ${dark ? PAGE_FIELD_HALO_WITHIN_DARK : PAGE_FIELD_HALO_WITHIN}`}>
+								<Search size={18} style={{ color: theme.textFaint }} />
+								<input
+									value={search}
+									onInput={(e) => setSearch(e.currentTarget.value)}
+									onKeyDown={(e) => {
+										if (searchSuggest.onKeyDown(e, pickSearchSuggestion)) return;
+
+										/*
+										 * **A second Escape clears the field** — the two
+										 * steps the `×` beside it collapses into one. The
+										 * first went to the menu, above.
+										 */
+										if (e.key === 'Escape' && search) { e.preventDefault(); setSearch(''); }
+									}}
+									onBlur={() => searchSuggest.close()}
+									placeholder="What are you looking for?"
+									aria-label="Search items"
+									class="text-[15px] outline-none flex-1 min-w-0 bg-transparent"
+									style={{ color: theme.text }}
+									role="combobox"
+									aria-autocomplete="list"
+									aria-expanded={searchSuggest.open}
+									aria-controls={SEARCH_SUGGEST_ID}
+									aria-activedescendant={searchSuggest.open && searchSuggest.active >= 0 ? searchSuggest.rows[searchSuggest.active]?.id : undefined}
+									autocomplete="off"
+								/>
+								{/*
+								  * **Search is still not touched by `Clear filters`**, so
+								  * this is the only thing that empties it — and now doubly
+								  * right, since the menu's term rows put chips in that bar
+								  * and clearing them should not clear the query that found
+								  * them.
+								  */}
+								{search && (
+									<button
+										onClick={() => { setSearch(''); searchSuggest.close(''); }}
+										/* The console's two clears' geometry, so the app has one search clear and not a third size. `-mr-2` puts the glyph's centre 26px off the field's right edge, against the search mark's 27 on the left. */
+						class={`flex items-center justify-center w-8 h-8 -mr-2 shrink-0 ${PAGE_ICON_IN_FIELD}`}
+										aria-label="Clear the search"
+									>
+										<X size={15} />
+									</button>
+								)}
+							</label>
+
+							<SuggestMenu
+								open={searchSuggest.open}
+								groups={searchSuggest.groups}
+								active={searchSuggest.active}
+								setActive={searchSuggest.setActive}
+								onPick={pickSearchSuggestion}
+								announced={searchSuggest.announced}
+								label="Search suggestions"
+								id={SEARCH_SUGGEST_ID}
+								matchLength={search.trim().length}
+								dark={dark}
+								theme={theme}
 							/>
-						</label>
+						</div>
 						{mayEditItems && (
 							<button
 								onClick={openAddForm}
@@ -2885,6 +3065,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				open={mayEditItems && (Boolean(editingId && editForm) || (showForm && Boolean(form)))}
 				mode={editingId ? 'edit' : 'add'}
 				title={items.find((i) => i.id === editingId)?.name}
+				itemId={editingId}
+				items={items}
 				value={(editingId ? editForm : form) ?? emptyDraft()}
 				onChange={editingId ? setEditForm : setForm}
 				error={editingId ? editError : formError}

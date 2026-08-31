@@ -41,6 +41,16 @@ control has its states now*, which also lists what is left in its *Gaps*.
 both screens that hold them, so the first look at the console cannot delete
 anything. See *The writes are held, and the console is read-only*.
 
+**Unpublished, on `master`: autofill (D63).** Two suggestion menus — one under
+the item name on the Add / Edit sheet, one under the top-bar search — built from
+`.claude/docs/design/autofill.md` on 2026-08-31. No schema change; the artifact
+is unchanged. It also brings the item grid's search into line with the menu's
+matching, gives the search field the `×` D45 has claimed since it was written,
+and adds `shared/suggest.ts` and `shared/catalog.ts`. **`Dry Goods` is a
+fifteenth seeded type** with it (D50, amended), which reaches new households
+only. See *Autofill — the name field and search (D63)* below. **Nobody has
+clicked it.**
+
 **Live as of v17: the auth model is rebuilt.** Local is a named
 `?guest=` identity, production is authenticated accounts only, `guest:local` is
 refused everywhere, and the admin hold now exempts dev guests so the deletion
@@ -2669,6 +2679,173 @@ Unbuilt on purpose:
 - **Can a household see the Activity rows that touch it?** Still admin-only,
   still unasked.
 
+### Autofill — the name field and search (D63) — 2026-08-31
+
+`.claude/docs/design/autofill.md`, drawn on
+`.claude/docs/design/larderlognameautofill.html` — twelve boards on four pages,
+both themes. **Client only apart from two new `shared/` modules**: no schema
+change, no handler moved. Eleven tables, thirteen queries, twenty-five
+mutations, `db.migrations` still empty — the artifact is byte-for-byte the shape
+the console left it.
+
+**Two suggestion menus, and they are one component.** `SuggestMenu.tsx` is the
+sort menu's construction at the sort menu's tokens — its **third** user after
+the unit menu — and everything that differs between the two fields is which
+groups they build.
+
+- **Nothing in either menu is ever *selected*, and that is what frees the
+  fill.** The sort and unit menus mark the current row with a crimson check
+  because with a fill doing both jobs a hovered row looks chosen. A suggestion
+  has no current value, so `surface-alt` means highlight outright — **one
+  treatment for the pointer and the keyboard cursor alike**, driven from an
+  index rather than from `:hover`, so a pointer on row three and an arrow key on
+  row one cannot paint the menu twice. **Sunk works here where D45 found it
+  fails on the ground**: a menu is a card, so sunk is a real step down from it.
+- **440 in both menus.** On the sheet that is the name field's own width. In the
+  top bar the field is a banner — about 1221px at a 1372 column — so search
+  takes 440 too and aligns left, which lands it on exactly one column of the
+  grid.
+- **One row shape, three kinds of row — all 38px, 48 at 390.** The item row was
+  56 and stacked, the name over `3 on hand · Pantry`, while catalog and term
+  rows were single lines. **Two constructions in one 440px menu read as two
+  different kinds of control**, and the stacked one spent a whole line on a
+  sentence rather than a fact: *on hand* is what the number in that slot has
+  always meant. The item row **is** the term row now, with a status dot and a
+  size in it — mark · name · right-aligned **`Location · N`**, against the term
+  row's `Store · 6`. The size still rides with the name (the run list's rule,
+  and the only place a size-only match can show why the row is there). **The
+  boards and the design doc's table both draw the two-line form.**
+- **The name field answers about names and nothing else.** Two groups —
+  `IN YOUR PANTRY`, then `COMMON ITEMS`. A `TERMS` group was drawn here and cut
+  on 31 Aug: *Baking* the type and *Baking Soda* the item collided in a field
+  labelled `ITEM`. **The term row survives as a search component.**
+- **Search matches names, sizes and term names. Never notes.** Typing `pint`
+  finds your pints; `co` does **not** return Costco's six items, it returns the
+  things *called* co-something and offers **Costco** as a term beside them.
+- **A match is a prefix of any word**, and **the grid now obeys the same rule**.
+  It was `name.toLowerCase().includes()`, so `eef` found Ground Beef and `pint`
+  found nothing at all. The menu is a shortcut into results already on screen
+  underneath it, and a menu listing a row the grid has ruled out is a menu
+  nobody can trust. **`matchAt` returns an offset rather than a boolean**,
+  because the matched characters going to 700 is the *whole* explanation of a
+  rule that is never written on screen.
+- **Two characters, never on focus. Six rows, and it never scrolls.** The unit
+  menu scrolls because fifteen units are a fixed set you are choosing from; this
+  is a guess you improve by typing another letter. **Nothing matches, so nothing
+  opens** — there is no *No matches* row and no *see all* row.
+- **Editing fills the name and nothing else; adding fills everything it can.**
+  An edit sheet is open on a whole item somebody already described, and a menu
+  that overwrote five fields because the name prefix-matched another row would
+  be a silent write to fix a typo in one. **The menu is the same on both
+  sheets; only what a press does changes.**
+- **Adding from a pantry row carries the name, the size and the three chips —
+  never a count.** *Low at* is a count rather than a property: copying it would
+  carry Ground Beef's 15 onto a jar of anything. That settles the question the
+  sheet's *Household default.* hint left open. **The watch-out is on the
+  record**: picking Ground Beef when you already have Ground Beef makes the
+  duplicate one tap, and nothing catches it — exploration **C** is the drawn
+  answer if it bites.
+- **Adding from a catalog row carries the name, the type and the shelf.** The
+  catalog is `{ name, type, place }` now rather than bare strings: *Half and
+  Half* is Dairy and it goes in the refrigerator, in every household there has
+  ever been. **Never a source** — where you buy a thing is one household's own
+  vocabulary (D40). **Both are matched by name, exactly**, against terms that
+  already exist, and **a catalog pick never creates one**: a household that
+  renamed *Dairy* gets nothing filled rather than something wrong.
+- **Nothing in either menu leaves the screen you are on, and there is no
+  chevron.** An item row in search **fills the field with that item's name**,
+  which narrows the grid to it — a shortcut through typing, not a way into the
+  item. It opened that item's Edit sheet for one round, which put a form over
+  the pantry from the control whose whole job is finding things in it. **That
+  also removed the one place a viewer had to be gated**: filling a search field
+  is a read.
+- **A term row applies the filter and clears the query.** The two are
+  alternative ways of narrowing one grid, and a stale query on a fresh filter
+  narrows it twice — usually to nothing. Clearing empties the menu, which is
+  what closes it. **This retires *terms are a set you work through***, which
+  was the reason a term row used to stay open.
+- **The search group is `FILTERS`, not `TERMS`.** *Terms* is the app's own word
+  everywhere a term is a thing you look **at**; this menu is the one place it is
+  a thing you are about to **do**, and the row does a drawer chip's job. **A
+  term already applied is dropped rather than marked**, which keeps *nothing is
+  ever selected* true.
+- **The search field finally has its `×`.** D45 has said since it was written
+  that *search has its own `×`*, and it did not. **Escape closes the menu and
+  keeps the query; a second Escape clears the field** — the two steps that `×`
+  collapses into one. **`Clear filters` still does not touch search**, and now
+  doubly right: the menu's term rows put chips in that bar.
+- **The field is a `combobox` over a `listbox`**, the shape the unit trigger
+  already takes two controls away on the same sheet, with `aria-activedescendant`
+  and a politely announced count that changes **only when the number moves**.
+  **Nothing is highlighted until an arrow key says so** — a pre-selected first
+  row makes Enter commit a guess nobody made, which is D48 one control over.
+- **`shared/suggest.ts` and `shared/catalog.ts`** are the two new modules, in
+  `shared/` for the reason `filter.ts` is: a substring where a word prefix
+  belongs still compiles, still runs, and hands back a plausible list nobody can
+  explain. **The catalog is a hand-written US-centric list with no source and no
+  locale, and it does not learn** — all four are open questions in the design
+  doc rather than gaps here. It is **281 rows**, and growing it has a visible
+  cost the design did not have: the six-row cap binds harder, so `be` now
+  answers Beef Broth · Beef Roast · Beets where the boards drew Beets · Bell
+  Peppers · Berries.
+- **A bean is two rows, and that is the one pair in the list.** Thirteen common
+  US-market beans — black, black-eyed, butter, cannellini, chickpea, fava,
+  garbanzo, great northern, kidney, lima, navy, pinto, red — each as the can
+  (`Canned Goods`, the cupboard) and as `<Bean>, Dry` (`Dry Goods`, the bulk
+  shelf). They run out independently and their sizes are not comparable, so one
+  row could not serve both. **The suffix is not decoration**: the comma is a
+  word separator to `matchAt`, so typing `dry` lists the bulk shelf and typing
+  `kidney` finds both forms. `npm test` pins the pairing in both directions —
+  half a pair is invisible when wrong, since the menu still opens and still
+  answers.
+- **`Garbanzo Beans` and `Chickpeas` are both here, and that is a knowing
+  duplicate.** They are one bean under the two names US cans actually print, and
+  somebody typing either has to find something — but picking one and picking the
+  other make two different items, which is the *Berries* / *berries* hazard the
+  design doc already records. A real fix needs the catalog to carry aliases
+  resolving to one entry, which is a shape change rather than a list edit.
+- **`Dry Goods` is the fifteenth seeded type** (D50, amended) — the bulk shelf,
+  which the catalog needed and `Grains` was standing in for. It takes
+  `color-11`, so **the reserved headroom is down from two unspent tokens to
+  one**; a sixteenth would take it to nothing. **Nothing backfills**, so an
+  existing household adds it once by hand — Justin's local *The Tadlock
+  Household* already has it, at the same `color-11` `proposeColor()` would have
+  handed out. `?demo`'s Long-Grain White Rice carries it as a second type, so
+  the chip is not dead under `?demo`.
+
+**Verified without a browser**: typecheck clean, **642 assertions** (73 new,
+covering the word-prefix rule and the substring it refuses, the separators, the
+empty query that has to match *everything* for the grid and *nothing* for the
+highlight, the two-character floor, the caps, the catalog's dedupe against the
+pantry, what a pick carries and what it must not, a size-only match and where it
+does and does not bold, the applied-term exclusion keyed by `kind:id`, and —
+after the 31 Aug revisions — that every catalog row names a type and a shelf a
+seeded household really has, that the list is A–Z, that a renamed term fills
+nothing rather than the wrong thing, and that every bean has both of its rows),
+the
+dry-run artifact unchanged (eleven tables, thirteen queries, twenty-five
+mutations, `db.migrations: []`, `/api/status` the only endpoint), and **all 124
+class literals across the three touched files** diffed against the freshly built
+`.spacefast/zero/public/zero.css` by unescaping the sheet's own selectors —
+printed, never hand-written, proved to discriminate against a bogus class — with
+`md:w-[440px]`, `md:h-[38px]`, `focus-within:border-line-strong` and
+`motion-reduce:transition-none` each confirmed by **byte offset** to land after
+the base it overrides. A throwaway `sf dev --port 4199` compiled, served
+`GET /` 200 and `/api/status` `ok`, and its `/client.js` carries every new
+string.
+
+**One trap the check itself walked into, and it is the fifth of its kind.** The
+selector printer's negated character class did not exclude the backslash, so
+`.md\:flex` unescaped to `md\` and **every variant in the app looked missing** —
+seventeen false positives, including four that were provably in the sheet. A
+check that reports a missing class is worth nothing until it has been shown to
+find one that is really there *and* one that is really absent.
+
+**Nobody has clicked it.** Every interesting part is press-time and
+keyboard-time: the arrows, the two Escapes, the pick, the chevron's navigation,
+and the term row that stays open. **To see it locally**: any two characters in
+the item name field, or in the top bar's search.
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -3411,7 +3588,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D61, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against** |
+| `.docs/decisions.md` | D1–D63, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -3424,6 +3601,8 @@ most of it is already decided.
 | `.claude/docs/design/larderloginstallmockup.html` | **The 5 boards for it** — desktop 1440, the row's states with the panel-edge finding drawn both ways, Preferences in three states × both themes, 390, and the appears-where matrix |
 | `.claude/docs/design/garden-and-kitchen.md` | **Garden and Kitchen** (rev. 29 Aug) — a source carries a kind, the shopping list becomes a run list of three bands with a segment over it, and an item gains a season. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list* wholesale**. **Read its *what is in v1 and what is a mockup* callout first**: everything about recipes, ingredients, quantities and units is a marked mockup (D59). **Its lede is stale** — it still promises an item gains "ingredients with quantities", which the callout eight lines below and the *Ingredients — on the recipe, never on the item* section both contradict. **Built: all of v1** — D58 (the kind, the rename, the menu, the card glyph), the run list, the item side, and **D61**, its *First run asks where your food comes from* section |
 | `.claude/docs/design/larderloggardenkitchenboards.html` | **The 9 boards for it** — **board 1 is first run** (the card, the hint in four states, the rejected second step, and the three seeded drawers with `STORE` becoming `SOURCE`); its card still draws the pre-D48 prefilled name and hint, which the build does not have. Then — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
+| `.claude/docs/design/autofill.md` | **Autofill — the name field and search** (31 Aug) — the two suggestion menus, what each group holds, the matching rule, what picking carries, and the four questions it closes under *Gaps*. Its own doc for the reason `add-edit-item.md` is. **Built, all of it** (D63) — **and four of its rules were reversed the same day, in the build rather than in the document**, so read D63 beside it: the search menu's item row **fills the field** instead of opening an Edit sheet (so **the chevron and the whole *a chevron means the row leaves the screen* section describe a build that does not exist**), a term row **clears the query** instead of keeping the menu open, the group is **`FILTERS`** rather than `TERMS`, and a catalog row now carries a **type and a shelf**. On geometry the build went past both: the boards draw the sheet's item row at 50 and the search term row at 44, the doc's table reconciles them at 56 and 38/48, and **what shipped is 38/48 for all three kinds** — the item row was restyled to the term row's single line on 31 Aug, so **every drawn item row in this file is two-line and the build's is not** |
+| `.claude/docs/design/larderlognameautofill.html` | **The 12 boards for it** — name field at 480 in both themes, row anatomy, 390, the rules, the settled picking behaviour, search at 1372 in both themes, search at 390 with the no-match state, what the search menu does, and two explorations. **The search boards draw a stale top bar** — `Showing 2 of 20`, a `Shopping list` trigger and `Sort · Recently added`, all three of which row 2's rework replaced — **and every item row on them carries a chevron the build does not draw**. **Explorations A and C are not a spec**; C is the answer to reach for if the duplicate watch-out bites |
 | `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
 | `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
@@ -3519,7 +3698,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 548 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 642 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -3530,9 +3709,11 @@ Cheapest first:
   avatar rule, D58's source-kind fallbacks, the group-word rule and the item card's
   one-glyph resolver, D61's source mix — including the absent-versus-empty pair
   and what each answer seeds — and
-  `?demo`'s fixture distribution and term resolution, and D62's admin rule —
+  `?demo`'s fixture distribution and term resolution, D62's admin rule —
   every fail-closed branch, the dev-guest bypass, the console's month walk, and
-  the audit log's encoding, phrasing and retention.
+  the audit log's encoding, phrasing and retention — and D63's word-prefix
+  matching, which is invisible when wrong in exactly the way the filter rule is:
+  a substring where a prefix belongs still returns a plausible list.
   **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.

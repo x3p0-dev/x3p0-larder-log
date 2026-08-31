@@ -59,6 +59,11 @@ import {
 	countTermFilters, matchesTermFilters, NO_TERM_FILTERS, pruneTermFilter, toggleTermFilter,
 } from '../shared/filter';
 import {
+	fillFromCatalog, fillFromItem, matchAt, matchesQuery, nameSuggestions,
+	searchSuggestions, sizeSearchText, suggestionAnnouncement, SUGGEST_MIN,
+} from '../shared/suggest';
+import { GROCERY_CATALOG } from '../shared/catalog';
+import {
 	DEFAULT_SOURCE_KIND, SOURCE_KINDS, isSourceKind, itemSourceKinds, sourceGroupWord, toSourceKind,
 } from '../shared/source';
 import type { SourceKind } from '../shared/source';
@@ -1646,6 +1651,258 @@ check('an id match still counts', matchScore('ab12', 'Somewhere', [], 'hh_ab12')
 check('nothing anywhere scores zero', matchScore('zzz', 'Somewhere', ['Nora'], 'hh_1'), 0);
 check('matching is case-insensitive', matchScore('RIVER', 'Riverside Kitchen', [], 'x'), 80);
 check('the best of several secondaries wins', matchScore('nora', 'X', ['A Nora B', 'Nora Vance'], 'y'), 40);
+
+// --- the suggestion menus (shared/suggest.ts) ---
+//
+// The matching rule is never written on screen — the matched characters going
+// to 700 is the whole explanation of it — so it is exactly the kind of thing
+// that stays wrong for months without anybody being able to say why the list
+// looks odd. A substring where a word prefix belongs still compiles, still
+// runs, and still returns a plausible list.
+
+check('a prefix of the first word matches at 0', matchAt('Beets', 'be'), 0);
+check('a prefix of a later word matches inside', matchAt('Ground Beef', 'be'), 7);
+check('a substring inside a word does not match', matchAt('Ground Beef', 'eef'), -1);
+check('matching is case-insensitive', matchAt('GROUND BEEF', 'be'), 7);
+check('and the index is into the original text', 'Ground Beef'.slice(7, 9), 'Be');
+check('a hyphen starts a word', matchAt('All-Purpose Flour', 'pur'), 4);
+check('an ampersand starts a word', matchAt('Oils & Vinegars', 'vin'), 7);
+check('a digit is matchable', matchAt('12 oz', '12'), 0);
+check('an empty query has nowhere to highlight', matchAt('Beets', ''), -1);
+check('and neither does whitespace', matchAt('Beets', '   '), -1);
+check('a non-string has no match', matchAt(undefined, 'be'), -1);
+
+// The grid asks the other question, and with nothing typed every row survives.
+// Answering -1 to both is what emptied the whole grid the first time.
+check('an empty query matches everything', matchesQuery('Beets', ''), true);
+check('a whitespace query matches everything', matchesQuery('Beets', '  '), true);
+check('a real query still discriminates', matchesQuery('Beets', 'ee'), false);
+
+// A size is searchable by what the card prints *and* by the unit's own word,
+// because D52 stores neither — it stores a slug.
+check('a size is searchable as printed', sizeSearchText('12', 'ounce'), '12 oz Ounce');
+check('typing the unit word finds it', matchesQuery(sizeSearchText('1', 'pint'), 'pint'), true);
+check('typing the abbreviation finds it too', matchesQuery(sizeSearchText('12', 'ounce'), 'oz'), true);
+check('an unset size is not searchable', sizeSearchText('', ''), '');
+
+function sized(name: string, size: string, unit: string, storeIds: string[] = []): Item {
+	return { ...item(name, '3', '2', storeIds), size, unit };
+}
+
+const SHELF: Item[] = [
+	sized('Coffee', '12', 'ounce', ['s-costco']),
+	sized('Frozen Corn', '12', 'ounce', ['s-aldi']),
+	sized('Heavy Cream', '1', 'pint', ['s-costco']),
+	item('Beets', '2', '4', []),
+];
+
+// --- the name field: two groups, names only ---
+
+check('two characters is the minimum', SUGGEST_MIN, 2);
+check(
+	'nothing opens below it',
+	nameSuggestions('c', SHELF).pantry.length + nameSuggestions('c', SHELF).catalog.length,
+	0
+);
+check(
+	'a pantry match is offered',
+	nameSuggestions('co', SHELF).pantry.map((h) => h.item.name),
+	['Coffee', 'Frozen Corn']
+);
+check('a first-word match leads', nameSuggestions('co', SHELF).pantry[0]?.at, 0);
+check('and the later match keeps its own offset', nameSuggestions('co', SHELF).pantry[1]?.at, 7);
+check(
+	'the item being edited stays out of its own menu',
+	nameSuggestions('co', SHELF, 'i-Coffee').pantry.map((h) => h.item.name),
+	['Frozen Corn']
+);
+// The design's own trio for `be` was Beets · Bell Peppers · Berries, and the
+// grown catalog answers Beef Broth · Beef Roast · Beets instead — the cap
+// binds harder the longer the list gets, which is the cost of growing it and is
+// why the ranking has to be by match position and then A–Z rather than by
+// file order.
+check(
+	'the catalog answers with the words nothing holds',
+	nameSuggestions('be', []).catalog.map((h) => h.entry.name),
+	['Beef Broth', 'Beef Roast', 'Beets']
+);
+check('the catalog is capped at three', nameSuggestions('be', []).catalog.length, 3);
+check(
+	'a catalog word already in the pantry is dropped',
+	nameSuggestions('be', SHELF).catalog.some((h) => h.entry.name === 'Beets'),
+	false
+);
+check(
+	'and the pantry row is what answers instead',
+	nameSuggestions('be', SHELF).pantry.map((h) => h.item.name),
+	['Beets']
+);
+check('a size never opens the name field’s menu', nameSuggestions('pint', SHELF).pantry.length, 0);
+check('the catalog carries no duplicate names', new Set(GROCERY_CATALOG.map((c) => c.name)).size, GROCERY_CATALOG.length);
+
+// A catalog row is only useful if the type and shelf it names are ones a
+// seeded household actually has — `fillFromCatalog` matches by name and fills
+// nothing when it misses, so a typo here is invisible rather than loud.
+check(
+	'every catalog type names a seeded type',
+	GROCERY_CATALOG.filter((c) => c.type && ! SEED_TYPES.some((t) => t.name === c.type)).map((c) => c.name),
+	[]
+);
+check(
+	'every catalog shelf names a seeded location',
+	GROCERY_CATALOG.filter((c) => c.place && ! SEED_LOCATIONS.some((l) => l.name === c.place)).map((c) => c.name),
+	[]
+);
+// --- the beans, which are the one place the catalog carries a pair ---
+//
+// A bean is sold two ways and is therefore two rows: the bare name is the can,
+// `<Bean>, Dry` is the bag. Half a pair is invisible when wrong — the menu
+// still opens and still answers, it just never offers the form you buy.
+
+const BEANS = [
+	'Black Beans', 'Black-Eyed Peas', 'Butter Beans', 'Cannellini Beans', 'Chickpeas',
+	'Fava Beans', 'Garbanzo Beans', 'Great Northern Beans', 'Kidney Beans', 'Lima Beans',
+	'Navy Beans', 'Pinto Beans', 'Red Beans',
+];
+const catalogNames = new Set(GROCERY_CATALOG.map((c) => c.name));
+
+check(
+	'every common bean is in the catalog prepared',
+	BEANS.filter((b) => ! catalogNames.has(b)),
+	[]
+);
+check(
+	'and every one of them has a dry twin',
+	BEANS.filter((b) => ! catalogNames.has(`${b}, Dry`)),
+	[]
+);
+check(
+	'a dry row is the bulk shelf, never the can',
+	GROCERY_CATALOG.filter((c) => c.name.endsWith(', Dry') && (c.type !== 'Dry Goods' || c.place !== 'Pantry')),
+	[]
+);
+check(
+	'and nothing is a dry twin without a prepared row to be a twin of',
+	GROCERY_CATALOG.filter((c) => c.name.endsWith(', Dry') && ! catalogNames.has(c.name.slice(0, -', Dry'.length))).map((c) => c.name),
+	[]
+);
+
+// The comma is a word separator, which is what makes the suffix work at all:
+// typing `dry` lists the bulk shelf and typing the bean finds both forms.
+check('typing the bean finds both forms', nameSuggestions('kidney', []).catalog.map((h) => h.entry.name), ['Kidney Beans', 'Kidney Beans, Dry']);
+check('and `dry` reaches the suffix', matchAt('Kidney Beans, Dry', 'dry'), 14);
+
+check('the catalog is A–Z, so a duplicate is obvious while editing it',
+	GROCERY_CATALOG.map((c) => c.name).join('|'),
+	[...GROCERY_CATALOG.map((c) => c.name)].sort((a, b) => a.localeCompare(b)).join('|'));
+
+// --- what a catalog row fills, and what it refuses to ---
+
+const CAT_TYPES = [term('t-dairy', 'Dairy', 'color-1'), term('t-produce', 'Produce', 'color-10')];
+const CAT_PLACES = [term('l-fridge', 'Refrigerator', 'color-1'), term('l-pantry', 'Pantry', 'color-10')];
+const HALF = GROCERY_CATALOG.find((c) => c.name === 'Half and Half')!;
+
+check('Half and Half knows it is Dairy', HALF.type, 'Dairy');
+check('and that it lives in the refrigerator', HALF.place, 'Refrigerator');
+check('a catalog pick fills the type', fillFromCatalog(HALF, CAT_TYPES, CAT_PLACES).typeIds, ['t-dairy']);
+check('and the shelf', fillFromCatalog(HALF, CAT_TYPES, CAT_PLACES).locationId, 'l-fridge');
+check('and never a source', Object.keys(fillFromCatalog(HALF, CAT_TYPES, CAT_PLACES)).includes('storeIds'), false);
+check('nor a count', Object.keys(fillFromCatalog(HALF, CAT_TYPES, CAT_PLACES)).includes('qty'), false);
+check('matching a term is case-insensitive', fillFromCatalog(HALF, [term('t-d', 'dairy', 'color-1')], []).typeIds, ['t-d']);
+check(
+	'a renamed term fills nothing rather than the wrong thing',
+	fillFromCatalog(HALF, [term('t-d', 'Dairy & Eggs', 'color-1')], CAT_PLACES).typeIds,
+	undefined
+);
+check(
+	'and a household missing the term still gets the name',
+	fillFromCatalog(HALF, [], []),
+	{ name: 'Half and Half' }
+);
+check(
+	'an entry with no type of its own fills none',
+	fillFromCatalog({ name: 'Ice', type: '', place: 'Freezer' }, CAT_TYPES, CAT_PLACES).typeIds,
+	undefined
+);
+
+// --- picking: the name, the size and the chips, never a count ---
+
+const SOURCE_ROW: Item = { ...sized('Coffee', '12', 'ounce', ['s-costco']), typeIds: ['t-1'], qty: '9', threshold: '5' };
+const PICKED = fillFromItem(SOURCE_ROW);
+
+check('a pick carries the name', PICKED.name, 'Coffee');
+check('and the size pair whole', [PICKED.size, PICKED.unit], ['12', 'ounce']);
+check('and the location', PICKED.locationId, 'l-1');
+check('and the stores', PICKED.storeIds, ['s-costco']);
+check('and the types', PICKED.typeIds, ['t-1']);
+check('it carries no count at all', Object.keys(PICKED).includes('qty'), false);
+check('and no threshold — the household default is what a new item starts from', Object.keys(PICKED).includes('threshold'), false);
+check('nor the retired off-list flag (D60)', Object.keys(PICKED).includes('offShoppingList'), false);
+check('the arrays are copies, never the item’s own', PICKED.storeIds !== SOURCE_ROW.storeIds, true);
+
+// --- search: items, sizes and terms ---
+
+const TERM_GROUPS = [
+	{ kind: 'location' as const, terms: [term('l-1', 'Pantry', 'color-1'), term('l-2', 'Chest Freezer', 'color-2')] },
+	{ kind: 'store' as const, terms: STORES },
+	{ kind: 'type' as const, terms: [term('t-1', 'Condiments', 'color-3')] },
+];
+
+check('search opens at the same two characters', searchSuggestions('c', SHELF, TERM_GROUPS).items.length, 0);
+check(
+	'search finds the items called co-something',
+	searchSuggestions('co', SHELF, TERM_GROUPS).items.map((h) => h.item.name),
+	['Coffee', 'Frozen Corn']
+);
+check(
+	'and offers Costco as a term rather than folding its six items in',
+	searchSuggestions('co', SHELF, TERM_GROUPS).terms.map((h) => h.term.name),
+	['Condiments', 'Costco']
+);
+check(
+	'a term row carries how many items name it',
+	searchSuggestions('costco', SHELF, TERM_GROUPS).terms[0]?.count,
+	2
+);
+check(
+	'a size-only match still reaches the list',
+	searchSuggestions('pint', SHELF, TERM_GROUPS).items.map((h) => h.item.name),
+	['Heavy Cream']
+);
+check('with nothing bolded in the name', searchSuggestions('pint', SHELF, TERM_GROUPS).items[0]?.at, -1);
+check(
+	'and nothing in the size either — the word that matched is not on the row',
+	searchSuggestions('pint', SHELF, TERM_GROUPS).items[0]?.sizeAt,
+	-1
+);
+check('but an abbreviation the row prints does highlight', searchSuggestions('oz', SHELF, TERM_GROUPS).items[0]?.sizeAt, 3);
+check(
+	'a name match sorts above a size-only one',
+	searchSuggestions('pint', [sized('Pint Glass Cleaner', '1', 'ounce'), sized('Heavy Cream', '1', 'pint')], []).items.map((h) => h.item.name),
+	['Pint Glass Cleaner', 'Heavy Cream']
+);
+check(
+	'a term already applied is not offered again',
+	searchSuggestions('co', SHELF, TERM_GROUPS, ['store:s-costco']).terms.map((h) => h.term.name),
+	['Condiments']
+);
+check(
+	'and the kind is part of that key, since ids repeat across tables',
+	searchSuggestions('co', SHELF, TERM_GROUPS, ['location:s-costco']).terms.map((h) => h.term.name),
+	['Condiments', 'Costco']
+);
+check(
+	'notes are never searched',
+	searchSuggestions('co', [{ ...item('Milk', '1', '2', []), notes: 'costco run' }], []).items.length,
+	0
+);
+
+// Announced only when the number moves, and never for an absence: nothing
+// opens when nothing matches, so there is no count to report.
+check('one suggestion is singular', suggestionAnnouncement(1), '1 suggestion.');
+check('more than one is plural', suggestionAnnouncement(6), '6 suggestions.');
+check('nothing is announced for nothing', suggestionAnnouncement(0), '');
+
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

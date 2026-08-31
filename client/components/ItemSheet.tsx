@@ -1,20 +1,23 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Check, Minus, Plus, Trash2, X } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
-import { entityColorFor, proposeColor, statusFor } from '../lib/theme';
+import { entityColorFor, proposeColor, statusFor, termNameFor } from '../lib/theme';
 import { CheckBox } from './CheckBox';
 import { TermPanel, TermRow } from './TermPanel';
 import { MonthMenu } from './MonthMenu';
 import { panelSkin } from './TermPanel';
 import { UnitMenu } from './UnitMenu';
+import { SuggestMenu, useSuggest } from './SuggestMenu';
+import type { SuggestGroup, SuggestRow } from './SuggestMenu';
 import { digitField } from '../lib/numericField';
 import { useHoldRepeat } from '../hooks/useHoldRepeat';
 import type { SourceKind } from '../../shared/source';
 import { itemSourceKinds, sourceGroupWord } from '../../shared/source';
-import type { ItemDraft, Source, Term } from '../../shared/types';
+import type { Item, ItemDraft, Source, Term } from '../../shared/types';
 import type { TaxonomyActions } from '../lib/actions';
 import { toInt } from '../../shared/qty';
+import { fillFromCatalog, fillFromItem, nameSuggestions } from '../../shared/suggest';
 import { formatSize, MAX_SIZE_DIGITS } from '../../shared/size';
 import { STATUS_PHRASE } from '../../shared/status';
 import {
@@ -26,12 +29,22 @@ import {
 /** Four digits, for the reason `MAX_SIZE_DIGITS` gives: an 85px cell at 390. */
 const MAX_COUNT_DIGITS = 4;
 
+/** The listbox the name field points `aria-controls` at. One sheet, one menu. */
+const SUGGEST_ID = 'item-name-suggestions';
+
 type Props = {
 	open: boolean;
 	/** `edit` prefills and swaps the header, the save label, and adds Remove. */
 	mode: 'add' | 'edit';
 	/** The item's name, for the edit header. Unused when adding. */
 	title?: string;
+	/**
+	 * The row being edited, so it stays out of its own suggestion menu.
+	 * `null` while adding.
+	 */
+	itemId?: string | null;
+	/** The household's items — the `IN YOUR PANTRY` half of the name field's menu. */
+	items: readonly Item[];
 	onRemove?: () => void;
 	value: ItemDraft;
 	onChange: (next: ItemDraft) => void;
@@ -317,7 +330,7 @@ function Stepper({ label, value, onValue, note, dark, theme }: {
  * question — where and what — asked three times.
  */
 export function ItemSheet({
-	open, mode, title, onRemove,
+	open, mode, title, itemId, items, onRemove,
 	value, onChange, error, locations, types, stores, taxonomy, canCreateTerms,
 	defaultThreshold, saving, onSave, onClose, dark, theme,
 }: Props) {
@@ -356,6 +369,41 @@ export function ItemSheet({
 	const [toOpen, setToOpen] = useState(false);
 
 	/*
+	 * The name field's suggestion menu — two groups, and **names only**.
+	 *
+	 * The field is labelled `ITEM` and answers one question: *what is this item
+	 * called*. A terms group was drawn here and cut on 31 Aug, because *Baking*
+	 * the type and *Baking Soda* the item collided in it and setting a chip from
+	 * the name field was a second subject in one control. Search asks *what are
+	 * you looking for*, where a location is a legitimate answer, and that is
+	 * where the term row lives now.
+	 */
+	const hits = useMemo(
+		() => nameSuggestions(value.name, items, itemId),
+		[value.name, items, itemId]
+	);
+
+	const suggestGroups = useMemo<SuggestGroup[]>(() => ([
+		{
+			label: 'In your pantry',
+			rows: hits.pantry.map((h) => ({
+				kind: 'item' as const,
+				id: `name-item-${h.item.id}`,
+				item: h.item,
+				place: termNameFor(h.item.locationId, locations),
+				at: h.at,
+				sizeAt: -1,
+			})),
+		},
+		{
+			label: 'Common items',
+			rows: hits.catalog.map((h) => ({ kind: 'catalog' as const, id: `name-cat-${h.entry.name}`, entry: h.entry, at: h.at })),
+		},
+	]), [hits, locations]);
+
+	const suggest = useSuggest(value.name, suggestGroups);
+
+	/*
 	 * The unit menu owns Escape while it is open. Read through a ref rather than
 	 * a dependency so the listener is not torn down and rebuilt every time the
 	 * menu opens — and because the sheet's own handler already has one
@@ -363,6 +411,12 @@ export function ItemSheet({
 	 */
 	const unitOpenRef = useRef(false);
 	unitOpenRef.current = unitOpen;
+
+	// The suggestion menu takes Escape ahead of the sheet too, and for the same
+	// reason: it is a thing you opened by typing, and closing it should not
+	// throw away the sheet under it.
+	const suggestOpenRef = useRef(false);
+	suggestOpenRef.current = suggest.open;
 
 	/*
 	 * Focus is an *opening* effect and nothing else. Folded in with the Escape
@@ -397,7 +451,7 @@ export function ItemSheet({
 			// The menu closes to its own trigger first. Two document-level
 			// listeners on the same node both run whatever either one stops, so
 			// this is a guard rather than a `stopPropagation` on the other side.
-			if (e.key === 'Escape' && ! unitOpenRef.current) onClose();
+			if (e.key === 'Escape' && ! unitOpenRef.current && ! suggestOpenRef.current) onClose();
 		}
 		document.addEventListener('keydown', onKey);
 		return () => document.removeEventListener('keydown', onKey);
@@ -434,6 +488,42 @@ export function ItemSheet({
 	function setUnit(key: string) {
 		if (! key) onChange({ ...value, size: '', unit: '' });
 		else onChange({ ...value, size: value.size || '1', unit: key });
+	}
+
+	/**
+	 * What a suggestion brings across, and it depends on which sheet you are on.
+	 *
+	 * **Editing fills the name and nothing else.** An edit sheet is open on a
+	 * whole item somebody already described — its shelf, its chips, its size are
+	 * answers, not blanks — and a menu that overwrote them because the name
+	 * happened to prefix-match another row would be a silent write on five
+	 * fields to correct a typo in one. Adding is the opposite: every field is
+	 * empty, and filling them is the entire point.
+	 *
+	 * **Adding from a pantry row hands over the name, the size and the three
+	 * term chips — never a count.** *Low at* is a count rather than a property of
+	 * the thing: copying it would carry Ground Beef's 15 onto a jar of anything,
+	 * and the household default is the number a new item should start from.
+	 *
+	 * **Adding from a catalog row hands over the name, the type and the shelf**
+	 * — *Half and Half* is Dairy and it goes in the refrigerator — but never a
+	 * source, and never a term the household does not already have. See
+	 * `shared/catalog.ts`.
+	 *
+	 * `close()` is told the name it should stay shut for. Picking rewrites the
+	 * field, and a menu that closed "for the current query" would reopen a tick
+	 * later showing the row that was just pressed.
+	 */
+	function pickSuggestion(row: SuggestRow) {
+		const name = row.kind === 'item' ? row.item.name : row.kind === 'catalog' ? row.entry.name : '';
+		if (! name) return;
+
+		if (editing) onChange({ ...value, name });
+		else if (row.kind === 'item') onChange({ ...value, ...fillFromItem(row.item) });
+		else if (row.kind === 'catalog') onChange({ ...value, ...fillFromCatalog(row.entry, types, locations) });
+
+		suggest.close(name);
+		nameRef.current?.focus();
 	}
 
 	return (
@@ -499,15 +589,39 @@ export function ItemSheet({
 					{/* ---------- Item ---------- */}
 					<Label theme={theme}>Item</Label>
 
-					<input
-						ref={nameRef}
-						value={value.name}
-						onInput={(e) => onChange({ ...value, name: e.currentTarget.value })}
-						placeholder="Sourdough starter"
-						class={`w-full h-12 px-3.5 mt-2.5 rounded-[11px] text-[15.5px] ${PAGE_FIELD} ${dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO}`}
-						style={error ? { borderColor: theme.dangerText } : undefined}
-						aria-label="Item name"
-					/>
+					<div class="relative mt-2.5">
+						<input
+							ref={nameRef}
+							value={value.name}
+							onInput={(e) => onChange({ ...value, name: e.currentTarget.value })}
+							onKeyDown={(e) => suggest.onKeyDown(e, pickSuggestion)}
+							onBlur={() => suggest.close()}
+							placeholder="Sourdough starter"
+							class={`w-full h-12 px-3.5 rounded-[11px] text-[15.5px] ${PAGE_FIELD} ${dark ? PANEL_FIELD_HALO_DARK : PANEL_FIELD_HALO}`}
+							style={error ? { borderColor: theme.dangerText } : undefined}
+							aria-label="Item name"
+							role="combobox"
+							aria-autocomplete="list"
+							aria-expanded={suggest.open}
+							aria-controls={SUGGEST_ID}
+							aria-activedescendant={suggest.open && suggest.active >= 0 ? suggest.rows[suggest.active]?.id : undefined}
+							autocomplete="off"
+						/>
+
+						<SuggestMenu
+							open={suggest.open}
+							groups={suggest.groups}
+							active={suggest.active}
+							setActive={suggest.setActive}
+							onPick={pickSuggestion}
+							announced={suggest.announced}
+							label="Item suggestions"
+							id={SUGGEST_ID}
+							matchLength={value.name.trim().length}
+							dark={dark}
+							theme={theme}
+						/>
+					</div>
 					{error && <p class="text-[13px] pt-1.5" style={{ color: theme.dangerText }}>{error}</p>}
 
 					{/*

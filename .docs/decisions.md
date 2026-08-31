@@ -2869,6 +2869,21 @@ its box and its own dismissal.
 
 **Decided:** 2026-08-27
 
+**Amended 2026-08-31 — there are fifteen, and the fifteenth is `Dry Goods`.**
+It is the bulk shelf: dried beans and lentils, nuts and seeds bought by the bag,
+dried fruit — the things that are neither a *grain* (rice, pasta, oats) nor a
+*baking* ingredient (flour, sugar, leaveners), and which the first pass put in
+`Grains` because that was the closest thing there was. It passes this decision's
+own test — *would a household hold two or more things that fit here and fit
+nowhere else?* — and **Grains, Baking and Canned Goods keep everything they
+already held**; an item can carry two types where the line is genuinely blurred,
+which is what a 5lb sack of rice does. It takes `color-11`, so **the headroom
+this decision reserved is down from two unspent tokens to one**: a sixteenth
+seeded type would take it to nothing and make a household's own first type
+arrive wearing Produce's olive, which is a decision rather than a list edit.
+**This reaches new households only** — nothing backfills, for the reason below,
+so an existing household adds it once by hand.
+
 **Amends [D40](#d40-seeded-terms-are-generic-and-there-are-still-three-stores)**,
 which treated all three seeded taxonomies as one problem. They are not.
 
@@ -5061,3 +5076,247 @@ either is ever revisited.
   of every household in the space has forgotten what it is for — and a
   `LARDER_ADMIN_IDS` that loses an id would leave a device restoring a section
   it can no longer be shown.
+
+---
+
+## D63. A suggestion menu answers the question its field asks
+
+**Decided:** 2026-08-31.
+
+**The design document is
+[`.claude/docs/design/autofill.md`](../.claude/docs/design/autofill.md), drawn
+on `larderlognameautofill.html` — twelve boards on four pages, both themes.**
+
+**Built, all of it**: the shared menu, the name field's two groups, the search
+field's two, the picking rule, the `×` and the two-step Escape, and the grid's
+matching brought into line with the menu's.
+
+### One component, two questions
+
+The Add / Edit sheet's name field asks *what is this item called*. The top bar's
+search field asks *what are you looking for*. **They open the same menu** —
+`SuggestMenu`, the sort menu's construction at the sort menu's tokens, its third
+user after the unit menu — and everything that differs between them is which
+groups they build.
+
+**Nothing in either menu is ever *selected*, and that is what frees the fill.**
+The sort menu and the unit menu both mark the current row with a crimson check
+rather than a fill, because with a fill doing both jobs a hovered row looks
+chosen. A suggestion has no current value, so there is nothing for a check to
+mark and `surface-alt` can mean highlight outright — **one treatment for the
+pointer and the keyboard cursor alike**, driven from an index rather than from
+`:hover`, so a pointer resting on row three and an arrow key sitting on row one
+cannot paint the menu twice.
+
+Sunk works here where D45 found it fails on the page ground: a control on the
+ground hovering to `surface-alt` reads as disappearing, because that token *is*
+the ground's middle stop. **A menu is a card**, so sunk is a real step down from
+it. The rule generalises exactly as it was written.
+
+### The name field answers about names, and nothing else
+
+**Two groups: `IN YOUR PANTRY`, then `COMMON ITEMS`.** A terms group was drawn
+here and cut on 31 Aug, and the reason is the decision's own title: *Baking* the
+type and *Baking Soda* the item collided in a field labelled `ITEM`, and setting
+a chip from the name field was a second subject in one control. The term **row**
+survives unchanged — it is a search component now, in a group whose whole job is
+to apply one.
+
+**Search's field asks a wider question, so it gets wider answers**: item names,
+item **sizes**, and term names. Never notes — a row in the list for a reason
+that is invisible in the row is worse than a shorter list. **Its second group is
+`FILTERS`** — see the reversal in *Rejected*.
+
+### One row shape, three kinds of row
+
+**Amended 2026-08-31, and it is the last of that day's reversals.** The item row
+was 56px and stacked — the name over `3 on hand · Pantry` — while a catalog row
+and a term row were single 38px lines, the term row with its scope and its
+number right-aligned in meta. **Two constructions inside one 440px menu read as
+two different kinds of control**, and the stacked one was spending a whole line
+on a sentence rather than on a fact: *on hand* is what the number in that slot
+has always meant.
+
+So the item row **is** the term row, with a status dot and a size in it:
+
+| Kind | Height (desktop / 390) | Content |
+|---|---|---|
+| **Item** | 38 / 48 | status dot · name · size in meta · right-aligned `Location · N` |
+| **Catalog** | 38 / 48 | the name, nothing else |
+| **Term** | 38 / 48 | term dot · name · right-aligned `Store · 6` |
+
+**The size stays with the name rather than taking the meta slot** — at the shelf
+*"Butter, 1 lb"* is one phrase, which is the run list row's own rule, and it is
+the only place a size-only match can show why the row is there.
+
+**The boards draw the two-line form**, and the design doc's own table gives the
+item row 56 at both widths. Both describe the shape that was built first.
+**One consequence worth having**: the menu's worst case is now six 38px rows
+rather than two 56s and three 38s, so it covers meaningfully less of the sheet
+than the doc's *~299px at 480* estimate.
+
+### A match is a prefix of any word
+
+`be` finds Ground **Be**ef and Black **Be**ans; `eef` finds nothing.
+Case-insensitive. **The matched characters going to 700 is the whole explanation
+of the rule** — it is never written on screen — which is why `matchAt` in
+`shared/suggest.ts` returns an offset rather than a boolean.
+
+**The grid behind obeys the same rule.** It was `name.toLowerCase().includes()`,
+so `eef` found Ground Beef and `pint` found nothing at all. The menu is a
+shortcut into results that are already on screen underneath it, and a menu
+listing a row the grid has ruled out is a menu nobody can trust.
+
+**It opens at two characters and never on focus.** An empty name field offering
+six common groceries is the app guessing at what you came to do. Six rows, at
+most three per group on the sheet and five items plus three terms in search, and
+**it never scrolls**: the unit menu scrolls because fifteen units are a fixed set
+you are choosing from, and this is a guess you can improve by typing one more
+letter.
+
+**Nothing matches, so nothing opens.** No *No matches* row and no *see all* row.
+A menu that opens to report an absence covers the surface to say what the empty
+list already said — and in search the grid behind is already narrowed to the
+same set, so everything the menu could list is on screen underneath it.
+
+### Picking carries properties, never counts — and only while adding
+
+**Amended 2026-08-31, before any of it shipped.**
+
+**Editing fills the name and nothing else.** An edit sheet is open on a whole
+item somebody already described — its shelf, its chips and its size are answers,
+not blanks — and a menu that overwrote five of them because the name happened to
+prefix-match another row would be a silent write to fix a typo in one. Adding is
+the opposite: every field is empty, and filling them is the entire point. **The
+menu is the same on both sheets; only what a press does changes.**
+
+**Adding from a pantry row brings across the name, the size, and the Location /
+Store / Type chips. It never brings a count.** *Low at* is a count rather than a
+property of the thing: copying it would carry Ground Beef's 15 onto a jar of
+anything, and the household default is the number a new item should start
+from — which settles the question the *Household default.* hint left open.
+
+**Adding from a catalog row brings across the name, the type and the shelf.**
+The catalog was a list of bare strings and is now a list of `{ name, type,
+place }`: *Half and Half* is Dairy and it goes in the refrigerator, in every
+household there has ever been, and a word list that knows that and asks anyway
+is the app declining to use what it has. Those two are the same everywhere for
+the reason D50 gives for seeding types at all.
+
+**Never a source.** Where you buy a thing *is* one household's own vocabulary
+(D40), the seeded shops are shapes of shop rather than shops, and a household
+that ticked *grow* may not buy it at all. Guessing there would be the app
+inventing an answer, which is what D48 settled about names.
+
+**Both are matched by name, exactly and case-insensitively, against terms that
+already exist.** A household that renamed *Dairy* to *Dairy & Eggs* gets nothing
+filled rather than something wrong, and **a catalog pick never creates a term** —
+absent rather than wrong, which is D30's instinct applied to a value instead of a
+control.
+
+**A bean is sold two ways, so it is two rows.** Thirteen common US-market beans
+appear twice: the bare name is the can (`Canned Goods`, the cupboard) and
+`<Bean>, Dry` is the bag (`Dry Goods`, the bulk shelf). They are genuinely
+different things to keep — they run out independently and their sizes are not
+comparable — so one row could not serve both, and this is the one place the
+catalog carries a pair. **The suffix is not decoration**: a comma is a word
+separator to `matchAt`, so typing `dry` lists the bulk shelf and typing the
+bean's name finds both of its forms.
+
+**`Garbanzo Beans` and `Chickpeas` are both there, and that is a knowing
+duplicate.** One bean under the two names US cans actually print; somebody
+typing either has to find something. The cost is that picking one and picking
+the other produce two different items — the *Berries* versus *berries* hazard
+already on the open list — and a real fix needs the catalog to carry aliases
+that resolve to one entry, which is a shape change rather than a list edit.
+
+**The watch-out, and nothing in this design catches it**: picking Ground Beef
+when you already have Ground Beef makes the duplicate *one tap*, faster than
+typing it. Exploration **C** — a pantry match as a signpost, replacing the Add
+sheet with that item's own Edit sheet — is the only drawn answer that stops a
+duplicate rather than describing one, and it is what to reach for if this bites.
+
+### Nothing in either menu leaves the screen you are on
+
+**Amended 2026-08-31, before any of it shipped.** The rule this section used to
+state — *a chevron means the row leaves the screen you are on* — was true of a
+search menu whose item row opened that item's Edit sheet. **It no longer does**,
+so the rule has no user and **the chevron is gone from both menus**.
+
+- **An item row finishes the query for you.** It fills the search field with
+  that item's name, which narrows the grid to it. The row is a shortcut through
+  typing, not a way into the item — and putting a form over the pantry from a
+  control whose whole job is finding things *in* the pantry was the wrong verb
+  for it. **This also removes the one place a viewer had to be gated**: filling
+  a search field is a read, so the pantry group is now theirs in full.
+- **A term row applies the filter and clears the query.** The two are
+  alternative ways of narrowing the same grid, and leaving a stale query on top
+  of a fresh filter narrows it twice — usually to nothing. Clearing empties the
+  menu, which is what closes it: with no query there are no rows.
+
+**That retires *terms are a set you work through*** as well. It was the reason a
+term row kept the menu open, and it cannot survive a press that clears the
+field. Applying two filters is two queries now, which is one more keystroke and
+one less thing to explain.
+
+**The applied term still lands in D45's filter row**, where *Clear filters* can
+take it off again — no new component, and that bar was built for exactly this.
+**A term already applied is dropped from the menu rather than marked**, which is
+what keeps *nothing is ever selected* true.
+
+### Escape has two steps, and the field has an `×`
+
+**Escape closes the menu and keeps what you typed**, joining the unit menu and
+the composer ahead of the sheet in Escape's order. **A second Escape clears the
+search field** — the two steps its `×` collapses into one. That `×` is new:
+D45 has said since it was written that *search has its own `×`*, and it did not.
+
+**Search is still not touched by `Clear filters`**, and now doubly right: the
+menu's term rows put chips in that bar, and clearing them must not clear the
+query that found them.
+
+### What is open, and one thing that is not
+
+- **The catalog is a hand-written word list** with no source, no locale and no
+  plurals policy, it is US-centric, and **it does not learn**. Making it learn
+  makes it household data, which is a schema change and a different design.
+- **Search reaches past the applied filters on purpose.** Filtered to *Pantry*
+  and searching for something in the freezer, the menu finds it and the grid
+  does not. A search that cannot reach past a filter you forgot you set is the
+  worse failure — but nothing on screen says so.
+- **`0 in stock · 0 out` under a query.** D45 already recorded that a pill
+  reading `0 out` is a control that can only disappoint. A query makes that
+  ordinary rather than rare, and nobody has looked at one on a real screen.
+- **Six rows was chosen, not measured**, and so was five-plus-three.
+
+**Not open:** whether the menu is debounced. It is not, on either field, and the
+grid narrows on every keystroke. At twenty items that is free; it becomes a
+question at a few hundred, not before.
+
+### Rejected
+
+- **A `TERMS` group on the name field.** Built, and cut the same day. A
+  suggestion menu answers the question its field asks, and `ITEM` asks one.
+- ~~**`FILTERS` as the search group's heading.**~~ **Reversed 2026-08-31.** The
+  argument was that *filters* names the verb while *terms* names the thing, and
+  that *terms* is the app's own word. It is — everywhere a term is a thing you
+  are looking *at*. This menu is the one place it is a thing you are about to
+  *do*, and the row does the same job as a chip in the drawer two panes away.
+  The "one heading the two menus could not have shared" objection also died with
+  the change: they no longer share the group at all.
+- **Bare hairlines between the groups**, as the sort and unit menus use. Those
+  group variants of one thing, where a heading would name what the trigger
+  already names. Here the groups are different *kinds of answer*, and which kind
+  a row is changes what pressing it does. A hairline cannot say that.
+- **Letting search's menu take the field's real width** (~1221px at a 1372
+  column). It would put a two-word item name in an acre of nothing. At 440 it
+  covers exactly one column of the grid and never clips a neighbour mid-word.
+- **A pre-selected first row.** Enter would then commit a guess nobody made,
+  which is D48's rule one control over. Down lands on the first row, Up on the
+  last.
+- **A *No matches* row, and a *see all* row.** Both describe an absence the
+  screen behind already carries.
+- **Searching the notes.** A row in the list for a reason invisible in the row.
+- **A `0 out` pill's disappointment, solved here.** It belongs to the status
+  pills, not to this menu, and solving it in passing would restyle a control on
+  a screen this feature only happens to cover.
