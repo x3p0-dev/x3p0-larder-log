@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Check, Minus, Plus, Trash2, X } from 'lucide-preact';
+import { Check, Plus, Trash2, X } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
 import { entityColorFor, proposeColor, statusFor, termNameFor } from '../lib/theme';
-import { CheckBox } from './CheckBox';
 import { TermPanel, TermRow } from './TermPanel';
 import { MonthMenu } from './MonthMenu';
 import { panelSkin } from './TermPanel';
 import { UnitMenu } from './UnitMenu';
+import { ListRuleSegment } from './ListRuleSegment';
 import { SuggestMenu, useSuggest } from './SuggestMenu';
 import type { SuggestGroup, SuggestRow } from './SuggestMenu';
 import { digitField } from '../lib/numericField';
-import { useHoldRepeat } from '../hooks/useHoldRepeat';
+import { Stepper } from './Stepper';
 import type { SourceKind } from '../../shared/source';
 import { itemSourceKinds, sourceGroupWord } from '../../shared/source';
+import { listNameFor, listRuleHint, listRuleLabel, listRuleOf } from '../../shared/listRule';
 import type { Item, ItemDraft, Source, Term } from '../../shared/types';
 import type { TaxonomyActions } from '../lib/actions';
 import { toInt } from '../../shared/qty';
@@ -21,13 +22,9 @@ import { fillFromCatalog, fillFromItem, nameSuggestions } from '../../shared/sug
 import { formatSize, MAX_SIZE_DIGITS } from '../../shared/size';
 import { STATUS_PHRASE } from '../../shared/status';
 import {
-	PAGE_BUTTON_PRIMARY, PAGE_CHECKBOX_ROW, PAGE_CHIP, PAGE_CHIP_ADD, PAGE_CHIP_ON,
-	PAGE_FIELD, PAGE_FIELD_HALO_WITHIN, PAGE_FIELD_HALO_WITHIN_DARK, PAGE_ICON,
-	PAGE_STEPPER_CELL, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK,
+	PAGE_BUTTON_PRIMARY, PAGE_CHIP, PAGE_CHIP_ADD, PAGE_CHIP_ON,
+	PAGE_FIELD, PAGE_ICON, PANEL_FIELD_HALO, PANEL_FIELD_HALO_DARK,
 } from '../lib/controlStyles';
-
-/** Four digits, for the reason `MAX_SIZE_DIGITS` gives: an 85px cell at 390. */
-const MAX_COUNT_DIGITS = 4;
 
 /** The listbox the name field points `aria-controls` at. One sheet, one menu. */
 const SUGGEST_ID = 'item-name-suggestions';
@@ -209,18 +206,18 @@ function ChipRow({
 }
 
 /**
- * One of the two matched steppers.
+ * One of the two matched steppers, with its sub-label above it.
  *
  * **`Low at` is a peer of `On hand`, not a footnote hanging off it.** It used to
  * sit inside the on-hand control as a `default 2` caption, which is most of why
  * changing a threshold was the hardest thing on the sheet.
  *
- * Both are symmetric and neutral — `−` and `+` as equal cells inside the field,
- * hairlines between the three. **The numeral is a text field**: stepping a
- * low-at from 2 to 15 is thirteen taps and typing is one gesture. Press-and-hold
- * repeats for anyone who does not find that.
+ * The control itself is `Stepper`, shared with the put-away sheet (D64). What is
+ * here is only the label row above it — which is the whole of what the two
+ * callers disagree about, since a put-away row is labelled by the item beside it
+ * rather than by a word over it.
  */
-function Stepper({ label, value, onValue, note, dark, theme }: {
+function LabelledStepper({ label, value, onValue, note, dark, theme }: {
 	label: string;
 	value: string;
 	onValue: (next: string) => void;
@@ -236,79 +233,15 @@ function Stepper({ label, value, onValue, note, dark, theme }: {
 	dark: boolean;
 	theme: Theme;
 }) {
-	const n = toInt(value);
-
-	function step(by: number) {
-		onValue(String(Math.max(0, toInt(value) + by)));
-	}
-
-	const down = useHoldRepeat(() => step(-1));
-	const up = useHoldRepeat(() => step(1));
-
-	const cell = 'flex items-center justify-center w-11 shrink-0 ' + PAGE_STEPPER_CELL;
-
-	/*
-	 * Two complete literals rather than a `dark:` variant. Tailwind's `dark:`
-	 * follows `prefers-color-scheme`, and this app's theme stops being the OS's
-	 * the moment a device overrides it (D25) — so the variant would paint the
-	 * selection the wrong colour for exactly the people who chose one.
-	 */
-	const selection = dark
-		? 'selection:bg-[rgba(212,99,107,0.22)]'
-		: 'selection:bg-[rgba(190,51,70,0.18)]';
-
 	return (
 		<div class="flex-1 min-w-0 flex flex-col gap-1.5">
 			<span class="flex items-baseline gap-1.5 text-[13px] min-w-0" style={{ color: theme.textMuted }}>
 				<span class="shrink-0">{label}</span>
 				{/* Truncates rather than wraps: at 390 the pair is 156px inside 173. */}
-				{note && <span class="truncate">· {note}</span>}
+				{note && <span class="truncate">&middot; {note}</span>}
 			</span>
 
-			<div
-				role="group"
-				aria-label={label}
-				class={`flex items-stretch h-14 rounded-[13px] overflow-hidden ${PAGE_FIELD} ${dark ? PAGE_FIELD_HALO_WITHIN_DARK : PAGE_FIELD_HALO_WITHIN}`}
-			>
-				{/*
-				  * At zero the minus stays faint and live, never disabled — the item
-				  * card's rule, and D36's reason: a disabled control cannot explain
-				  * itself. It just stops promising a change it will not make.
-				  */}
-				<button
-					type="button"
-					onClick={() => step(-1)}
-					{...down}
-					class={`${cell} ${n <= 0 ? 'text-ink-faint' : 'text-ink-body hover:text-ink'}`}
-					style={{ borderRight: `1px solid ${theme.divider}` }}
-					aria-label="Remove one"
-				>
-					<Minus size={16} strokeWidth={2.2} />
-				</button>
-
-				<input
-					value={value}
-					{...digitField(onValue, MAX_COUNT_DIGITS)}
-					role="spinbutton"
-					aria-valuenow={n}
-					aria-valuemin={0}
-					aria-label={label}
-					class={`flex-1 min-w-0 bg-transparent text-center font-disp text-[26px] md:text-[28px] font-bold outline-none ${selection}`}
-					style={{ color: theme.textStrong }}
-				/>
-
-				<button
-					type="button"
-					onClick={() => step(1)}
-					{...up}
-					class={`${cell} text-ink-body hover:text-ink`}
-					style={{ borderLeft: `1px solid ${theme.divider}` }}
-					aria-label="Add one"
-				>
-					<Plus size={16} strokeWidth={2.2} />
-				</button>
-			</div>
-
+			<Stepper label={label} value={value} onValue={onValue} dark={dark} theme={theme} />
 		</div>
 	);
 }
@@ -460,6 +393,19 @@ export function ItemSheet({
 	if (! open) return null;
 
 	const status = statusFor(value.qty, value.threshold, dark);
+	/*
+	 * The rule **in force**, which is not the same as the column: a row written
+	 * before `listRule` existed carries its answer in `offShoppingList`, and
+	 * reading the raw field would show it as Automatic and quietly turn the
+	 * override off the next time anybody saved.
+	 */
+	const rule = listRuleOf(value);
+	/*
+	 * Which list the segment is talking about — *shopping*, *harvest*, or both.
+	 * Derived from the source chips below rather than stored, so it is already
+	 * live: picking a garden source rewrites the label and the hint together.
+	 */
+	const listName = listNameFor(kinds);
 	const sizePreview = formatSize(value.size, value.unit);
 
 	async function addTerm(
@@ -669,13 +615,13 @@ export function ItemSheet({
 					</div>
 
 					<div class="flex gap-3 pt-3">
-						<Stepper
+						<LabelledStepper
 							label="On hand"
 							value={value.qty}
 							onValue={(qty) => onChange({ ...value, qty })}
 							dark={dark} theme={theme}
 						/>
-						<Stepper
+						<LabelledStepper
 							label="Low at"
 							value={value.threshold}
 							onValue={(threshold) => onChange({ ...value, threshold })}
@@ -699,49 +645,61 @@ export function ItemSheet({
 					</div>
 
 					{/*
-					  * **Retired, and this is the way out rather than the way in**
-					  * (D60). It appears only on an item that *already* carries the
-					  * flag, so it can be cleared and never set — and once cleared the
-					  * row unmounts and cannot come back.
+					  * **When this joins the list, as a tri-state** (D65).
 					  *
-					  * The checkbox existed to answer *some things are never shopped
-					  * for* (D53), and **a source's kind answers that better**: you
-					  * grow it, you make it, or you buy it, and the first two go to
-					  * their own bands without anyone ticking anything. A control
-					  * whose whole job has been taken over is a second way to say one
-					  * thing, and this one says it worse — it hides an item from the
-					  * list without saying where it went.
+					  * It sits here, under the two steppers, because *low at* is the
+					  * sentence *put this on the list when I'm down to N* and both
+					  * overrides amend that sentence rather than replacing it.
 					  *
-					  * **The column stays**, because dropping one needs
-					  * `sf db migrate --drop` while filling it again is additive — the
-					  * same trade D34 made for `icon`. `needsBuying` still reads it, so
-					  * a row that was ticked before today keeps behaving exactly as it
-					  * did, and putting the control back is deleting one condition.
+					  * **It replaces D60's clear-only checkbox**, which was the way
+					  * out of `offShoppingList` and had no way in. That control
+					  * existed because D53 asked *some things are never shopped for*
+					  * and a source's kind answered it better — but the question it
+					  * could never answer is the opposite one, the thing you want on
+					  * the list whatever the count says. Three states answer both, and
+					  * a legacy row now reads as **Never** rather than as a ticked box
+					  * with an apology under it.
 					  *
-					  * **Absent rather than disabled** where it would create a new
-					  * one, present where it is the only way out of an old one. A
-					  * legacy row with no control at all would be stuck off every
-					  * band for good, which is a worse thing to ship than a control
-					  * that only subtracts.
+					  * `listRuleOf` is what makes that true: it folds the retired
+					  * column in, so the segment shows the rule actually in force, and
+					  * writing any of the three clears the old flag.
 					  */}
-					{value.offShoppingList && (
-						<button
-							type="button"
-							role="checkbox"
-							aria-checked
-							onClick={() => onChange({ ...value, offShoppingList: false })}
-							class={`flex items-start gap-[11px] mt-3.5 -mx-2 px-2 py-2 ${PAGE_CHECKBOX_ROW}`}
-						>
-							<span class="pt-px shrink-0"><CheckBox checked theme={theme} /></span>
-							<span class="min-w-0">
-								<span class="block text-[15px]" style={{ color: theme.text }}>Keep off the list</span>
-								<span class="block text-[12.5px] leading-[1.45] pt-[3px]" style={{ color: theme.textMuted }}>
-									It still shows as low or out on its card — it just never joins the list.
-									Clearing this is permanent: what you grow or make gets its own band now.
-								</span>
-							</span>
-						</button>
-					)}
+					<div class="flex flex-col gap-[9px] pt-[18px]">
+						{/*
+						  * **A sub-label, because the two steppers beside it have one
+						  * and this had none.** Three words under a stepper with
+						  * nothing saying what question they answer is the whole of
+						  * why this control read as unclear.
+						  *
+						  * It names the list this item would actually land on, so the
+						  * label and the sentence below agree — and **both move when
+						  * you pick a source chip two sections down**: tag a row with
+						  * the garden and this says *Harvest list* before you have
+						  * finished reading it.
+						  */}
+						<span class="text-[13px]" style={{ color: theme.textMuted }}>
+							{listRuleLabel(listName)}
+						</span>
+
+						<ListRuleSegment
+							value={rule}
+							onChange={(next) => onChange({ ...value, listRule: next, offShoppingList: false })}
+							theme={theme}
+						/>
+
+						{/*
+						  * **The hint is how the choice explains itself.** It names the
+						  * list rather than saying *the list*, and it says *stock*
+						  * rather than *count* — the sheet is covered in counts and
+						  * every one of them is a number, while what this sentence is
+						  * about is the shelf.
+						  *
+						  * Automatic's reads the *live* threshold, the same rule the
+						  * status line above follows, so stepping *Low at* moves the
+						  * number in this sentence while you watch.
+						  */}
+						<Hint theme={theme}>{listRuleHint(rule, toInt(value.threshold), listName)}</Hint>
+					</div>
 
 					<Rule theme={theme} />
 

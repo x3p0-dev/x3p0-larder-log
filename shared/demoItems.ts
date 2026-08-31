@@ -67,6 +67,7 @@ export type DemoItem = {
 	 * The card still reads *Out*; the run list drops the row.
 	 */
 	offShoppingList?: boolean;
+	listRule?: string;
 	/**
 	 * When a grown thing is ready, as month numbers — `'6'` and `'9'` (D58).
 	 *
@@ -165,7 +166,10 @@ export const DEMO_ITEMS: readonly DemoItem[] = [
 	{ name: 'Chickpeas', locationName: 'Pantry', typeNames: ['Canned Goods'], storeNames: ['Grocery'], qty: '4', threshold: '2', size: '15', unit: 'ounce', daysAgo: 34 },
 	{ name: 'Tuna in Olive Oil', locationName: 'Pantry', typeNames: ['Canned Goods'], storeNames: ['Market'], qty: '3', threshold: '2', size: '5', unit: 'ounce', daysAgo: 39 },
 	{ name: 'Coconut Milk', locationName: 'Pantry', typeNames: ['Canned Goods'], storeNames: ['Market'], qty: '0', threshold: '2', size: '13.5', unit: 'ounce', daysAgo: 42 },
-	{ name: 'Peanut Butter', locationName: 'Pantry', typeNames: ['Condiments', 'Breakfast'], storeNames: ['Warehouse'], qty: '2', threshold: '1', size: '40', unit: 'ounce', daysAgo: 15 },
+	// The one pinned row (D65). Stocked, so its badge slot is free and reads
+	// `EXTRA` — the only way to see that badge, and the tri-state's `always`
+	// branch, without setting one by hand.
+	{ name: 'Peanut Butter', locationName: 'Pantry', typeNames: ['Condiments', 'Breakfast'], storeNames: ['Warehouse'], qty: '2', threshold: '1', size: '40', unit: 'ounce', listRule: 'always', daysAgo: 15 },
 	{ name: 'Strawberry Jam', locationName: 'Pantry', typeNames: ['Condiments', 'Breakfast'], storeNames: ['Market'], qty: '2', threshold: '1', size: '12', unit: 'ounce', daysAgo: 48 },
 	{ name: 'Soy Sauce', locationName: 'Pantry', typeNames: ['Condiments'], storeNames: ['Grocery'], qty: '1', threshold: '0', size: '15', unit: 'fluid-ounce', daysAgo: 51 },
 	{ name: 'Honey', locationName: 'Pantry', typeNames: ['Condiments'], storeNames: [], qty: '1', threshold: '1', size: '1', unit: 'pint', offShoppingList: true, notes: 'From Dale’s hives. Ask, don’t buy.', daysAgo: 57 },
@@ -273,6 +277,7 @@ export function resolveDemoItems(
 			size: demo.size ?? '',
 			unit: demo.unit ?? '',
 			offShoppingList: demo.offShoppingList ?? false,
+			listRule: demo.listRule ?? '',
 			seasonFrom: demo.seasonFrom ?? '',
 			seasonTo: demo.seasonTo ?? '',
 			notes: demo.notes ?? '',

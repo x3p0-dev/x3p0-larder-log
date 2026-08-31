@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Check, Eye, EyeOff, RotateCcw } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
 import { statusColor, statusFor, themed } from '../lib/theme';
-import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET } from '../lib/controlStyles';
+import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET, PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
 import { CheckBox } from './CheckBox';
 
 import { SOURCE_KIND_ICONS } from './SourceKindMenu';
 import type { BandKind, RunBand, ShoppingGroup } from '../../shared/runList';
 import type { Item } from '../../shared/types';
+import { isExtra } from '../../shared/listRule';
 import { toInt } from '../../shared/qty';
 import { formatSize } from '../../shared/size';
 import { readyPhrase } from '../../shared/season';
@@ -45,6 +46,24 @@ type Props = {
 	 * cannot clear rows that are not in front of you.
 	 */
 	onClearChecks?: (ids: string[]) => void;
+	/**
+	 * Open the put-away on exactly these rows — the trip bar's one filled
+	 * control, and the only thing on this screen that writes.
+	 *
+	 * It takes the ids for the reason `onClearChecks` does: what is on screen is
+	 * what the bar is counting, and a control beside `Hide 3 checked` must not
+	 * act on seven.
+	 */
+	onPutAway?: (ids: string[]) => void;
+	/**
+	 * How many counts the last put-away wrote, or `null`.
+	 *
+	 * The caller sets it only while the trip really did empty the list, so this
+	 * screen never has to ask whether a filter is what emptied it.
+	 */
+	putAwayCount: number | null;
+	/** Leaves the mode — the only control on the after-the-trip card. */
+	onBackToItems: () => void;
 	/** The store filter's name, when one is on. The empty state names it. */
 	storeFilterName: string | null;
 	/** What the *rest* of the household still has to buy, for that same screen. */
@@ -70,7 +89,7 @@ type Props = {
  * and its badge crowd the counts on the right, and the row wraps.
  */
 export function RunList(props: Props) {
-	const { bands, banded, checked, onToggle, onClearChecks, dark, theme } = props;
+	const { bands, banded, checked, onToggle, onClearChecks, onPutAway, dark, theme } = props;
 
 	const [hideChecked, setHideChecked] = useState(false);
 
@@ -110,10 +129,10 @@ export function RunList(props: Props) {
 	const total = here.size;
 	const checkedHere = useMemo(() => [...checked].filter((id) => here.has(id)), [checked, here]);
 	const checkedCount = checkedHere.length;
-	const allChecked = total > 0 && checkedCount >= total;
 
-	/** `undefined` rather than a no-op, so the bars render no control for a viewer. */
+	/** `undefined` rather than a no-op, so the bar renders no control for a viewer. */
 	const clear = onClearChecks && (() => onClearChecks(checkedHere));
+	const putAway = onPutAway && (() => onPutAway(checkedHere));
 
 	/*
 	 * *Run list, 17 to get across three kinds* — the doc's own sentence, and
@@ -135,14 +154,30 @@ export function RunList(props: Props) {
 			{groups.length === 0
 				? (
 					<div class="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-[repeat(auto-fill,minmax(min(460px,100%),1fr))] items-start">
-						<ListEmpty
-							storeFilterName={props.storeFilterName}
-							elsewhereCount={props.elsewhereCount}
-							onClearStoreFilter={props.onClearStoreFilter}
-							onClearFilters={props.onClearFilters}
-							dark={dark}
-							theme={theme}
-						/>
+						{/*
+						  * **The trip finished, or a filter did.** Two empty screens that
+						  * look alike and mean opposite things: one says you are done, the
+						  * other says you are looking at the wrong slice of the list. The
+						  * caller sets `putAwayCount` only while the household's whole list
+						  * really is empty, so nothing here has to work out which it was.
+						  */}
+						{props.putAwayCount !== null ? (
+							<PutAwayDone
+								count={props.putAwayCount}
+								onBack={props.onBackToItems}
+								dark={dark}
+								theme={theme}
+							/>
+						) : (
+							<ListEmpty
+								storeFilterName={props.storeFilterName}
+								elsewhereCount={props.elsewhereCount}
+								onClearStoreFilter={props.onClearStoreFilter}
+								onClearFilters={props.onClearFilters}
+								dark={dark}
+								theme={theme}
+							/>
+						)}
 					</div>
 				)
 				: (
@@ -189,19 +224,23 @@ export function RunList(props: Props) {
 			  * The trip bar is a fact about the *trip*, not about Costco, which is
 			  * why it sits below the whole grid rather than in a card. A copy in
 			  * each card would be five controls doing one job.
+			  *
+			  * **One shape at every count** (D64). It used to grow to 70px and a green
+			  * disc once every row was ticked — *Everything's checked off. / Update
+			  * your counts when you unpack.* — which was green for something that was
+			  * still pending, and whose second line was a description of the button
+			  * now standing beside it. The disc moved to the screen *after* the
+			  * put-away, where nothing is pending and the claim is true.
 			  */}
 			{checkedCount > 0 && (
-				allChecked
-					? <TripDone onClear={clear} dark={dark} theme={theme} />
-					: (
-						<TripBar
-							count={checkedCount}
-							hidden={hideChecked}
-							onToggle={() => setHideChecked((prev) => ! prev)}
-							onClear={clear}
-							theme={theme}
-						/>
-					)
+				<TripBar
+					count={checkedCount}
+					hidden={hideChecked}
+					onToggle={() => setHideChecked((prev) => ! prev)}
+					onClear={clear}
+					onPutAway={putAway}
+					theme={theme}
+				/>
 			)}
 		</div>
 	);
@@ -382,6 +421,7 @@ type RowProps = {
  */
 function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	const status = statusFor(item.qty, item.threshold, dark);
+	const extra = isExtra(item);
 	const counts = `have ${toInt(item.qty)} · low at ${toInt(item.threshold)}`;
 
 	const name = (
@@ -406,17 +446,30 @@ function ListRow({ item, first, checked, onToggle, dark, theme }: RowProps) {
 	 * row is centred on the box and looks right; only the thing sitting *next
 	 * to* display type needs the nudge.
 	 */
+	/*
+	 * **`EXTRA` is what an `always` row says instead of a status** (D65).
+	 *
+	 * A row forced onto the list while nothing is wrong with it has no status to
+	 * report — that is precisely what frees the slot — so it says *why it is
+	 * here* instead. **Quiet by having no hue at all**, which is the argument
+	 * `NO STORE` already runs on: the three status colours mean something on this
+	 * screen, and a fourth tint would have to mean a fourth thing.
+	 *
+	 * A row that is genuinely low or out keeps its status however it got here.
+	 * The status is the more useful of the two facts, and *extra* would be
+	 * answering a question nobody asked about a thing that has run out.
+	 */
 	const badge = (
 		<span
 			class="relative top-px self-center inline-flex items-center h-[18px] px-[7px] rounded-full font-bold text-[9.5px] uppercase tracking-[0.1em] shrink-0"
 			style={{
-				background: status.bg,
-				border: `1px solid ${status.ring}`,
-				color: status.ink,
+				background: extra ? theme.surfaceAlt : status.bg,
+				border: `1px solid ${extra ? theme.border : status.ring}`,
+				color: extra ? theme.textMuted : status.ink,
 				opacity: checked ? 0.55 : 1,
 			}}
 		>
-			{status.label}
+			{extra ? 'Extra' : status.label}
 		</span>
 	);
 
@@ -556,47 +609,115 @@ function NotYetRow({ item, theme }: { item: Item; theme: Theme }) {
 }
 
 /**
- * The trip bar.
+ * The trip bar — one shape at every count.
  *
- * Controls radius rather than card radius — it is a bar, the same argument the
- * toast makes. **Its right half is deliberately empty, and it is reserved for
- * restocking**: checking a row means "it's in the cart", and the honest end of
- * that sentence is setting the count when you unpack. That is a write to the
- * item, which makes it shared, which is a different design. The bar exists now
- * so that flow has somewhere to land instead of arriving as a new surface.
+ * Controls radius rather than card radius: it is a bar, the same argument the
+ * toast makes. **Its right half is no longer reserved** (D64) — the whole
+ * design has been waiting for the honest end of *it's in the cart*, which is
+ * setting the count when you unpack, and that is what *Put N away* is.
+ *
+ * **Trip management groups left; the trip's one action sits right.** *Hide* and
+ * *Clear checks* are both ghosts and both about the ticks — one subject, so
+ * they are one group. The only filled control on the bar is the one that
+ * writes, and the separation is carried by that fill rather than by a divider:
+ * two ghosts and a primary is already three weights, and a hairline between the
+ * ghosts would be a fourth statement about a bar 52px tall.
+ *
+ * **Two ink controls on one screen, and it earns it.** *Add item* holds the only
+ * ink fill in row 1. The rule this bar follows is the sheet's — one primary per
+ * surface, and a bar below the grid is its own surface the way a sheet's footer
+ * is. It is also most of a screen away from row 1 and it is the terminal action
+ * of the entire mode.
  */
-function TripBar({ count, hidden, onToggle, onClear, theme }: {
-	count: number; hidden: boolean; onToggle: () => void; onClear?: () => void; theme: Theme;
+function TripBar({ count, hidden, onToggle, onClear, onPutAway, theme }: {
+	count: number;
+	hidden: boolean;
+	onToggle: () => void;
+	onClear?: () => void;
+	onPutAway?: () => void;
+	theme: Theme;
 }) {
+	const hideLabel = `${hidden ? 'Show' : 'Hide'} ${count} checked`;
+
+	/**
+	 * **It fades in; it does not slide.** The bar appears under a grid that is
+	 * already reflowing to make room for it, and two things moving at once reads
+	 * as the page settling rather than as a control arriving.
+	 *
+	 * A flag flipped in an effect rather than a CSS animation, because the app
+	 * has no stylesheet to hold `@keyframes` — an effect runs after the first
+	 * paint, so `opacity-0` is what lands and the flip is what transitions.
+	 *
+	 * **The fade survives `prefers-reduced-motion`**, which is the applied-filter
+	 * chip's own rule: what that setting asks for is no *movement*, and a control
+	 * that blinks into existence gives no sign anything happened. There is no
+	 * movement here to drop.
+	 */
+	const [shown, setShown] = useState(false);
+
+	useEffect(() => { setShown(true); }, []);
+
+	/*
+	 * **At 390 the two ghosts drop to glyph-only 44px squares**, which is what the
+	 * glyphs are actually for: they are not decoration on a desktop, they are the
+	 * thing that survives at the width where this bar matters most. Three labels
+	 * do not fit — 44 + 6 + 44 + the primary leaves room and three sets of words
+	 * do not.
+	 *
+	 * The words survive in `aria-label`, so a screen reader hears the same two
+	 * controls at both widths.
+	 */
+	const ghost = `inline-flex items-center justify-center gap-2 shrink-0 w-11 md:w-auto h-11 md:h-[34px] md:px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`;
+
 	return (
 		<div
-			class="flex items-center h-14 md:h-[52px] px-2 mt-6 rounded-[15px]"
+			role="group"
+			aria-label="This trip"
+			class={
+				'flex items-center gap-1.5 h-14 md:h-[52px] px-2 md:px-3 mt-6 rounded-[15px] '
+				+ `transition-opacity duration-[160ms] ease-out ${shown ? 'opacity-100' : 'opacity-0'}`
+			}
 			style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}
 		>
-			<button
-				onClick={onToggle}
-				class={`inline-flex items-center gap-1.5 h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
-			>
+			<button onClick={onToggle} class={ghost} aria-label={hideLabel}>
 				{hidden
-					? <Eye size={15} strokeWidth={2.2} />
-					: <EyeOff size={15} strokeWidth={2.2} />}
-				{hidden ? 'Show' : 'Hide'} {count} checked
+					? <Eye size={16} strokeWidth={2.2} />
+					: <EyeOff size={16} strokeWidth={2.2} />}
+				<span class="hidden md:inline">{hideLabel}</span>
 			</button>
-			<span class="flex-1" />
+
 			{/*
-			  * The reset, and it wears the same box as the hide — two views of the
-			  * trip, neither of them the thing to do next. **It is not crimson and
-			  * it does not confirm**: nothing here is a record, the toast hands
-			  * the ticks straight back (D36), and a dialog in front of a phone in
-			  * a shop is worse than the mistake it guards.
+			  * *Clear checks* moved here from the bar's right half (D64), because
+			  * the right half is where the write goes and these two are one
+			  * subject: what to do about the ticks.
+			  *
+			  * **It is not crimson and it does not confirm.** Nothing here is a
+			  * record, the toast hands the ticks straight back (D36), and a dialog
+			  * in front of a phone in a shop costs more than the mistake. It does
+			  * now earn that toast, which it did not before: a check used to be
+			  * local, free and cheap, and under restock it is a claim — re-ticking
+			  * a shop's worth of rows is not one tap.
 			  */}
 			{onClear && (
+				<button onClick={onClear} class={ghost} aria-label="Clear checks">
+					<RotateCcw size={16} strokeWidth={2.2} />
+					<span class="hidden md:inline">Clear checks</span>
+				</button>
+			)}
+
+			<span class="flex-1" />
+
+			{/*
+			  * The write. Absent for a viewer, who has no checkboxes to have got
+			  * here with — the list stays a pure read surface for them (D30).
+			  */}
+			{onPutAway && (
 				<button
-					onClick={onClear}
-					class={`inline-flex items-center gap-1.5 h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold shrink-0 ${LIST_GHOST}`}
+					onClick={onPutAway}
+					class={`inline-flex items-center shrink-0 h-[46px] md:h-[38px] px-4 md:px-[18px] rounded-[13px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY}`}
+					style={{ background: theme.inkBg, color: theme.inkText }}
 				>
-					<RotateCcw size={15} strokeWidth={2.2} />
-					Clear checks
+					Put {count} away
 				</button>
 			)}
 		</div>
@@ -604,71 +725,58 @@ function TripBar({ count, hidden, onToggle, onClear, theme }: {
 }
 
 /**
- * The same bar, once everything is checked.
+ * The screen after the trip — where the green went.
  *
- * Green because nothing is wrong and nothing is pending — the third rung of the
- * same ramp the item badges use.
+ * **A finished trip empties the list by arithmetic**: every row was put away to
+ * a count that clears its threshold, so there is nothing left to draw. This is
+ * where the old 70px completion note's disc belongs. On the bar it was claiming
+ * nothing was pending while the counts still were; here nothing is pending and
+ * the sentence is simply true.
+ *
+ * It takes `ListEmpty`'s construction — the app's one shape for this slot, one
+ * card in the grid's first track, at most one action. **That is a knowing
+ * departure from the board**, which draws it left-aligned at 440: the two states
+ * appear in the same place and a second alignment would read as a second kind of
+ * screen.
+ *
+ * **The numbers are numerals.** The board's copy spells them — *Seven counts
+ * updated.* — and every other count in this app is a digit, including the toast
+ * this screen's sibling arms (*Cleared 3 checks.*).
  */
-function TripDone({ onClear, dark, theme }: {
-	onClear?: () => void; dark: boolean; theme: Theme;
+function PutAwayDone({ count, onBack, dark, theme }: {
+	count: number;
+	onBack: () => void;
+	dark: boolean;
+	theme: Theme;
 }) {
 	const ok = statusColor('ok', dark);
 
-	/*
-	 * It wraps, and `min-h` replaces the fixed 70.
-	 *
-	 * Two sentences and a control do not always fit one line at 390 — the words
-	 * alone are most of it — so the button drops to a second line and the bar
-	 * grows. The old `h-[70px]` would have let it overflow instead, which is the
-	 * same bar with its bottom cut off.
-	 *
-	 * **One control is what makes the wrap read.** With two of them the wrapped
-	 * line was a pair pinned right under a sentence that starts 47px in — two
-	 * ragged edges, neither shared — and filling the line to fix that turned a
-	 * pair of ghosts into centred prose. There is only *Clear checks* now, and a
-	 * single trailing action hanging off `ml-auto` is the same shape as the
-	 * trip bar above it in either arrangement.
-	 */
 	return (
 		<div
-			class="flex flex-wrap items-center gap-[13px] min-h-[70px] py-3 pl-[18px] pr-3 mt-6 rounded-[15px]"
-			style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}
+			class="max-w-[520px] flex flex-col items-center gap-3 py-[54px] px-6 rounded-[20px] text-center"
+			style={{ background: theme.surface, border: `1px solid ${dark ? theme.borderStrong : theme.border}` }}
 		>
 			<span
-				class="flex items-center justify-center w-[34px] h-[34px] rounded-full shrink-0"
+				class="flex items-center justify-center w-11 h-11 rounded-full shrink-0"
 				style={{ background: ok.bg, border: `1px solid ${ok.ring}` }}
 			>
-				<Check size={16} strokeWidth={2.6} style={{ color: ok.ink }} />
+				<Check size={20} strokeWidth={2.6} style={{ color: ok.ink }} />
 			</span>
-			<span class="flex flex-col gap-0.5 min-w-0 flex-1 basis-[200px]">
-				<span class="font-semibold text-[14.5px]" style={{ color: theme.textStrong }}>
-					Everything&rsquo;s checked off.
-				</span>
-				<span class="text-[13px]" style={{ color: theme.textMuted }}>
-					Update your counts when you unpack.
-				</span>
-			</span>
-			{/*
-			  * *Clear checks*, and it is the bar's only control.
-			  *
-			  * **There is no exit here.** A *Back to items* sat in this slot and
-			  * was a third way out of a mode that already has two — row 2's own
-			  * quiet chevron, and the trigger it shares the row with, which is
-			  * tinted and pressed while the list is on. Neither of those is on
-			  * screen at the foot of a long list, which was the argument for
-			  * repeating it here; but the answer to that is a scroll, and the
-			  * cost was a second control competing with the one thing this state
-			  * is actually for.
-			  */}
-			{onClear && (
-				<button
-					onClick={onClear}
-					class={`inline-flex items-center gap-1.5 ml-auto shrink-0 h-11 md:h-[34px] px-3 rounded-[11px] text-sm font-semibold ${LIST_GHOST}`}
-				>
-					<RotateCcw size={15} strokeWidth={2.2} />
-					Clear checks
-				</button>
-			)}
+
+			<p class="font-disp font-semibold text-[21px]" style={{ color: theme.textStrong }}>
+				Everything&rsquo;s put away.
+			</p>
+
+			<p class="text-sm" style={{ color: theme.textMuted }}>
+				{plural(count, 'count')} updated. Nothing is low or out.
+			</p>
+
+			<button
+				onClick={onBack}
+				class={`inline-flex items-center h-11 md:h-[34px] px-3 mt-0.5 rounded-[11px] text-sm font-semibold ${LIST_GHOST_ON_CARD}`}
+			>
+				Back to items
+			</button>
 		</div>
 	);
 }

@@ -8,6 +8,7 @@ import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
 import { normalizeQty, toInt, fromInt } from '../shared/qty';
 import { isSourceKind, sourceGroupWord, toSourceKind } from '../shared/source';
+import { toListRule } from '../shared/listRule';
 import { normalizeSeason } from '../shared/season';
 import { normalizeSize } from '../shared/size';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
@@ -79,6 +80,16 @@ function termTable(kind: TermKind): 'locations' | 'types' | 'stores' {
 
 	throw new AccessError('Unknown term kind.');
 }
+
+/**
+ * The most rows one put-away may write.
+ *
+ * A weekly shop is not fifty items and a trip is one person's afternoon, so
+ * this is a bound on a bug rather than on anybody's shopping. It matters
+ * because `restockItems` is the app's only mutation that writes an unbounded
+ * number of rows from one call.
+ */
+const RESTOCK_MAX = 200;
 
 /** Human label for a term kind, for error copy. */
 function termLabel(kind: TermKind): string {
@@ -306,12 +317,22 @@ export const schema = {
 		// stored must survive us changing what it prints.
 		size: string().default(''),
 		unit: string().default(''),
-		// Never joins the run list, however low it gets. **Retired (D60)**: a
-		// source's kind says what this said, and better, so nothing writes `true`
-		// any more. Kept because dropping a column needs `sf db migrate --drop`
-		// while filling it again is additive (D34), and because the rows that
-		// already hold it must keep behaving as they did. See `needsBuying`.
+		// Never joins the run list, however low it gets. **Retired twice** — by
+		// D60, which took its control away, and by D65, which replaced it with
+		// `listRule` below. Nothing writes `true` any more and an edit through
+		// the tri-state clears it. Kept because dropping a column needs
+		// `sf db migrate --drop` while filling it again is additive (D34), and
+		// because the rows that already hold it must keep behaving as they did.
+		// `listRuleOf` is the one place the two are reconciled.
 		offShoppingList: boolean().default(false),
+		// Whether this item joins the run list at all (D65) — '' automatic,
+		// 'always', or 'never'. *Low at* is the sentence *put this on the list
+		// when I'm down to N*, and both overrides amend it.
+		//
+		// **Automatic is the absence of an override**, stored as '', so there is
+		// no third literal to keep in step with this default — and so every row
+		// written before the column reads back as the behaviour it already had.
+		listRule: string().default(''),
 		// When a grown thing is ready, as two month numbers — `'6'` to `'9'`, and
 		// `''` for no season at all (D58). A pair that is never half-set, the way
 		// `size` and `unit` are, and `shared/season.ts` owns that rule.
@@ -343,6 +364,49 @@ export const schema = {
 	})
 		.index('by_item', ['itemId'])
 		.index('by_store', ['storeId'])
+		.index('by_household', ['householdId']),
+
+	// One trip's worth of counts, written once each by the put-away (D64). **The
+	// twelfth table, and the second added for a reader that does not exist yet.**
+	//
+	// `profiles` was the first, and D44 is the argument for both: a column — or
+	// a table — is permanent, nothing backfills it, and every put-away that
+	// happens before this exists is a data point nobody can ever recover. The
+	// reader is *trends, tier 2*: with three or more rows against an item, the
+	// sheet's *Low at* hint can say **how often** you restock it.
+	//
+	// **Intervals are all it may ever promise.** A put-away doubles as drift
+	// correction, so `toQty − fromQty` is sometimes a purchase and sometimes a
+	// fix and nothing here can tell them apart. The dates are trustworthy; the
+	// quantities are not, and the two counts are stored anyway because the row is
+	// written once and read forever — a column that turns out to be needed later
+	// cannot be added to rows that already exist.
+	//
+	// **No `userId`, and that is the privacy line rather than an omission.** A
+	// name rides the *trip*, which is transient and dies with the account that
+	// owns it; nothing in the larder itself ever records who touched a thing, so
+	// deleting an account stays a clean operation rather than a scrubbing job.
+	// `tripId` is the trip's own id and says only that several rows arrived
+	// together.
+	//
+	// `kind` is the source's — shop, grow or make — copied rather than joined,
+	// so a reader can tell a shop run from a harvest without asking whether the
+	// source still exists or still carries the kind it had that day. '' when the
+	// row named no source at all.
+	//
+	// No `changedAt`: a restock is an event and is never edited. `at` is ours
+	// rather than the platform's `createdAt`, for D44's reason — a stamp this app
+	// reads back is a stamp this app writes.
+	restocks: table({
+		householdId: id('households'),
+		itemId: id('items'),
+		tripId: string().default(''),
+		fromQty: string(),
+		toQty: string(),
+		kind: string().default(''),
+		at: string(),
+	})
+		.index('by_item', ['itemId'])
 		.index('by_household', ['householdId']),
 
 	// The admin console's audit log (D62). **The eleventh table, and the first
@@ -609,6 +673,13 @@ export default capsule({
 					size: item.size,
 					unit: item.unit,
 					offShoppingList: item.offShoppingList,
+					// **Coalesced here and nowhere else.** `.default('')` applies to
+					// an insert and does not backfill, so every row written before
+					// this column reads back `null` — and the generated row type
+					// still says `string`, so nothing downstream would catch it.
+					// The rule that column added after rows exist is nullable, and
+					// the type will not say so.
+					listRule: item.listRule ?? '',
 					seasonFrom: item.seasonFrom,
 					seasonTo: item.seasonTo,
 					notes: item.notes,
@@ -1626,6 +1697,8 @@ export default capsule({
 					size?: string;
 					unit?: string;
 					offShoppingList?: boolean;
+					/** '' automatic, 'always' or 'never' (D65). Anything else is automatic. */
+					listRule?: string;
 					// Both, or neither — `normalizeSeason` discards a half rather
 					// than completing it. Only a grow item ever carries one, and
 					// undo carries it back with the rest of the row.
@@ -1673,6 +1746,10 @@ export default capsule({
 					size: size.size,
 					unit: size.unit,
 					offShoppingList: draft.offShoppingList === true,
+					// `toListRule` resolves anything it does not recognise to '',
+					// which is the behaviour the app had before the column — so a
+					// client sending nonsense gets automatic rather than an error.
+					listRule: toListRule(draft.listRule),
 					seasonFrom: season.seasonFrom,
 					seasonTo: season.seasonTo,
 					notes: normalizeNotes(draft.notes),
@@ -1704,6 +1781,7 @@ export default capsule({
 					size?: string;
 					unit?: string;
 					offShoppingList?: boolean;
+					listRule?: string;
 					seasonFrom?: string;
 					seasonTo?: string;
 					notes?: string;
@@ -1734,6 +1812,24 @@ export default capsule({
 				if (patch.threshold !== undefined) next.threshold = normalizeQty(patch.threshold);
 				if (patch.notes !== undefined) next.notes = normalizeNotes(patch.notes);
 				if (patch.offShoppingList !== undefined) next.offShoppingList = patch.offShoppingList === true;
+
+				/*
+				 * **Writing the rule drains the column it replaces.**
+				 *
+				 * `offShoppingList` said exactly what `never` says and every row
+				 * carrying it predates this column, so an edit through the segment
+				 * writes the whole answer into `listRule` and clears the old flag
+				 * in the same patch. `listRuleOf` prefers the new column, so the
+				 * two can never disagree in between.
+				 *
+				 * That is what makes D60's *the flag drains out as people meet it*
+				 * actually happen: before this it could only ever be cleared by a
+				 * control that did nothing else.
+				 */
+				if (patch.listRule !== undefined) {
+					next.listRule = toListRule(patch.listRule);
+					next.offShoppingList = false;
+				}
 
 				// The two halves move together or not at all. A patch naming only
 				// one of them could otherwise leave the pair half-set, which is the
@@ -1793,6 +1889,116 @@ export default capsule({
 		}),
 
 		/**
+		 * The put-away — a whole trip's counts, written once (D64).
+		 *
+		 * **One mutation rather than a loop of `updateItem`**, and that is the
+		 * whole reason it exists. A put-away is several writes that mean one
+		 * thing, from a phone in a car park on a bad connection; a client-side
+		 * loop can half-commit and leave you with no way to tell which half. It
+		 * is also the only write in the app that is worth a spinner.
+		 *
+		 * **It sets, it does not add.** The stepper asked *how many do you have
+		 * now* — the question every other stepper in the app asks — so this
+		 * writes exactly what it was handed. A delta would be a second mental
+		 * model for one control, and the sheet would have to say which it meant.
+		 *
+		 * Each row also writes a `restocks` event, which nothing reads yet. See
+		 * the table's own note: the reader is trends, and a row that was never
+		 * written cannot be recovered later.
+		 *
+		 * **Every entry is checked, and one bad entry refuses the whole call.**
+		 * Partial success is the state this mutation exists to prevent, so it
+		 * resolves every item up front and writes nothing until all of them are
+		 * ours.
+		 */
+		restockItems: mutation(
+			async (
+				ctx,
+				householdId: string,
+				/**
+				 * The trip these counts came from, so several rows can be seen to
+				 * have arrived together. Minted client-side and opaque here —
+				 * there is no trip table yet and this is the id there will be.
+				 */
+				tripId: string,
+				entries: {
+					itemId: string;
+					/** What is on the shelf now, not what was added. */
+					qty: string;
+					/**
+					 * The source kind the row was filed under, or '' for a row
+					 * that named no source.
+					 *
+					 * The client's answer rather than a recomputation, because the
+					 * *band* decided it: an item you both buy and grow is filed
+					 * under the card it was ticked on, and the server rederiving
+					 * it could disagree with the screen it came from.
+					 */
+					kind?: string;
+				}[]
+			) => {
+				const membership = await requireCapability(ctx, householdId, 'item:write');
+
+				if (! Array.isArray(entries) || entries.length === 0) {
+					throw new AccessError('There is nothing to put away.');
+				}
+
+				if (entries.length > RESTOCK_MAX) {
+					throw new AccessError('That is more than one trip.');
+				}
+
+				// Resolve everything first. `id()` is not a foreign key, so this
+				// loop is the only thing standing between a bogus id and a write
+				// into somebody else's household.
+				const resolved = [];
+
+				for (const entry of entries) {
+					const item = assertInHousehold(await ctx.db.items.get(entry.itemId), membership);
+
+					resolved.push({ item, qty: normalizeQty(entry.qty), kind: entry.kind });
+				}
+
+				// One clock read for the whole trip: rows that arrived together
+				// should say so, and two calls can straddle a millisecond.
+				const at = stampFrom(Date.now());
+
+				for (const row of resolved) {
+					/*
+					 * **A put-away writes the count and nothing else** (D65,
+					 * amended). It used to clear an `always` pin, on D64's
+					 * reasoning that a check can be abandoned but a purchase
+					 * cannot — which answered *when* the pin should end without
+					 * asking whether it should end at all.
+					 *
+					 * It should not. `always` is a standing preference: *keep this
+					 * on my list whatever happens*. A control labelled **Always**
+					 * that quietly stops after one trip makes the word lie, and
+					 * leaves somebody wondering why the thing they pinned is gone.
+					 * The only thing that ends a pin is somebody setting it back.
+					 */
+					await ctx.db.items.update(row.item.id, { qty: row.qty, changedAt: at });
+
+					await ctx.db.restocks.insert({
+						householdId: membership.householdId,
+						itemId: row.item.id,
+						tripId: typeof tripId === 'string' ? tripId.slice(0, 64) : '',
+						fromQty: row.item.qty,
+						toQty: row.qty,
+						// '' is a real answer here — a storeless row — so this
+						// cannot go through `toSourceKind`, which resolves
+						// everything it does not recognise to `shop`.
+						kind: isSourceKind(row.kind) ? row.kind : '',
+						at,
+					});
+				}
+
+				ctx.invalidate('pantry');
+
+				return { count: resolved.length };
+			}
+		),
+
+		/**
 		 * A hard delete. Undo is a client-held tombstone that re-runs `addItem`
 		 * (D17), so there is no `deletedAt` and nothing filters on one.
 		 */
@@ -1802,6 +2008,7 @@ export default capsule({
 			const item = assertInHousehold(await ctx.db.items.get(itemId), membership);
 
 			await clearJoinsForItem(ctx.db, item.id);
+			await clearRestocksForItem(ctx.db, item.id);
 			await ctx.db.items.delete(item.id);
 
 			ctx.invalidate('pantry', 'households');
@@ -2217,6 +2424,7 @@ export default capsule({
 			for (const name of [
 				'itemTypes',
 				'itemStores',
+				'restocks',
 				'items',
 				'locations',
 				'types',
@@ -2905,6 +3113,7 @@ async function deleteHouseholdRows(db: WriteDb, householdId: string): Promise<vo
 	for (const name of [
 		'itemTypes',
 		'itemStores',
+		'restocks',
 		'items',
 		'locations',
 		'types',
@@ -3258,6 +3467,22 @@ async function clearJoinsForItem(db: WriteDb, itemId: string): Promise<void> {
 	const stores = await db.itemStores.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
 
 	for (const row of stores) await db.itemStores.delete(row.id);
+}
+
+/**
+ * Deletes every restock event belonging to an item.
+ *
+ * Separate from `clearJoinsForItem` because it is not a join: a join row is
+ * meaningless without both ends, while a restock row is a record of something
+ * that happened. It still goes, and the reason is the one D62 gives for the
+ * audit log's opposite choice — the log denormalises so it can outlive its
+ * subject, and this deliberately does not. There is nothing to say about how
+ * often you restock an item that no longer exists.
+ */
+async function clearRestocksForItem(db: WriteDb, itemId: string): Promise<void> {
+	const rows = await db.restocks.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+
+	for (const row of rows) await db.restocks.delete(row.id);
 }
 
 /**

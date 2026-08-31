@@ -6,6 +6,7 @@ import type { SourceKind } from '../../shared/source';
 import { SOURCE_KIND_ADJECTIVES, itemSourceKinds } from '../../shared/source';
 import type { Item, Term } from '../../shared/types';
 import { formatSize } from '../../shared/size';
+import { listRuleOf } from '../../shared/listRule';
 import {
 	CARD_ACTION, CARD_ACTION_GHOST, CARD_CHEVRON, CARD_HEADER, CARD_STEPPER, CARD_STEPPER_PRIMARY,
 } from '../lib/controlStyles';
@@ -182,8 +183,16 @@ export function ItemCard({
 				  * `ListX` says exactly that and collides with nothing. It is
 				  * fainter than the kind glyphs on purpose: the kinds are facts
 				  * about the item, this is a rule somebody set about it.
+				  *
+				  * **It follows the rule in force, not the retired column** (D65),
+				  * so a row set to `never` through the tri-state draws it and a
+				  * legacy `offShoppingList` row keeps drawing it. **`always` gets
+				  * no marker at all**, which is the cheap give the design names:
+				  * an `always` item is visible on the list, which is where you go
+				  * looking for it — and a second mark here would make this corner
+				  * four things wide.
 				  */}
-				{item.offShoppingList && (
+				{listRuleOf(item) === 'never' && (
 					<span
 						role="img"
 						aria-label="Kept off the list"

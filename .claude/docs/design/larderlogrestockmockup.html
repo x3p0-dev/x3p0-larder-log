@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Larder Log — Restock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Karla:wght@400;500;600;700&display=swap">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: Karla, system-ui, sans-serif;
+    background: #F3EADC;
+    color: #241E17;
+    -webkit-font-smoothing: antialiased;
+    padding: 56px 28px 96px;
+  }
+  .wrap { max-width: 1500px; margin: 0 auto; }
+  header.doc { margin-bottom: 52px; max-width: 720px; }
+  header.doc .eyebrow {
+    font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em;
+    text-transform: uppercase; color: #6F6049; margin-bottom: 14px;
+  }
+  header.doc h1 {
+    font: 600 42px/1.1 "Playfair Display", Georgia, serif; margin: 0 0 14px;
+  }
+  header.doc h1 em { font-style: italic; font-weight: 600; color: #BE3346; }
+  header.doc p { font: 400 15.5px/1.6 Karla, sans-serif; color: #4C4237; margin: 0; }
+  .board { margin-bottom: 64px; }
+  .bhead { margin-bottom: 16px; max-width: 720px; }
+  .bhead h2 { font: 600 24px/1.2 "Playfair Display", Georgia, serif; margin: 0 0 7px; }
+  .bhead p { font: 400 14px/1.6 Karla, sans-serif; color: #6F6049; margin: 0; }
+  .scroller {
+    overflow-x: auto; border-radius: 22px;
+    border: 1px solid #E2D5C0; background: #FDFAF4;
+    box-shadow: 0 18px 44px rgba(36,30,23,.10);
+  }
+  .frame { width: max-content; }
+  footer.doc {
+    border-top: 1px solid #E2D5C0; padding-top: 22px; max-width: 720px;
+    font: 400 13px/1.6 Karla, sans-serif; color: #6F6049;
+  }
+#b0 { margin: 0; font-family: Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+#b0 a { color: #BE3346; }
+#b0 a:hover { color: #9A2E3B; }
+#b0 .dlabel { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #9E8C74; }
+#b0 .micro { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+#b0 .meta { font: 400 13px/1.45 Karla, sans-serif; color: #6F6049; }
+#b0 .pf { font: 600 17px/1 "Playfair Display", Georgia, serif; color: #241E17; }
+#b0 .chip { height: 30px; border-radius: 999px; padding: 0 11px; display: flex; align-items: center; gap: 7px; background: #FDFAF4; border: 1px solid #E2D5C0; font: 500 13.5px Karla, sans-serif; color: #241E17; box-sizing: border-box; }
+#b0 .dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+#b0 .cnt { color: #6F6049; font-size: 12.5px; }
+#b0 .dash { height: 30px; border-radius: 999px; padding: 0 11px; display: flex; align-items: center; border: 1px dashed #4A4031; color: #9E8C74; font: 500 13.5px Karla, sans-serif; box-sizing: border-box; }
+#b0 .card { width: 506px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; box-sizing: border-box; }
+#b0 .hdr { height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 16px; font: 700 12px Karla, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+#b0 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; }
+#b0 .ctrl { width: 56px; display: flex; align-items: center; justify-content: center; flex: none; }
+#b0 .rbody { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#b0 .right { padding-right: 16px; white-space: nowrap; font: 400 13px Karla, sans-serif; color: #6F6049; }
+#b0 .badge { font: 700 9.5px Karla, sans-serif; letter-spacing: .1em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; }
+#b0 .box { width: 22px; height: 22px; border-radius: 7px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+#b0 .segi { height: 32px; border-radius: 10px; padding: 0 13px; display: flex; align-items: center; gap: 7px; font: 500 13.5px Karla, sans-serif; color: #4C4237; box-sizing: border-box; }
+#b0 .band { display: flex; align-items: center; gap: 9px; }
+#b1 { margin: 0; font-family: Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+#b1 a { color: #BE3346; }
+#b1 a:hover { color: #9A2E3B; }
+#b1 .dlabel { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #9E8C74; }
+#b1 .micro { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+#b1 .meta { font: 400 13px/1.45 Karla, sans-serif; color: #6F6049; }
+#b1 .pf { font: 600 17px/1 "Playfair Display", Georgia, serif; color: #241E17; }
+#b1 .chip { height: 30px; border-radius: 999px; padding: 0 11px; display: flex; align-items: center; gap: 7px; background: #FDFAF4; border: 1px solid #E2D5C0; font: 500 13.5px Karla, sans-serif; color: #241E17; box-sizing: border-box; }
+#b1 .dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+#b1 .cnt { color: #6F6049; font-size: 12.5px; }
+#b1 .dash { height: 30px; border-radius: 999px; padding: 0 11px; display: flex; align-items: center; border: 1px dashed #4A4031; color: #9E8C74; font: 500 13.5px Karla, sans-serif; box-sizing: border-box; }
+#b1 .card { width: 506px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; box-sizing: border-box; }
+#b1 .hdr { height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 16px; font: 700 12px Karla, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+#b1 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; }
+#b1 .ctrl { width: 56px; display: flex; align-items: center; justify-content: center; flex: none; }
+#b1 .rbody { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#b1 .right { padding-right: 16px; white-space: nowrap; font: 400 13px Karla, sans-serif; color: #6F6049; }
+#b1 .badge { font: 700 9.5px Karla, sans-serif; letter-spacing: .1em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; }
+#b1 .box { width: 22px; height: 22px; border-radius: 7px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+#b1 .segi { height: 32px; border-radius: 10px; padding: 0 13px; display: flex; align-items: center; gap: 7px; font: 500 13.5px Karla, sans-serif; color: #4C4237; box-sizing: border-box; }
+#b1 .band { display: flex; align-items: center; gap: 9px; }
+#b1 .step { width: 132px; height: 44px; border-radius: 11px; background: #FDFAF4; border: 1px solid #6F6049; box-sizing: border-box; display: flex; align-items: stretch; overflow: hidden; flex: none; }
+#b1 .cell { width: 42px; display: flex; align-items: center; justify-content: center; color: #4C4237; }
+#b1 .num { flex: 1; display: flex; align-items: center; justify-content: center; border-left: 1px solid #EEE4D2; border-right: 1px solid #EEE4D2; font: 700 20px "Playfair Display", Georgia, serif; color: #241E17; }
+#b1 .prow { display: flex; align-items: center; gap: 12px; padding: 13px 0; }
+#b2 { margin: 0; font-family: Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+#b2 a { color: #BE3346; }
+#b2 a:hover { color: #9A2E3B; }
+#b2 .dlabel { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #9E8C74; }
+#b2 .micro { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+#b2 .meta { font: 400 13px/1.45 Karla, sans-serif; color: #6F6049; }
+#b2 .pf { font: 600 17px/1 "Playfair Display", Georgia, serif; color: #241E17; }
+#b2 .chip { height: 30px; border-radius: 999px; padding: 0 11px; display: flex; align-items: center; gap: 7px; background: #FDFAF4; border: 1px solid #E2D5C0; font: 500 13.5px Karla, sans-serif; color: #241E17; box-sizing: border-box; }
+#b2 .dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+#b2 .cnt { color: #6F6049; font-size: 12.5px; }
+#b2 .dash { height: 30px; border-radius: 999px; padding: 0 11px; display: flex; align-items: center; border: 1px dashed #4A4031; color: #9E8C74; font: 500 13.5px Karla, sans-serif; box-sizing: border-box; }
+#b2 .card { width: 506px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; overflow: hidden; box-sizing: border-box; }
+#b2 .hdr { height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 16px; font: 700 12px Karla, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+#b2 .row { height: 56px; display: flex; align-items: center; border-top: 1px solid #EEE4D2; }
+#b2 .ctrl { width: 56px; display: flex; align-items: center; justify-content: center; flex: none; }
+#b2 .rbody { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#b2 .right { padding-right: 16px; white-space: nowrap; font: 400 13px Karla, sans-serif; color: #6F6049; }
+#b2 .badge { font: 700 9.5px Karla, sans-serif; letter-spacing: .1em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; }
+#b2 .box { width: 22px; height: 22px; border-radius: 7px; box-sizing: border-box; background: #FDFAF4; border: 2px solid #6F6049; }
+#b2 .segi { height: 32px; border-radius: 10px; padding: 0 13px; display: flex; align-items: center; gap: 7px; font: 500 13.5px Karla, sans-serif; color: #4C4237; box-sizing: border-box; }
+#b2 .band { display: flex; align-items: center; gap: 9px; }
+#b3 { margin: 0; font-family: Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+#b3 a { color: #BE3346; }
+#b3 a:hover { color: #9A2E3B; }
+#b3 .micro { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+#b3 .cap { font: 500 13px/1.4 Karla, sans-serif; color: #9B8B75; }
+#b3 .meta { font: 400 13px/1.45 Karla, sans-serif; color: #6F6049; }
+#b3 .bar { width: 1036px; height: 52px; border-radius: 15px; background: #F2EADC; border: 1px solid #E2D5C0; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+#b3 .left { display: flex; align-items: center; gap: 6px; }
+#b3 .ghost { height: 34px; border: 0; background: transparent; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font: 600 14.5px Karla, sans-serif; color: #4C4237; cursor: pointer; }
+#b3 .prim { height: 38px; border: 0; background: #241E17; color: #F2E9DA; border-radius: 13px; padding: 0 18px; font: 600 15px Karla, sans-serif; cursor: pointer; }
+#b4 { margin: 0; font-family: Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+#b4 a { color: #BE3346; }
+#b4 a:hover { color: #9A2E3B; }
+#b4 .micro { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+#b4 .meta { font: 400 13px/1.45 Karla, sans-serif; color: #6F6049; }
+#b4 .hint { font: 400 12.5px/1.5 Karla, sans-serif; color: #6F6049; }
+#b4 .sub { font: 500 12.5px/1 Karla, sans-serif; color: #6F6049; }
+#b4 .seg { width: 440px; height: 40px; border-radius: 13px; background: #F2EADC; border: 1px solid #E2D5C0; box-sizing: border-box; padding: 3px; display: flex; gap: 3px; }
+#b4 .segi { flex: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 500 13.5px Karla, sans-serif; color: #4C4237; box-sizing: border-box; }
+#b4 .on { background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600; }
+#b4 .step { width: 214px; height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; box-sizing: border-box; display: flex; align-items: stretch; overflow: hidden; }
+#b4 .cell { width: 56px; display: flex; align-items: center; justify-content: center; color: #4C4237; }
+#b4 .num { flex: 1; display: flex; align-items: center; justify-content: center; border-left: 1px solid #EEE4D2; border-right: 1px solid #EEE4D2; font: 700 28px "Playfair Display", Georgia, serif; color: #241E17; }
+#b5 { margin: 0; font-family: Karla, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+#b5 a { color: #BE3346; }
+#b5 a:hover { color: #9A2E3B; }
+#b5 .micro { font: 700 10.5px/1 Karla, sans-serif; letter-spacing: .15em; text-transform: uppercase; color: #6F6049; }
+#b5 .meta { font: 400 13px/1.45 Karla, sans-serif; color: #6F6049; }
+#b5 .hint { font: 400 12.5px/1.5 Karla, sans-serif; color: #6F6049; }
+#b5 .sub { font: 500 12.5px/1 Karla, sans-serif; color: #6F6049; }
+#b5 .cap { font: 500 13px/1.4 Karla, sans-serif; color: #9B8B75; }
+#b5 .step { width: 214px; height: 56px; border-radius: 13px; background: #FDFAF4; border: 1px solid #6F6049; box-sizing: border-box; display: flex; align-items: stretch; overflow: hidden; }
+#b5 .cell { width: 56px; display: flex; align-items: center; justify-content: center; color: #4C4237; }
+#b5 .num { flex: 1; display: flex; align-items: center; justify-content: center; border-left: 1px solid #EEE4D2; border-right: 1px solid #EEE4D2; font: 700 28px "Playfair Display", Georgia, serif; color: #241E17; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="doc">
+    <div class="eyebrow">Larder Log &middot; design mockup</div>
+    <h1>Restock &mdash; the trip that <em>ends</em></h1>
+    <p>A check on the run list is a claim, not a write. The count is written once, at the shelf, by the control the trip bar has been holding space for since the list was drawn. Six boards: the three-step flow inside the app, the bar's own states, and the two things restock unblocks.</p>
+  </header>
+
+<section class="board">
+  <div class="bhead">
+    <h2>1 — The run list, three checked</h2>
+    <p>Three rows checked, one from each band. The trip bar appears below the grid: Hide and Clear checks group left, Put 3 away is the only filled control on it. Tortillas is claimed by someone else, so it shows a cart rather than a box you could tick twice.</p>
+  </div>
+  <div class="scroller"><div id="b0" class="frame"><div style="width: 1440px; height: 920px; display: flex; box-sizing: border-box; overflow: hidden; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD);">
+
+  <!-- DRAWER -->
+  <aside style="width: 340px; flex: none; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); padding: 18px 16px 0; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+      <span style="font: 700 27px 'Playfair Display', Georgia, serif; color: #F2E9DA;">Larder <em style="font-style: italic; font-weight: 600; color: #D4636B;">Log</em></span>
+      <div style="width: 30px; height: 30px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center; color: #9E8C74;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3.5" width="15" height="13" rx="3"/><path d="M7.5 3.5v13"/></svg>
+      </div>
+    </div>
+
+    <div style="height: 58px; border-radius: 13px; background: #332B22; display: flex; align-items: center; gap: 11px; padding: 0 12px; margin-bottom: 12px;">
+      <div style="width: 34px; height: 34px; border-radius: 10px; background: #3F7A4C; display: flex; align-items: center; justify-content: center; font: 700 14px 'Playfair Display', Georgia, serif; color: #FDFAF4;">T</div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 3px;">
+        <span class="dlabel">Household</span>
+        <span style="font: 500 14.5px Karla, sans-serif; color: #F2E9DA;">The Tadlock Household</span>
+      </div>
+      <span style="color: #9E8C74;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 8l3-3 3 3M7 12l3 3 3-3"/></svg>
+      </span>
+    </div>
+
+    <div style="height: 44px; border-radius: 12px; background: #191510; display: flex; padding: 4px; gap: 4px; box-sizing: border-box; margin-bottom: 20px;">
+      <div style="flex: 1; border-radius: 9px; background: #F2E9DA; display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 14px Karla, sans-serif; color: #241E17;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg>Filter
+      </div>
+      <div style="flex: 1; border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 14px Karla, sans-serif; color: #9E8C74;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 14h12"/><circle cx="8" cy="6" r="2"/><circle cx="13" cy="14" r="2"/></svg>Settings
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="dlabel" style="flex: 1;">Location</span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 3.5l3 3-9 9H4.5v-3z"/></svg></span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <div class="chip" style="background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600;">All items <span class="cnt" style="color: #A5937A;">26</span></div>
+        <div class="chip"><span class="dot" style="background: #5F7542;"></span>Pantry <span class="cnt">10</span></div>
+        <div class="chip"><span class="dot" style="background: #456B80;"></span>Refrigerator <span class="cnt">6</span></div>
+        <div class="chip"><span class="dot" style="background: #3E6D68;"></span>Chest Freezer <span class="cnt">5</span></div>
+        <div class="dash">+ Location</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="dlabel" style="flex: 1;">Source</span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 3.5l3 3-9 9H4.5v-3z"/></svg></span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <div class="chip"><span class="dot" style="background: #456B80;"></span>Publix <span class="cnt">8</span></div>
+        <div class="chip"><span class="dot" style="background: #5F7542;"></span>Costco <span class="cnt">6</span></div>
+        <div class="chip"><span class="dot" style="background: #3F7A4C;"></span>Garden <span class="cnt">5</span></div>
+        <div class="chip"><span class="dot" style="background: #8E4468;"></span>Kitchen <span class="cnt">4</span></div>
+        <div class="dash">+ Source</div>
+      </div>
+    </div>
+
+    <div style="flex: 1;"></div>
+
+    <div style="border-top: 1px solid #3B3126; height: 68px; display: flex; align-items: center; gap: 11px; margin: 0 -16px; padding: 0 16px;">
+      <div style="width: 34px; height: 34px; border-radius: 999px; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font: 600 13px Karla, sans-serif; color: #DCD0BA;">JT</div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font: 500 14.5px Karla, sans-serif; color: #F2E9DA;">Justin Tadlock</span>
+        <span style="font: 400 12px Karla, sans-serif; color: #9E8C74;">justin@example.com</span>
+      </div>
+      <span style="color: #9E8C74;"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 5l4 5-4 5"/></svg></span>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <main style="flex: 1; min-width: 0; padding: 20px 32px 32px; box-sizing: border-box; display: flex; flex-direction: column;">
+
+    <div style="display: flex; gap: 14px; margin-bottom: 18px;">
+      <div style="flex: 1; height: 52px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0; box-sizing: border-box; display: flex; align-items: center; gap: 11px; padding: 0 18px;">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></svg>
+        <span style="font: 400 16px Karla, sans-serif; color: #9B8B75;">What are you looking for?</span>
+      </div>
+      <button style="height: 52px; border: 0; background: #241E17; color: #F2E9DA; border-radius: 16px; padding: 0 22px; display: flex; align-items: center; gap: 9px; font: 600 15.5px Karla, sans-serif; cursor: pointer;">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg>Add item
+      </button>
+    </div>
+
+    <div style="display: flex; align-items: center; margin-bottom: 22px;">
+      <button style="height: 40px; border: 0; background: transparent; border-radius: 13px; padding: 0 12px 0 4px; display: flex; align-items: center; gap: 8px; font: 600 15px Karla, sans-serif; color: #241E17; cursor: pointer;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5l-4 5 4 5"/></svg>Back to items
+      </button>
+      <div style="flex: 1;"></div>
+      <span class="meta" style="margin-right: 18px;">3 in your cart</span>
+      <div style="height: 40px; border-radius: 13px; background: #F2EADC; border: 1px solid #E2D5C0; box-sizing: border-box; padding: 3px; display: flex; gap: 3px;">
+        <div class="segi" style="background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600;">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h14l-1.6 8.2a1.6 1.6 0 0 1-1.6 1.3H6.2a1.6 1.6 0 0 1-1.6-1.3L3 7Z"/><path d="M7 7V5.2A2.2 2.2 0 0 1 9.2 3h1.6A2.2 2.2 0 0 1 13 5.2V7"/></svg>
+          All <span style="color: #241E17; font-size: 12.5px;">7</span>
+        </div>
+        <div class="segi">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h2l2.2 9.5h9"/><path d="M6 6.5h11.5L16 12H7"/><circle cx="8" cy="16" r="1.3"/><circle cx="15" cy="16" r="1.3"/></svg>
+          Buy <span class="cnt">3</span>
+        </div>
+        <div class="segi">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5v-6.5"/><path d="M10 11C10 8 8 5.8 4.8 5.8 4.8 8.8 6.8 11 10 11Z"/><path d="M10 11c0-2.7 1.9-4.7 4.7-4.7 0 2.7-1.9 4.7-4.7 4.7Z"/></svg>
+          Harvest <span class="cnt">2</span>
+        </div>
+        <div class="segi">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h12v5.5a3.2 3.2 0 0 1-3.2 3.2H7.2A3.2 3.2 0 0 1 4 13V7.5Z"/><path d="M2.3 9.2h1.7M16 9.2h1.7"/><path d="M5.2 5h9.6"/></svg>
+          Make <span class="cnt">2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUY -->
+    <div class="band" style="margin-bottom: 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h2l2.2 9.5h9"/><path d="M6 6.5h11.5L16 12H7"/><circle cx="8" cy="16" r="1.3"/><circle cx="15" cy="16" r="1.3"/></svg>
+      <span class="micro">Buy &middot; 3</span>
+      <span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #E8EDEF; border-bottom: 1px solid #D0DADF; color: #456B80;">
+        <span class="dot" style="width: 8px; height: 8px; background: #456B80;"></span><span style="flex: 1;">Publix</span><span>3</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box" style="background: #241E17; border: 2px solid #241E17;"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#F2E9DA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5"/></svg></div></div>
+        <div class="rbody">
+          <span class="pf" style="color: #6F6049; text-decoration: line-through;">Black Beans</span>
+          <span class="meta" style="text-decoration: line-through;">15 oz</span>
+          <span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; opacity: .55;">Out</span>
+        </div>
+        <div class="right">have 0 &middot; low at 4</div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #F2EADC; border: 2px solid #CFBEA3;"></div></div>
+        <div class="rbody">
+          <span class="pf" style="color: #6F6049;">Tortillas</span>
+          <span class="meta">10 ct</span>
+          <span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; opacity: .55;">Out</span>
+        </div>
+        <div class="right" style="display: flex; align-items: center; gap: 7px;">
+          <span style="width: 18px; height: 18px; border-radius: 999px; background: #F2EADC; border: 1px solid #CFBEA3; display: flex; align-items: center; justify-content: center; font: 600 9px Karla, sans-serif; color: #6F6049;">S</span>
+          <span>In Sarah's cart</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #FDFAF4; border: 2px solid #6F6049;"></div></div>
+        <div class="rbody">
+          <span class="pf">Coffee</span><span class="meta">12 oz</span>
+          <span class="badge" style="background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F;">Low</span>
+        </div>
+        <div class="right">have 1 &middot; low at 2</div>
+      </div>
+    </div>
+
+    <!-- HARVEST -->
+    <div class="band" style="margin: 34px 0 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5v-6.5"/><path d="M10 11C10 8 8 5.8 4.8 5.8 4.8 8.8 6.8 11 10 11Z"/><path d="M10 11c0-2.7 1.9-4.7 4.7-4.7 0 2.7-1.9 4.7-4.7 4.7Z"/></svg>
+      <span class="micro">Harvest &middot; 2</span>
+      <span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #E8F0EA; border-bottom: 1px solid #D0DFD3; color: #3C7549;">
+        <span class="dot" style="width: 8px; height: 8px; background: #3F7A4C;"></span><span style="flex: 1;">Garden</span><span>2</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box" style="background: #241E17; border: 2px solid #241E17;"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#F2E9DA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5"/></svg></div></div>
+        <div class="rbody">
+          <span class="pf" style="color: #6F6049; text-decoration: line-through;">Tomatoes</span>
+          <span class="meta" style="text-decoration: line-through;">1 qt</span>
+          <span class="badge" style="background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F; opacity: .55;">Low</span>
+        </div>
+        <div class="right">have 1 &middot; low at 4</div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #FDFAF4; border: 2px solid #6F6049;"></div></div>
+        <div class="rbody">
+          <span class="pf">Basil</span>
+          <span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B;">Out</span>
+        </div>
+        <div class="right">have 0 &middot; low at 1</div>
+      </div>
+    </div>
+
+    <!-- MAKE -->
+    <div class="band" style="margin: 34px 0 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h12v5.5a3.2 3.2 0 0 1-3.2 3.2H7.2A3.2 3.2 0 0 1 4 13V7.5Z"/><path d="M2.3 9.2h1.7M16 9.2h1.7"/><path d="M5.2 5h9.6"/></svg>
+      <span class="micro">Make &middot; 2</span>
+      <span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #F0E8EC; border-bottom: 1px solid #E0CFD7; color: #8E4468;">
+        <span class="dot" style="width: 8px; height: 8px; background: #8E4468;"></span><span style="flex: 1;">Kitchen</span><span>2</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box" style="background: #241E17; border: 2px solid #241E17;"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#F2E9DA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5"/></svg></div></div>
+        <div class="rbody">
+          <span class="pf" style="color: #6F6049; text-decoration: line-through;">Chicken Stock</span>
+          <span class="meta" style="text-decoration: line-through;">1 qt</span>
+          <span class="badge" style="background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F; opacity: .55;">Low</span>
+        </div>
+        <div class="right">have 2 &middot; low at 4</div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #FDFAF4; border: 2px solid #6F6049;"></div></div>
+        <div class="rbody">
+          <span class="pf">Sourdough Bread</span>
+          <span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B;">Out</span>
+        </div>
+        <div class="right">have 0 &middot; low at 1</div>
+      </div>
+    </div>
+
+    <!-- TRIP BAR -->
+    <div style="margin-top: 24px; height: 52px; border-radius: 15px; background: #F2EADC; border: 1px solid #E2D5C0; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 12px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button style="height: 34px; border: 0; background: transparent; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font: 600 14.5px Karla, sans-serif; color: #4C4237; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 3.2 16.8 16.8"/><path d="M8.2 8.3a2.5 2.5 0 0 0 3.4 3.5"/><path d="M5.6 5.9C3.9 7 2.6 8.5 2 10c1.2 2.9 4.4 5 8 5 1.1 0 2.2-.2 3.2-.6"/><path d="M8.6 5.2A8.6 8.6 0 0 1 10 5c3.6 0 6.8 2.1 8 5-.5 1.1-1.2 2.1-2.1 2.9"/></svg>
+          Hide 3 checked
+        </button>
+        <button style="height: 34px; border: 0; background: transparent; border-radius: 11px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font: 600 14.5px Karla, sans-serif; color: #4C4237; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6"/><path d="M3.5 3v4h4"/></svg>
+          Clear checks
+        </button>
+      </div>
+      <button style="height: 38px; border: 0; background: #241E17; color: #F2E9DA; border-radius: 13px; padding: 0 18px; font: 600 15px Karla, sans-serif; cursor: pointer;">Put 3 away</button>
+    </div>
+
+  </main>
+</div></div></div>
+</section>
+<section class="board">
+  <div class="bhead">
+    <h2>2 — Put away</h2>
+    <p>The 480 sheet from the right, one stepper per checked row, each prefilled to the smallest count that clears its threshold. One Done writes them all.</p>
+  </div>
+  <div class="scroller"><div id="b1" class="frame"><div style="width: 1440px; height: 920px; display: flex; box-sizing: border-box; overflow: hidden; position: relative; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD);">
+
+  <!-- DRAWER -->
+  <aside style="width: 340px; flex: none; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); padding: 18px 16px 0; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+      <span style="font: 700 27px 'Playfair Display', Georgia, serif; color: #F2E9DA;">Larder <em style="font-style: italic; font-weight: 600; color: #D4636B;">Log</em></span>
+      <div style="width: 30px; height: 30px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center; color: #9E8C74;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3.5" width="15" height="13" rx="3"/><path d="M7.5 3.5v13"/></svg>
+      </div>
+    </div>
+    <div style="height: 58px; border-radius: 13px; background: #332B22; display: flex; align-items: center; gap: 11px; padding: 0 12px; margin-bottom: 12px;">
+      <div style="width: 34px; height: 34px; border-radius: 10px; background: #3F7A4C; display: flex; align-items: center; justify-content: center; font: 700 14px 'Playfair Display', Georgia, serif; color: #FDFAF4;">T</div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 3px;">
+        <span class="dlabel">Household</span>
+        <span style="font: 500 14.5px Karla, sans-serif; color: #F2E9DA;">The Tadlock Household</span>
+      </div>
+      <span style="color: #9E8C74;"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 8l3-3 3 3M7 12l3 3 3-3"/></svg></span>
+    </div>
+    <div style="height: 44px; border-radius: 12px; background: #191510; display: flex; padding: 4px; gap: 4px; box-sizing: border-box; margin-bottom: 20px;">
+      <div style="flex: 1; border-radius: 9px; background: #F2E9DA; display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 14px Karla, sans-serif; color: #241E17;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg>Filter
+      </div>
+      <div style="flex: 1; border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 14px Karla, sans-serif; color: #9E8C74;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 14h12"/><circle cx="8" cy="6" r="2"/><circle cx="13" cy="14" r="2"/></svg>Settings
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="dlabel" style="flex: 1;">Location</span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 3.5l3 3-9 9H4.5v-3z"/></svg></span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <div class="chip" style="background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600;">All items <span class="cnt" style="color: #A5937A;">26</span></div>
+        <div class="chip"><span class="dot" style="background: #5F7542;"></span>Pantry <span class="cnt">10</span></div>
+        <div class="chip"><span class="dot" style="background: #456B80;"></span>Refrigerator <span class="cnt">6</span></div>
+        <div class="chip"><span class="dot" style="background: #3E6D68;"></span>Chest Freezer <span class="cnt">5</span></div>
+        <div class="dash">+ Location</div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="dlabel" style="flex: 1;">Source</span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 3.5l3 3-9 9H4.5v-3z"/></svg></span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <div class="chip"><span class="dot" style="background: #456B80;"></span>Publix <span class="cnt">8</span></div>
+        <div class="chip"><span class="dot" style="background: #5F7542;"></span>Costco <span class="cnt">6</span></div>
+        <div class="chip"><span class="dot" style="background: #3F7A4C;"></span>Garden <span class="cnt">5</span></div>
+        <div class="chip"><span class="dot" style="background: #8E4468;"></span>Kitchen <span class="cnt">4</span></div>
+        <div class="dash">+ Source</div>
+      </div>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="border-top: 1px solid #3B3126; height: 68px; display: flex; align-items: center; gap: 11px; margin: 0 -16px; padding: 0 16px;">
+      <div style="width: 34px; height: 34px; border-radius: 999px; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font: 600 13px Karla, sans-serif; color: #DCD0BA;">JT</div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font: 500 14.5px Karla, sans-serif; color: #F2E9DA;">Justin Tadlock</span>
+        <span style="font: 400 12px Karla, sans-serif; color: #9E8C74;">justin@example.com</span>
+      </div>
+      <span style="color: #9E8C74;"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 5l4 5-4 5"/></svg></span>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <main style="flex: 1; min-width: 0; padding: 20px 32px 32px; box-sizing: border-box; display: flex; flex-direction: column;">
+    <div style="display: flex; gap: 14px; margin-bottom: 18px;">
+      <div style="flex: 1; height: 52px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0; box-sizing: border-box; display: flex; align-items: center; gap: 11px; padding: 0 18px;">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></svg>
+        <span style="font: 400 16px Karla, sans-serif; color: #9B8B75;">What are you looking for?</span>
+      </div>
+      <button style="height: 52px; border: 0; background: #241E17; color: #F2E9DA; border-radius: 16px; padding: 0 22px; display: flex; align-items: center; gap: 9px; font: 600 15.5px Karla, sans-serif;">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg>Add item
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; margin-bottom: 22px;">
+      <button style="height: 40px; border: 0; background: transparent; border-radius: 13px; padding: 0 12px 0 4px; display: flex; align-items: center; gap: 8px; font: 600 15px Karla, sans-serif; color: #241E17;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5l-4 5 4 5"/></svg>Back to items
+      </button>
+      <div style="flex: 1;"></div>
+      <span class="meta" style="margin-right: 18px;">3 in your cart</span>
+      <div style="height: 40px; border-radius: 13px; background: #F2EADC; border: 1px solid #E2D5C0; box-sizing: border-box; padding: 3px; display: flex; gap: 3px;">
+        <div class="segi" style="background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600;">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h14l-1.6 8.2a1.6 1.6 0 0 1-1.6 1.3H6.2a1.6 1.6 0 0 1-1.6-1.3L3 7Z"/><path d="M7 7V5.2A2.2 2.2 0 0 1 9.2 3h1.6A2.2 2.2 0 0 1 13 5.2V7"/></svg>
+          All <span style="color: #241E17; font-size: 12.5px;">7</span>
+        </div>
+        <div class="segi"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h2l2.2 9.5h9"/><path d="M6 6.5h11.5L16 12H7"/><circle cx="8" cy="16" r="1.3"/><circle cx="15" cy="16" r="1.3"/></svg>Buy <span class="cnt">3</span></div>
+        <div class="segi"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5v-6.5"/><path d="M10 11C10 8 8 5.8 4.8 5.8 4.8 8.8 6.8 11 10 11Z"/><path d="M10 11c0-2.7 1.9-4.7 4.7-4.7 0 2.7-1.9 4.7-4.7 4.7Z"/></svg>Harvest <span class="cnt">2</span></div>
+        <div class="segi"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h12v5.5a3.2 3.2 0 0 1-3.2 3.2H7.2A3.2 3.2 0 0 1 4 13V7.5Z"/><path d="M2.3 9.2h1.7M16 9.2h1.7"/><path d="M5.2 5h9.6"/></svg>Make <span class="cnt">2</span></div>
+      </div>
+    </div>
+
+    <div class="band" style="margin-bottom: 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h2l2.2 9.5h9"/><path d="M6 6.5h11.5L16 12H7"/><circle cx="8" cy="16" r="1.3"/><circle cx="15" cy="16" r="1.3"/></svg>
+      <span class="micro">Buy &middot; 3</span><span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #E8EDEF; border-bottom: 1px solid #D0DADF; color: #456B80;">
+        <span class="dot" style="width: 8px; height: 8px; background: #456B80;"></span><span style="flex: 1;">Publix</span><span>3</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box" style="background: #241E17; border: 2px solid #241E17;"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#F2E9DA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5"/></svg></div></div>
+        <div class="rbody"><span class="pf" style="color: #6F6049; text-decoration: line-through;">Black Beans</span><span class="meta" style="text-decoration: line-through;">15 oz</span><span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; opacity: .55;">Out</span></div>
+        <div class="right">have 0 &middot; low at 4</div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #F2EADC; border: 2px solid #CFBEA3;"></div></div>
+        <div class="rbody"><span class="pf" style="color: #6F6049;">Tortillas</span><span class="meta">10 ct</span><span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; opacity: .55;">Out</span></div>
+        <div class="right" style="display: flex; align-items: center; gap: 7px;">
+          <span style="width: 18px; height: 18px; border-radius: 999px; background: #F2EADC; border: 1px solid #CFBEA3; display: flex; align-items: center; justify-content: center; font: 600 9px Karla, sans-serif; color: #6F6049;">S</span><span>In Sarah's cart</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #FDFAF4; border: 2px solid #6F6049;"></div></div>
+        <div class="rbody"><span class="pf">Coffee</span><span class="meta">12 oz</span><span class="badge" style="background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F;">Low</span></div>
+        <div class="right">have 1 &middot; low at 2</div>
+      </div>
+    </div>
+
+    <div class="band" style="margin: 34px 0 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5v-6.5"/><path d="M10 11C10 8 8 5.8 4.8 5.8 4.8 8.8 6.8 11 10 11Z"/><path d="M10 11c0-2.7 1.9-4.7 4.7-4.7 0 2.7-1.9 4.7-4.7 4.7Z"/></svg>
+      <span class="micro">Harvest &middot; 2</span><span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #E8F0EA; border-bottom: 1px solid #D0DFD3; color: #3C7549;">
+        <span class="dot" style="width: 8px; height: 8px; background: #3F7A4C;"></span><span style="flex: 1;">Garden</span><span>2</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box" style="background: #241E17; border: 2px solid #241E17;"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#F2E9DA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5"/></svg></div></div>
+        <div class="rbody"><span class="pf" style="color: #6F6049; text-decoration: line-through;">Tomatoes</span><span class="meta" style="text-decoration: line-through;">1 qt</span><span class="badge" style="background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F; opacity: .55;">Low</span></div>
+        <div class="right">have 1 &middot; low at 4</div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box" style="background: #FDFAF4; border: 2px solid #6F6049;"></div></div>
+        <div class="rbody"><span class="pf">Basil</span><span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B;">Out</span></div>
+        <div class="right">have 0 &middot; low at 1</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- SCRIM + SHEET -->
+  <div style="position: absolute; inset: 0; background: rgba(36,30,23,.44);"></div>
+  <div style="position: absolute; top: 16px; right: 16px; bottom: 16px; width: 480px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; box-shadow: 0 24px 60px rgba(36,30,23,.28); display: flex; flex-direction: column; overflow: hidden;">
+
+    <div style="height: 68px; padding: 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #EEE4D2; flex: none;">
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 3px;">
+        <span style="font: 600 21px 'Playfair Display', Georgia, serif; color: #241E17;">Put away</span>
+        <span class="meta">3 from this trip</span>
+      </div>
+      <button style="width: 30px; height: 30px; border: 0; background: transparent; border-radius: 9px; color: #9B8B75; display: flex; align-items: center; justify-content: center;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+
+    <div style="flex: 1; padding: 16px 20px; overflow: hidden;">
+      <div style="font: 400 12.5px/1.5 Karla, sans-serif; color: #6F6049; margin-bottom: 12px;">Each one starts at the smallest count that clears its threshold. Correct anything that's wrong &mdash; this is the one moment you're standing in front of the shelf.</div>
+
+      <div class="prow">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;"><span class="pf">Black Beans</span><span class="meta">15 oz</span></div>
+          <div style="display: flex; align-items: center; gap: 7px;"><span class="dot" style="background: #456B80;"></span><span class="meta">Publix &middot; was 0 &middot; low at 4</span></div>
+        </div>
+        <div class="step">
+          <div class="cell"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">5</div>
+          <div class="cell"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+      </div>
+      <div style="height: 1px; background: #EEE4D2;"></div>
+
+      <div class="prow">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;"><span class="pf">Tomatoes</span><span class="meta">1 qt</span></div>
+          <div style="display: flex; align-items: center; gap: 7px;"><span class="dot" style="background: #3F7A4C;"></span><span class="meta">Garden &middot; was 1 &middot; low at 4</span></div>
+        </div>
+        <div class="step">
+          <div class="cell"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">14</div>
+          <div class="cell"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+      </div>
+      <div style="height: 1px; background: #EEE4D2;"></div>
+
+      <div class="prow">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;"><span class="pf">Chicken Stock</span><span class="meta">1 qt</span></div>
+          <div style="display: flex; align-items: center; gap: 7px;"><span class="dot" style="background: #8E4468;"></span><span class="meta">Kitchen &middot; was 2 &middot; low at 4</span></div>
+        </div>
+        <div class="step">
+          <div class="cell"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">6</div>
+          <div class="cell"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+      </div>
+      <div style="height: 1px; background: #EEE4D2;"></div>
+
+      <div style="font: 400 12.5px/1.5 Karla, sans-serif; color: #6F6049; margin-top: 14px;">Bought, picked and made all land here. The Kitchen row is the whole of &ldquo;made a batch&rdquo; until recipes exist to say what a batch used.</div>
+    </div>
+
+    <div style="height: 76px; border-top: 1px solid #EEE4D2; padding: 0 20px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: none;">
+      <button style="height: 40px; border: 0; background: transparent; border-radius: 13px; padding: 0 14px; font: 600 15px Karla, sans-serif; color: #4C4237;">Cancel</button>
+      <button style="height: 40px; border: 0; background: #241E17; color: #F2E9DA; border-radius: 13px; padding: 0 18px; font: 600 15px Karla, sans-serif;">Update 3 counts</button>
+    </div>
+
+  </div>
+</div></div></div>
+</section>
+<section class="board">
+  <div class="bhead">
+    <h2>3 — After</h2>
+    <p>The three rows are gone and the counts are right. No toast: the rows leaving is the confirmation, on the screen you are already on.</p>
+  </div>
+  <div class="scroller"><div id="b2" class="frame"><div style="width: 1440px; height: 920px; display: flex; box-sizing: border-box; overflow: hidden; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD);">
+
+  <aside style="width: 340px; flex: none; box-sizing: border-box; background: linear-gradient(#2B2419, #1F1A13); padding: 18px 16px 0; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+      <span style="font: 700 27px 'Playfair Display', Georgia, serif; color: #F2E9DA;">Larder <em style="font-style: italic; font-weight: 600; color: #D4636B;">Log</em></span>
+      <div style="width: 30px; height: 30px; border-radius: 9px; background: #332B22; display: flex; align-items: center; justify-content: center; color: #9E8C74;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="3.5" width="15" height="13" rx="3"/><path d="M7.5 3.5v13"/></svg>
+      </div>
+    </div>
+    <div style="height: 58px; border-radius: 13px; background: #332B22; display: flex; align-items: center; gap: 11px; padding: 0 12px; margin-bottom: 12px;">
+      <div style="width: 34px; height: 34px; border-radius: 10px; background: #3F7A4C; display: flex; align-items: center; justify-content: center; font: 700 14px 'Playfair Display', Georgia, serif; color: #FDFAF4;">T</div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 3px;">
+        <span class="dlabel">Household</span>
+        <span style="font: 500 14.5px Karla, sans-serif; color: #F2E9DA;">The Tadlock Household</span>
+      </div>
+      <span style="color: #9E8C74;"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 8l3-3 3 3M7 12l3 3 3-3"/></svg></span>
+    </div>
+    <div style="height: 44px; border-radius: 12px; background: #191510; display: flex; padding: 4px; gap: 4px; box-sizing: border-box; margin-bottom: 20px;">
+      <div style="flex: 1; border-radius: 9px; background: #F2E9DA; display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 14px Karla, sans-serif; color: #241E17;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg>Filter
+      </div>
+      <div style="flex: 1; border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 14px Karla, sans-serif; color: #9E8C74;">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 14h12"/><circle cx="8" cy="6" r="2"/><circle cx="13" cy="14" r="2"/></svg>Settings
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="dlabel" style="flex: 1;">Location</span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 3.5l3 3-9 9H4.5v-3z"/></svg></span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <div class="chip" style="background: #241E17; border-color: #241E17; color: #F2E9DA; font-weight: 600;">All items <span class="cnt" style="color: #A5937A;">26</span></div>
+        <div class="chip"><span class="dot" style="background: #5F7542;"></span>Pantry <span class="cnt">10</span></div>
+        <div class="chip"><span class="dot" style="background: #456B80;"></span>Refrigerator <span class="cnt">6</span></div>
+        <div class="chip"><span class="dot" style="background: #3E6D68;"></span>Chest Freezer <span class="cnt">5</span></div>
+        <div class="dash">+ Location</div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="dlabel" style="flex: 1;">Source</span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 3.5l3 3-9 9H4.5v-3z"/></svg></span>
+        <span style="color: #9E8C74;"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8l4 4 4-4"/></svg></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <div class="chip"><span class="dot" style="background: #456B80;"></span>Publix <span class="cnt">8</span></div>
+        <div class="chip"><span class="dot" style="background: #5F7542;"></span>Costco <span class="cnt">6</span></div>
+        <div class="chip"><span class="dot" style="background: #3F7A4C;"></span>Garden <span class="cnt">5</span></div>
+        <div class="chip"><span class="dot" style="background: #8E4468;"></span>Kitchen <span class="cnt">4</span></div>
+        <div class="dash">+ Source</div>
+      </div>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="border-top: 1px solid #3B3126; height: 68px; display: flex; align-items: center; gap: 11px; margin: 0 -16px; padding: 0 16px;">
+      <div style="width: 34px; height: 34px; border-radius: 999px; background: #4A3E2E; box-shadow: inset 0 0 0 1px #63533E; display: flex; align-items: center; justify-content: center; font: 600 13px Karla, sans-serif; color: #DCD0BA;">JT</div>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font: 500 14.5px Karla, sans-serif; color: #F2E9DA;">Justin Tadlock</span>
+        <span style="font: 400 12px Karla, sans-serif; color: #9E8C74;">justin@example.com</span>
+      </div>
+      <span style="color: #9E8C74;"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 5l4 5-4 5"/></svg></span>
+    </div>
+  </aside>
+
+  <main style="flex: 1; min-width: 0; padding: 20px 32px 32px; box-sizing: border-box; display: flex; flex-direction: column;">
+    <div style="display: flex; gap: 14px; margin-bottom: 18px;">
+      <div style="flex: 1; height: 52px; border-radius: 16px; background: #FDFAF4; border: 1px solid #E2D5C0; box-sizing: border-box; display: flex; align-items: center; gap: 11px; padding: 0 18px;">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></svg>
+        <span style="font: 400 16px Karla, sans-serif; color: #9B8B75;">What are you looking for?</span>
+      </div>
+      <button style="height: 52px; border: 0; background: #241E17; color: #F2E9DA; border-radius: 16px; padding: 0 22px; display: flex; align-items: center; gap: 9px; font: 600 15.5px Karla, sans-serif;">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg>Add item
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; margin-bottom: 22px;">
+      <button style="height: 40px; border: 0; background: transparent; border-radius: 13px; padding: 0 12px 0 4px; display: flex; align-items: center; gap: 8px; font: 600 15px Karla, sans-serif; color: #241E17;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5l-4 5 4 5"/></svg>Back to items
+      </button>
+      <div style="flex: 1;"></div>
+      <div style="height: 40px; border-radius: 13px; background: #F2EADC; border: 1px solid #E2D5C0; box-sizing: border-box; padding: 3px; display: flex; gap: 3px;">
+        <div class="segi" style="background: #FDFAF4; border: 1px solid #CFBEA3; color: #241E17; font-weight: 600;">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h14l-1.6 8.2a1.6 1.6 0 0 1-1.6 1.3H6.2a1.6 1.6 0 0 1-1.6-1.3L3 7Z"/><path d="M7 7V5.2A2.2 2.2 0 0 1 9.2 3h1.6A2.2 2.2 0 0 1 13 5.2V7"/></svg>
+          All <span style="color: #241E17; font-size: 12.5px;">4</span>
+        </div>
+        <div class="segi"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h2l2.2 9.5h9"/><path d="M6 6.5h11.5L16 12H7"/><circle cx="8" cy="16" r="1.3"/><circle cx="15" cy="16" r="1.3"/></svg>Buy <span class="cnt">2</span></div>
+        <div class="segi"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5v-6.5"/><path d="M10 11C10 8 8 5.8 4.8 5.8 4.8 8.8 6.8 11 10 11Z"/><path d="M10 11c0-2.7 1.9-4.7 4.7-4.7 0 2.7-1.9 4.7-4.7 4.7Z"/></svg>Harvest <span class="cnt">1</span></div>
+        <div class="segi"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h12v5.5a3.2 3.2 0 0 1-3.2 3.2H7.2A3.2 3.2 0 0 1 4 13V7.5Z"/><path d="M2.3 9.2h1.7M16 9.2h1.7"/><path d="M5.2 5h9.6"/></svg>Make <span class="cnt">1</span></div>
+      </div>
+    </div>
+
+    <div class="band" style="margin-bottom: 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3h2l2.2 9.5h9"/><path d="M6 6.5h11.5L16 12H7"/><circle cx="8" cy="16" r="1.3"/><circle cx="15" cy="16" r="1.3"/></svg>
+      <span class="micro">Buy &middot; 2</span><span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #E8EDEF; border-bottom: 1px solid #D0DADF; color: #456B80;">
+        <span class="dot" style="width: 8px; height: 8px; background: #456B80;"></span><span style="flex: 1;">Publix</span><span>2</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box" style="background: #F2EADC; border-color: #CFBEA3;"></div></div>
+        <div class="rbody"><span class="pf" style="color: #6F6049;">Tortillas</span><span class="meta">10 ct</span><span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B; opacity: .55;">Out</span></div>
+        <div class="right" style="display: flex; align-items: center; gap: 7px;">
+          <span style="width: 18px; height: 18px; border-radius: 999px; background: #F2EADC; border: 1px solid #CFBEA3; display: flex; align-items: center; justify-content: center; font: 600 9px Karla, sans-serif; color: #6F6049;">S</span><span>In Sarah's cart</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="ctrl"><div class="box"></div></div>
+        <div class="rbody"><span class="pf">Coffee</span><span class="meta">12 oz</span><span class="badge" style="background: #F7EEDA; border: 1px solid #E9DAB9; color: #855A0F;">Low</span></div>
+        <div class="right">have 1 &middot; low at 2</div>
+      </div>
+    </div>
+
+    <div class="band" style="margin: 34px 0 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5v-6.5"/><path d="M10 11C10 8 8 5.8 4.8 5.8 4.8 8.8 6.8 11 10 11Z"/><path d="M10 11c0-2.7 1.9-4.7 4.7-4.7 0 2.7-1.9 4.7-4.7 4.7Z"/></svg>
+      <span class="micro">Harvest &middot; 1</span><span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #E8F0EA; border-bottom: 1px solid #D0DFD3; color: #3C7549;">
+        <span class="dot" style="width: 8px; height: 8px; background: #3F7A4C;"></span><span style="flex: 1;">Garden</span><span>1</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box"></div></div>
+        <div class="rbody"><span class="pf">Basil</span><span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B;">Out</span></div>
+        <div class="right">have 0 &middot; low at 1</div>
+      </div>
+    </div>
+
+    <div class="band" style="margin: 34px 0 12px;">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#6F6049" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h12v5.5a3.2 3.2 0 0 1-3.2 3.2H7.2A3.2 3.2 0 0 1 4 13V7.5Z"/><path d="M2.3 9.2h1.7M16 9.2h1.7"/><path d="M5.2 5h9.6"/></svg>
+      <span class="micro">Make &middot; 1</span><span style="flex: 1; height: 1px; background: #E2D5C0;"></span>
+    </div>
+    <div class="card">
+      <div class="hdr" style="background: #F0E8EC; border-bottom: 1px solid #E0CFD7; color: #8E4468;">
+        <span class="dot" style="width: 8px; height: 8px; background: #8E4468;"></span><span style="flex: 1;">Kitchen</span><span>1</span>
+      </div>
+      <div class="row" style="border-top: 0;">
+        <div class="ctrl"><div class="box"></div></div>
+        <div class="rbody"><span class="pf">Sourdough Bread</span><span class="badge" style="background: #F6E2DD; border: 1px solid #EBCFC5; color: #9A2E3B;">Out</span></div>
+        <div class="right">have 0 &middot; low at 1</div>
+      </div>
+    </div>
+
+    <div style="flex: 1;"></div>
+  </main>
+</div></div></div>
+</section>
+<section class="board">
+  <div class="bhead">
+    <h2>The trip bar — anatomy</h2>
+    <p>Four states, the undo toast that clearing earns, and where the green completion note goes instead.</p>
+  </div>
+  <div class="scroller"><div id="b3" class="frame"><div style="min-height: 880px; box-sizing: border-box; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 36px 32px; display: flex; flex-direction: column; gap: 26px;">
+
+  <div style="display: flex; flex-direction: column; gap: 7px;">
+    <div class="micro">The trip bar &mdash; anatomy</div>
+    <div class="meta" style="max-width: 780px;">Below the grid, 24px down, full width of the content column. <strong style="color: #4C4237;">Trip management groups left; the trip's one action sits right.</strong> <em>Hide</em> and <em>Clear checks</em> are both ghosts and both about the ticks; the only filled control on the bar is the one that writes.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="cap">Nothing checked &mdash; there is no bar</div>
+    <div style="width: 1036px; height: 52px; border-radius: 15px; border: 1px dashed #CFBEA3; box-sizing: border-box; display: flex; align-items: center; padding: 0 18px;">
+      <span class="meta" style="color: #9B8B75; font-style: italic;">Unchanged. The bar appears with the first check.</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="cap">Some checked</div>
+    <div class="bar">
+      <div class="left">
+        <button class="ghost">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 3.2 16.8 16.8"/><path d="M8.2 8.3a2.5 2.5 0 0 0 3.4 3.5"/><path d="M5.6 5.9C3.9 7 2.6 8.5 2 10c1.2 2.9 4.4 5 8 5 1.1 0 2.2-.2 3.2-.6"/><path d="M8.6 5.2A8.6 8.6 0 0 1 10 5c3.6 0 6.8 2.1 8 5-.5 1.1-1.2 2.1-2.1 2.9"/></svg>
+          Hide 3 checked
+        </button>
+        <button class="ghost">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6"/><path d="M3.5 3v4h4"/></svg>
+          Clear checks
+        </button>
+      </div>
+      <button class="prim">Put 3 away</button>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="cap">Everything checked &mdash; the same bar, bigger numbers</div>
+    <div class="bar">
+      <div class="left">
+        <button class="ghost">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 3.2 16.8 16.8"/><path d="M8.2 8.3a2.5 2.5 0 0 0 3.4 3.5"/><path d="M5.6 5.9C3.9 7 2.6 8.5 2 10c1.2 2.9 4.4 5 8 5 1.1 0 2.2-.2 3.2-.6"/><path d="M8.6 5.2A8.6 8.6 0 0 1 10 5c3.6 0 6.8 2.1 8 5-.5 1.1-1.2 2.1-2.1 2.9"/></svg>
+          Hide 7 checked
+        </button>
+        <button class="ghost">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6"/><path d="M3.5 3v4h4"/></svg>
+          Clear checks
+        </button>
+      </div>
+      <button class="prim">Put 7 away</button>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 36px; align-items: flex-start; padding-top: 4px;">
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="cap">Clearing earns an undo</div>
+      <div style="width: 460px; height: 52px; border-radius: 15px; background: linear-gradient(#2B2419, #1F1A13); border: 1px solid #3B3126; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 18px; box-shadow: 0 16px 40px rgba(36,30,23,.30); position: relative; overflow: hidden;">
+        <span style="flex: 1; font: 400 15px Karla, sans-serif; color: #F2E9DA;">Cleared <strong style="font-weight: 600;">3 checks</strong>.</span>
+        <button style="height: 34px; border: 0; background: #F2E9DA; color: #241E17; border-radius: 11px; padding: 0 14px; font: 600 14px Karla, sans-serif; cursor: pointer;">Undo</button>
+        <span style="color: #9E8C74; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></span>
+        <span style="position: absolute; left: 0; bottom: 0; height: 2px; width: 62%; background: #9E8C74;"></span>
+      </div>
+      <div class="meta" style="width: 460px; line-height: 1.5;">Under restock a check is worth something &mdash; it is a claim other people can see, and re-ticking a shop's worth of rows is not one tap. So clearing takes the actionable toast that already exists, and releases only <em>your</em> claims.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="cap">Where the green belongs &mdash; the whole list put away</div>
+      <div style="width: 440px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; box-sizing: border-box; padding: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
+        <div style="width: 40px; height: 40px; border-radius: 999px; background: #EDEFE1; border: 1px solid #DCE0CB; display: flex; align-items: center; justify-content: center;">
+          <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#47592F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 5.5"/></svg>
+        </div>
+        <div style="font: 600 21px 'Playfair Display', Georgia, serif; color: #241E17;">Everything's put away.</div>
+        <div class="meta" style="line-height: 1.5;">Seven counts updated. Nothing is low or out.</div>
+        <button style="height: 38px; border: 1px solid #CFBEA3; background: #FDFAF4; border-radius: 13px; padding: 0 14px; font: 600 14.5px Karla, sans-serif; color: #241E17; cursor: pointer; margin-top: 2px;">Back to items</button>
+      </div>
+      <div class="meta" style="width: 440px; line-height: 1.5;">Every row is put away to a count that clears its threshold, so a finished trip empties the list by arithmetic. This is where the 70px completion note's green disc goes &mdash; on the bar it was claiming nothing was pending while the counts still were.</div>
+    </div>
+
+  </div>
+
+</div></div></div>
+</section>
+<section class="board">
+  <div class="bhead">
+    <h2>Always / Never — the tri-state</h2>
+    <p>In the COUNT section, under the two steppers, because both overrides amend the low-at sentence.</p>
+  </div>
+  <div class="scroller"><div id="b4" class="frame"><div style="min-height: 800px; box-sizing: border-box; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 34px 40px; display: flex; flex-direction: column; gap: 18px;">
+
+  <div style="display: flex; flex-direction: column; gap: 7px;">
+    <div class="micro">Always &middot; Never &mdash; in the count section</div>
+    <div class="meta" style="width: 480px; line-height: 1.5;"><em>Low at</em> is the sentence <em>put this on the list when I'm down to N</em>. Both overrides amend that sentence, so they sit where the sentence is set.</div>
+  </div>
+
+  <div style="width: 480px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; box-sizing: border-box; padding: 20px;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+      <span class="micro">Count</span>
+      <span style="display: flex; align-items: center; gap: 7px; font: 600 13px Karla, sans-serif; color: #855A0F;">
+        <span style="width: 7px; height: 7px; border-radius: 999px; background: #C4901F;"></span>Running low
+      </span>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span class="sub">On hand</span>
+        <div class="step">
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">2</div>
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span class="sub">Low at</span>
+        <div class="step">
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">4</div>
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 9px;">
+      <div class="seg">
+        <div class="segi on">Automatic</div>
+        <div class="segi">Always</div>
+        <div class="segi">Never</div>
+      </div>
+      <div class="hint">On the list when you're down to <strong style="color: #4C4237;">4</strong>.</div>
+    </div>
+
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 18px; padding-top: 4px;">
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div class="seg">
+        <div class="segi">Automatic</div>
+        <div class="segi on">Always</div>
+        <div class="segi">Never</div>
+      </div>
+      <div class="hint">On the list until you buy it, whatever the count says.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div class="seg">
+        <div class="segi">Automatic</div>
+        <div class="segi">Always</div>
+        <div class="segi on">Never</div>
+      </div>
+      <div class="hint">Never on the list. It still shows as low or out on its card.</div>
+    </div>
+
+  </div>
+
+  <div style="width: 480px; height: 1px; background: #E2D5C0; margin: 4px 0;"></div>
+
+  <div class="meta" style="width: 480px; line-height: 1.55;">The active segment is surface on <em>line strong</em>, not the ink fill &mdash; the sheet already has exactly one ink control and it is <em>Save</em>. That is the third answer the run list's own segment already reached, for the same reason.</div>
+
+  <div class="meta" style="width: 480px; line-height: 1.55;"><strong style="color: #4C4237;">Always clears on the put-away, not on the check.</strong> A check is a claim and can be abandoned; a purchase can't. So an abandoned trip leaves the flag standing, which is correct.</div>
+
+</div></div></div>
+</section>
+<section class="board">
+  <div class="bhead">
+    <h2>Trends, tier 2</h2>
+    <p>One trustworthy event per trip, in the hint slot the low-at stepper already carries.</p>
+  </div>
+  <div class="scroller"><div id="b5" class="frame"><div style="min-height: 520px; box-sizing: border-box; background: radial-gradient(135% 105% at 10% -12%, #F9F3E9, #F3EADC, #EADFCD); padding: 34px 40px; display: flex; flex-direction: column; gap: 20px;">
+
+  <div style="display: flex; flex-direction: column; gap: 7px;">
+    <div class="micro">Trends, tier 2 &mdash; in the hint slot that already exists</div>
+    <div class="meta" style="width: 480px; line-height: 1.5;">Put-away writes one trustworthy event per trip. The <em>low at</em> stepper already carries a hint line, and it already disappears once you touch the number.</div>
+  </div>
+
+  <div style="width: 480px; background: #FDFAF4; border: 1px solid #E2D5C0; border-radius: 20px; box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; gap: 22px;">
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <span class="cap">Fewer than three restocks &mdash; unchanged</span>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span class="sub">Low at</span>
+        <div class="step">
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">2</div>
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+        <div class="hint">Household default.</div>
+      </div>
+    </div>
+
+    <div style="height: 1px; background: #EEE4D2;"></div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <span class="cap">Three or more &mdash; the hint has something to say</span>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span class="sub">Low at</span>
+        <div class="step">
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11"/></svg></div>
+          <div class="num">4</div>
+          <div class="cell"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4.5 10h11M10 4.5v11"/></svg></div>
+        </div>
+        <div class="hint">You restock this about every <strong style="color: #4C4237;">three weeks</strong>. The last one was 16 days ago.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="meta" style="width: 480px; line-height: 1.55;"><strong style="color: #4C4237;">The date is trustworthy and the quantity is not.</strong> Put-away doubles as drift correction, so <em>new minus old</em> is sometimes a purchase and sometimes a fix, and nothing can tell them apart. So tier 2 promises intervals, not rates &mdash; and stops short of <em>you go through four a month</em>, which is the sentence the data can't support.</div>
+
+  <div class="meta" style="width: 480px; line-height: 1.55;">No button. It is a line of copy with a number in it; the numeral beside it is already typeable, and a suggestion that also acts is a suggestion that gets tapped by accident.</div>
+
+</div></div></div>
+</section>
+  <footer class="doc">Light theme, desktop. Static mockup &mdash; nothing here is interactive.</footer>
+</div>
+</body>
+</html>

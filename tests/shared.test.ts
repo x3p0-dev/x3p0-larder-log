@@ -49,6 +49,8 @@ import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, runBands, runCount } from '../shared/runList';
+import { putAwayMeta, putAwayRows, restockEntry, restockPrefill } from '../shared/restock';
+import { isExtra, listNameFor, listRuleHint, listRuleLabel, listRuleOf, toListRule } from '../shared/listRule';
 import {
 	MONTHS, hasSeason, isInSeason, monthName, monthNumber, monthOf, normalizeSeason, readyPhrase,
 } from '../shared/season';
@@ -698,11 +700,12 @@ const STORES: Term[] = [
 
 function item(
 	name: string, qty: string, threshold: string, storeIds: string[],
-	offShoppingList = false, season: [string, string] = ['', '']
+	offShoppingList = false, season: [string, string] = ['', ''],
+	listRule = ''
 ): Item {
 	return {
 		id: `i-${name}`, name, locationId: 'l-1', typeIds: [], storeIds,
-		qty, threshold, size: '', unit: '', offShoppingList,
+		qty, threshold, size: '', unit: '', offShoppingList, listRule,
 		seasonFrom: season[0], seasonTo: season[1], notes: '',
 		createdAt: '2026-08-26T00:00:00.000Z', addedAt: '', changedAt: '',
 	};
@@ -1057,7 +1060,7 @@ check('an empty list is fine', byName([]), []);
 function filterable(id: string, locationId: string, typeIds: string[], storeIds: string[]): Item {
 	return {
 		id, name: id, locationId, typeIds, storeIds,
-		qty: '1', threshold: '1', size: '', unit: '', offShoppingList: false,
+		qty: '1', threshold: '1', size: '', unit: '', offShoppingList: false, listRule: '',
 		seasonFrom: '', seasonTo: '', notes: '',
 		createdAt: '', addedAt: '', changedAt: '',
 	};
@@ -1309,6 +1312,13 @@ check(
 	DEMO_ITEMS.filter((i) => i.offShoppingList && demoStatus(i) !== 'ok').length,
 	2
 );
+
+// D65: exactly one pinned row, and it has to be **stocked** or the `EXTRA`
+// badge it exists to show never draws — a low row keeps its status instead.
+const pinnedDemo = DEMO_ITEMS.filter((i) => i.listRule === 'always');
+check('one row is pinned to the list', pinnedDemo.length, 1);
+check('and it is stocked, so it reads EXTRA', pinnedDemo.every((i) => demoStatus(i) === 'ok'), true);
+check('with a store, so it lands on a real card', pinnedDemo.every((i) => i.storeNames.length > 0), true);
 
 // D35/D44: sixty rows stamped in one second sort by nothing, so *Recently
 // added* would render in id order and look like it was applying no sort — the
@@ -1919,6 +1929,268 @@ check('one suggestion is singular', suggestionAnnouncement(1), '1 suggestion.');
 check('more than one is plural', suggestionAnnouncement(6), '6 suggestions.');
 check('nothing is announced for nothing', suggestionAnnouncement(0), '');
 
+
+
+// --- D64: restock — the trip that ends ---
+//
+// A check is a **claim**, and the count is written once, at the shelf. Two
+// things here are invisible when wrong: a prefill one out is still a plausible
+// number, and a row filed under the wrong band still puts something away.
+
+// The prefill is the smallest thing that is certainly true — you have at least
+// one more than you had, and you are no longer low.
+check('an out item clears its threshold', restockPrefill('0', '4'), 5);
+check('a low item does too', restockPrefill('2', '4'), 5);
+check('at the threshold exactly, still one above it', restockPrefill('4', '4'), 5);
+
+// **The `on hand + 1` half is not redundant**, and this is the case it exists
+// for: something already above its threshold — forced onto the list, or bought
+// early — would otherwise prefill to a step *down* from what is on the shelf.
+check('an item above its threshold steps up, never down', restockPrefill('7', '2'), 8);
+
+// `low at + 1` rather than `low at`, because *on hand == low at* is low
+// (`statusKeyFor`): a default that left the row on the list would be a default
+// that undid the trip it is ending.
+check('a zero threshold still means one on the shelf', restockPrefill('0', '0'), 1);
+check('unparseable counts read as zero, not NaN', restockPrefill('', 'abc'), 1);
+
+// Ordered as the list orders them — kind, then source, then out before low —
+// by walking the bands rather than sorting again. The sheet is the screen you
+// just ticked, read back to you.
+const TRIP = runBands(RUN, SOURCED, JUNE);
+const everything = putAwayRows(TRIP, new Set(RUN.map((i) => i.id)));
+
+check(
+	'rows follow the list: buy, then harvest, then make',
+	everything.map((r) => r.kind),
+	['shop', 'shop', 'shop', 'shop', null, 'grow', 'grow', 'make']
+);
+check(
+	'and within a band, source A-Z then out before low',
+	everything.map((r) => `${r.sourceName}:${r.item.name}`),
+	[
+		'Aldi:Coffee', 'Aldi:Frozen Corn',
+		'Costco:Bacon', 'Costco:Butter',
+		':Baking Soda',
+		'The Garden:Basil', 'The Garden:Tomatoes',
+		'The Kitchen:Chicken Stock',
+	]
+);
+
+// Only the ticked rows, and a row nobody ticked is simply not here.
+check('unticked rows are absent', putAwayRows(TRIP, new Set(['i-Basil'])).map((r) => r.item.name), ['Basil']);
+check('and nothing ticked is no sheet at all', putAwayRows(TRIP, new Set()), []);
+
+// **One row per item, never per list row.** Coffee draws on two cards and is
+// one thing to put away; the first band and group to claim it names it, which
+// is Aldi because groups run A–Z.
+check(
+	'an item on two cards is one row',
+	putAwayRows(TRIP, new Set(['i-Coffee'])).map((r) => `${r.sourceName}:${r.item.name}`),
+	['Aldi:Coffee']
+);
+
+// The same rule across *bands*, which is the case that actually matters: an
+// item bought in February and picked in July is filed under the band you would
+// have found it in first.
+const twoKinds = putAwayRows(runBands(BOTH, SOURCED, JUNE), new Set(['i-Tomatoes']));
+check('an item in two bands is one row', twoKinds.length, 1);
+check('filed under the first band that claims it', twoKinds[0].kind, 'shop');
+
+// The storeless group has no term, so it has no dot and no kind — and '' is a
+// real answer there rather than a missing one, which is why nothing runs it
+// through `toSourceKind` (that resolves everything it does not recognise to
+// `shop`).
+const storeless = putAwayRows(TRIP, new Set(['i-Baking Soda']))[0];
+check('a storeless row names no source', storeless.sourceName, '');
+check('carries no colour', storeless.sourceInk, '');
+check('and no kind at all', storeless.kind, null);
+check('its meta line starts at the counts', putAwayMeta(storeless), 'was 0 · low at 1');
+check('where a sourced row leads with the source', putAwayMeta(everything[0]), 'Aldi · was 1 · low at 2');
+
+// What the row carried before the trip, for the `was N` clause. It is read at
+// snapshot time and not again: the sheet holds the screen you opened it from.
+check('was is the count before the trip', everything[2].was, 0);
+check('and low at rides with it', everything[2].lowAt, 2);
+
+// The wire shape. `qty` is **what is on the shelf now**, never what was added —
+// a client that meant the other one would compile perfectly and halve a pantry.
+check(
+	'an entry carries the item, the new count and the kind',
+	restockEntry(everything[5], '14'),
+	{ itemId: 'i-Basil', qty: '14', kind: 'grow' }
+);
+check(
+	'and a storeless row sends an empty kind rather than a guess',
+	restockEntry(storeless, '5').kind,
+	''
+);
+
+// An out-of-season harvest row has no checkbox, so it can never be ticked and
+// can never reach the sheet. Belt and braces: it is not in the band's `items`
+// either, so `putAwayRows` never sees it.
+check(
+	'a NOT YET row cannot be put away',
+	putAwayRows(runBands([SQUASH], SOURCED, JUNE), new Set([SQUASH.id])),
+	[]
+);
+
+
+// --- D65: the list override, as a tri-state ---
+//
+// `low at` is the sentence *put this on the list when I'm down to N*, and both
+// overrides amend it. Invisible when wrong in the worst way: a row silently
+// comes back onto a list somebody took it off months ago, or silently leaves
+// one they pinned.
+
+check('an unset rule is automatic', toListRule(''), '');
+check('and so is anything unrecognised', toListRule('sometimes'), '');
+check('a value from a later version does not throw', toListRule({ nested: true }), '');
+check('always survives', toListRule('always'), 'always');
+check('never survives', toListRule('never'), 'never');
+
+// Automatic behaves exactly as the app did before the column existed.
+check('automatic: out is on the list', needsBuying(item('x', '0', '2', [])), true);
+check('automatic: at the threshold is on the list', needsBuying(item('x', '2', '2', [])), true);
+check('automatic: above it is not', needsBuying(item('x', '3', '2', [])), false);
+
+// `always` outranks the count in the one direction that matters.
+const PINNED = item('Peanut Butter', '3', '2', [], false, ['', ''], 'always');
+check('always keeps a stocked row on the list', needsBuying(PINNED), true);
+check('and does not change what the card says', statusKeyFor(PINNED.qty, PINNED.threshold), 'ok');
+
+// `never` is the retired checkbox's meaning, said by the new column.
+const MUTED = item('Sourdough Starter', '0', '1', [], false, ['', ''], 'never');
+check('never keeps an out row off the list', needsBuying(MUTED), false);
+check('and it still reads out on its card', statusKeyFor(MUTED.qty, MUTED.threshold), 'out');
+
+// **The retired column folds in as `never`.** Every row carrying it predates
+// this one, and reading it wrong would put a muted item back on the list.
+const LEGACY = item('Honey', '0', '1', [], true);
+check('a legacy offShoppingList row resolves to never', listRuleOf(LEGACY), 'never');
+check('and stays off the list', needsBuying(LEGACY), false);
+
+// The new column wins, which is what lets an edit drain the old one.
+check(
+	'listRule beats the retired flag',
+	listRuleOf({ listRule: 'always', offShoppingList: true }),
+	'always'
+);
+check(
+	'and an explicit automatic un-mutes a legacy row',
+	needsBuying(item('Honey', '9', '1', [], true, ['', ''], '')),
+	false
+);
+
+// `EXTRA` is what an `always` row says when it has no status to report.
+check('a stocked always row is extra', isExtra(PINNED), true);
+check('a low always row is not — the status is the better fact', isExtra(item('x', '2', '2', [], false, ['', ''], 'always')), false);
+check('an out always row is not either', isExtra(item('x', '0', '2', [], false, ['', ''], 'always')), false);
+check('and an ordinary stocked row is never extra', isExtra(item('x', '9', '2', [])), false);
+check('nor is a never row', isExtra(item('x', '9', '2', [], false, ['', ''], 'never')), false);
+
+// **`always` outranks the count and nothing else.** It does not outrank the
+// season: *whatever the count says* is a claim about wanting the thing, not
+// about whether it has grown yet.
+const PINNED_SQUASH: Item = {
+	...item('Squash', '9', '2', ['s-garden'], false, ['8', '10'], 'always'),
+};
+const pinnedBands = runBands([PINNED_SQUASH], SOURCED, JUNE);
+check('a pinned out-of-season row is still NOT YET', pinnedBands[0].groups[0].notYet.map((i) => i.name), ['Squash']);
+check('and does not count toward its band', pinnedBands[0].count, 0);
+check('in season it is an ordinary pinned row', runBands([PINNED_SQUASH], SOURCED, 9)[0].groups[0].items.length, 1);
+
+// **Which list the segment is talking about.** The run list has had three bands
+// since D58 and the copy never caught up: *on the list until you buy it* is
+// simply false for a tomato you pick, and *the list* names nothing anybody can
+// point at. It follows the item's sources, because the band does.
+check('no source at all is the shopping list — the storeless group is Buy\u2019s', listNameFor([]), 'shopping list');
+check('a shop is the shopping list', listNameFor(['shop']), 'shopping list');
+check('a garden is the harvest list', listNameFor(['grow']), 'harvest list');
+check('a kitchen is the make list', listNameFor(['make']), 'make list');
+check('two kinds make it plural', listNameFor(['shop', 'grow']), 'shopping and harvest lists');
+check('and it reads in band order however it arrives', listNameFor(['make', 'shop']), 'shopping and make lists');
+check('three take the serial comma', listNameFor(['shop', 'grow', 'make']), 'shopping, harvest, and make lists');
+
+// The hint is the whole of how the choice explains itself. It names the list
+// rather than saying *the list*, and it says **stock** rather than *count* —
+// the sheet is covered in counts and every one of them is a number, while what
+// this sentence is about is the shelf.
+check(
+	'automatic names the list and the number',
+	listRuleHint('', 4, 'shopping list'),
+	'On your shopping list when your stock is down to 4.'
+);
+check(
+	'and follows the number',
+	listRuleHint('', 11, 'shopping list'),
+	'On your shopping list when your stock is down to 11.'
+);
+// **`always` means always** (D65, amended). It was a one-shot pin for one round
+// — the put-away cleared it — and the copy had to carry an *until you put it
+// away* clause to stay honest. A control labelled Always that stops after one
+// trip makes the word lie, so the behaviour moved to match the label.
+check(
+	'always is unconditional, with no caveat to carry',
+	listRuleHint('always', 4, 'shopping list'),
+	'Always on your shopping list, however much stock you have.'
+);
+check(
+	'and it promises no ending, because nothing but the control itself is one',
+	listRuleHint('always', 4, 'shopping list').includes('until'),
+	false
+);
+// The symmetry with `never` is the tell that this is the right shape: two
+// standing preferences, one sentence each, neither with a caveat.
+check(
+	'never carries none either',
+	listRuleHint('never', 4, 'shopping list').includes('until'),
+	false
+);
+check(
+	'never says what it does not do, and what still happens',
+	listRuleHint('never', 4, 'shopping list'),
+	'Never on your shopping list. It still shows as low or out on its card.'
+);
+// The contextual half, which is the point of the rewrite: a grown thing is
+// never *bought*, so the sentence must not say so.
+check(
+	'a grown row is told about its harvest list',
+	listRuleHint('always', 4, listNameFor(['grow'])),
+	'Always on your harvest list, however much stock you have.'
+);
+check(
+	'and a bought-and-grown row about both',
+	listRuleHint('', 3, listNameFor(['shop', 'grow'])),
+	'On your shopping and harvest lists when your stock is down to 3.'
+);
+check(
+	'nothing in the copy says "count"',
+	[
+		listRuleHint('', 4, 'shopping list'),
+		listRuleHint('always', 4, 'shopping list'),
+		listRuleHint('never', 4, 'shopping list'),
+	].some((line) => line.includes('count')),
+	false
+);
+
+// The sub-label is the same name, capitalised — the two steppers beside it each
+// name their field and this had none, which is the whole of why it read as
+// unclear.
+check('the label is the list, capitalised', listRuleLabel('shopping list'), 'Shopping list');
+check('and it follows the sources too', listRuleLabel(listNameFor(['grow'])), 'Harvest list');
+
+// A pinned row reaches the put-away like any other, and its band files it.
+const pinnedRun = runBands([item('Peanut Butter', '3', '2', ['s-costco'], false, ['', ''], 'always')], SOURCED, JUNE);
+check('a pinned row is on the Buy band', pinnedRun.map((b) => b.kind), ['buy']);
+check(
+	'and puts away from the count it has',
+	putAwayRows(pinnedRun, new Set(['i-Peanut Butter']))[0].was,
+	3
+);
+// The prefill's second half, on the row it exists for: already above its
+// threshold, so `low at + 1` alone would be a step **down**.
+check('its prefill steps up, not down', restockPrefill('3', '2'), 4);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

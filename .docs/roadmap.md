@@ -1749,3 +1749,95 @@ grow some of it* seeds **Garden** at fern, *We make some of it* seeds
 all 70 class literals diffed against a live `/zero.css`, and `createHousehold`
 was driven over `POST /__spacefast/zero/run` across all eight branches including
 **the argument omitted**, which still seeds exactly three shops.
+
+### Restock — the trip that ends ✅ (2026-08-31)
+
+[D64](decisions.md#d64-a-check-is-a-claim-and-the-count-is-written-once-at-the-shelf),
+amending D41. **One schema change**: `restocks`, the twelfth table. Thirteen
+queries, **twenty-six** mutations, `db.migrations` empty, `/api/status` still
+the only endpoint.
+
+The trip bar's right half has been drawn empty since the shopping list was
+first specified, reserved for the honest end of *it's in the cart*: **setting
+the count when you unpack**. This is that.
+
+- **A check is a claim, not a write.** The app cannot know whether you came home
+  with a four-pack or a single, so it stops guessing and asks once, on a screen
+  you are looking at while standing in front of the shelf.
+- **The prefill is `max(low at + 1, on hand + 1)`** — the smallest thing that is
+  certainly true. The second half is not redundant: an item already above its
+  threshold would otherwise prefill to a step *down*.
+- **The stepper asks *how many do you have now***, which makes the put-away
+  **the only self-correcting moment in the product** — and is why the log may
+  only ever promise intervals, never rates.
+- **`restockItems` is one mutation** and resolves every row before writing any,
+  because a put-away is several writes that mean one thing from a phone in a
+  car park.
+- **The bar keeps one shape at every count.** Three controls, the ghosts left
+  and the write right, glyph-only ghosts at 390. The 70px green completion
+  variant is deleted and its disc moved to the screen *after* the trip.
+- **`restocks` records no `userId`.** A name rides the trip, which is transient;
+  nothing in the larder ever records who touched a thing.
+
+**Deferred by request: shared claims** — *in Sarah's cart* — and with it the
+`N in your cart` wording. **Unbuilt and optional in the document itself:** the
+`Always` / `Never` tri-state and trends tier 2, which the log now collects for.
+
+**671 assertions** (23 new), typecheck clean, the artifact at twelve tables and
+twenty-six mutations with no migration, 433 class literals diffed against the
+freshly built `zero.css` and the check proved to discriminate, and the real
+handler driven over `POST /__spacefast/zero/run` — the doc's own three-row trip
+written and read back, a bogus id refusing the whole call with its neighbour
+untouched, a viewer refused, and both cascades watched to actually delete.
+
+### The list override is a tri-state ✅ (2026-08-31)
+
+[D65](decisions.md#d65-the-list-override-is-a-tri-state-and-it-lives-where-low-at-is-set),
+amending D53 and completing D60. **One schema change**: `items.listRule`.
+Twelve tables, thirteen queries, twenty-six mutations, `db.migrations` empty.
+
+*Low at* is the sentence **put this on the list when I'm down to N**, and both
+overrides amend it — so **Automatic · Always · Never** sits under the two
+steppers, where the sentence is set.
+
+- **It closes what D53 could only half-answer.** D60 retired D53's checkbox and
+  left a control that could subtract and never add; the question none of them
+  answered is the opposite one — the thing you want on the list whatever the
+  count says.
+- **`listRuleOf` folds the retired `offShoppingList` in as `never`**, and an
+  edit through the segment drains it in the same patch. That is what finally
+  makes D60's *the flag drains out as people meet it* happen.
+- **`always` outranks the count and never the season.** An out-of-season harvest
+  row still files under `NOT YET`, and the pills never move — they count stock.
+- **`EXTRA`** fills the badge slot a pinned row leaves free, quiet by having no
+  hue at all. A row that is genuinely low or out keeps its status.
+- **The copy is not the design's.** Built as drawn it read as unclear, so the
+  hints now name the list this item actually lands on — *shopping*, *harvest*,
+  *make*, or both — follow the source chips live, and say **stock** rather than
+  *count*. The segment gained a sub-label for the same reason: the two steppers
+  beside it name their fields and it named nothing. **And the hint carries no caveat**,
+  because the behaviour moved to match the label rather than the sentence
+  stretching to excuse it.
+- **`always` means always**, which overrules D64's *clears on the put-away*.
+  That rule asked when the pin should end and never whether it should; a control
+  labelled Always that stops after one trip makes the word lie. Nothing ends a
+  pin now but somebody setting it back.
+- The card's `ListX` follows the rule now and **`always` gets no marker**, so
+  the four-glyph cluster the design prices is not created.
+
+**719 assertions** (48 new), typecheck clean, the artifact showing the column
+with `default: ""` and no migration, 532 class literals diffed with 0 absent,
+and the real handlers driven across all four values including the drain, the
+put-away clear, and a viewer refused. **Both new rules were proved by
+mutation**: deleting the legacy fold fails 6 assertions, making `always` beat
+the season fails 2.
+
+**Trends tier 2 is the last unbuilt piece of `restock.md`**, and the `restocks`
+log is collecting for it — **decided against for now** on 2026-08-31, because
+the log records put-aways and two of the three ways to raise a count write
+nothing, so *you restock this every three weeks* would be a confident sentence
+about a biased sample. See D65's *Open* and the note in D64.
+
+**Both phases were used on 2026-08-31 and read correctly** — on the first pass,
+which no phase of this size has managed before. **390 and a twenty-row put-away
+are what that session did not cover.**

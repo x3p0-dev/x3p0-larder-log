@@ -19,6 +19,7 @@
  * wrong.
  */
 
+import { listRuleOf } from './listRule';
 import { isInSeason } from './season';
 import { toSourceKind } from './source';
 import type { SourceKind } from './source';
@@ -75,28 +76,32 @@ const NO_STORE = '';
  * Is this item on the list at all?
  *
  * Two questions, and the second one is authored where the first is derived: an
- * item joins the list when its count drops under its low-at, **unless someone
- * has said it never should**. `offShoppingList` is for the things a household grows or
- * brews and never shops for — it is a property of the item and therefore the
- * household's, like every other property of an item.
+ * item joins the list when its count drops under its low-at, **unless somebody
+ * has overridden that**. The override is a property of the item and therefore
+ * the household's, like every other property of an item.
  *
- * The exclusion reaches this function and nothing else. `statusKeyFor` is
- * untouched, so an excluded item still reads *running low* on its card and
- * still counts toward the top bar's status pills. Those count stock; this
+ * The override reaches this function and nothing else. `statusKeyFor` is
+ * untouched, so an item kept off the list still reads *running low* on its card
+ * and still counts toward the top bar's status pills. Those count stock; this
  * counts shopping.
  *
  * **It gates every band, not only Buy** (D58) — an item kept off the list never
- * reaches Harvest or Make either, because what the flag says is *never remind me
+ * reaches Harvest or Make either, because what `never` says is *never remind me
  * about this*, and a harvest list is a reminder.
  *
- * **Nothing can set it any more** (D60). D53 wrote it for "the things a
- * household grows or brews", and a source's kind now answers that better and
- * says *which* — you grow it, you make it, or you buy it. The control is gone
- * from the sheet except as a way to clear a row that already carries the flag;
- * this branch stays so those rows keep behaving exactly as they did, and so
- * putting the control back is deleting one condition rather than restoring a
- * rule. The column is kept for the reason `icon` is (D34): dropping one needs
- * `sf db migrate --drop`, filling it again is additive.
+ * **The override is a tri-state now** (D65), and `listRuleOf` is what reads it.
+ * D53 wrote `offShoppingList` for "the things a household grows or brews"; D58's
+ * source kinds answered that better and D60 retired the control. What was left
+ * unanswered was the *other* direction — the thing you want on the list whatever
+ * the count says — so the checkbox became `items.listRule`, three states, and
+ * the retired column folds into `never`. The old column is kept for the reason
+ * `icon` is (D34): dropping one needs `sf db migrate --drop`, filling it again
+ * is additive.
+ *
+ * **`always` outranks the count and nothing else.** It does not outrank the
+ * season: `runBands` still files an out-of-season harvest row under `NOT YET`,
+ * because *whatever the count says* is a claim about wanting the thing, not
+ * about whether it has grown yet.
  *
  * **The name predates the bands.** It reads *needs getting* now: a low tomato
  * from The Garden goes through this same gate and is never bought. The column
@@ -105,7 +110,10 @@ const NO_STORE = '';
  * mismatch.
  */
 export function needsBuying(item: Item): boolean {
-	if (item.offShoppingList) return false;
+	const rule = listRuleOf(item);
+
+	if (rule === 'never') return false;
+	if (rule === 'always') return true;
 
 	return statusKeyFor(item.qty, item.threshold) !== 'ok';
 }

@@ -5320,3 +5320,493 @@ question at a few hundred, not before.
 - **A `0 out` pill's disappointment, solved here.** It belongs to the status
   pills, not to this menu, and solving it in passing would restyle a control on
   a screen this feature only happens to cover.
+
+---
+
+## D64. A check is a claim, and the count is written once, at the shelf
+
+**Decided:** 2026-08-31. Amends [D41](#d41-the-shopping-list-is-a-mode-and-its-checks-are-local),
+replacing its *Checks are local, and they expire* rule wholesale.
+
+**The design document is
+[`.claude/docs/design/restock.md`](../.claude/docs/design/restock.md), drawn on
+`larderlogrestockmockup.html` — six boards, one page, light theme, desktop.**
+
+**Built:** the trip, the trip bar's three controls, the put-away sheet and its
+write, the `restocks` log, the after-the-trip screen, and `Clear checks`'
+move to the left group. **Deferred by request:** shared claims — *in Sarah's
+cart* — which is the half that makes a trip the household's rather than the
+device's. **Not built, and marked optional by the document itself:** the
+`Always` / `Never` tri-state, and trends tier 2, which the log now collects for.
+
+### The problem, and why it went unsolved for so long
+
+D41 gave the run list a checkbox meaning *it's in my cart*, put the ticks in
+`localStorage`, expired them in twenty-four hours, and never let them touch an
+item. The honest end of that sentence — the reserved right half of the trip bar,
+drawn empty since the list was first specified — is **setting the count when you
+unpack**.
+
+The reason nobody designed it is a real one: **the app cannot know how many you
+bought.** The row says *have 0 · low at 4*; you came home with a four-pack or a
+single, and nothing on the screen can tell. Every design in which a check writes
+a count is guessing at that number.
+
+**So the check does not write. It claims** — *I am getting this* — **and the
+write happens once, deliberately, on a screen you are looking at while standing
+in front of the shelf.**
+
+### Three objects where there was one
+
+| | What it is | Lives |
+|---|---|---|
+| **A claim** | one person saying they are getting one row | on the item, held by a trip |
+| **A trip** | one person's claims, from the first tick to the put-away | the household |
+| **A restock** | the write — an item, a new count, a moment | the item, and an event log |
+
+### The prefill is the smallest thing that is certainly true
+
+`max(low at + 1, on hand + 1)`, in `shared/restock.ts`.
+
+Two things are certainly true when you get home: you have **at least one more
+than before**, and you are **no longer low**. The prefill is whichever of those
+is larger and nothing else is inferred, because nothing else can be.
+
+**`low at + 1` rather than `low at`**, because *on hand == low at* is low —
+settled in `add-edit-item.md` and load-bearing here, since a default that left
+the row on the list would be a default that undid the trip it is ending.
+
+**And `on hand + 1` is not the redundant half**, which is the part that is
+invisible when wrong: an item already above its threshold — bought early, or
+forced onto the list — would otherwise prefill to a step **down** from what is
+on the shelf. `npm test` pins that case specifically.
+
+### Set, not add — and the thing that falls out of it
+
+**The stepper asks *how many do you have now***, the question every other
+stepper in the app asks. An *added* quantity would be a second mental model for
+one control and the sheet would have to say which it meant.
+
+**Which makes this the only self-correcting moment in the product.** Counts
+drift and nobody opens a pantry app to audit a shelf. The one time somebody is
+guaranteed to be looking at the shelf and the app together is while unpacking,
+so the flow that ends the trip is the flow that fixes the drift. That is worth
+more than anything else in this decision.
+
+**And it is why the restock log may only ever promise intervals.** A put-away
+doubles as drift correction, so `toQty − fromQty` is sometimes a purchase and
+sometimes a fix and nothing can tell them apart. The dates are trustworthy; the
+quantities are not. Trends tier 2 may say *you restock this about every three
+weeks* and must stop short of *you go through four a month*.
+
+### The write is one mutation, and that is the point of it
+
+`restockItems(householdId, tripId, entries)` — the app's only mutation that
+writes an unbounded number of rows from one call, capped at `RESTOCK_MAX` (200).
+
+A put-away is several writes that mean one thing, made from a phone in a car
+park on a bad connection, and half of them landing is the state it exists to
+prevent. **Every entry is resolved before anything is written**, so one bogus id
+refuses the whole call — verified against the real handler, with the untouched
+row read back unchanged.
+
+It is also the only place in the app where a spinner is the honest answer.
+
+### `restocks` — the twelfth table, and the second built for a reader that does not exist
+
+`householdId`, `itemId`, `tripId`, `fromQty`, `toQty`, `kind`, `at`. Indexed
+`by_item` (the reader is per-item) and `by_household` (the cascade).
+
+`profiles` was the first table written ahead of its reader and
+[D44](#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)
+is the argument for both: a table is permanent, nothing backfills it, and every
+put-away that happens before it exists is a data point nobody can ever recover.
+
+- **No `userId`, and that is the privacy line rather than an omission.** A name
+  rides the *trip*, which is transient and dies with the account that owns it;
+  nothing in the larder itself ever records who touched a thing, so deleting an
+  account stays a clean operation rather than a scrubbing job. `tripId` says only
+  that several rows arrived together.
+- **`kind` is copied, not joined**, so a reader can tell a shop run from a
+  harvest without asking whether the source still exists or still carries the
+  kind it had that day. `''` is a real answer — a row that named no source — so
+  it goes through `isSourceKind` and never through `toSourceKind`, which resolves
+  everything it does not recognise to `shop`.
+- **A restock row dies with its item**, which is the opposite of what the audit
+  log does and for a stated reason: the log denormalises so it can outlive its
+  subject, and there is nothing to say about how often you restock a row that no
+  longer exists. Both household cascades and `removeItem` were driven and the
+  rows confirmed gone.
+
+### The trip bar keeps one shape at every count
+
+Three controls, and a rule about them: **trip management groups left, the trip's
+one action sits right.** *Hide N checked* and *Clear checks* are both ghosts and
+both about the ticks — one subject, so they are one group. The only filled
+control is the one that writes.
+
+**The separation is carried by the fill, not by a divider.** Two ghosts and a
+primary is already three weights; a hairline between the ghosts would be a
+fourth statement about a bar 52px tall.
+
+**Two ink controls on one screen, and it earns it.** *Add item* holds the only
+ink fill in row 1. The rule this bar follows is the sheet's — one primary per
+surface, and a bar below the grid is its own surface the way a sheet's footer
+is. It is also most of a screen away from row 1 and it is the terminal action of
+the entire mode.
+
+**At 390 the two ghosts drop to glyph-only 44px squares.** That is what the
+glyphs are for: not decoration on a desktop, but the thing that survives at the
+width where this bar matters most. The words stay in `aria-label`.
+
+### The green moved off the bar
+
+D41's 70px completion variant — a green disc and *Everything's checked off. /
+Update your counts when you unpack.* — **is deleted.** It was green for
+something that was still pending, and its second line was a description of the
+button now standing beside it.
+
+The disc goes to the screen **after** the put-away, where nothing is pending and
+the claim is true: *Everything's put away.* A finished trip **empties the list
+by arithmetic** — every row was put away to a count that clears its threshold —
+so nothing has to remove anything.
+
+**That state is held open deliberately.** A put-away drops the household's total
+to zero in the same breath as the write lands, and the mode is normally alive
+only while there is something to get; dropping it there would answer the
+terminal action of the whole flow by throwing you back to the grid with no
+confirmation. `justPutAway` holds it for exactly one screen, and only while the
+list is *really* empty — a trip that put away half of it never draws the card.
+
+**No toast.** Four toast triggers are settled on the grounds that the thing you
+did is visible on the screen you are on, and rows vanishing from the list you
+are looking at is the most visible confirmation in the app.
+
+### Motion, and what the screen says out loud
+
+**The bar fades in over 160ms and does not slide.** It appears under a grid
+already reflowing to make room for it, and two things moving at once reads as
+the page settling rather than as a control arriving. The fade survives
+`prefers-reduced-motion` — that setting asks for no *movement*, which is the
+applied-filter chip's rule, and there is none here to drop.
+
+**The put-away sheet has no motion at all**, and that is the spec satisfied
+rather than skipped: it takes the Add / Edit sheet's motion unchanged, and
+`ItemSheet` has never had any.
+
+**Two announcements, through a live region separate from the filters'** — they
+answer different acts, and one region would have each overwrite the other.
+Committing says `3 counts updated. 4 left to get.`; clearing says
+`3 checks cleared.`, because a toast appears in a corner with no focus moved to
+it and is never read.
+
+**What is left is counted rather than read off the total.** `toBuyTotal` comes
+from a live query that has not re-emitted a line after the write, so reading it
+would announce the total from *before* the trip — the one number that sentence
+must not say.
+
+### `Clear checks` moved, and now earns its undo
+
+It sat alone in the bar's right half; the right half is where the write goes, so
+it joins *Hide* on the left. It already armed an actionable toast, and under
+restock that toast is load-bearing rather than polite: a check used to be local,
+free and cheap, and it is now a claim — re-ticking a shop's worth of rows is not
+one tap.
+
+**Still no confirm and still not crimson.** Nothing here is a record, the toast
+hands the ticks straight back ([D36](#d36-undo-what-comes-back-confirm-what-doesnt)),
+and a dialog in front of a phone in a shop costs more than the mistake.
+
+### What clears a claim — four rules, one button
+
+1. **The item leaves the list.** Anyone restocks it and the claim goes with the
+   row — unchanged.
+2. **The trip is put away.** The counts are written and the trip is over.
+3. **Twenty-four hours with no put-away.** A shopping trip does not last a day.
+4. **`Clear checks`**, the one deliberate one.
+
+**Switching households no longer clears anything**, which replaces D41's own
+rule 3. That rule existed because a check was a fact about a device; a trip
+belongs to a household, so leaving one and coming back finds it where you left
+it. Each household keeps its own record now, expiring on its own clock, and the
+reader accepts D41's single-record shape so upgrading does not throw away a trip
+that is halfway round a shop.
+
+**The trip has an id**, minted at the first tick and written onto every restock
+row. It is opaque and deliberately not a row id — there is no trip table yet. It
+is the id there will be, so the events written before that exists can still be
+grouped afterwards.
+
+### The three bands share one control
+
+`garden-and-kitchen.md` left this open and Restock closes it: **one checkbox,
+one trip, all three bands.**
+
+| Band | A check means | Written |
+|---|---|---|
+| **Buy** | it's in the cart | at the put-away |
+| **Harvest** | I'm picking these | at the put-away |
+| **Make** | I'm making some | at the put-away |
+
+Buy and Harvest were never in doubt — a harvest is a shopping trip in your own
+garden, and you do not know how many pounds until you are at the sink either.
+**Make is settled by [D59](#d59-processes-depend-on-the-pantry-the-pantry-depends-on-nothing)
+rather than by this decision**: a make item carries no ingredients, so making a
+batch has nothing to deduct and raises one count exactly as buying does. An
+earlier pass drew Make with its own control and a batch sheet, on the argument
+that a batch writes to four other items — **that argument only exists once
+ingredients do. Deduction is the thing that would take Make out of the trip, and
+nothing before it will.**
+
+### One row per item, never per list row
+
+An item you can buy at either of two shops draws twice on the list and is one
+thing to put away, so the first band and group to claim it is the one that names
+it. That is not arbitrary — bands run Buy · Harvest · Make and groups run A–Z —
+so the row is filed under the first place you would have found it. The same rule
+across *bands* is the case that matters: something bought in February and picked
+in July gets one row, filed under Buy.
+
+### What was deferred, and what it costs
+
+**Claims are still local to this device.** The design makes a trip the
+household's, so a row someone else has claimed draws their initial and no
+checkbox — which is what stops the double-buy and is most of why sharing them is
+worth doing. Until it lands, two people at two shops still collide silently.
+
+What is built is the shape that survives it: the trip has an id and it *ends*
+rather than merely emptying, and `localStorage` is already positioned to stop
+being the storage and become the queue. **`N in the cart` keeps its wording**;
+the design's `N in your cart` exists because there may be someone else's, and
+there cannot be yet.
+
+### Rejected
+
+- **A check that writes a count.** The whole decision. Nothing on the screen can
+  know whether you bought a four-pack or a single.
+- **An *added* quantity rather than a count.** A second mental model for one
+  control, on the one screen where the count is in front of you.
+- **A toast on the put-away.** The rows leaving the list is the confirmation.
+- **Keeping the 70px completion bar.** Green for something still pending.
+- **Storing `userId` on a restock row.** It would make account deletion a
+  scrubbing job, and the trip already carries the name for as long as a name is
+  wanted.
+- **Spelling the counts out** — the board's *Seven counts updated.* Every other
+  count in this app is a digit, including the toast this screen's sibling arms.
+
+### Open
+
+- **Can you take over someone else's claim?** She is at Publix, she checked the
+  butter, she has left. Nothing releases it but twenty-four hours or her own
+  *Clear checks*.
+- **Two people put the same item away** five minutes apart, from two shops. Last
+  write wins is wrong and a merge is worse.
+- **Twenty-four hours is still a guess**, and once claims are shared it is a
+  guess other people can see.
+- **Does the sheet scroll well at twenty rows?** Drawn at three. A weekly shop is
+  not three, and twenty steppers may want grouping by source the way the list is.
+- **A claim on an item somebody deletes mid-trip.** The removal's undo toast and
+  a live claim on the same row are two features that have never met.
+- **Offline put-away**, the one write that must not half-commit, most likely to
+  happen on a bad connection in a car park.
+- **`Put N away` is the second ink control on the screen.** Argued; unmeasured on
+  a real one.
+
+---
+
+## D65. The list override is a tri-state, and it lives where *low at* is set
+
+**Decided:** 2026-08-31. Amends [D53](#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item)
+and completes [D60](#d60-the-off-list-checkbox-is-retired-and-the-column-is-kept),
+which retired D53's checkbox and left the column with no control that could set
+it. Specified in
+[`restock.md`](../.claude/docs/design/restock.md) under *What this unblocks*,
+drawn on **board 5**.
+
+**Built, all of it.** One schema change: `items.listRule`, the ninth additive
+change since Phase 2.
+
+### The sentence both overrides amend
+
+*Low at* is the sentence **put this on the list when I'm down to N**. `always`
+and `never` amend that sentence rather than replacing it, so the control sits
+where the sentence is set — under the two steppers, in the sheet's `COUNT`
+section — and not in a section of its own.
+
+### The copy names the list, and it says *stock*
+
+**The design's own hints were rewritten on the first look at the built control**,
+which read as *not very clear what it does*. Three things were wrong with them
+and all three are worth keeping written down.
+
+- ***The list* names nothing anybody can point at.** The run list has had three
+  bands since D58, and which one an item lands on is decided by its **sources**.
+  So the sentence names the band's list, and follows the source chips two
+  sections below it: tag a row with the garden and the hint says *harvest list*
+  before you have finished reading it.
+- ***Until you buy it* is simply false for a tomato you pick.** It was the
+  design's own phrasing for `always`, written before the bands existed in the
+  copy, and it is the sharpest case of the first problem.
+- ***Count* is the wrong noun.** The sheet is covered in counts — two steppers,
+  a size, a status line — and every one of them is a number. What this sentence
+  is about is the shelf, and **stock** is the word the status pills and the
+  badges already use for it.
+
+| State | Hint |
+|---|---|
+| **Automatic** | *On your shopping list when your stock is down to **4**.* |
+| **Always** | *Always on your shopping list, however much stock you have.* |
+| **Never** | *Never on your shopping list. It still shows as low or out on its card.* |
+
+**The symmetry with `never` is the tell.** Two standing preferences, one
+sentence each, neither carrying a caveat — see *Always means always* below,
+which is what made that possible.
+
+`listNameFor` supplies the name: *shopping list* for a shop **and for an item
+naming no source at all**, because the storeless group is Buy's; *harvest list*
+for a garden; *make list* for a kitchen; and *your shopping and harvest lists*
+for an item that really is on both cards. Three kinds take the serial comma.
+
+**It matches vocabulary the app already had**: the season panel has said *the
+harvest list* since D58.
+
+**And the segment gained a sub-label**, which is the other half of the fix. The
+two steppers beside it each name their field and this had none — three words
+under a stepper with nothing saying what question they answer. It is the same
+list name, capitalised: *Shopping list*, *Harvest list*.
+
+**Automatic's hint reads the field, not the row**, the way the sheet's status
+line reads the live quantity: stepping *Low at* moves the number in the sentence
+while you watch.
+
+### It closes a question D53 could only half-answer
+
+D53 asked *some things are never shopped for* and gave it a checkbox. D58's
+source kinds answered that better and said **which** — you grow it, you make it,
+or you buy it — so D60 retired the control and kept the column, leaving a
+clear-only checkbox that could subtract and never add.
+
+**The question none of them could answer is the opposite one**: the thing you
+want on the list *whatever the count says*. Three states answer both, and the
+retired checkbox becomes the `never` third of a real control rather than a
+ticked box with an apology under it.
+
+### The retired column folds in, and an edit drains it
+
+`listRuleOf` in `shared/listRule.ts` is the one place `offShoppingList` and
+`listRule` are reconciled — the arrangement `changedAtOf` already uses for its
+own fallback chain, so nothing else has to remember a second spelling exists.
+
+- **A legacy row reads as `Never`**, so it behaves exactly as it did and shows
+  the segment on the state it is really in.
+- **The new column wins**, which is what makes the drain safe: `updateItem`
+  writes `listRule` and clears `offShoppingList` **in the same patch**, so the
+  two can never disagree in between.
+- **That is what finally makes D60's *the flag drains out as people meet it*
+  happen.** Before this it could only be cleared by a control that did nothing
+  else, which nobody had a reason to press.
+
+The column stays for the reason `icon` does (D34): dropping one needs
+`sf db migrate --drop` while filling it again is additive.
+
+### `always` outranks the count and nothing else
+
+It does **not** outrank the season. `runBands` still files an out-of-season
+harvest row under `NOT YET`, because *whatever the count says* is a claim about
+wanting the thing, not about whether it has grown yet. `npm test` pins that
+boundary in both directions, and a deliberate mutation that made `always` beat
+the season was confirmed to fail two assertions.
+
+It does not touch `statusKeyFor` either, so **the pills are unmoved**: a `never`
+item that is low still counts in `6 running low`, because the pills count stock
+and the list counts shopping (D53's split, intact). That is what closes the
+muted-pantry worry without a safety valve — the valve was already there.
+
+### `EXTRA`, and the badge slot it fills
+
+A row forced onto the list while nothing is wrong with it has **no status to
+report**, which is precisely what frees its badge slot. It says why it is there
+instead: `EXTRA`, the same 18px pill in the same construction, **sunk fill,
+`border` edge, `textMuted` label**.
+
+**Quiet by having no hue at all**, which is the argument `NO STORE` already runs
+on: the three status colours mean something on this screen and a fourth tint
+would have to mean a fourth thing.
+
+**A row that is genuinely low or out keeps its status**, however it got on the
+list. The status is the more useful of the two facts, and *extra* would be
+answering a question nobody asked about a thing that has run out.
+
+### Always means always — the pin is permanent
+
+**This overrules [D64](#d64-a-check-is-a-claim-and-the-count-is-written-once-at-the-shelf)
+and `restock.md`'s *`Always` clears on the put-away, not on the check*.** That
+rule asked *when* the pin should end and never asked *whether* it should. It
+should not.
+
+**A control labelled `Always` that quietly stops after one trip makes the word
+lie.** It was built as the design specified, and the copy immediately had to
+grow an *until you put it away* clause to stay honest — which is the shape of a
+control apologising for itself. Two rounds of hint-writing went into excusing a
+behaviour, which is usually the sign that the behaviour is what is wrong.
+
+**`always` is a standing preference**: *keep this on my list whatever happens*.
+Nothing ends it but somebody setting it back — verified against the real
+handlers, where a pin survived a put-away, a `+` on a card and an ordinary edit,
+and went only when the segment itself was moved.
+
+**D64's reasoning was sound about the wrong question.** *A check is a claim and
+can be abandoned; a purchase cannot* is a good argument for preferring the
+put-away over the check as the moment to clear — and no argument at all for
+clearing. `never` was already permanent, and nobody proposed expiring that.
+
+**What it costs, and it is real.** A finished trip no longer empties the list by
+arithmetic when a pinned row is on it, so the after-the-trip screen —
+*Everything's put away. Nothing is low or out.* — is unreachable for a household
+that pins anything. That is honest rather than broken: there **is** still
+something on the list, and saying otherwise is what the old behaviour did.
+
+### The card marker follows the rule, and `always` gets none
+
+`ItemCard`'s `ListX` now draws for `listRuleOf(item) === 'never'` rather than for
+the raw column, so a row set through the segment marks and a legacy row keeps
+marking. **`always` gets no marker at all**, which is the design's own cheap
+give: an `always` item is visible on the list, which is where you go looking for
+it — and a second mark would make that corner four things wide. The four-glyph
+cluster the design *prices but does not solve* is therefore not created here.
+
+### Rejected
+
+- **The ink fill on the active segment.** The sheet has exactly one ink control
+  and it is *Save*. `surface` on `borderStrong` — a raised item on a sunk track
+  — which is the third time the run segment's own answer has been reached for
+  the same reason.
+- **A fourth literal for automatic.** It is the **absence** of an override,
+  stored as `''`, so there is nothing to keep in step with the schema default
+  and every row written before the column reads back as the behaviour it had.
+- **Throwing on an unrecognised value.** `toListRule` resolves anything it does
+  not know to automatic, which is what the app did before the column existed. A
+  query that throws is invisible to the client.
+- **Naming the column `listMode`.** The app already uses that word for *is the
+  run list showing*, and a column sharing it would read as the same thing three
+  screens apart.
+- **A `Never` marker on the item card that is new.** The existing `ListX` was
+  retargeted rather than joined.
+- **The design's own hint copy**, and the segment with no sub-label. Both were
+  built as drawn and both read as unclear on the first look; see *The copy names
+  the list* above. This is the fourth time a board's copy has lost to the built
+  screen, after D57's badge rule, D58's kind control and D63's four reversals.
+- **Clearing the pin at the put-away**, which is D64's own rule and is overruled
+  here. See *Always means always*.
+
+### Open
+
+- **Is the override yours or the household's?** Every other property of an item
+  is the household's, so this is too — inherited unchanged from the design's own
+  unanswered question, which this does not answer either.
+- **An `always` row nobody ever buys** sits on the list for ever and nothing
+  says how long it has been there. The trends log now has the data to notice.
+- **A pinned row is on the list for ever until somebody unpins it**, and nothing
+  reminds them. `EXTRA` says *why* it is there and never *how long* it has been.
+  The `restocks` log now has the data to notice, which is the shape of an answer
+  rather than one.

@@ -4566,3 +4566,154 @@ which is the step that does real work.
 Worth noting the retry printed the unsupported-file warning again, so that
 warning is emitted at version creation and the first attempt died before
 reaching it.
+
+## 2026-08-31 — a `config_update` version broke sign-in for the whole space
+
+### 🐛 The space's own runtime config advertises a `signInPath` the edge 404s
+
+Reported as *"I can't log in"*, with the platform's own 404 page:
+
+> **404 · Not Found** — There's nothing at `/__zero/auth/start`.
+
+`GET https://larderlog.view.fast/__spacefast/zero/config` on the live space:
+
+```json
+{"runtimeKind":"zero",
+ "auth":{"provider":"gravatar",
+         "signInPath":"/__zero/auth/start",
+         "signInUrl":null,
+         "signOutPath":"/__zero/auth/sign-out",
+         "signOutUrl":null,
+         "returnToParam":"returnTo"}, …}
+```
+
+The SDK resolves `signInUrl ?? auth.signInPath`, so with `signInUrl` null every
+sign-in on the space goes to `/__zero/auth/start` — and that path returns **404**
+from the edge's own error page (the one that preloads `wordpress.com` fonts, so
+it is the platform's, not the app's). Neighbouring prefixes exist and merely
+refuse: `/__spacefast/zero/auth/start` and `/__spacefast/auth/start` both answer
+**403**. So the config names a route under a prefix the edge does not serve at
+all, while the plausibly-correct one is a prefix away.
+
+**Nothing in the project sets this.** `sf.jsonc` carries `name`, `meta.title`
+and the `runtime` block and no auth section anywhere; `signInPath` is the
+platform's.
+
+### 🐛 A version appeared that no `sf publish` created, and the admin disagrees with the CLI about it
+
+`sf versions list` at the time of the report:
+
+```
+* v19 (live) status=ready source=config_update mode=website
+    updated: 2026-08-31T19:20:24.000Z
+  v18 status=ready source=git@ece9f75 mode=website
+    updated: 2026-08-31T18:35:45.000Z
+```
+
+Three things about that row:
+
+- **`source=config_update`**, not `git@…`. No `sf publish` was run — v18 was the
+  last one, 45 minutes earlier. So a change made through the admin UI mints a
+  version, and that version can change edge routing.
+- **The admin UI still showed "publishing…"** while the CLI reported
+  `status=ready` and served the version. One of the two is wrong about the same
+  version at the same moment, and the operator has no way to tell which.
+- **v19 injects head content v18 did not.** v18's `<!-- spacefast:head -->` block
+  is empty; v19's carries a generated `<link rel="icon">` (a green *L* data URI),
+  `og:title` and two `twitter:` metas. This app appends its own icons and metas
+  at boot (`client/lib/appIcon.ts`) because the generated shell exposes only a
+  title, so the platform is now injecting a competing favicon into the same head.
+
+**The app itself is intact**, which is what makes this purely a platform
+question: `GET /` 200, `/api/status` `ok`, the live `/client.js` still
+`shasum`-identical to `.spacefast/zero/public/client.js` from the v18 build, and
+`POST /__spacefast/zero/run` still answers (`households` → `guest` for an
+anonymous caller). Only the sign-in route is gone.
+
+### 😕 `sf versions --help` promises promote and rollback and lists neither
+
+**Corrected: both commands exist. This is a discoverability bug, and it cost a
+wrong conclusion — the first draft of this entry said there was no rollback.**
+
+`sf versions --help` says *"List, promote, and roll back space versions"* and
+then lists exactly three subcommands: `versions get`, `versions ls`,
+`versions rm`. Read on its own it says the two operations it names do not exist.
+
+**They are top-level commands**: `sf rollback <version>` and
+`sf promote <version>`, both documented at
+[`/docs/publish/versions`](https://spacefast.com/docs/publish/versions) and both
+present in the pinned `spacefast@0.2.2`. So is `sf channels`, which is where
+*where does live point* is answered, and `sf apply`, which pushes settings saved
+in the dashboard onto the serving runtime without creating a content version.
+
+The fix is one line of help text: name them, or drop the sentence. A topic's own
+`--help` describing operations that live somewhere else, without saying where,
+is worse than saying nothing.
+
+### 🐛 `sf channels ls` and `sf channels history` crash in their renderer
+
+```
+$ npx sf channels ls --space larderlog
+Cannot read properties of undefined (reading 'length')
+    at _ChannelsLs.catch (…/spacefast/dist/commands/channels/ls.js:11345:10)
+```
+
+Both throw with a full stack trace, with and without `--space`. **`--json` works
+perfectly on both** and returns exactly the data the human form was going to
+print, so it is the table renderer and not the request. On `spacefast@0.2.2`.
+
+That is how the facts below were read at all.
+
+### 😕 Nothing anywhere lets an app configure `signInPath`
+
+Checked before concluding the broken route was ours to fix. The
+[space settings reference](https://spacefast.com/docs/serve/settings) gives the
+complete `sf.jsonc` key list — `$schema`, `space`, `name`, `index`, `fallback`,
+`cleanUrls`, `listing`, `meta`, `theme`, `access`, `redirects`, `rewrites`,
+`headers`, `templates`, `superpowers`, `runtime`, `build` — and **there is no
+auth key**. The [Zero doc](https://spacefast.com/docs/zero-runtime) treats
+sign-in as one component, `SignInWithGoogle`, with no path, no URL and no
+option; `signInPath` returns **zero results** from
+`https://api.spacefast.com/v1/docs/search`.
+
+So the broken route is not something an app can set, work around in config, or
+even name. The only lever on this side is which version is live.
+
+### What the API says about the stuck version
+
+`sf versions get v19 --json`, with `sf channels history --json` beside it:
+
+| | v17 | v18 | v19 |
+|---|---|---|---|
+| `source.kind` | `git` | `git` | **`config_update`** |
+| files added / changed / removed | 1 / 8 / 0 | 4 / 12 / 0 | **0 / 0 / 0** |
+| created → ready | 12s | **8s** | **34m 58s** |
+| publisher | — | — | `{type: "system", displayName: "Spacefast"}` |
+
+v19 changed **no files at all**, was created by the *system* ten minutes after
+our own v18 publish, and took thirty-five minutes to reach `ready` against eight
+seconds for the publish before it. The channel move is recorded as
+`kind: "publish"` by `actorId: "version-finalize"`, so the history does not
+distinguish a settings version from a content one.
+
+**And nothing is pending anywhere in the API's own view** —
+`space.operation: null`, `runtime.operation: null`,
+`runtime.pendingVersionId: null`, `runtimeState: "active"`, `status: "ready"`.
+The dashboard showing *publishing…* is contradicted by every field that would
+carry it.
+
+`channels ls --json` also names `previousVersionId`, and it is v18 exactly — so
+the platform knows what the rollback target is even while the UI is stuck.
+
+**One red herring, recorded so nobody chases it twice**: the version record's
+`siteTitle` reads `"Wild Rain"`, which is not this app's name. It is on v17 and
+v18 as well, so it predates all of this — the served `<title>` comes from
+`sf.jsonc`'s `meta.title` and is correct.
+
+What would help, cheapest first: keep `signInPath` and the served route in
+agreement, or fall back to the `/__spacefast/` prefix that already answers 403
+rather than 404; make the dashboard's status read from `runtime.operation` the
+way the API does; distinguish a `config_update` from a `publish` in
+`channels history` and say what it changed; and look at why a zero-file settings
+version takes thirty-five minutes when a full capsule publish takes eight
+seconds.

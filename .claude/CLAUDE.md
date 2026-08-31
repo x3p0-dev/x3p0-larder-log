@@ -41,6 +41,21 @@ control has its states now*, which also lists what is left in its *Gaps*.
 both screens that hold them, so the first look at the console cannot delete
 anything. See *The writes are held, and the console is read-only*.
 
+**Built and unpublished: restock (D64) and the list override (D65).** A check on the run list is a **claim**
+now, and the count is written once, at the put-away — the trip bar's right half,
+empty since the list was first drawn. Built from
+`.claude/docs/design/restock.md` on 2026-08-31. **One schema change**: `restocks`,
+the twelfth table, and **twenty-six mutations** — the new one is `restockItems`.
+**Shared claims are deferred by request** — *in Sarah's cart*, the half that makes
+a trip the household's. **D65 then built the first of the two things restock
+unblocked**: the `Always` / `Never` tri-state, which adds `items.listRule` and
+finally gives D60's retired column a control that can set it. **Trends tier 2 is
+the one still unbuilt**, and the `restocks` log is collecting for it. See
+*Restock — the trip that ends (D64)* and *The list override is a tri-state
+(D65)* below. **Both have been clicked and both work** — a real session on
+2026-08-31, on the first pass, which no phase of this size has managed before.
+**390 and a twenty-row put-away are the two things it did not cover.**
+
 **Live as of v18: autofill (D63) and three fixes.** Two suggestion menus — one under
 the item name on the Add / Edit sheet, one under the top-bar search — built from
 `.claude/docs/design/autofill.md` on 2026-08-31. No schema change; the artifact
@@ -203,17 +218,18 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, **thirteen** live queries, and **twenty-five** mutations
-across **eleven** tables. Eight queries, six mutations and the `activity` table
-are the admin console's (D62) and are **unpublished** — built and
-verified locally, not yet in a version. The schema is
+`.docs/data-model.md`, **thirteen** live queries, and **twenty-six** mutations
+across **twelve** tables. `restockItems`, the `restocks` table and
+`items.listRule` are restock's (D64, D65) and are **unpublished** — built and verified locally, not yet in a
+version. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
 
 Data lives in the database. **Four** `localStorage` call sites remain, all
 correct: the per-device theme override (D25), which household this device is
-pointed at (D33), the shopping trip's ticks and list mode (D41), and where the
+pointed at (D33), the shopping trip's ticks, its id and its list mode (D41, D64 — a record per
+household now, so a trip survives switching away and back), and where the
 view was left — drawer, tab and filters (D51). Same reasoning throughout — a
 dark-mode choice on a phone should not follow you to a desktop, neither should
 which pantry you were last looking at, and neither should which shelf you had
@@ -2876,6 +2892,301 @@ keyboard-time: the arrows, the two Escapes, the pick, the chevron's navigation,
 and the term row that stays open. **To see it locally**: any two characters in
 the item name field, or in the top bar's search.
 
+### Restock — the trip that ends (D64) — 2026-08-31
+
+`.claude/docs/design/restock.md`, drawn on
+`.claude/docs/design/larderlogrestockmockup.html` — six boards, one page, light
+theme, desktop. **One schema change**: `restocks`, the **twelfth** table, which
+applies on the next publish with no flag as `profiles` and `activity` did.
+Thirteen queries and **twenty-six** mutations; `/api/status` is still the only
+endpoint and `db.migrations` is empty.
+
+**A check is a claim, not a write.** Ticking a row says *I am getting this*; the
+count is written once, at the put-away. The reason it went undesigned for so
+long is real — **the app cannot know how many you bought**, so every design in
+which a tick writes a count is guessing — and the answer is to stop guessing and
+ask on a screen you are looking at while standing in front of the shelf.
+
+- **`shared/restock.ts`** owns both rules. `restockPrefill` is
+  `max(low at + 1, on hand + 1)` — the smallest thing that is certainly true.
+  **`on hand + 1` is not the redundant half**: an item already above its
+  threshold would otherwise prefill to a step *down* from what is on the shelf,
+  and `npm test` pins that case. `putAwayRows` walks the bands rather than
+  sorting again, so the sheet is the screen you just ticked read back to you.
+- **One row per item, never per list row.** Something you buy at either of two
+  shops is one thing to put away, and the first band and group to claim it names
+  it — bands run Buy · Harvest · Make, groups run A–Z, so a row is filed under
+  the first place you would have found it. The case that matters is *across
+  bands*: bought in February and picked in July gets one row, on Buy.
+- **`restockItems` is one mutation and that is the point.** A put-away is
+  several writes that mean one thing, from a phone in a car park, and half of
+  them landing is the state it exists to prevent. **Every entry is resolved
+  before anything is written**, capped at `RESTOCK_MAX` (200). It is also the
+  only place in the app where a spinner is the honest answer.
+- **The stepper asks *how many do you have now***, the question every other
+  stepper asks — **which makes this the only self-correcting moment in the
+  product.** Counts drift and nobody audits a shelf; the flow that ends the trip
+  is the flow that fixes the drift. It is also why the log may only ever promise
+  **intervals**: `toQty − fromQty` is sometimes a purchase and sometimes a fix
+  and nothing can tell them apart.
+- **`Stepper.tsx` is extracted, not drawn twice** — `ItemSheet`'s own control,
+  now shared at two sizes. The put-away's is 132 × 44 against the sheet's
+  full-width 56, and the reason generalises: on Add / Edit the two steppers are
+  the heroes of their section, while here every row has a name to read and the
+  stepper is a peer of its row.
+- **The trip bar keeps one shape at every count.** Three controls now — *Hide N
+  checked* and *Clear checks* group left, *Put N away* on the right — and
+  **the separation is carried by the fill, not by a divider**: two ghosts and a
+  primary is already three weights. **Two ink controls on one screen and it
+  earns it**: a bar below the grid is its own surface the way a sheet's footer
+  is, and it is the terminal action of the whole mode.
+- **At 390 the two ghosts drop to glyph-only 44px squares.** That is what the
+  glyphs are for — not decoration on a desktop, but the thing that survives at
+  the width where this bar matters most.
+- **The 70px completion variant is deleted.** It was green for something still
+  pending and its second line described the button now standing beside it. The
+  disc moved to the screen *after* the put-away — *Everything's put away.* — and
+  a finished trip **empties the list by arithmetic**, so nothing removes
+  anything. **No toast**, for the reason four other triggers are already settled
+  on: rows leaving the list you are looking at is the most visible confirmation
+  in the app.
+- **That screen is held open deliberately.** A put-away drops the household's
+  total to zero in the same breath as the write lands, and the mode is normally
+  alive only while there is something to get — so `justPutAway` holds it for
+  exactly one screen, and only while the list is *really* empty. A trip that put
+  away half the list never draws the card.
+- **`Clear checks` moved to the left group** — the right half is where the write
+  goes, and *Hide* and *Clear* are one subject. It already armed a toast, which
+  is now load-bearing rather than polite: a check used to be free, and it is a
+  claim now.
+- **Switching households no longer clears anything** (replacing D41's rule 3).
+  Each household keeps its own trip, expiring on its own clock, and
+  `useTripChecks`'s reader **accepts D41's single-record shape** so upgrading
+  does not throw away a trip halfway round a shop.
+- **The trip has an id**, minted at the first tick and written onto every
+  restock row. Opaque, and deliberately not a row id — there is no trip table
+  yet. It is the id there will be, so rows written before that exists can still
+  be grouped afterwards.
+- **`restocks` carries no `userId`, and that is the privacy line.** A name rides
+  the trip, which dies with the account that owns it; nothing in the larder ever
+  records who touched a thing, so deleting an account stays a clean operation.
+  `kind` is copied rather than joined and goes through **`isSourceKind`, never
+  `toSourceKind`** — `''` is a real answer (a storeless row) and `toSourceKind`
+  resolves everything it does not recognise to `shop`.
+- **A restock row dies with its item**, which is the opposite of the audit log's
+  choice and for a stated reason: the log denormalises so it can outlive its
+  subject, and there is nothing to say about how often you restock a row that
+  does not exist. `restocks` is in **both** household cascades and in
+  `removeItem`.
+
+- **The bar fades in over 160ms and does not slide.** It appears under a grid
+  that is already reflowing to make room for it, and two things moving at once
+  reads as the page settling rather than as a control arriving. A flag flipped
+  in an effect rather than a CSS animation, because there is no stylesheet to
+  hold `@keyframes` — an effect runs after the first paint, so `opacity-0` is
+  what lands and the flip is what transitions. **The fade survives
+  `prefers-reduced-motion`**, which is the applied-filter chip's own rule: that
+  setting asks for no *movement*, and there is none here to drop.
+- **The put-away sheet has no motion, and that is the spec satisfied rather
+  than skipped.** *It takes the Add / Edit sheet's motion unchanged* — and
+  `ItemSheet` has never had any. Nothing was invented for the copy that the
+  original does not do.
+- **Two announcements through the trip's own live region**, separate from the
+  filters' — they answer different acts and a shared region would have each
+  overwrite the other. Committing says `3 counts updated. 4 left to get.`;
+  clearing says `3 checks cleared.`, because the toast appears in a corner with
+  no focus moved to it and is never read.
+- **What is left is counted, not read off `toBuyTotal`.** That number comes from
+  a live query which has not re-emitted a line after the write, so reading it
+  would announce the total from *before* the trip — the one number the sentence
+  must not say. Every row that now clears its threshold leaves the list and
+  `putAway` holds one row per item, so subtracting is exact.
+
+**Deferred by request: shared claims** — *in Sarah's cart*, the half that makes
+a trip the household's and stops the double-buy. Until it lands, two people at
+two shops still collide silently. **`N in the cart` therefore keeps its
+wording**; the design's `N in your cart` exists because there may be someone
+else's. Also unbuilt, and marked optional by the document itself: the
+`Always` / `Never` tri-state (board 5) and trends tier 2 (board 6) — **the log
+is collecting for the second one from today**, which is the whole argument for
+building the table now.
+
+**One more trap, and it is the standing one.** `duration-[160ms]` was checked by
+hand with a grep whose escaping was wrong, reported missing, and is **provably in
+the sheet** — the class-literal checker, which unescapes the sheet's own
+selectors, had already said 0 missing and was right. *Print the selector; never
+hand-write the escaped form* has now cost this project six rounds.
+
+**Verified without a browser**: typecheck clean, **671 assertions** (23 new,
+covering the prefill's second half, band order and the filed-under rule across
+both groups and bands, the storeless row's three absences, the two-card item
+counted once, and a `NOT YET` row that cannot be put away), the dry-run artifact
+at twelve tables / thirteen queries / twenty-six mutations / `db.migrations: []`
+with `/api/status` still the only endpoint, and **436 class literals across five
+files** diffed against the freshly built `.spacefast/zero/public/zero.css` by
+unescaping the sheet's own selectors — printed, never hand-written, and proved
+to catch both a nonsense class and a real-but-unused variant — with every `md:`
+override confirmed by **byte offset** to land after its base.
+
+The **real handler** was driven over `POST /__spacefast/zero/run` on a throwaway
+`sf dev --port 4199`, as two named dev guests: the doc's own three-row trip
+(5 · 14 · 6) written and read back, all three `restocks` rows carrying the right
+`fromQty` / `toQty` / `kind` and **one shared `at` and `tripId`**; an empty and a
+non-array payload refused; **a bogus id refusing the whole call with the good row
+beside it left untouched**, which is the resolve-first guarantee; 201 entries
+refused; a bogus kind and a missing kind both stored as `''` rather than `shop`;
+`qty: "abc"` normalized; a **viewer** refused; and the `removeItem` and
+`deleteHousehold` cascades both watched to actually delete. One throwaway
+endpoint was added and removed, with the artifact printed to prove it went.
+
+**Two traps the class check itself walked into**, and both are the fifth and
+sixth of their kind. The tokenizer read *comments* as strings, so an apostrophe
+in a sentence opened a string that ran through the markup after it and reported
+117 phantom classes. And a selector's **pseudo-class is not part of its name** —
+`.hover\:text-ink:hover` has to yield `hover:text-ink` — so three classes that
+are provably in the sheet were reported missing. **A check that reports a
+missing class is worth nothing until it has been shown to find one that is
+really there and one that is really absent.**
+
+**It has been clicked, and it works** — a real session on 2026-08-31, which is
+the check none of the above substitutes for and the one every previous phase of
+this size has failed on the first pass. The trip bar, the put-away sheet and the
+after-the-trip screen all read correctly.
+
+**What that session did not cover**, so it is still open rather than proved:
+**390** — the bar's glyph-only ghosts and the sheet as a bottom sheet are both
+specced in prose and drawn nowhere — and **a sheet of twenty rows**, which the
+design's own open questions raise and which was drawn at three. **To see it
+locally**: `?demo`, tick two or three rows, then *Put N away*.
+
+### The list override is a tri-state (D65) — 2026-08-31
+
+`restock.md`'s *What this unblocks*, drawn on **board 5**. **One schema change**:
+`items.listRule`, the ninth additive change since Phase 2 — `''` automatic,
+`'always'`, `'never'`. Twelve tables, thirteen queries, twenty-six mutations,
+`db.migrations` still empty.
+
+**Automatic · Always · Never, under the two steppers in `COUNT`** — because
+*low at* is the sentence *put this on the list when I'm down to N* and both
+overrides amend that sentence rather than replacing it. It goes where the
+sentence is set.
+
+**The copy is not the design's, and that is the first thing to know about it.**
+Built as drawn it read as *not very clear what it does*, and three things were
+wrong. ***The list* names nothing anybody can point at** — the run list has had
+three bands since D58, so the sentence names the one this item lands on and
+follows the source chips two sections below it. ***Until you buy it* is simply
+false for a tomato you pick**, which is the sharpest case of the same problem.
+And ***count* is the wrong noun**: the sheet is covered in counts and every one
+is a number, while what this is about is the shelf — **stock** is the word the
+pills and badges already use.
+
+| State | Hint |
+|---|---|
+| **Automatic** | *On your shopping list when your stock is down to **4**.* |
+| **Always** | *Always on your shopping list, however much stock you have.* |
+| **Never** | *Never on your shopping list. It still shows as low or out on its card.* |
+
+`listNameFor` supplies the name — *shopping list* for a shop **and for an item
+naming no source at all** (the storeless group is Buy's), *harvest list*,
+*make list*, and *your shopping and harvest lists* for an item that is really on
+both cards, with the serial comma at three. **It matches vocabulary the app
+already had**: the season panel has said *the harvest list* since D58.
+
+**The segment also gained a sub-label**, which is the other half of the fix: the
+two steppers beside it each name their field and this had none. Same list name,
+capitalised — *Shopping list*, *Harvest list* — and it moves with the chips too.
+
+- **It closes a question D53 could only half-answer.** D53 gave *some things are
+  never shopped for* a checkbox; D58's source kinds answered that better and D60
+  retired the control, leaving a clear-only box that could subtract and never
+  add. **The question none of them could answer is the opposite one** — the
+  thing you want on the list whatever the count says. Three states answer both.
+- **`shared/listRule.ts` owns every rule, the copy included**, and `listRuleOf` is the load-bearing
+  one: it **folds the retired `offShoppingList` in as `never`**, the way
+  `changedAtOf` folds its own fallback chain, so nothing else has to remember a
+  second spelling exists. Reading it wrong is invisible — a muted row would
+  simply come back onto a list months after anybody last thought about it.
+- **An edit drains the old column.** `updateItem` writes `listRule` and clears
+  `offShoppingList` **in the same patch**, and `listRuleOf` prefers the new one,
+  so the two can never disagree in between. That is what finally makes D60's
+  *the flag drains out as people meet it* actually happen — before this it could
+  only be cleared by a control nobody had a reason to press.
+- **`always` outranks the count and nothing else.** It does **not** outrank the
+  season: an out-of-season harvest row still files under `NOT YET`, because
+  *whatever the count says* is a claim about wanting the thing, not about
+  whether it has grown. `npm test` pins that boundary and a deliberate mutation
+  making `always` beat the season fails two assertions.
+- **The pills are unmoved.** `statusKeyFor` never sees the rule, so a `never`
+  item that is low still counts in `6 running low`. D53's split intact, and the
+  muted-pantry worry closes itself.
+- **`EXTRA` is what an `always` row says instead of a status.** A row forced onto
+  the list with nothing wrong with it has no status to report, which is exactly
+  what frees the slot. **Quiet by having no hue at all** — sunk fill, `border`
+  edge, `textMuted` label — which is `NO STORE`'s argument: the three status
+  colours mean something here and a fourth tint would have to mean a fourth
+  thing. **A row that is genuinely low or out keeps its status**, however it got
+  on the list.
+- **`always` means always, and this overrules D64.** `restock.md`'s rule was
+  *`Always` clears on the put-away, not on the check*, which asked **when** the
+  pin should end and never asked **whether**. A control labelled `Always` that
+  quietly stops after one trip makes the word lie — and the tell was that two
+  rounds of hint-writing went into excusing it, first *until you buy it* and then
+  *until you put it away*. **A behaviour that needs its copy to apologise is
+  usually the thing that is wrong.** Now nothing ends a pin but somebody setting
+  it back: verified against the real handlers, where it survived a put-away, a
+  `+` on a card and an ordinary edit, and went only when the segment moved.
+  `never` was already permanent and nobody proposed expiring that.
+- **What it costs is real and it is honest.** A finished trip no longer empties
+  the list by arithmetic when a pinned row is on it, so *Everything's put away.
+  Nothing is low or out.* is unreachable for a household that pins anything —
+  because there **is** still something on the list, which is exactly what the old
+  behaviour was papering over.
+- **`ListRuleSegment.tsx` is the run list's segment**, same track, same
+  raised-tab-on-a-sunk-track, same custom-property hover — `radio` rather than
+  `tab`, and `flex-1` rather than content width, because these three are a fixed
+  set filling a 480px sheet. **Not the ink fill**: the sheet has exactly one ink
+  control and it is *Save*, which is the third time that answer has been reached
+  for the same reason.
+- **The card marker follows the rule and `always` gets none.** `ItemCard`'s
+  `ListX` draws for `listRuleOf(item) === 'never'` rather than the raw column.
+  An `always` item is visible on the list, which is where you look for it — so
+  **the four-glyph top-right cluster the design prices but does not solve is not
+  created here.**
+- **`?demo`'s Peanut Butter is pinned**, stocked and with a store, which is the
+  only way to see the `EXTRA` badge or the `always` branch locally without
+  setting one by hand. It is the design's own sample row. The fixture's pinned
+  distribution is asserted, including that it must be **stocked** — a low pinned
+  row keeps its status and the badge never draws.
+- **Not `listMode`.** The app already uses that word for *is the run list
+  showing*, and a column sharing it would read as the same thing three screens
+  apart.
+
+**Verified without a browser**: typecheck clean, **719 assertions** (48 new,
+covering the legacy fold in both directions, the new column winning, the
+season boundary, all four `isExtra` cases, every list name including the
+storeless one and the serial comma, all three hints in three vocabularies, and a
+bogus value resolving to automatic rather than throwing — plus one assertion
+that the word *count* appears in none of the copy) — and **both new rules were proved
+by mutation**: deleting the legacy fold fails 6, making `always` beat the season
+fails 2. The artifact shows `items.listRule` with `default: ""`, twelve tables,
+twenty-six mutations and `db.migrations: []`. **532 class literals** across
+seven files diffed against the freshly built sheet, 0 absent, with both
+`--seg-*` hover rules confirmed by byte offset to land after their bases.
+
+The **real handlers** were driven over `POST /__spacefast/zero/run`: all four
+values through `addItem` and `updateItem`, a bogus string and a non-string both
+landing as automatic, a legacy row keeping its flag until an edit and losing it
+in the same patch, **a pin surviving a put-away, a `+` on a card and an
+ordinary edit and going only when the segment itself moved**, and a viewer
+refused.
+
+**It has been clicked, and it works** — the same 2026-08-31 session. The
+segment, its moving hint and the `EXTRA` badge are the new surfaces and all
+three read correctly. **To see it locally**: `?demo` — Peanut Butter is pinned,
+so it is on the run list wearing `EXTRA` — then open any item and the segment is
+under the two steppers.
+
 ### The console's two seams land where they were aimed — 2026-08-31
 
 **Client only**: no schema change, no handler moved, no new class. Eleven
@@ -3707,7 +4018,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D63, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on** |
+| `.docs/decisions.md` | D1–D63, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -3722,6 +4033,8 @@ most of it is already decided.
 | `.claude/docs/design/larderloggardenkitchenboards.html` | **The 9 boards for it** — **board 1 is first run** (the card, the hint in four states, the rejected second step, and the three seeded drawers with `STORE` becoming `SOURCE`); its card still draws the pre-D48 prefilled name and hint, which the build does not have. Then — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
 | `.claude/docs/design/autofill.md` | **Autofill — the name field and search** (31 Aug) — the two suggestion menus, what each group holds, the matching rule, what picking carries, and the four questions it closes under *Gaps*. Its own doc for the reason `add-edit-item.md` is. **Built, all of it** (D63) — **and four of its rules were reversed the same day, in the build rather than in the document**, so read D63 beside it: the search menu's item row **fills the field** instead of opening an Edit sheet (so **the chevron and the whole *a chevron means the row leaves the screen* section describe a build that does not exist**), a term row **clears the query** instead of keeping the menu open, the group is **`FILTERS`** rather than `TERMS`, and a catalog row now carries a **type and a shelf**. On geometry the build went past both: the boards draw the sheet's item row at 50 and the search term row at 44, the doc's table reconciles them at 56 and 38/48, and **what shipped is 38/48 for all three kinds** — the item row was restyled to the term row's single line on 31 Aug, so **every drawn item row in this file is two-line and the build's is not** |
 | `.claude/docs/design/larderlognameautofill.html` | **The 12 boards for it** — name field at 480 in both themes, row anatomy, 390, the rules, the settled picking behaviour, search at 1372 in both themes, search at 390 with the no-match state, what the search menu does, and two explorations. **The search boards draw a stale top bar** — `Showing 2 of 20`, a `Shopping list` trigger and `Sort · Recently added`, all three of which row 2's rework replaced — **and every item row on them carries a chevron the build does not draw**. **Explorations A and C are not a spec**; C is the answer to reach for if the duplicate watch-out bites |
+| `.claude/docs/design/restock.md` | **Restock — the trip that ends** (31 Aug) — a check becomes a claim, the trip bar's reserved right half becomes *Put N away*, and the put-away sheet writes a whole trip's counts at once. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list → Checks are local, and they expire* wholesale**. **Read its *what is specced and what is a consequence* callout first**: the claim, the trip, the bar, the sheet and the `Clear checks` delta are specced; the **`Always` / `Never` tri-state** and **trends tier 2** are separate features it merely unblocks. **Built** (D64) — **except shared claims**, deferred by request, so no row ever draws *In Sarah's cart* and `N in the cart` keeps its wording rather than becoming `N in your cart`. **Its `Always` / `Never` section is built too** (D65) — **but not its hint copy**: all three sentences were rewritten on the first look at the built control, because *the list* names nothing a person can point at, *until you buy it* is false for anything you pick, and *count* is the wrong noun for what is on a shelf. **Its hint table therefore describes copy that does not ship**, and its segment is drawn without the sub-label the build gives it. **Trends tier 2 is the one part still unbuilt**, and the `restocks` log is collecting for it |
+| `.claude/docs/design/larderlogrestockmockup.html` | **The 6 boards for it** — the run list with three checked, the put-away sheet, the screen after, the trip bar's anatomy with its undo toast, the tri-state, and trends tier 2. Light theme, desktop; **mobile is not drawn at all** — the bar's three controls at 390 are specced in prose and the sheet as a bottom sheet is asserted rather than drawn. **Boards 1, 2 and 3 all draw a row claimed by Sarah**, which is the deferred half; **board 4's "where the green belongs" card is drawn left-aligned at 440** and the build takes `EmptyState`'s centred shape instead, since the two empty states share one slot. **Board 5 is built** (D65); **board 6 is not** |
 | `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
 | `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
@@ -3797,6 +4110,29 @@ capsule.
 `sf --help` does not list `dev`, `db`, `logs`, or `storage`, but they all exist,
 as do `sf db migrate`, `sf db export`, `sf db dump`, and `sf db console`.
 
+**And a whole release surface is hidden the same way.** `sf versions --help`
+says *"List, promote, and roll back space versions"* and then lists only `get`,
+`ls` and `rm` — which reads as *there is no rollback*, and that conclusion was
+drawn here once. **The commands are top-level**, and all four are in the pinned
+`spacefast@0.2.2`:
+
+| | |
+|---|---|
+| `sf rollback <version>` | move `live` back to a ready version. Seconds; nothing rebuilds |
+| `sf promote <version>` | the same operation, forwards |
+| `sf channels ls` / `sf channels history` | where `live` points, and every move with its actor. **Both crash in their table renderer — use `--json`** |
+| `sf apply` | push settings saved in the dashboard onto the serving runtime, **without** creating a content version |
+
+`sf publish --target preview` creates a version without serving it, which is the
+way to stage a risky publish. See
+[`/docs/publish/versions`](https://spacefast.com/docs/publish/versions).
+
+**A version can be created by the platform, not only by a publish.** A settings
+change made in the dashboard mints one with `source=config_update` and zero file
+changes, and it moves the live channel. `sf versions ls` shows the `source`;
+`channels history` does **not** distinguish it from a publish. One of those broke
+sign-in on 2026-08-31 — see `.claude/docs/spacefast.md`.
+
 `sf dev` gates every path behind a capability token printed in its banner. To
 reach it from a script, POST that token to bootstrap first — **an `Origin`
 header is required or it answers 403**:
@@ -3817,7 +4153,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 642 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 719 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -3832,7 +4168,12 @@ Cheapest first:
   every fail-closed branch, the dev-guest bypass, the console's month walk, and
   the audit log's encoding, phrasing and retention — and D63's word-prefix
   matching, which is invisible when wrong in exactly the way the filter rule is:
-  a substring where a prefix belongs still returns a plausible list.
+  a substring where a prefix belongs still returns a plausible list, and D64's
+  restock prefill and put-away ordering, which are invisible when wrong in the
+  same way: a prefill one out is still a plausible number and a row filed under
+  the wrong band still puts something away — and D65's list override, where
+  reading the retired column wrong puts a muted item back on a list months after
+  anybody last thought about it.
   **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
@@ -3870,6 +4211,27 @@ Cheapest first:
   a.server.endpoints             // [{ method, path }] — check nothing throwaway survived
   a.db.migrations                // [] when nothing additive is pending
   ```
+- **Diff the artifact against `.docs/data-model.md` after any schema edit.** That
+  file is the schema's prose and it is **not** named in the *Keep these current*
+  instruction above, which is exactly how `restocks` and `items.listRule` got
+  built, tested, documented in three other files and left out of the one whose
+  whole job is the data model. Nothing catches it — typecheck cannot, the
+  artifact read cannot, and the doc stays plausible because it describes eleven
+  correct tables.
+
+  ```js
+  const a = JSON.parse(readFileSync('.spacefast/zero/artifact.json', 'utf8'));
+  const doc = readFileSync('.docs/data-model.md', 'utf8');
+  Object.keys(a.server.schema).filter((t) => ! doc.includes(`\`${t}\``));   // tables
+  a.server.schema.items.columns.filter((c) => ! doc.includes(c.name));    // columns
+  a.server.mutations.filter((m) => ! doc.includes(`\`${m}\``));            // and the surface
+  ```
+
+  Check the **cascade table** by hand while you are there: a new table that
+  belongs to a household or an item has to appear in `deleteHouseholdRows`, in
+  `deleteHousehold`'s own list, and in whichever delete owns it — and in the
+  doc's *Cascade deletes* table, which is the only place all three are written
+  down together.
 - **`sf dev`** compiles the capsule for real. A clean start plus `GET /` and
   `GET /api/status` proves the client and server entries both resolve.
 - **An unused `theme.json` token is pruned from `zero.css`, and that looks

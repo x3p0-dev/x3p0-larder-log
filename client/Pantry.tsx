@@ -24,6 +24,7 @@ import { FirstRun } from './components/FirstRun';
 import { InviteLanding } from './components/InviteLanding';
 import { OutsideShell } from './components/OutsideShell';
 import { RunList } from './components/RunList';
+import { PutAwaySheet } from './components/PutAwaySheet';
 import { RunListTrigger } from './components/RunListTrigger';
 import { RunSegment, runSegmentPx } from './components/RunSegment';
 import { ToastStack } from './components/Toast';
@@ -66,6 +67,8 @@ import { DEFAULT_ROLE, can } from '../shared/roles';
 import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
 import { runBands, runCount, runIds } from '../shared/runList';
+import { putAwayRows, restockEntry } from '../shared/restock';
+import type { PutAwayRow } from '../shared/restock';
 import { monthOf } from '../shared/season';
 import type { RunTab } from './components/RunSegment';
 import { countTermFilters, matchesTermFilters, pruneTermFilter, toggleTermFilter } from '../shared/filter';
@@ -800,6 +803,27 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const [form, setForm] = useState<ItemDraft | null>(null);
 	const [formError, setFormError] = useState('');
 	const [saving, setSaving] = useState(false);
+
+	/**
+	 * The put-away sheet's rows, snapshotted when it opened. `null` while closed.
+	 *
+	 * Held here rather than in the sheet because the list underneath is live —
+	 * see `openPutAway`.
+	 */
+	const [putAway, setPutAwayRows] = useState<PutAwayRow[] | null>(null);
+
+	/**
+	 * How many counts the last put-away wrote, for the screen that follows it.
+	 *
+	 * It survives only as long as it is *true*: the after-the-trip card draws on
+	 * `justPutAway !== null && toBuyTotal === 0`, so a trip that emptied half the
+	 * list simply never shows one, and a stale value is invisible until it is
+	 * cleared below.
+	 */
+	const [justPutAway, setJustPutAway] = useState<number | null>(null);
+
+	/** What the trip's own live region last said. See `announceTrip`. */
+	const [tripAnnouncement, setTripAnnouncement] = useState('');
 
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editForm, setEditForm] = useState<ItemDraft | null>(null);
@@ -1569,7 +1593,39 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * but the trigger is hidden once the list would be empty, and a mode with no
 	 * way out is worse than one that lets go.
 	 */
-	const listMode = trip.listMode && toBuyTotal > 0;
+	/*
+	 * **And it survives one more beat than that, exactly once.** A put-away
+	 * empties the list by arithmetic, so `toBuyTotal` drops to zero in the same
+	 * breath as the write lands — and dropping the mode there would answer the
+	 * terminal action of the whole flow by throwing you back to the grid with no
+	 * confirmation that anything happened. `justPutAway` holds the mode open for
+	 * the one screen that says so.
+	 */
+	const listMode = trip.listMode && (toBuyTotal > 0 || justPutAway !== null);
+
+	/**
+	 * How many counts the trip just wrote, when that is the reason the list is
+	 * empty — and `null` whenever anything else is.
+	 *
+	 * The two empty screens look alike and mean opposite things, so the test is
+	 * made here where both numbers are in hand rather than inside `RunList`,
+	 * which knows only about the bands it was handed and could not tell a
+	 * finished trip from a Store filter that matched nothing.
+	 */
+	const tripDone = justPutAway !== null && toBuyTotal === 0 ? justPutAway : null;
+
+	/*
+	 * The card is about *this* trip, so it goes the moment there is another one.
+	 * Leaving the mode drops it too: coming back later to a pantry that happens
+	 * to be full again should not re-announce a shop from last week.
+	 *
+	 * Keyed on `trip.listMode` rather than on `listMode`, which `justPutAway`
+	 * itself holds true — reading the derived value here would be an effect that
+	 * can never fire.
+	 */
+	useEffect(() => {
+		if (trip.count > 0 || ! trip.listMode) setJustPutAway(null);
+	}, [trip.count, trip.listMode]);
 
 	/**
 	 * Whether the segment has to give up its three words for its three glyphs.
@@ -1674,7 +1730,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 
 		function onKey(e: KeyboardEvent) {
 			if (e.key !== 'Escape') return;
-			if (pending || showForm || editingId) return;
+			// A sheet or a dialog over the mode owns the key first — including the
+			// put-away, which closes to the list it was opened from rather than
+			// closing the list underneath it.
+			if (pending || showForm || editingId || putAway) return;
 
 			setListMode(false);
 		}
@@ -1682,7 +1741,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		window.addEventListener('keydown', onKey);
 
 		return () => window.removeEventListener('keydown', onKey);
-	}, [listMode, pending, showForm, editingId, setListMode]);
+	}, [listMode, pending, showForm, editingId, putAway, setListMode]);
 
 	// --- Item actions ------------------------------------------------------
 
@@ -1788,6 +1847,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					size: item.size,
 					unit: item.unit,
 					offShoppingList: item.offShoppingList,
+					listRule: item.listRule,
 					notes: item.notes,
 				}, { addedAt: addedAtOf(item), changedAt: changedAtOf(item) });
 			},
@@ -1882,6 +1942,82 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			name: plural(ids.length, 'check'),
 			onUndo: () => trip.recheck(ids),
 		});
+
+		// The toast is the sighted confirmation and it is not read: it appears
+		// in a corner with no focus moved to it. This is the same fact said out
+		// loud, through the region the put-away already uses.
+		setTripAnnouncement(`${plural(ids.length, 'check')} cleared.`);
+	}
+
+	/**
+	 * Opens the put-away on the rows the bar was counting.
+	 *
+	 * **The rows are snapshotted here rather than recomputed by the sheet**,
+	 * because the list underneath is live: somebody else restocking one of them
+	 * mid-put-away would otherwise pull it out from under a number you had
+	 * already typed. `shownBands` is what the list is drawing, so the sheet holds
+	 * the screen's own rows in the screen's own order.
+	 */
+	function openPutAway(ids: string[]) {
+		if (ids.length === 0) return;
+
+		setPutAwayRows(putAwayRows(shownBands, new Set(ids)));
+	}
+
+	/**
+	 * The write — a whole trip's counts, in one mutation.
+	 *
+	 * **One call rather than a loop**, and that is the point of the handler: a
+	 * put-away is several writes that mean one thing, made from a phone in a car
+	 * park, and half of them landing is the state it exists to prevent.
+	 *
+	 * **No toast.** Four toast triggers are settled on the grounds that the thing
+	 * you did is visible on the screen you are on, and three rows vanishing from
+	 * the list you are looking at is the most visible confirmation in the app.
+	 * The rows leave *by arithmetic* — every one was put away to a count that
+	 * clears its threshold — so nothing has to remove them.
+	 */
+	async function commitPutAway(counts: Record<string, string>) {
+		if (! putAway || saving) return;
+
+		const entries = putAway.map((row) => restockEntry(row, counts[row.item.id] ?? String(row.was)));
+
+		setSaving(true);
+
+		const ok = await api.restockItems(trip.tripId, entries);
+
+		setSaving(false);
+
+		// A refusal leaves the sheet open with the numbers still in it, the way a
+		// refused item edit does — they were typed at the shelf and are not
+		// something to make somebody reconstruct.
+		if (! ok) return;
+
+		setPutAwayRows(null);
+		setJustPutAway(entries.length);
+		trip.end();
+
+		/*
+		 * **What is left is counted here rather than read off `toBuyTotal`.**
+		 * That number comes from a live query which has not re-emitted yet — the
+		 * write landed a line ago — so reading it would announce the total from
+		 * *before* the trip, which is the one number this sentence must not say.
+		 *
+		 * Every row that now clears its threshold leaves the list, and `putAway`
+		 * holds one row per item, so subtracting is exact. `statusKeyFor` rather
+		 * than `needsBuying`: a row that was on the list is not excluded, or it
+		 * would not have been there to tick.
+		 */
+		const leaving = putAway.filter(
+			(row) => statusKeyFor(counts[row.item.id] ?? String(row.was), row.item.threshold) === 'ok'
+		).length;
+
+		const left = Math.max(0, toBuyTotal - leaving);
+
+		setTripAnnouncement(
+			`${plural(entries.length, 'count')} updated. `
+			+ (left > 0 ? `${left} left to get.` : 'Nothing left to get.')
+		);
 	}
 
 	/**
@@ -2000,6 +2136,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			size: '',
 			unit: '',
 			offShoppingList: false,
+			listRule: '',
 			// Neither half of the season either, and for a firmer reason than the
 			// size's: the field is not even on screen until a **grow** source is
 			// picked (D58), so a new item cannot arrive holding one.
@@ -2061,6 +2198,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			size: item.size,
 			unit: item.unit,
 			offShoppingList: item.offShoppingList,
+			listRule: item.listRule,
 			seasonFrom: item.seasonFrom,
 			seasonTo: item.seasonTo,
 			notes: item.notes,
@@ -2898,6 +3036,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  * that has just been removed, which is exactly nothing.
 					  */}
 					<span role="status" aria-live="polite" style={SR_ONLY}>{filterAnnouncement}</span>
+					{/*
+					  * The trip's own region, separate from the filters'.
+					  *
+					  * They describe different things and land at different moments —
+					  * one answers a press on a chip, the other answers a write — and a
+					  * shared region would have each overwrite the other's sentence.
+					  */}
+					<span role="status" aria-live="polite" style={SR_ONLY}>{tripAnnouncement}</span>
 
 					{/*
 					  * **Row 3 — the applied filters.** Present only while a term
@@ -2933,6 +3079,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							checked={trip.checked}
 							onToggle={mayEditItems ? trip.toggle : undefined}
 							onClearChecks={mayEditItems ? clearChecks : undefined}
+							onPutAway={mayEditItems ? openPutAway : undefined}
+							putAwayCount={tripDone}
+							onBackToItems={() => setListMode(false)}
 							storeFilterName={storeFilterName}
 							elsewhereCount={elsewhereCount}
 							onClearStoreFilter={() => setActiveStores([])}
@@ -3114,6 +3263,24 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				onSave={() => void (editingId ? saveEdit(editingId) : addItem())}
 				onRemove={editingId ? () => { const id = editingId; cancelEdit(); void removeItem(id); } : undefined}
 				onClose={() => { if (editingId) cancelEdit(); else { setShowForm(false); setFormError(''); } }}
+				dark={dark} theme={theme}
+			/>
+
+			{/*
+			  * The put-away — the Add / Edit sheet in a different job (D64), and
+			  * the only thing on the run list that writes.
+			  *
+			  * It renders beside that sheet rather than inside `RunList`, for the
+			  * reason every other overlay in this app does: a sheet is a fact about
+			  * the screen, not about the list under it, and the two can never be
+			  * open at once because the trip bar is unreachable while either is.
+			  */}
+			<PutAwaySheet
+				open={putAway !== null}
+				rows={putAway ?? []}
+				saving={saving}
+				onCommit={(counts) => void commitPutAway(counts)}
+				onClose={() => setPutAwayRows(null)}
 				dark={dark} theme={theme}
 			/>
 

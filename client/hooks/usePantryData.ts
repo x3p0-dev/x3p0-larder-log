@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@spacefast/zero/client';
 import type { Role } from '../../shared/roles';
 import type { SourceKind } from '../../shared/source';
 import type { SourceMix } from '../../shared/seed';
+import type { RestockEntry } from '../../shared/restock';
 import type {
 	HouseholdData,
 	HouseholdListResult,
@@ -82,6 +83,15 @@ export type PantryApi = {
 	/** True when the server accepted the edit. False leaves the sheet open. */
 	updateItem: (id: string, patch: Partial<ItemDraft>) => Promise<boolean>;
 	adjustQty: (id: string, delta: number) => Promise<void>;
+	/**
+	 * A whole trip's counts, written once (D64).
+	 *
+	 * One call rather than a loop of `updateItem`, because a put-away is several
+	 * writes that mean one thing and half of them landing is the state it exists
+	 * to prevent. True when the server took them; false leaves the sheet open
+	 * with the numbers somebody typed still in it.
+	 */
+	restockItems: (tripId: string, entries: RestockEntry[]) => Promise<boolean>;
 	/** True when the row is really gone — the undo toast is armed on this. */
 	removeItem: (id: string) => Promise<boolean>;
 
@@ -143,6 +153,7 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	const rawAddItem = useMutation<[string, ItemDraft & Stamps], { id: string }>('addItem');
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
 	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
+	const rawRestockItems = useMutation<[string, string, RestockEntry[]], { count: number }>('restockItems');
 	const rawRemoveItem = useMutation<[string, string], void>('removeItem');
 	const rawCreateTerm = useMutation<[string, TermKind, TermDraft & Stamps & { kind?: SourceKind }], { id: string }>('createTerm');
 	const rawUpdateTerm = useMutation<[string, TermKind, string, { name?: string; ink?: string }], void>('updateTerm');
@@ -238,6 +249,10 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 		adjustQty: useCallback(async (id, delta) => {
 			await run(() => rawAdjustQty(currentHouseholdId, id, delta));
 		}, [run, rawAdjustQty, currentHouseholdId]),
+
+		restockItems: useCallback(async (tripId, entries) => (
+			(await run(() => rawRestockItems(currentHouseholdId, tripId, entries).then(() => true))) === true
+		), [run, rawRestockItems, currentHouseholdId]),
 
 		// `void` here is what armed the undo toast for removals the server had
 		// refused — and undo re-runs `addItem`, so pressing it duplicated the row.

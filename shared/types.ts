@@ -106,6 +106,26 @@ export type Item = {
 	 */
 	offShoppingList: boolean;
 	/**
+	 * Whether this item joins the run list at all — `''`, `'always'` or
+	 * `'never'` (D65).
+	 *
+	 * *Low at* is the sentence **put this on the list when I'm down to N**, and
+	 * both overrides amend that sentence: `always` keeps a row on the list
+	 * whatever the count says, `never` keeps it off however low it gets.
+	 * Automatic is the **absence** of an override and is stored as `''`, so
+	 * there is no third literal to keep in step with the schema's default.
+	 *
+	 * `shared/listRule.ts` owns every rule, including the one that matters most:
+	 * **`listRuleOf` folds the retired `offShoppingList` in as `never`**, so a
+	 * row written before this column existed behaves exactly as it did and stops
+	 * being legacy the first time anybody edits it.
+	 *
+	 * Like the flag it replaces, it changes one *view* and nothing that is true:
+	 * a `never` item that is low still reads *Low* on its card and still counts
+	 * toward the three status pills.
+	 */
+	listRule: string;
+	/**
 	 * When a grown thing is ready — two month numbers as strings, `''` for none.
 	 *
 	 * A pair that is never half-set (`shared/season.ts`), and asked for only

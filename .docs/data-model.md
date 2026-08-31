@@ -288,7 +288,8 @@ items: table({
   threshold: string(),              // non-negative integer, as a string
   size: string().default(""),       // how big ONE of them is — D52
   unit: string().default(""),       // its unit KEY, a slug: "quart", not "qt"
-  offShoppingList: boolean().default(false),   // retired — D60; kept, never set
+  offShoppingList: boolean().default(false),   // retired TWICE — D60, then D65
+  listRule: string().default(""),   // "" | "always" | "never" — D65
   seasonFrom: string().default(""),    // month 1-12 as a string; "" for none — D58
   seasonTo: string().default(""),      // both, or neither — shared/season.ts
                                     // never joins the shopping list — D53
@@ -314,11 +315,31 @@ both `addItem` and `updateItem` go through it — a unit with no number becomes
 `1`, and a number with no unit becomes neither. `unit` holds a **slug**, so what
 a household stored survives us changing what it prints.
 
-`offShoppingList` is read by **exactly one function**, `needsBuying`
-([D53](decisions.md#d53-some-things-are-never-shopped-for-and-that-is-a-property-of-the-item)).
-`statusKeyFor` does not see it, so an excluded item still reads *Out* on its card
-and still counts toward the status pills; only the shopping list and its counts
-drop it.
+`listRule` is the **list override**, and it is read by exactly one function,
+`needsBuying`
+([D65](decisions.md#d65-the-list-override-is-a-tri-state-and-it-lives-where-low-at-is-set)).
+*Low at* is the sentence *put this on the list when I'm down to N*; `always` and
+`never` amend that sentence, and `""` is the absence of an override rather than a
+third literal to keep in step with the default.
+
+**`offShoppingList` folds into it as `never`.** D53 gave *some things are never
+shopped for* a checkbox, D58's source kinds answered that better, D60 retired the
+control and kept the column, and D65 replaced it with three states — so the two
+columns say overlapping things and **`listRuleOf` in `shared/listRule.ts` is the
+one place they are reconciled**. The new column wins, and writing it clears the
+old flag in the same patch, so a row written before D65 stops being legacy the
+first time anybody edits it. The column stays for the reason `icon` does (D34).
+
+**Neither reaches `statusKeyFor`**, so an item kept off the list still reads
+*Out* on its card and still counts toward the status pills — the pills count
+stock, the list counts shopping. `always` is the same split from the other side:
+a pinned item on the list while nothing is wrong with it reads `EXTRA` where its
+status badge would be.
+
+**`always` is permanent.** Nothing ends it but somebody setting it back — not the
+put-away, not `adjustQty`, not an ordinary edit. D64 specified that a put-away
+should clear it and that was overruled: a control labelled *Always* that stops
+after one trip makes the word lie.
 
 Note what is **absent**:
 
@@ -354,11 +375,70 @@ itemStores: table({
 be loaded without walking through `items` first, and so orphan cleanup is a
 scoped scan rather than a full-table one.
 
+### `restocks`
+
+One trip's worth of counts, written once each by the put-away
+([D64](decisions.md#d64-a-check-is-a-claim-and-the-count-is-written-once-at-the-shelf)).
+**The twelfth table, and the second added for a reader that does not exist yet.**
+
+```ts
+restocks: table({
+  householdId: id("households"),
+  itemId: id("items"),
+  tripId: string().default(""),   // the trip these arrived with; opaque
+  fromQty: string(),              // the count before
+  toQty: string(),                // the count after
+  kind: string().default(""),     // the source's kind; "" for a storeless row
+  at: string(),                   // ISO 8601 UTC — ours, not createdAt (D44)
+})
+  .index("by_item", ["itemId"])
+  .index("by_household", ["householdId"])
+```
+
+`profiles` was the first table written ahead of its reader and
+[D44](decisions.md#d44-the-app-writes-its-own-timestamps-because-the-platforms-cannot-survive-an-undo)
+is the argument for both: a table is permanent, nothing backfills it, and every
+put-away that happens before this exists is a data point nobody can recover. The
+intended reader is *trends, tier 2* — with three or more rows against an item,
+the sheet's *Low at* hint could say how often it is restocked.
+
+**It is not built, and there is a finding in the way.** Only `restockItems`
+writes here. `adjustQty` (the `+` on a card) and `updateItem` (the sheet's *On
+hand* stepper) also raise a count and write nothing — so this table records
+**put-aways, not restocks**, and a household that mostly taps `+` would get
+intervals that are systematically too long rather than merely noisy. Settle that
+before reading these rows for anything.
+
+**No `userId`, and that is the privacy line rather than an omission.** A name
+rides the *trip*, which is transient and dies with the account that owns it;
+nothing in the larder itself ever records who touched a thing, so deleting an
+account stays a clean operation rather than a scrubbing job. `tripId` says only
+that several rows arrived together.
+
+**`kind` is copied, not joined**, so a reader can tell a shop run from a harvest
+without asking whether the source still exists or still carries the kind it had
+that day. `""` is a real answer there — a row that named no source — so it is
+validated with `isSourceKind` and never with `toSourceKind`, which resolves
+everything it does not recognise to `shop`.
+
+**The quantities are stored and are not trustworthy.** A put-away doubles as
+drift correction, so `toQty − fromQty` is sometimes a purchase and sometimes a
+fix and nothing can tell them apart. They are kept anyway because a row is
+written once and read forever, and a column that turns out to be needed cannot
+be added to rows that already exist. **The dates are the trustworthy part.**
+
+No `changedAt`: a restock is an event and is never edited.
+
+**There is no retention and no pruning**, unlike `activity`. That is deliberate —
+this is data rather than an audit log — but it grows without bound, at roughly
+780 rows a year for a household restocking fifteen items a week, and nothing has
+a plan for it.
+
 ### `activity`
 
 The admin console's audit log
 ([D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment)).
-**The eleventh table, and the first new one since `profiles`.**
+**The eleventh table**, and the first new one after `profiles`. `restocks` above is the twelfth.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -502,7 +582,7 @@ dependents, in this order:
 
 | Deleting a… | Also delete | Also do |
 |---|---|---|
-| `item` | its `itemTypes`, `itemStores` rows | — |
+| `item` | its `itemTypes`, `itemStores` **and `restocks`** rows | — |
 | `type` | its `itemTypes` rows | — |
 | `store` | its `itemStores` rows | — |
 | `location` | — | **refused** if any item references it; see [D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it) |
@@ -524,6 +604,11 @@ Undo therefore produces a new row `id`.
 it: an audit row is the surviving record of a deletion, so a cascade that
 reached it would erase exactly what it exists to keep. It expires on its own
 clock and on nothing else's.
+
+**`restocks` makes the opposite choice deliberately.** A restock row dies with
+its item and with its household, because there is nothing to say about how often
+you restock a row that no longer exists. The audit log denormalises so it can
+outlive its subject; this does not, and does not need to.
 
 **Deleting an account is a cascade this app can perform and a deletion it cannot
 complete.** It removes every row keyed to a `userId` — the memberships, the
@@ -550,7 +635,8 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `addItem` | mutation | Create an item and its join rows. Takes optional `addedAt` / `changedAt` — **undo only** |
 | `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |
-| `removeItem` | mutation | Delete an item and its joins |
+| `restockItems` | mutation | A whole trip's counts at once, plus one `restocks` row each. Resolves every entry before writing any — a put-away must not half-commit |
+| `removeItem` | mutation | Delete an item, its joins and its `restocks` rows |
 | `createTerm` / `updateTerm` / `deleteTerm` | mutation | Taxonomy CRUD, parameterized by kind. `createTerm` takes the same optional stamps, plus a source's `kind` — **undo only** |
 | `setSourceKind` | mutation | A store's `shop` / `grow` / `make` — [D58](decisions.md#d58-a-source-carries-a-kind-and-the-group-is-named-for-what-it-holds). Stores only, and a no-op write invalidates nothing |
 | `updateHousehold` | mutation | Name, colour and `defaultThreshold` — owner only |
