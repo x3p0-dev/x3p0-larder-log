@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
-	ChevronRight, MapPin, Moon, PanelLeftOpen, SlidersHorizontal, Store as StoreIcon, Sun, Tag,
+	ArrowLeft, ChevronRight, History, Home, LayoutDashboard, MapPin, Moon, PanelLeftOpen,
+	SlidersHorizontal, Store as StoreIcon, Sun, Tag, Users,
 } from 'lucide-preact';
 
 import { AccountMenu } from './AccountMenu';
@@ -8,6 +9,7 @@ import { DrawerAvatar } from './DrawerAvatar';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { HouseholdTile } from './HouseholdTile';
 import { RailFlyout } from './RailFlyout';
+import type { AdminSection } from './AdminPane';
 import type { Theme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
 import { chipDot, drawerTheme } from '../lib/theme';
@@ -56,6 +58,29 @@ type Props = {
 	accountPicture?: string;
 	/** Renames the account. Absent for the dev guest, who has no account row. */
 	onSetDisplayName?: (name: string) => void;
+	/**
+	 * Opens the admin console (D62). Absent unless the caller administers the
+	 * space, which is almost everybody.
+	 *
+	 * **`AccountMenu` is one component in two places** — the drawer's foot row
+	 * and this flyout — so anything the drawer hands it has to be handed here
+	 * too, or the same menu is two different menus depending on whether the
+	 * drawer happens to be collapsed. It was, for one round: the row existed in
+	 * the drawer and not on the rail.
+	 */
+	onOpenAdmin?: () => void;
+	/*
+	 * The console's own rail state (D62). `adminSection` is `null` whenever the
+	 * console is closed, which is every ordinary load.
+	 *
+	 * **While it is open the rail is the console's, not the pantry's.** The
+	 * household switcher, the three filter groups and Settings all go: every one
+	 * of them is a control over *a* household, and the console is not about
+	 * being in one. What survives is what is not — expand, appearance, and you.
+	 */
+	adminSection: AdminSection | null;
+	onAdminSection: (section: AdminSection) => void;
+	onCloseAdmin: () => void;
 	themeOverride: ThemeOverride;
 	setThemeOverride: (v: ThemeOverride) => void;
 	dark: boolean;
@@ -64,6 +89,14 @@ type Props = {
 	onSignOut: () => void;
 	theme: Theme;
 };
+
+/** The console's nav, as the rail draws it. Same order and glyphs as `AdminPane`. */
+const ADMIN_SECTIONS: { key: AdminSection; label: string; Icon: typeof Home }[] = [
+	{ key: 'overview', label: 'Overview', Icon: LayoutDashboard },
+	{ key: 'households', label: 'Households', Icon: Home },
+	{ key: 'people', label: 'People', Icon: Users },
+	{ key: 'activity', label: 'Activity', Icon: History },
+];
 
 const THEME_OPTIONS: { key: ThemeOverride; label: string }[] = [
 	{ key: 'system', label: 'Auto' },
@@ -190,7 +223,8 @@ export function CollapsedRail({
 	locationFilter, storeFilter, typeFilter,
 	autoOnly, itemCount, locationCounts, householdName, householdInk,
 	households, currentHouseholdId, onSelectHousehold, onNewHousehold, onJoinHousehold,
-	accountName, accountEmail, accountPicture, onSetDisplayName,
+	accountName, accountEmail, accountPicture, onSetDisplayName, onOpenAdmin,
+	adminSection, onAdminSection, onCloseAdmin,
 	themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
 }: Props) {
 	const [menu, setMenu] = useState<Menu | null>(null);
@@ -305,6 +339,20 @@ export function CollapsedRail({
 				</span>
 			</Control>
 
+			{/*
+			  * **Back to the pantry takes slot 2** — where the household switcher
+			  * sits, and for the same reason the design gives: it is the control
+			  * that says which thing you are looking at. It wears the expand
+			  * control's raised square rather than a bare glyph, because the two
+			  * of them are the only chrome in this column and they are a pair.
+			  */}
+			{adminSection !== null ? (
+				<Control id="back-to-app" label="Back to the pantry" on={false} tile chrome={chrome} onClick={onCloseAdmin}>
+					<span class="flex items-center justify-center w-10 h-10 rounded-xl bg-drawer-raised text-[#C3B49C] transition-[filter] group-hover:brightness-125 group-active:brightness-90">
+						<ArrowLeft size={18} />
+					</span>
+				</Control>
+			) : (
 			<Control
 				id="household"
 				label={`${householdName || 'Household'} — switch household`}
@@ -330,10 +378,27 @@ export function CollapsedRail({
 					interactive
 				/>
 			</Control>
+			)}
 
 			<span class="w-6 h-px bg-drawer-line" />
 
-			{groups.map(({ key, label, Icon, filter }) => (
+			{/*
+			  * The console's four sections, or the pantry's three filter groups.
+			  * Never both — a rail offering to filter a pantry beside a list of
+			  * every household in the space is two apps in one column.
+			  */}
+			{adminSection !== null ? ADMIN_SECTIONS.map(({ key, label, Icon }) => (
+				<Control
+					key={key}
+					id={`admin-${key}`}
+					label={label}
+					on={adminSection === key}
+					chrome={chrome}
+					onClick={() => onAdminSection(key)}
+				>
+					<Icon size={18} />
+				</Control>
+			)) : groups.map(({ key, label, Icon, filter }) => (
 				<Control
 					key={key}
 					id={key}
@@ -355,9 +420,12 @@ export function CollapsedRail({
 				{dark ? <Moon size={18} /> : <Sun size={18} />}
 			</Control>
 
-			<Control id="settings" label="Settings" on={false} chrome={chrome} onClick={() => onExpand('settings')}>
-				<SlidersHorizontal size={18} />
-			</Control>
+			{/* Settings is the household's, so it goes with the rest of them. */}
+			{adminSection === null && (
+				<Control id="settings" label="Settings" on={false} chrome={chrome} onClick={() => onExpand('settings')}>
+					<SlidersHorizontal size={18} />
+				</Control>
+			)}
 
 			<span class="flex-1" />
 
@@ -487,6 +555,7 @@ export function CollapsedRail({
 						email={accountEmail}
 						picture={accountPicture}
 						onRename={onSetDisplayName}
+						onOpenAdmin={onOpenAdmin}
 						onSignOut={onSignOut}
 						onDone={() => setMenu(null)}
 						theme={drawerTheme(theme)}

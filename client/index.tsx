@@ -25,7 +25,9 @@ import { clearSignInAttempt, markSignInAttempt, signInAttemptPending } from './l
 import { InviteLanding } from './components/InviteLanding';
 import { MarketingPage } from './components/MarketingPage';
 import { OutsideShell } from './components/OutsideShell';
+import { DevGuestCard } from './components/DevGuestCard';
 import { SignInCard, SignInFailedCard, SigningInCard } from './components/SignInCard';
+import { ANON_GUEST_NAME, guestName } from '../shared/identity';
 
 /*
  * Before anything renders, and before the gate decides who this is.
@@ -165,8 +167,31 @@ export function App() {
 	/** A code from an invite link. The stash is what survived the sign-in trip. */
 	const [code, setCode] = useState<string | null>(() => pendingInvite());
 
-	const devGuest = auth.isGuest && Boolean(auth.userId) && isLoopback() && ! forcedSignedOut();
+	/*
+	 * **A named dev guest, not any guest.** This used to accept whatever guest
+	 * `sf dev` handed over, which was always `guest:local` — and `guest:local`
+	 * is exactly what the *hosted* runtime hands an unauthenticated stranger, so
+	 * the server-side twin of this line was a hole (see `shared/identity.ts`).
+	 * The server now refuses that name outright, so accepting it here would only
+	 * render an app whose every query answers *no household*.
+	 *
+	 * The name still has to be in `LARDER_DEV_GUESTS` for the server to agree.
+	 * This gate cannot check that — it is a client gate, and a client gate is
+	 * not security — so a name the server rejects lands on the same empty app.
+	 * `DevGuestCard` below is what stops that being a mystery.
+	 */
+	const devGuest = auth.isGuest
+		&& Boolean(auth.userId)
+		&& guestName(auth.userId) !== ''
+		&& guestName(auth.userId) !== ANON_GUEST_NAME
+		&& isLoopback()
+		&& ! forcedSignedOut();
 	const signedIn = Boolean(auth.userId) && (! auth.isGuest || devGuest);
+	/** Loopback, no `?guest=` — the state that needs an instruction, not a gate. */
+	const needsDevGuest = isLoopback()
+		&& auth.isGuest
+		&& guestName(auth.userId) === ANON_GUEST_NAME
+		&& ! forcedSignedOut();
 
 	/*
 	 * The signed-out surface has no per-device override to honour, so the OS
@@ -259,6 +284,19 @@ export function App() {
 				picture={devGuest ? devGuestPicture() : auth.picture}
 				onSignOut={() => signOut()}
 			/>
+		);
+	}
+
+	/*
+	 * Local, and nobody has said who they are. Above the signed-out surface
+	 * because on loopback that surface is not the real answer — there is no
+	 * sign-in to offer, and the marketing page would be a dead end.
+	 */
+	if (needsDevGuest) {
+		return (
+			<OutsideShell dark={dark} theme={theme}>
+				<DevGuestCard theme={theme} />
+			</OutsideShell>
 		);
 	}
 

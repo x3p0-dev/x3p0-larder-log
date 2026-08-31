@@ -5,6 +5,7 @@ import { useDismiss } from '../hooks/useDismiss';
 import type { Theme } from '../lib/theme';
 import {
 	DRAWER_MENU_ROW, DRAWER_MENU_ROW_DANGER, DRAWER_SUNK, DRAWER_SUNK_ON,
+	PAGE_HELD, PAGE_MENU, PAGE_MENU_ROW, PAGE_MENU_ROW_DANGER, PAGE_SUNK,
 } from '../lib/controlStyles';
 import type { Role } from '../../shared/roles';
 import { ROLES } from '../../shared/roles';
@@ -63,9 +64,22 @@ export const ROLE_BLURBS: Record<Role, string> = {
  * owner to see it, and it never appears on your own row, so the person you are
  * looking at is never the last owner. The trash on a term row settled the same
  * question the same way (D36) — a disabled control cannot explain itself.
+ *
+ * **`onDark` is the one thing that changes, and the existing rule picked it.**
+ * In the app this opens on the drawer, so it is dark. In the admin console it
+ * opens on a cream card, so it takes the sort menu's construction instead — the
+ * same component, the other surface. The reverse is the mistake `DrawerMenu`
+ * already records: a cream popover over the darkest panel in the app would put
+ * the brightest thing on screen over the darkest.
+ *
+ * **The console reaches the last-owner case where the app cannot.** There, this
+ * only ever appears on somebody else's row and only to an owner, so the person
+ * you are looking at is never the last one. An administrator is in neither
+ * position, so a demotion here really can be refused — and it is refused
+ * server-side with a sentence rather than disabled, for the reason above.
  */
 export function RoleMenu({
-	open, setOpen, memberName, role, onChangeRole, onRemove, theme,
+	open, setOpen, memberName, role, onChangeRole, onRemove, onDark = true, held = false, theme,
 }: {
 	open: boolean;
 	setOpen: (open: boolean) => void;
@@ -73,24 +87,89 @@ export function RoleMenu({
 	role: Role;
 	onChangeRole: (role: Role) => void;
 	onRemove: () => void;
+	/** False in the admin console, where this opens on a cream card. */
+	onDark?: boolean;
+	/**
+	 * Present but not pressable — the console while `ADMIN_WRITES_HELD` is on.
+	 *
+	 * The role still **reads**, which is the point: this trigger is the only
+	 * place a member's role is written on the page, so hiding it would take a
+	 * fact away to disable a control. The drawer's own members pane never passes
+	 * this, and must not.
+	 */
+	held?: boolean;
 	theme: Theme;
 }) {
 	const ref = useDismiss<HTMLSpanElement>(open, () => setOpen(false));
+
+	const trigger = onDark
+		? `h-[30px] rounded-[13px] ${open ? DRAWER_SUNK_ON : DRAWER_SUNK}`
+		/* 32px at radius 10 as the boards draw it, and it keeps one treatment
+		 * open or shut: the cream trigger's "open" is the menu below it, where
+		 * the drawer's had to invert because a dark control on a dark panel has
+		 * no other way to say so. */
+		/* 44 on a phone, 32 as drawn above `md` — the console's rows are 78px
+		 * tall at 390 and a 32px control inside one is the hit area the
+		 * shopping list already corrected once. */
+		: `h-11 md:h-8 rounded-[10px] font-semibold ${PAGE_SUNK}`;
 
 	return (
 		<span class="relative shrink-0" ref={ref}>
 			<button
 				onClick={() => setOpen(! open)}
-				class={`flex items-center gap-[5px] h-[30px] pl-3 pr-2.5 rounded-[13px] text-[13.5px] ${open ? DRAWER_SUNK_ON : DRAWER_SUNK}`}
+				disabled={held}
+				class={`flex items-center gap-[5px] pl-3 pr-2.5 text-[13.5px] ${trigger} ${held ? PAGE_HELD : ''}`}
 				aria-haspopup="menu"
 				aria-expanded={open}
-				aria-label={`${memberName} is ${ROLE_LABELS[role]} — change role`}
+				/* The label states the role either way and only the second half
+				  * changes, so a screen reader hears what the sighted reader sees
+				  * rather than an offer the control cannot honour. */
+				aria-label={held
+					? `${memberName} is ${ROLE_LABELS[role]} — changing roles is on hold`
+					: `${memberName} is ${ROLE_LABELS[role]} — change role`}
 			>
 				{ROLE_LABELS[role]}
 				<ChevronDown size={13} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
 			</button>
 
-			{open && (
+			{open && ! onDark && (
+				<div
+					role="menu"
+					aria-label={`Role for ${memberName}`}
+					class={`${PAGE_MENU} right-0 top-full mt-1.5 w-[240px]`}
+					style={{ boxShadow: theme.liftShadow }}
+				>
+					{ROLES.map((option) => {
+						const on = option === role;
+
+						return (
+							<button
+								key={option}
+								role="menuitemradio"
+								aria-checked={on}
+								onClick={() => { setOpen(false); if (! on) onChangeRole(option); }}
+								class={PAGE_MENU_ROW}
+								style={{ color: theme.text, fontWeight: on ? 600 : 400 }}
+							>
+								<span class="flex-1 min-w-0 truncate">{ROLE_LABELS[option]}</span>
+								{on && <Check size={15} strokeWidth={2.4} style={{ color: theme.accent }} />}
+							</button>
+						);
+					})}
+
+					<div class="h-px mx-2 my-[5px]" style={{ background: theme.divider }} />
+
+					<button
+						role="menuitem"
+						onClick={() => { setOpen(false); onRemove(); }}
+						class={PAGE_MENU_ROW_DANGER}
+					>
+						Remove from household
+					</button>
+				</div>
+			)}
+
+			{open && onDark && (
 				<DrawerMenu label={`Role for ${memberName}`} width="224px" place="right-0 top-full mt-1.5" theme={theme}>
 					{ROLES.map((option) => {
 						const on = option === role;

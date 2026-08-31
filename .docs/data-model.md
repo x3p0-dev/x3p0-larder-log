@@ -354,6 +354,63 @@ itemStores: table({
 be loaded without walking through `items` first, and so orphan cleanup is a
 scoped scan rather than a full-table one.
 
+### `activity`
+
+The admin console's audit log
+([D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment)).
+**The eleventh table, and the first new one since `profiles`.**
+
+| Field | Type | Notes |
+|---|---|---|
+| `at` | `string()` | ISO 8601 UTC. Ours, not `createdAt` — see below |
+| `actorId` | `string().default('')` | The `userId` who did it. `''` when the actor is not a person |
+| `actorName` | `string().default('')` | A **copy**, taken at write time, that outlives the account |
+| `actorKind` | `string().default('person')` | `person` \| `automatic` \| `system` |
+| `action` | `string()` | A stable slug — `household.delete`, `member.role`, … |
+| `targetKind` | `string().default('')` | `household` \| `account` \| `membership` \| `invite` |
+| `targetId` | `string()` | Deliberately **not** `id()` — see below |
+| `targetName` | `string().default('')` | A copy, for the same reason `actorName` is |
+| `targetInk` | `string().default('')` | A household's colour token, so a deleted one's tile still draws |
+| `fromValue` / `toValue` | `string().default('')` | Whatever the action moved between — a role, a name |
+| `held` | `string().default('')` | JSON. What a deleted thing held, at the moment it went |
+
+Index: `by_at` — the log's order, its pager, and its export range.
+
+**Four things about this table are unlike every other one.**
+
+**`targetId` is a plain `string()`, not an `id()`.** Every other reference in
+this schema is a type hint pointing at a row that exists. This one points at
+rows that are *supposed* to stop existing: a deletion entry outlives its target
+by design, and `id('households')` would be a hint that resolves to nothing
+forever after.
+
+**It denormalises, and only a deletion row needs it to.** `targetName`,
+`targetInk` and `held` are the row's own copy of a thing that is gone — it is
+the only surviving record of it, so a join is not available at any price. Every
+other row could join and denormalises anyway, so one read answers.
+
+**`held` is JSON in a string.** Zero has no array or JSON type and no numeric
+type, so the alternative is five string columns that only one action ever fills
+— five permanent columns (D44) bought for one row shape. `shared/activity.ts`
+owns the encoding and its decoder **never throws**: a row is written once and
+read forever, so it survives `''`, a value written by a later version, and a
+corrupt string alike.
+
+**`at` is ours and it is strictly increasing.** D44's reason applies — a stamp
+this app sorts by is a stamp this app writes — and one more that only a log has:
+two rows written by one mutation landed on the same millisecond, at which point
+`by_at` descending put a transfer *above the deletion that caused it*.
+`logActivity` never reuses a stamp, so `by_at` is a true order. It is
+per-isolate, so concurrent requests can still tie.
+
+**There is no `changedAt`**, because an audit row is never edited.
+
+**Rows expire and nothing schedules it.** `LARDER_RETENTION_MONTHS` (default 24)
+sets the window, and the log prunes what has expired every time it is appended
+to — a bounded number per write. A log nothing is adding to is a log nothing is
+pruning. Retention is **not** a control in the console: an administrator who
+could shorten it could erase the record of what administrators did.
+
 ## Relationships
 
 ```
@@ -450,7 +507,8 @@ dependents, in this order:
 | `store` | its `itemStores` rows | — |
 | `location` | — | **refused** if any item references it; see [D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it) |
 | `member` (demote or remove) | — | revoke the `invites` they created ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) |
-| `household` | everything scoped to it, `memberships` and `invites` included | last, after all children |
+| `household` | everything scoped to it, `memberships` and `invites` included | last, after all children. **Its `activity` rows survive** |
+| `account` (console only) | every `membership` it holds, and its `profiles` row | its solely-owned households are transferred or deleted first, one decision each. **Its `activity` rows survive** |
 
 The location case is not a cascade at all. Zero has no nullable fields, so an
 item cannot be left without a location; `deleteTerm` refuses to delete a
@@ -461,6 +519,16 @@ Deleting an **item** is a hard delete — undo is a client-held tombstone that
 re-inserts, not a `deletedAt` flag, so no query filters on deletion state
 ([D17](decisions.md#d17-undo-is-a-client-held-tombstone-not-a-soft-delete)).
 Undo therefore produces a new row `id`.
+
+**`activity` is the one table nothing cascades into**, and that is the point of
+it: an audit row is the surviving record of a deletion, so a cascade that
+reached it would erase exactly what it exists to keep. It expires on its own
+clock and on nothing else's.
+
+**Deleting an account is a cascade this app can perform and a deletion it cannot
+complete.** It removes every row keyed to a `userId` — the memberships, the
+profile — and it cannot remove the Spacefast account itself, which lives on the
+platform. Signing in again produces a stranger with the same id and no history.
 
 ## Query surface (initial)
 
@@ -490,6 +558,51 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `changeRole` | mutation | Promote or demote a member — owner only, last-owner guarded |
 | `removeMember` / `leaveHousehold` | mutation | Membership removal, last-owner guarded |
 | `deleteHousehold` | mutation | Owner only; cascades through every child table |
+
+### The admin console's surface
+
+Eight queries and six mutations, all gated on `LARDER_ADMIN_IDS`
+([D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment)).
+**They are the only handlers in the capsule that reach a household the caller is
+not a member of**, so the household id here really is only a selector — there is
+no membership to resolve it against, and `requireAdmin` is the only check
+beneath them.
+
+| Name | Kind | What it does |
+|---|---|---|
+| `adminAccess` | query | One boolean. The only console query anybody who is not an administrator ever runs |
+| `adminSummary` | query | Overview — four counts, three 30-day deltas, twelve months of households, and what needs attention |
+| `adminHouseholds` | query | The household list — searched, chipped, sorted, paged |
+| `adminHousehold` | query | One household's metadata: counts, members, live invites |
+| `adminPeople` | query | The people list, on the same four axes |
+| `adminAccount` | query | One account: where they are a member and what they can do there |
+| `adminActivity` | query | The audit log, newest first, paged |
+| `adminActivityExport` | query | A **range** of the log, capped, for CSV |
+| `adminSetRole` | mutation | A member's role in a household the caller is not in. Last-owner guarded |
+| `adminRemoveMember` | mutation | Same, and revokes their invites (D21) |
+| `adminRevokeInvite` | mutation | Kills a link somebody else is holding |
+| `adminDeleteHousehold` | mutation | The full cascade, plus the audit row that records what it held |
+| `adminTransferOwnership` | mutation | Promotes one member and demotes every other owner, in that order |
+| `adminDeleteAccount` | mutation | Every membership and the profile, after one decision per solely-owned household |
+
+**A console query answers `{ state: 'denied' }` and never throws**, for the
+reason every query here reports rather than throwing. A console *mutation*
+throws, because a mutation's rejection reaches the client.
+
+**An administrator is exempt from none of the household's own rules** — D22's
+last owner, D21's invite revocation, and the cascade above all apply unchanged.
+A console that could strand a household would be manufacturing the state its own
+Overview flags as needing attention.
+
+**Six of the eight queries scan whole tables**, because Zero's query builder is
+`collect` / `take` / `first` / `paginate` with no aggregate at all — a count is
+a scan and there is nothing to push down. `by_creation`, which every table has
+whether or not it declares an index, is what makes it possible with no schema
+change. It is linear in the whole database and fine at this size; **it stops
+being fine somewhere in the low thousands**, and the fix then is a denormalised
+counts row per household maintained by the mutations that already invalidate,
+not a smarter query. `adminHousehold` and `adminActivity` are the exceptions —
+one reads `by_household`, the other `by_at`.
 
 `pantry` returning one denormalized payload keeps the client to a single live
 subscription. Whether that stays practical as the item count grows is an

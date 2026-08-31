@@ -21,8 +21,22 @@ import {
 	normalizeName, normalizeNotes, termKey, normalizeInk, DEFAULT_INK, isInk,
 	isValidName, MAX_NAME, termBlock, termUsageCount, byName,
 } from '../shared/term';
-import { isSignedIn, isDevGuest, type IdentityLike } from '../shared/identity';
+import {
+	ANON_GUEST_NAME, DEV_GUESTS_VAR, isDevGuest, isSignedIn, parseDevGuests,
+	type IdentityLike,
+} from '../shared/identity';
+import {
+	ADMIN_HELD_NOTE, ADMIN_HELD_REFUSAL, ADMIN_IDS_VAR, ADMIN_WRITES_HELD, adminWritesHeldFor,
+	cumulativeByMonth,
+	daysBetween, DORMANT_DAYS, isAdminUser, isDormant, isWithinDays, matchScore, monthKey,
+	monthKeysBack, monthLabel, parseAdminIds, SERIES_MONTHS, usDate, usDateFrom, usLongDate,
+} from '../shared/admin';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
+import {
+	ACTIONS, actionPhrase, actionTitle, decodeHeld, encodeHeld, heldPhrase,
+	isAction, isDestructive, retentionCutoff, RETENTION_DEFAULT_MONTHS,
+	RETENTION_MAX_MONTHS, toActorKind, toRetentionMonths,
+} from '../shared/activity';
 import { householdInk, householdLetter, toHouseholdInk } from '../shared/household';
 import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName, pickDisplayName } from '../shared/profile';
 import { normalizeAvatarUrl } from '../shared/avatar';
@@ -389,40 +403,59 @@ check('shorthand hex rejected', normalizeInk('#abc'), DEFAULT_INK);
 check('legacy hex is still accepted', isInk('#8c2f2f'), true);
 check('notes keep newlines', normalizeNotes('a\nb'), 'a\nb');
 
-// --- the dev-guest bypass (D14's server half) ---
+// --- who counts as signed in ---
 //
-// This is the app's only authentication hole. What matters is not that the dev
-// identity passes, but that nothing else does.
-const devGuest: IdentityLike = {
+// **This block is the tripwire for the v15 leak.** The old rule admitted the
+// exact identity `sf dev` issues, and the hosted runtime hands an
+// *unauthenticated* caller that same identity — so an anonymous `curl` against
+// the published space was a signed-in user. What matters here is not that a dev
+// guest passes; it is that `guest:local` never does, however it is configured.
+const anonGuest: IdentityLike = {
 	userId: 'guest:local', displayName: 'Local', provider: 'guest',
 	isGuest: true, isAuthenticated: false,
 };
+const namedGuest: IdentityLike = {
+	userId: 'guest:justin-7f3a91c2', displayName: 'Justin 7f3a91c2', provider: 'guest',
+	isGuest: true, isAuthenticated: false,
+};
 const realUser: IdentityLike = {
-	userId: 'gravatar:abc123', displayName: 'Justin', provider: 'gravatar',
+	userId: 'account:abc123', displayName: 'Justin', provider: 'gravatar',
 	isGuest: false, isAuthenticated: true,
 };
 
-check('dev guest is recognized', isDevGuest(devGuest), true);
-check('dev guest may act', isSignedIn(devGuest), true);
-check('real user may act', isSignedIn(realUser), true);
-check('real user is not a dev guest', isDevGuest(realUser), false);
+const DEV = 'justin-7f3a91c2, alice-2d81ee40';
 
-// Each field must be load-bearing: a production guest that matches only some of
-// the dev identity must still be refused.
-for (const [label, override] of [
-	['different userId', { userId: 'guest:a1b2c3' }],
-	['empty userId', { userId: '' }],
-	['gravatar provider', { provider: 'gravatar' }],
-	['different displayName', { displayName: 'Anonymous' }],
-	['claims authenticated', { isAuthenticated: true }],
-] as [string, Partial<IdentityLike>][]) {
-	const impostor: IdentityLike = { ...devGuest, ...override };
-	check(`guest with ${label} is refused`, isSignedIn(impostor), false);
-	check(`guest with ${label} is not a dev guest`, isDevGuest(impostor), false);
-}
+check('a real account may act', isSignedIn(realUser, undefined), true);
+check('and does not need the dev list', isSignedIn(realUser, ''), true);
+
+// **The four that must never change.** `guest:local` is the only identity a
+// published space can mint, so every one of these is a production caller.
+check('the anonymous guest is refused', isSignedIn(anonGuest, undefined), false);
+check('and stays refused when a dev list exists', isSignedIn(anonGuest, DEV), false);
+check('and cannot be let in by naming it', isSignedIn(anonGuest, 'local'), false);
+check('nor by naming it with the prefix', isSignedIn(anonGuest, 'guest:local'), false);
+check('parsing drops it either way', parseDevGuests('local, guest:local, alice'), ['alice']);
+check('the excluded name is stated once', ANON_GUEST_NAME, 'local');
+
+// A named guest is `sf dev` only — production ignores `?guest=`, verified
+// against the live space on 2026-08-30.
+check('a named dev guest in the list may act', isSignedIn(namedGuest, DEV), true);
+check('but not when the list is absent', isSignedIn(namedGuest, undefined), false);
+check('nor when the list is empty', isSignedIn(namedGuest, ''), false);
+check('nor when the list names somebody else', isSignedIn(namedGuest, 'alice-2d81ee40'), false);
+check('the match is exact, not a prefix', isSignedIn(namedGuest, 'justin'), false);
+check('the list accepts the prefixed spelling too', isSignedIn(namedGuest, 'guest:justin-7f3a91c2'), true);
+check('the variable is named once', DEV_GUESTS_VAR, 'LARDER_DEV_GUESTS');
+
+// A guest that claims to be authenticated is still a guest. Both flags are
+// required together so a future identity setting only one is refused.
+check('a guest claiming authentication is refused', isSignedIn({ ...namedGuest, isAuthenticated: true }, DEV), false);
+check('an account that is not authenticated is refused', isSignedIn({ ...realUser, isAuthenticated: false }, DEV), false);
+check('an id with no guest prefix is not a dev guest', isDevGuest({ ...namedGuest, userId: 'justin-7f3a91c2' }, DEV), false);
 
 // A signed-in user with no id is not a user.
-check('no userId is refused', isSignedIn({ ...realUser, userId: '' }), false);
+check('no userId is refused', isSignedIn({ ...realUser, userId: '' }, DEV), false);
+check('and an empty guest id is refused', isSignedIn({ ...namedGuest, userId: 'guest:' }, DEV), false);
 
 // --- D28: invite links ride in a query parameter ---
 
@@ -1319,6 +1352,300 @@ const noTypes = resolveDemoItems(DEMO_LOCS, [], DEMO_STORES, NOW);
 check('a missing taxonomy keeps every row', noTypes.drafts.length, 60);
 check('with no types on any of them', noTypes.drafts.every((d) => d.typeIds.length === 0), true);
 check('and its stores intact', noTypes.drafts.some((d) => d.storeIds.length > 0), true);
+
+// --- the admin console (shared/admin.ts) ---
+//
+// The authorization half is the app's second security test after
+// `shared/identity.ts`, and it is fail-closed in every direction: an unset
+// variable, an empty one and a list that does not name you all answer no.
+
+check('an absent admin list parses to nothing', parseAdminIds(undefined), []);
+check('and so does an empty one', parseAdminIds(''), []);
+check('and so does one that is only separators', parseAdminIds(' , ,\n'), []);
+check('commas separate', parseAdminIds('a,b,c'), ['a', 'b', 'c']);
+check('so does whitespace', parseAdminIds('a b\tc'), ['a', 'b', 'c']);
+check('so do both together, with padding', parseAdminIds(' a , b\n c '), ['a', 'b', 'c']);
+// A trailing comma would otherwise put '' in the list, which an identity with
+// no userId would match. That is the whole reason blanks are dropped.
+check('a trailing comma leaves no blank id', parseAdminIds('a,b,'), ['a', 'b']);
+check('the variable is named once', ADMIN_IDS_VAR, 'LARDER_ADMIN_IDS');
+
+const account = (userId: string): IdentityLike => ({
+	userId, displayName: 'Someone', provider: 'gravatar', isGuest: false, isAuthenticated: true,
+});
+// The identity a published space hands a stranger. Every assertion naming it
+// below is a production caller, not a local one.
+const anonAdminGuest: IdentityLike = {
+	userId: 'guest:local', displayName: 'Local', provider: 'guest',
+	isGuest: true, isAuthenticated: false,
+};
+const namedAdminGuest: IdentityLike = {
+	userId: 'guest:justin-7f3a91c2', displayName: 'Justin 7f3a91c2', provider: 'guest',
+	isGuest: true, isAuthenticated: false,
+};
+
+check('nobody is an administrator on a space with nothing set', isAdminUser(account('a'), undefined, undefined), false);
+check('nor on one with an empty list', isAdminUser(account('a'), '', ''), false);
+check('an id in the list is', isAdminUser(account('a'), 'a,b', undefined), true);
+check('an id that is not is not', isAdminUser(account('c'), 'a,b', undefined), false);
+check('the match is exact, not a prefix', isAdminUser(account('a'), 'abc', undefined), false);
+check('and not a suffix either', isAdminUser(account('bc'), 'abc', undefined), false);
+
+// **The regression test for the v15 leak.** `isAdminUser` used to open with a
+// dev-guest bypass, and the hosted runtime hands an *unauthenticated* caller
+// that exact identity — so on the live space `adminAccess` answered
+// `{admin: true}` to anybody with a curl. These are what stop it coming back,
+// and the third is the important one: naming `guest:local` in **both** lists,
+// which is the worst thing somebody could write in `.env.server`, still fails.
+check('the anonymous guest does not administer', isAdminUser(anonAdminGuest, undefined, undefined), false);
+check('nor when the admin list names it', isAdminUser(anonAdminGuest, 'guest:local', undefined), false);
+check('nor when both lists name it', isAdminUser(anonAdminGuest, 'guest:local', 'local'), false);
+
+// Administration is signing in plus being named, so a dev guest needs both.
+check('a named dev guest in both lists administers', isAdminUser(namedAdminGuest, 'guest:justin-7f3a91c2', 'justin-7f3a91c2'), true);
+check('but not on the admin list alone', isAdminUser(namedAdminGuest, 'guest:justin-7f3a91c2', undefined), false);
+check('and not on the dev list alone', isAdminUser(namedAdminGuest, undefined, 'justin-7f3a91c2'), false);
+
+check('an identity with no id never matches', isAdminUser(account(''), '', undefined), false);
+check('and cannot be let in by a blank list entry', isAdminUser(account(''), 'a,,b', undefined), false);
+
+// --- the arithmetic ---
+
+const NOW_A = '2026-08-29T12:00:00.000Z';
+
+check('a blank stamp has no age', daysBetween('', NOW_A), null);
+check('and neither has a bogus one', daysBetween('not a date', NOW_A), null);
+check('today is zero days ago', daysBetween('2026-08-29T01:00:00.000Z', NOW_A), 0);
+check('yesterday is one', daysBetween('2026-08-28T01:00:00.000Z', NOW_A), 1);
+
+check('a stamp inside the window counts', isWithinDays('2026-08-20T00:00:00.000Z', NOW_A, 30), true);
+check('one outside it does not', isWithinDays('2026-06-20T00:00:00.000Z', NOW_A, 30), false);
+check('a blank stamp is never inside it', isWithinDays('', NOW_A, 30), false);
+// A future stamp is not "new" — it is broken data, and counting it would let
+// one bad row inflate every delta on Overview for as long as it exists.
+check('and neither is a future one', isWithinDays('2027-01-01T00:00:00.000Z', NOW_A, 30), false);
+
+check('90 days idle is dormant', isDormant('2026-05-01T00:00:00.000Z', NOW_A), true);
+check('89 is not', isDormant(daysAgoIso(NOW_A, DORMANT_DAYS - 1), NOW_A), false);
+check('exactly 90 is', isDormant(daysAgoIso(NOW_A, DORMANT_DAYS), NOW_A), true);
+// The load-bearing one. Every stamp column defaults to '' and nothing
+// backfills (D44), so treating "no date" as "very old" would flag the app's
+// oldest households — the ones most likely to be real — as abandoned.
+check('an unknown last-active is not dormant', isDormant('', NOW_A), false);
+
+// D62's dates are US style — month, day, comma, year — and the console had four
+// copies of the day-first form before they were consolidated here. These are
+// what stops a fifth copy drifting back: the comma is not optional in this
+// order, and the month name comes first.
+check('a short date is month first', usDate('2026-03-04T00:00:00.000Z'), 'Mar 4, 2026');
+check('the long form spells the month', usLongDate('2026-03-04T00:00:00.000Z'), 'March 4, 2026');
+check('a two-digit day keeps the comma', usDate('2026-12-25T00:00:00.000Z'), 'Dec 25, 2026');
+// UTC, not the reader's zone. A stamp late on the 4th in London is still the
+// 4th here, and the audit log — which prints `UTC` beside the time — would
+// otherwise contradict the page it was opened from.
+check('a late stamp does not roll over', usDate('2026-03-04T23:59:59.000Z'), 'Mar 4, 2026');
+check('an unreadable stamp is the fallback', usDate('not a date'), 'unknown');
+check('and the fallback is the caller\u2019s', usLongDate('', 'at some point'), 'at some point');
+check('the number form agrees with the string form', usDateFrom(Date.parse('2026-03-04T00:00:00.000Z')), 'Mar 4, 2026');
+check('and NaN falls back too', usDateFrom(Number.NaN), 'unknown');
+
+// The hold (2026-08-30). Asserted rather than assumed because the flag is the
+// only thing standing between a first look at the console and a deleted
+// household, and because flipping it back is meant to be one line: if that line
+// moves, this is what says so.
+check('the console\u2019s writes are held', ADMIN_WRITES_HELD, true);
+// The hold is a **production** hold: a real account is refused, and a dev guest
+// is exempt so the deletion flows can be exercised at all. `guest:` ids only
+// exist under `sf dev`, so "exempt" and "local" are the same set.
+check('a real account is held', adminWritesHeldFor(account('a')), true);
+check('a dev guest is not', adminWritesHeldFor(namedAdminGuest), false);
+check('the held note says nothing can change', ADMIN_HELD_NOTE.includes('Nothing here can be changed'), true);
+check('and the refusal says nothing did', ADMIN_HELD_REFUSAL.includes('Nothing was changed'), true);
+// The refusal must not be the permission message — an administrator reading
+// that one would go looking at `LARDER_ADMIN_IDS` for a problem that is not
+// there. `tsc` proves it outright: the two are literal types with no overlap,
+// so a comparison here is a compile error rather than an assertion.
+
+check('a month key is the first seven characters', monthKey('2026-08-29T12:00:00.000Z'), '2026-08');
+check('a label is the short month', monthLabel('2026-08'), 'Aug');
+check('and takes a year when asked', monthLabel('2026-08', true), 'Aug 2026');
+
+const months = monthKeysBack(NOW_A);
+check('the series is twelve months long', months.length, SERIES_MONTHS);
+check('and ends on the current one', months[11], '2026-08');
+// Stepping a Date backwards by a month lands on the 31st of a 30-day month and
+// skips one. Walking a month *number* cannot, which is why it is written that
+// way — and this is the assertion that would catch it coming back.
+check('and starts eleven back, across the year boundary', months[0], '2025-09');
+check('a January now walks back into the previous year', monthKeysBack('2026-01-15T00:00:00.000Z', 3), ['2025-11', '2025-12', '2026-01']);
+check('a 31st does not skip February', monthKeysBack('2026-03-31T00:00:00.000Z', 2), ['2026-02', '2026-03']);
+check('an unparseable now gives no series at all', monthKeysBack('nonsense'), []);
+
+// Cumulative, not per-month: a household that existed in March still exists in
+// April, and a line labelled *Households* that dips would be a different chart.
+const stamps = ['2026-06-02T00:00:00.000Z', '2026-07-11T00:00:00.000Z', '2026-07-30T00:00:00.000Z'];
+check(
+	'the series is a running total',
+	cumulativeByMonth(stamps, ['2026-05', '2026-06', '2026-07', '2026-08']),
+	[0, 1, 3, 3]
+);
+// Anything older than the window still counts toward the first bucket — the app
+// did not begin twelve months ago, and a series starting at zero would say so.
+check(
+	'a stamp older than the window counts from the start',
+	cumulativeByMonth(['2024-01-01T00:00:00.000Z'], ['2026-07', '2026-08']),
+	[1, 1]
+);
+check(
+	'a blank stamp counts nowhere',
+	cumulativeByMonth(['', 'nonsense'], ['2026-07', '2026-08']),
+	[0, 0]
+);
+
+/** N whole days before an ISO stamp, for the dormancy boundaries above. */
+function daysAgoIso(nowIso: string, days: number): string {
+	return new Date(Date.parse(nowIso) - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+// --- the audit log (shared/activity.ts) ---
+//
+// The encoding is the part that is invisible when wrong: a row is written once
+// and read forever, so the decoder has to survive '', a value written by a
+// later version, and a genuinely corrupt string — and never throw on a screen
+// whose whole job is being readable during an incident.
+
+check('a known action is recognized', isAction('household.delete'), true);
+check('an unknown one is not', isAction('household.explode'), false);
+check('the vocabulary is closed', ACTIONS.length, 7);
+
+check('an unknown actor kind falls back to a person', toActorKind('wat'), 'person');
+check('and so does an empty one', toActorKind(''), 'person');
+check('a known one survives', toActorKind('automatic'), 'automatic');
+
+check('counts round-trip', decodeHeld(encodeHeld({ items: 41, members: 2 })), { items: 41, members: 2 });
+check('nothing encodes to nothing', encodeHeld({}), '');
+check('and an empty string decodes to nothing', decodeHeld(''), {});
+// Every non-deletion row holds '', so this is the common path, not the edge.
+check('a corrupt string decodes to nothing', decodeHeld('{items:'), {});
+check('a JSON array decodes to nothing', decodeHeld('[1,2]'), {});
+check('a JSON scalar decodes to nothing', decodeHeld('7'), {});
+check('null decodes to nothing', decodeHeld('null'), {});
+// A row written by a later version that learned a sixth count.
+check('an unknown key is dropped, the rest survive', decodeHeld('{"items":3,"jars":9}'), { items: 3 });
+check('a non-numeric count is dropped', decodeHeld('{"items":"three","types":2}'), { types: 2 });
+check('a negative count is dropped', decodeHeld('{"items":-1,"types":2}'), { types: 2 });
+check('NaN never survives encoding', encodeHeld({ items: NaN }), '');
+check('Infinity never survives encoding', encodeHeld({ items: Infinity }), '');
+check('a fractional count is floored', decodeHeld(encodeHeld({ items: 4.9 })), { items: 4 });
+check('zero is a real count and is kept', decodeHeld(encodeHeld({ items: 0 })), { items: 0 });
+
+check('the phrase reads in order', heldPhrase({ types: 6, items: 41 }), '41 items · 6 types');
+check('and singularises', heldPhrase({ items: 1, members: 1 }), '1 item · 1 member');
+check('nothing held says nothing', heldPhrase({}), '');
+
+// The sentence is assembled, never stored — which is the whole reason the slug
+// is what goes in the column.
+check(
+	'a deletion names the household',
+	actionPhrase('household.delete', 'Riverside Kitchen', '', ''),
+	'deleted the household Riverside Kitchen'
+);
+check(
+	'a role change names both ends',
+	actionPhrase('member.role', 'Nora Vance', 'editor', 'viewer'),
+	'changed Nora Vance from editor to viewer'
+);
+check(
+	'a role change with no ends still reads',
+	actionPhrase('member.role', 'Nora Vance', '', ''),
+	'changed Nora Vance’s role'
+);
+check(
+	'a transfer names who got it',
+	actionPhrase('household.transfer', 'The Lake Cabin', 'Sarah', 'Justin'),
+	'handed The Lake Cabin over to Justin'
+);
+// A row whose target was never named — the account with no name anywhere.
+check(
+	'a nameless target does not print an id',
+	actionPhrase('household.delete', '', '', ''),
+	'deleted the household something that is gone'
+);
+// A row written by a version that knew more actions than this one. It is still
+// a time and a person, which is most of what a log entry is for.
+check(
+	'an unrecognized action still reads as something',
+	actionPhrase('household.teleport', 'X', '', ''),
+	'did something this version does not recognize (household.teleport)'
+);
+check('and has a title', actionTitle('household.teleport'), 'Unrecognized action');
+check('a known action has its own', actionTitle('account.delete'), 'Account deleted');
+
+check('a household deletion is destructive', isDestructive('household.delete'), true);
+check('an account deletion is too', isDestructive('account.delete'), true);
+check('a role change is not', isDestructive('member.role'), false);
+
+// --- retention (shared/activity.ts) ---
+//
+// Every branch falls back to the default rather than refusing: a log that stops
+// working over a typo in an environment variable is worse than one that keeps
+// its rows a little longer than intended.
+
+check('an absent retention is the default', toRetentionMonths(undefined), RETENTION_DEFAULT_MONTHS);
+check('and so is an empty one', toRetentionMonths('   '), RETENTION_DEFAULT_MONTHS);
+check('and so is a word', toRetentionMonths('forever'), RETENTION_DEFAULT_MONTHS);
+check('a number is read', toRetentionMonths('6'), 6);
+check('with padding', toRetentionMonths(' 6 '), 6);
+check('a fraction is floored', toRetentionMonths('6.9'), 6);
+// Zero is a real answer and means keep nothing. A negative is not, and must not
+// read as "keep forever" through the arithmetic below.
+check('zero is a real answer', toRetentionMonths('0'), 0);
+check('a negative falls back', toRetentionMonths('-1'), RETENTION_DEFAULT_MONTHS);
+check('and so does an absurd one', toRetentionMonths(String(RETENTION_MAX_MONTHS + 1)), RETENTION_DEFAULT_MONTHS);
+check('the ceiling itself is allowed', toRetentionMonths(String(RETENTION_MAX_MONTHS)), RETENTION_MAX_MONTHS);
+
+// The cutoff walks a month number, not a Date, for the reason `monthKeysBack`
+// does — and clamps the day, which is the case that would silently delete three
+// extra days of records every 31st.
+check(
+	'a month back is a month back',
+	retentionCutoff('2026-08-29T12:00:00.000Z', 1).slice(0, 10),
+	'2026-07-29'
+);
+check(
+	'the 31st clamps rather than overshooting',
+	retentionCutoff('2026-08-31T12:00:00.000Z', 1).slice(0, 10),
+	'2026-07-31'
+);
+check(
+	'and clamps into February',
+	retentionCutoff('2026-03-31T12:00:00.000Z', 1).slice(0, 10),
+	'2026-02-28'
+);
+check(
+	'a year and a half crosses the boundary',
+	retentionCutoff('2026-08-29T12:00:00.000Z', 18).slice(0, 10),
+	'2025-02-28'
+);
+// Zero months means the cutoff is now, so everything already written expires.
+check('zero months cuts off at now', retentionCutoff('2026-08-29T12:00:00.000Z', 0).slice(0, 10), '2026-08-29');
+check('an unparseable now yields no cutoff', retentionCutoff('nonsense', 12), '');
+
+// --- the relevance ladder (shared/admin.ts) ---
+//
+// It only exists while there is a query, and the ladder is what stops a row
+// that matched on its id from outranking one whose name starts with the term.
+
+check('no query scores nothing', matchScore('', 'Riverside Kitchen', [], 'hh_1'), 0);
+check('and neither does whitespace', matchScore('   ', 'Riverside Kitchen', [], 'hh_1'), 0);
+check('an exact name wins outright', matchScore('riverside kitchen', 'Riverside Kitchen', [], 'x'), 100);
+check('a prefix beats a substring', matchScore('river', 'Riverside Kitchen', [], 'x') > matchScore('side', 'Riverside Kitchen', [], 'x'), true);
+check('a name beats a member name', matchScore('nora', 'Nora’s Place', [], 'x') > matchScore('nora', 'Somewhere', ['Nora Vance'], 'x'), true);
+check('a member name beats an id', matchScore('nora', 'Somewhere', ['Nora Vance'], 'x') > matchScore('ab', 'Somewhere', [], 'hh_ab12'), true);
+check('an id match still counts', matchScore('ab12', 'Somewhere', [], 'hh_ab12'), 10);
+check('nothing anywhere scores zero', matchScore('zzz', 'Somewhere', ['Nora'], 'hh_1'), 0);
+check('matching is case-insensitive', matchScore('RIVER', 'Riverside Kitchen', [], 'x'), 80);
+check('the best of several secondaries wins', matchScore('nora', 'X', ['A Nora B', 'Nora Vance'], 'y'), 40);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

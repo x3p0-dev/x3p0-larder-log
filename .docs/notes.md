@@ -290,6 +290,94 @@ summarized here.
   behaves the same in both environments; D31 records the self-hosted recipe in
   full if that ever changes.
 
+## Open after the admin console (2026-08-29)
+
+D62 built the whole of the console's design except board 10, which it settles
+against. These are what it left behind — none blocking, all worth a decision
+before somebody rediscovers them.
+
+**Owed by the feature itself:**
+
+- **Nothing has been clicked.** The console is a whole surface verified entirely
+  by compiling, curling and reading rows back. The Phase 4.9 entry already
+  records what that is worth: one real session found six defects no such check
+  could catch. The unclicked list here is the pane, six screens, three confirms,
+  a pre-flight, a chart and a CSV download.
+
+  **The 2026-08-30 states sweep is the strongest argument yet for clicking it.**
+  Ten controls were missing a hover, a press, a focus ring or an open state, and
+  every one of them passed typecheck, passed the class diff, and would have
+  passed a browserless check of any kind — because the classes were all
+  *present*, and an inline style was quietly beating them. That is the same
+  shape as the `ResizeObserver` that never attached: a control that compiles,
+  serves, and does not respond.
+
+  **And the sweep itself shipped two dead controls**, found by a real session
+  the same day: both *Delete* buttons hovered to the colour of the strip they
+  sat on. A class-literal diff proves a rule is in the sheet and cannot see what
+  is painted behind it. The ground-aware check written in response reports 0
+  across the console, and four real bugs outside it — **all fixed**: both drawer
+  segmented controls (whose selected tab also had a focus ring measuring
+  **1.00:1**, the same cream as its own fill), `SortMenu`'s rows, the Filter
+  tab's add row inside the editing card, and the invite card's *Copy link*.
+
+- **A ring offset cannot resolve against a fill that is not a `theme.json`
+  token**, and that is where the remaining ones are. `AccountMenu`'s *Save*, the
+  household switcher's four controls and the invite composer's *Create* all sit
+  on `drawer.menu` (`#15110B`) or a `panelSkin` panel (`#262019`), neither of
+  which any `ring-offset-*` class can name — and the switcher is hosted by **two**
+  surfaces with different fills, so no single offset could serve it anyway.
+  `DRAWER_MENU_ROW` already answers this with `ring-inset`. Doing it everywhere
+  is a decision — inset throughout, or promote `menu` to a token — and it has
+  not been made.
+
+  **The chart's tooltip (2026-08-30) is the sharpest case of this on the
+  unclicked list.** Nothing browserless can see a hover at all, and its
+  positioning depends on a scale the browser computes — `xMidYMid meet` picking
+  the smaller of two, and centring the slack. The arithmetic is right on paper
+  and on paper is where it has stayed.
+
+- **Concurrent edits are unhandled and unspoken.** Two administrators can act on
+  one household at once. The console re-reads on every invalidate, so the second
+  one sees the first's result — it just never learns that is what happened, and
+  a role menu that silently answers a different question than the one you opened
+  it on is worse than a refusal.
+- **`LARDER_ADMIN_IDS` is empty in production**, so the console is unreachable
+  there. Setting it needs an `account:…` id, and **there is currently no way to
+  learn your own** — a throwaway endpoint, `sf db console`, or adding it to a
+  screen. Deciding which is the last step before the console exists anywhere but
+  locally.
+- **The retention sweep only runs when something is written.** Append-time
+  pruning needs no scheduler, and the cost is that a quiet space keeps expired
+  rows until the next administrative action. Fine now; a real answer needs a
+  schedule this platform has not been asked for.
+- **Six of the eight console queries scan whole tables.** Zero has no aggregate,
+  so a count is a scan. It is linear in the whole database and stops being fine
+  somewhere in the low thousands — at which point the fix is a denormalised
+  counts row per household, not a smarter query.
+
+**Reserved and unwritten**, both in the log's vocabulary so the renderer handles
+them from the first row:
+
+- **`automatic`** waits on a deletion hold — the boards' *awaiting deletion*,
+  which needs a column.
+- **`system` / out of band** waits on detecting an administrator grant, which
+  would mean storing the last-seen `LARDER_ADMIN_IDS` to diff against. Until
+  then the log cannot show the one event only it could show.
+
+**Wants somebody who is not us:**
+
+- **An audit log that survives the account it names.** `actorName` is a copy
+  taken at write time and stays after deletion, because a log you can erase by
+  deleting yourself is not a log. Both deletion screens now say so. The design
+  doc asks for a lawyer's read before it ships, and that has not happened.
+
+**Answered, so it does not get re-asked:**
+
+- ~~**Should an administrator be able to see inside a household?**~~ **No**, and
+  D62 records it as a decision with a stated threshold for reopening rather than
+  as an omission — which is what the design document asks for.
+
 ## Product questions
 
 All settled as of 2026-08-24 — see [decisions.md](decisions.md), D16-D26.

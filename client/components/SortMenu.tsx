@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'preact/hooks';
 import { Check, ChevronDown } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
-import { PAGE_BUTTON_QUIET, PAGE_FOCUS } from '../lib/controlStyles';
+import {
+	PAGE_BUTTON_QUIET, PAGE_BUTTON_QUIET_ON, PAGE_FOCUS, PAGE_MENU_ROW,
+} from '../lib/controlStyles';
 
 export type SortKey = 'default' | 'restock' | 'name-asc' | 'name-desc' | 'qty-asc' | 'qty-desc';
 
@@ -29,8 +31,7 @@ export type SortKey = 'default' | 'restock' | 'name-asc' | 'name-desc' | 'qty-as
  * down once.
  */
 const TRIGGER = PAGE_BUTTON_QUIET;
-const TRIGGER_ON =
-	'bg-surface-alt border-line-strong text-ink';
+const TRIGGER_ON = PAGE_BUTTON_QUIET_ON;
 
 export const SORT_OPTIONS: { key: SortKey; label: string; short: string; group?: boolean }[] = [
 	{ key: 'default', label: 'Recently added', short: 'Recent' },
@@ -126,7 +127,13 @@ export function SortMenu({ open, setOpen, sortBy, setSortBy, compact, theme }: P
 									role="menuitemradio"
 									aria-checked={on}
 									onClick={() => { setSortBy(opt.key); setOpen(false); }}
-									class={`flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt ${PAGE_FOCUS}`}
+									/* `PAGE_MENU_ROW`, which this was character for
+									  * character apart from the focus ring: `PAGE_FOCUS`
+									  * offsets against `canvas`, and these rows are
+									  * inside a `surface` popover. Two menus a click
+									  * apart wearing the same row and two different
+									  * rings is the drift this app writes down once. */
+									class={PAGE_MENU_ROW}
 									style={{ color: on ? theme.textStrong : theme.text, fontWeight: on ? 600 : 400 }}
 								>
 									<span class="flex-1 min-w-0 truncate">{opt.label}</span>

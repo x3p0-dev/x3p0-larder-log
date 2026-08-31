@@ -294,3 +294,357 @@ export type InvitePreviewResult = InvitePreview;
 export type ProfileResult =
 	| { state: 'guest' }
 	| { state: 'ready'; displayName: string; needsName: boolean };
+
+// --- the admin console ---
+
+/**
+ * What a console query answers when the caller is not an administrator.
+ *
+ * `denied` rather than `guest` / `no-household`: a signed-in owner of three
+ * households is neither of those and still may not see this. It is a value and
+ * not a throw for the reason every other query is (see `QueryState`) — a query
+ * that throws never emits, and the client cannot tell that apart from loading.
+ *
+ * **The client renders nothing at all for it.** Board 8's refusal is a 404 in
+ * the app's own words, not a message this union carries: naming the console in
+ * a denial confirms there is one.
+ */
+export type AdminState<T> =
+	| ({ state: 'ready' } & T)
+	| { state: 'denied' };
+
+/** Whether the account menu draws an *Admin* row. The one cheap console query. */
+export type AdminAccessResult = {
+	admin: boolean;
+	/**
+	 * Whether the console's writes are on hold **for this caller**.
+	 *
+	 * Server-decided rather than worked out client-side, because it depends on
+	 * who is asking: the hold is a production hold and a dev guest is exempt, so
+	 * the deletion flows can be exercised locally without being reachable on the
+	 * live site.
+	 */
+	writesHeld: boolean;
+};
+
+/** One point on Overview's twelve-month line. */
+export type AdminSeriesPoint = {
+	/** `'2026-08'`. */
+	month: string;
+	/** `'Aug'`, or `'Aug 2026'` at a year boundary. */
+	label: string;
+	value: number;
+};
+
+/**
+ * Overview's four cards and its *Needs attention* list.
+ *
+ * **Storage is absent and is not coming.** The boards draw `2.4 GB`; the server
+ * context is `{auth, content, db, env, gravatar, log, spam}` and carries no
+ * storage handle in either direction, so there is no figure to read. *Live
+ * invites* takes the fourth card instead — real, administrative, and it keeps
+ * the row four across.
+ *
+ * The three deltas count what *arrived* in the window, never a net change.
+ * Nothing records a deletion (the Activity log is a later stage), so a month
+ * that lost more households than it gained still reports a positive number.
+ * The copy says *new*, not `+`, so the card does not claim otherwise.
+ */
+export type AdminSummaryData = {
+	households: number;
+	people: number;
+	items: number;
+	invites: number;
+
+	newHouseholds: number;
+	newPeople: number;
+	newItems: number;
+
+	noOwner: number;
+	dormant: number;
+	empty: number;
+
+	series: AdminSeriesPoint[];
+};
+
+export type AdminSummaryResult = AdminState<AdminSummaryData>;
+
+/** A face on a household row — three of them, then a count (D55's rule). */
+export type AdminFace = {
+	name: string;
+	picture: string;
+};
+
+/**
+ * One household as the console lists it, and as its own page opens.
+ *
+ * **Every field is a count, a name or a date.** That is the console's stated
+ * spine and this type is where it is enforceable: if something here is ever not
+ * one of the three, the household page has stopped being metadata-only.
+ */
+export type AdminHouseholdRow = {
+	id: string;
+	name: string;
+	ink: string;
+	faces: AdminFace[];
+	members: number;
+	items: number;
+	/** ISO, or `''` when nothing readable has ever been stamped. */
+	lastActive: string;
+	noOwner: boolean;
+	dormant: boolean;
+	empty: boolean;
+};
+
+/** The status chips above the list, and the one that is on. */
+export type AdminHouseholdFilter = 'all' | 'no-owner' | 'dormant' | 'empty';
+
+/**
+ * `relevance` is offered **only while there is a query** (D62).
+ *
+ * *Best match* means nothing on an unsearched list, so offering it there would
+ * be a sort option that silently does nothing — and the moment a search is
+ * cleared the list falls back to the sort it had before.
+ */
+export type AdminHouseholdSort = 'relevance' | 'name' | 'recent' | 'items' | 'members';
+
+export type AdminHouseholdsData = {
+	rows: AdminHouseholdRow[];
+	/** Rows matching the current search and chip — what `Showing 1–25 of N` counts. */
+	matching: number;
+	/** Every household, whatever is filtered. The chips' *All* count. */
+	total: number;
+	counts: { noOwner: number; dormant: number; empty: number };
+	/** Echoed back so the pager reads the page it was actually given. */
+	offset: number;
+	pageSize: number;
+};
+
+export type AdminHouseholdsResult = AdminState<AdminHouseholdsData>;
+
+/** One member, as the console sees them. A name, a role and a date — nothing else. */
+export type AdminMember = {
+	/** The **membership** id — what the two member writes take. */
+	id: string;
+	/**
+	 * The account behind the membership, so the row can open that person's page.
+	 *
+	 * The two halves of the console meet in both directions now: a household on
+	 * somebody's account page opens the household, and a member here opens the
+	 * account. It is the membership that is written to and the account that is
+	 * navigated to, which is why the row carries both ids.
+	 */
+	userId: string;
+	name: string;
+	picture: string;
+	role: string;
+	/**
+	 * When they joined, from the platform's `createdAt`.
+	 *
+	 * D44 deliberately gave `memberships` no stamps of its own, on the grounds
+	 * that nothing ordered them by time. Nothing still does — this is a date on
+	 * a row, not a sort key — and a membership is never re-inserted by an undo,
+	 * which is the whole reason the app's other tables could not use `createdAt`.
+	 */
+	joinedAt: string;
+};
+
+/**
+ * One live invite, as the console sees it.
+ *
+ * **It carries no code, and that is a security decision rather than an
+ * omission.** The boards draw `larderlog.app/?join=k3f9d2a7b1c8…` on the
+ * household page. A code *is* the authorization (D39) — anyone holding one can
+ * join the household — so printing it here would hand every administrator a
+ * silent way into any pantry, and reading someone's shelves is the one thing
+ * the refusal card on that same page promises the console will not do. An admin
+ * can already delete a household; that is loud, recorded and irreversible,
+ * which is exactly what quietly joining one is not.
+ */
+export type AdminInvite = {
+	id: string;
+	role: string;
+	/** ISO, or `''` for an invite that never expires. */
+	expiresAt: string;
+	issuedAt: string;
+	/** The member who minted it, by name. `''` when they have since left. */
+	issuedBy: string;
+};
+
+export type AdminHouseholdDetailData = {
+	household: AdminHouseholdRow;
+	createdAt: string;
+	holds: { items: number; locations: number; stores: number; types: number };
+	members: AdminMember[];
+	/** Live only — neither revoked nor expired. A dead invite is not a fact. */
+	invites: AdminInvite[];
+};
+
+export type AdminHouseholdDetailResult =
+	| AdminState<AdminHouseholdDetailData>
+	/** The id names nothing. Deleted while the page was open, or simply wrong. */
+	| { state: 'missing' };
+
+/** A household as it appears beside a person — a tile, a name and their role. */
+export type AdminPersonHousehold = {
+	id: string;
+	name: string;
+	ink: string;
+	role: string;
+	members: number;
+	items: number;
+	/**
+	 * They are the only owner, so this household is one the pre-flight must ask
+	 * about before the account can go. It is D22's guard read one household at a
+	 * time — run against every household at once, that rule turns deleting an
+	 * account into a wall for exactly the people most likely to want it.
+	 */
+	soleOwner: boolean;
+	/**
+	 * Everyone **else** in that household, for the pre-flight's menu.
+	 *
+	 * Present only where it is needed — a solely-owned household — because it is
+	 * a list of names per household per person, and shipping it for every row
+	 * would be the whole membership table arriving to answer a question almost
+	 * nobody asks. Empty means nobody else is in there, which is a real state
+	 * and leaves *delete it* as the only answer.
+	 */
+	candidates: { id: string; name: string }[];
+};
+
+/**
+ * One person, as the console lists them.
+ *
+ * **There is no accounts table**, so a person is the union of a `profiles` row
+ * and every membership sharing its `userId`. Someone can have one and not the
+ * other: a profile with no memberships is somebody who named themselves and
+ * then left everywhere, and a membership with no profile is an account that
+ * predates D46.
+ */
+export type AdminPersonRow = {
+	userId: string;
+	name: string;
+	picture: string;
+	/** Up to three tiles, then a count — the members trio's rule (D55). */
+	tiles: { id: string; name: string; ink: string }[];
+	households: number;
+	owned: number;
+	soleOwnerOf: number;
+	/** Named in `LARDER_ADMIN_IDS`. The only flag the console can actually see. */
+	admin: boolean;
+	joinedAt: string;
+};
+
+export type AdminPeopleFilter = 'all' | 'admins' | 'no-household' | 'sole-owner';
+export type AdminPeopleSort = 'relevance' | 'name' | 'joined' | 'households';
+
+export type AdminPeopleData = {
+	rows: AdminPersonRow[];
+	matching: number;
+	total: number;
+	counts: { admins: number; noHousehold: number; soleOwner: number };
+	offset: number;
+	pageSize: number;
+};
+
+export type AdminPeopleResult = AdminState<AdminPeopleData>;
+
+export type AdminAccountData = {
+	person: AdminPersonRow;
+	households: AdminPersonHousehold[];
+	/** Live invites this account minted, anywhere. A count, so still metadata. */
+	invitesIssued: number;
+	/**
+	 * Whether this is the caller's own account.
+	 *
+	 * The pre-flight is the same dialog in both places and only the title
+	 * changes, but the console has to know: deleting yourself here signs you out
+	 * of a profile you are still holding a session for.
+	 */
+	isSelf: boolean;
+};
+
+export type AdminAccountResult =
+	| AdminState<AdminAccountData>
+	| { state: 'missing' };
+
+/**
+ * What the pre-flight answers, one row per household this account solely owns.
+ *
+ * `transfer` needs a `toMembershipId`; `delete` must not carry one. A household
+ * the account does **not** solely own is refused rather than ignored — a
+ * decision about a household that needed none means the client and the server
+ * disagree about the state, and quietly dropping it would let a stale dialog
+ * delete a household nobody chose.
+ */
+export type AdminOwnershipDecision = {
+	householdId: string;
+	action: 'transfer' | 'delete';
+	toMembershipId?: string;
+};
+
+/**
+ * One row of the audit log.
+ *
+ * **A time, a person, an action and a target** — the design's own four, plus
+ * the denormalised copy a deletion row needs, because that row is the only
+ * surviving record of the thing it describes.
+ *
+ * `actorName` is a copy taken at write time and stays after the account is
+ * gone. **That is an erasure question and it is deliberately open**: an audit
+ * log you can erase by deleting yourself is not an audit log, and the design
+ * says as much and asks for a lawyer's read before it ships.
+ */
+export type AdminActivityRow = {
+	id: string;
+	at: string;
+	actorId: string;
+	actorName: string;
+	actorKind: string;
+	action: string;
+	targetKind: string;
+	targetId: string;
+	targetName: string;
+	targetInk: string;
+	fromValue: string;
+	toValue: string;
+	/** JSON, decoded by `shared/activity.ts` — which never throws. */
+	held: string;
+	/**
+	 * Whether the target still exists.
+	 *
+	 * Resolved server-side per row, because only the server can look — and it is
+	 * what lets an opened entry say *this household no longer exists; everything
+	 * above is the log's own copy* on its own face.
+	 */
+	targetGone: boolean;
+};
+
+export type AdminActivityData = {
+	rows: AdminActivityRow[];
+	total: number;
+	offset: number;
+	pageSize: number;
+	/** How long rows are kept. A constant for now — see D62. */
+	retentionMonths: number;
+};
+
+export type AdminActivityResult = AdminState<AdminActivityData>;
+
+/**
+ * A slice of the log, for export.
+ *
+ * **A range, not everything**, which is the design's own rule and a good one: a
+ * button that hands over all 2,904 rows invites the habit of handing over all
+ * of them. `capped` says so on its face when the range held more than one
+ * export may carry — a silently truncated audit export is worse than no export.
+ */
+export type AdminActivityExportData = {
+	rows: AdminActivityRow[];
+	from: string;
+	to: string;
+	capped: boolean;
+	limit: number;
+};
+
+export type AdminActivityExportResult = AdminState<AdminActivityExportData>;

@@ -30,7 +30,7 @@ export function prefersReducedMotion(): boolean {
 
 export function ModalShell({
 	open, role = 'dialog', labelledBy, describedBy, onCancel,
-	initialFocus, dark, theme, children,
+	initialFocus, width = 420, dark, theme, children,
 }: {
 	open: boolean;
 	/** `alertdialog` for a confirm; the plain one for a form. */
@@ -47,6 +47,21 @@ export function ModalShell({
 	 * return key, a typed confirm on its field, this one on its name field.
 	 */
 	initialFocus?: () => void;
+	/**
+	 * The card's max width in pixels. 420 everywhere but one.
+	 *
+	 * **A confirm asks one question and 420 is right for it; a pre-flight asks
+	 * two and has to show you what you are answering about.** The admin
+	 * console's account deletion is the only caller that widens, to 520, and
+	 * the design doc names it as its single deliberate deviation from the
+	 * confirm shell.
+	 *
+	 * It is a number rather than a class because Tailwind resolves a class by
+	 * scanning for a static string, so `max-w-[${width}px]` would compile to
+	 * nothing — the same constraint that makes `min-[1120px]:` a literal in
+	 * three places.
+	 */
+	width?: number;
 	dark: boolean;
 	theme: Theme;
 	children: ComponentChildren;
@@ -157,8 +172,9 @@ export function ModalShell({
 				aria-modal="true"
 				aria-labelledby={labelledBy}
 				aria-describedby={describedBy}
-				class="relative w-full max-w-[420px] max-h-[90vh] overflow-y-auto p-[22px] rounded-[18px]"
+				class="relative w-full max-h-[90vh] overflow-y-auto p-[22px] rounded-[18px]"
 				style={{
+					maxWidth: `${width}px`,
 					background: theme.surface,
 					/*
 					 * In dark the scrim cannot lift this — deepening it moves the

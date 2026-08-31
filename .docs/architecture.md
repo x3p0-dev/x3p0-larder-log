@@ -18,10 +18,11 @@ larder-log/
   client/
     index.tsx          # exports App: the sign-in gate and nothing else
     Pantry.tsx         # the signed-in application
-    components/        # 30 files; the shell, the surfaces, the dialogs
+    components/        # the shell, the surfaces, the dialogs, and Admin* (D62)
     hooks/
-      usePantryData.ts # the ONLY module importing @spacefast/zero/client
-      usePersistentState.ts  # the three localStorage keys — D25, D33, D41
+      usePantryData.ts # the app's bridge to @spacefast/zero/client
+      useAdminData.ts  # the console's — separate, so a pantry load opens none of it (D62)
+      usePersistentState.ts  # the four localStorage keys — D25, D33, D41, D51
       useSystemTheme.ts
       useToasts.ts     # the toast stack; each row owns its own countdown (D36)
       useTripChecks.ts # a shopping trip's ticks, per device (D41)
@@ -35,10 +36,12 @@ larder-log/
       pendingInvite.ts # holds an invite code across sign-in (D28, D38)
       signInAttempt.ts # remembers an abandoned sign-in, for the bounce (D37)
       devMembers.ts    # `?members`: stand-in rows, loopback only. Goes with D14
+      adminEntry.ts    # `?admin`: reads a URL, and a URL is not authorization (D62)
+      activityCsv.ts   # the audit log as a file — Blob/URL/document, so never shared/
   server/
-    index.ts           # capsule(): the schema, 4 queries, 16 mutations, 2 endpoints
+    index.ts           # capsule(): 11 tables, 13 queries, 25 mutations, 1 endpoint
     schema.ts          # ReadDb / WriteDb only — the tables CANNOT live here (D27)
-    auth.ts            # membershipState / requireMembership / requireCapability
+    auth.ts            # membershipState / requireMembership / requireCapability / requireAdmin
   shared/              # imports NOTHING — see below
     types.ts           # Item, Term, QueryState — the domain vocabulary
     roles.ts           # the D20 capability matrix; can()
@@ -51,12 +54,18 @@ larder-log/
     palette.ts         # WHICH color tokens exist — no colors in it (D32)
     term.ts            # name/ink validation, and the A-Z term order (D44)
     stamp.ts           # addedAt / changedAt, and their fallbacks (D44)
-    shoppingList.ts    # grouping items by store, and both orderings (D41)
+    runList.ts         # grouping items into bands and sources, and both orderings (D41, D58)
+    source.ts          # a source's kind, and what the group is called (D58)
+    season.ts          # months, not dates — a pair that is never half-set (D58)
+    size.ts            # an item's size, and its fourteen units (D52)
+    profile.ts         # the account's display name and its fallback chain (D46)
+    admin.ts           # who administers the space, and what the console counts (D62)
+    activity.ts        # the audit log's vocabulary, encoding and retention (D62)
     filter.ts          # OR inside a group, AND across groups (D45)
     seed.ts            # starter taxonomies for a new household (D40)
     qty.ts             # the string <-> integer boundary (D4)
     status.ts          # out / low / ok derivation (D9)
-  tests/shared.test.ts # 222 assertions; `npm test`, no runner
+  tests/shared.test.ts # 548 assertions; `npm test`, no runner
   icons/               # favicons and PWA icons; served at /icons/ in production
   sf.jsonc             # runtime config. JSONC — comments allowed here
   theme.json           # the palette and type scale, as light-dark() pairs.
@@ -162,6 +171,25 @@ The rules, which every handler must follow without exception:
    answer. Which household a request is about is decided by one of two pure
    functions in `shared/membership.ts`, and which one you call depends on
    whether you are reading or writing.
+
+**The admin console is the one exception to rule 1, and it proves it.**
+[D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment)'s
+six mutations reach a household the caller is **not** a member of, so there is
+no membership to resolve the id against and rule 1 has nothing to work with.
+What replaces it is not weaker but narrower: `requireAdmin(ctx)` checks the
+caller against `LARDER_ADMIN_IDS` in the server environment and nothing else.
+
+Three things follow, and all three are load-bearing:
+
+- **`requireAdmin` is the only check beneath those handlers.** There is no
+  second line of defence anywhere — no row-level security, no foreign key, no
+  membership. `shared/admin.ts` is therefore fail-closed in every direction and
+  is unit-tested for each of them, exactly as `shared/identity.ts` is.
+- **An administrator is exempt from none of the household's own rules.** D22's
+  last owner, D21's invite revocation and the delete cascade all still apply.
+  The console can do more than a member; it cannot do it more carelessly.
+- **A console *query* answers `{ state: 'denied' }` and never throws**, because
+  a query that throws never emits (see below). A console *mutation* throws.
 
 **A read heals, a write refuses**
 ([D33](decisions.md#d33-a-user-may-belong-to-several-households)). A query

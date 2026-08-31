@@ -280,7 +280,107 @@ install row from v12; and now the source-kind menu, the run list's bands and
 segment, the season panel and the first-run source mix. **The published
 household still holds three shop sources and the old nine types**, so the
 bands, the segment and the `SOURCE` rename are not even visible there until a
-source is given a kind by hand.
+source is given a kind by hand. **Phase 6's whole console joins that list on the
+day it publishes**, and it is the largest single thing on it.
+
+## Phase 6 — The admin console
+
+Built 2026-08-29 in seven stages, **unpublished**. Twenty-six boards on three
+pages in `.claude/docs/design/admin-console.md`, governed by
+[D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment).
+The single account of it is in
+[CLAUDE.md](../.claude/CLAUDE.md); this is the phase ledger.
+
+- ✅ **The way in, and the pane** — a row in the account menu, administrators
+  only; *Administration* pushed into the app drawer exactly as *Members* is.
+  **There is no admin shell**: the content column swaps and nothing outside it
+  does. `/admin` cannot exist (`SPA false`), so the deep link is `?admin` and
+  the platform's own 404 is a better refusal than board 8's.
+- ✅ **Overview** — four stat cards, a twelve-month household line drawn from
+  `@spacefast/zero/charts`, and *Needs attention* whose rows land on the
+  household list with the chip already set.
+- ✅ **The household list** — searched, four status chips, four sorts, 25 a page.
+- ✅ **The household page** — the metadata-only rule made checkable: every field
+  is a count, a name or a date, and the card in the left column says so.
+- ✅ **The household's three writes** — the role menu (the console's one
+  component that changes surface), *Revoke* on a live invite, and *Delete
+  household* behind the app's **second** typed confirmation.
+- ✅ **People and the account page** — where somebody is a member and what they
+  can do there, behind the same line the household page draws.
+- ✅ **Ownership transfer** — a real hand-over rather than a promotion, which is
+  what account deletion forced into existence and what the orphan dialog calls.
+- ✅ **The account-deletion pre-flight** — one row per solely-owned household,
+  hand it over or delete it, and a tail line for the rest. 520 rather than 420,
+  the console's one deviation from the confirm shell.
+- ✅ **The audit log** — the eleventh table, `activity`, on `by_at`. A time, a
+  person, an action and a target; a deletion entry carries its own copy of what
+  the thing held; and **nothing a household does to its own pantry appears in
+  it**.
+- ✅ **Retention and export** — retention enforced at append time (there is no
+  scheduler) and set by `LARDER_RETENTION_MONTHS` rather than by a control, on
+  the grounds that an administrator who could shorten it could erase the record
+  of what administrators did. Export is a range, capped, and says when the cap
+  bit.
+- ✅ **The orphan dialog** — amber, because nothing is gone and a household is
+  stuck.
+- ✅ **The list states and 390** — *Best match* while searching, day one with no
+  controls at all, chips that scroll, and every control clearing 44px.
+- ✅ **The collapsed rail** — back-to-the-pantry in slot 2 and the four sections
+  in the filter groups' places, so collapsing the drawer no longer leaves the
+  console beside a rail offering to filter a household nothing on screen is
+  about.
+- ✅ **The interaction states, swept** (2026-08-30) — ten controls were missing
+  hover, press, focus or an open state they were written to have, all of it
+  invisible to a typecheck and to a class-presence grep. The pattern under nine
+  of the ten is one the app had already recorded three times: **an inline style
+  beats a `hover:` class**, and six of these inline colours were byte-identical
+  to the token they were overriding. `PAGE_BUTTON_QUIET_ON`, `PAGE_BANNER_X`,
+  `PAGE_GHOST_DANGER`, `PAGE_SUNK_UNSET`, `PAGE_BUTTON_OUTLINE_ON` and
+  `DRAWER_NAV_ROW_ON` are what came out of it. **It then shipped two dead
+  controls of its own** — both *Delete* buttons hovering to the colour of the
+  `surface-alt` strip they sit in — because a class-literal diff cannot see what
+  is painted behind a control. `PAGE_GHOST_DANGER_SUNK`, `PAGE_SUNK_ON_ROW` and
+  `PAGE_ICON_IN_FIELD` came out of the ground-aware check written in response,
+  which now reports 36 console controls and 0 flagged.
+- ✅ **A loading state that can escalate** — `AdminLoading`, shared by all seven
+  screens. Zero has no query error path, so a thrown handler and a slow one look
+  identical **forever**; time is the only signal, so past ten seconds the copy
+  stops claiming to be loading and offers the one recovery there is. Quiet for
+  the first half-second, because every console subscription opens in the same
+  tick as the pane.
+- ✅ **The chart's tooltip** (2026-08-30) — the last drawn console surface that
+  was neither built nor decided against. The design gives the surface and the
+  surface was the whole answer: it is the rail's `Tip` with two lines in it, on
+  the drawer's darkest layer in both themes. Hit-tested by band rather than by
+  dot, positioned from the `xMidYMid meet` scale worked out at
+  `pointerenter` — so the chart still has no `ResizeObserver` — and the twelve
+  values moved into the `aria-label`, which had carried only the ending one.
+- ❌ **Seeing inside a household** — **decided against** on 2026-08-29 and
+  recorded in D62 as a decision rather than an omission, which is what the
+  design document asks for. Metadata-only holds; support means asking somebody
+  inside the household. **Do not build it without reopening the decision**, and
+  if it is reopened the amber banner and the household being told are not
+  negotiable parts of it.
+
+**Still open in the design's own *Gaps***: **concurrent edits**, where two administrators act on one household and nothing
+says so; **the rest of mobile**, where Overview, People and one account render
+at 390 but have never been drawn there; **announcements** and **running cost**,
+both from *future-ideas*; and whether **a household can see the Activity rows
+that touch it**.
+
+**Not built, and none of it is a later stage** — the platform cannot supply
+any: every **email** on the boards (D56), **storage** figures, and **last
+seen**. The `Awaiting deletion` chip needs a deletion hold, which is a column
+nothing else wants; *Sole owner* took its place and is more useful.
+
+**Done when:** `LARDER_ADMIN_IDS` holds a real account id on the published
+space and somebody has opened the pane there. **Neither has happened.**
+
+**Before publishing it**, two things are new since v14 and both want reading
+first: this is a **migrating** publish (`activity` is a new table, additive and
+flagless, as `profiles` was), and `.env.server` gains two variables that must be
+set on the space or the console is unreachable and the log keeps its rows
+forever.
 
 ## Later, maybe
 

@@ -4088,3 +4088,302 @@ pendingOperationCount`. So `data.plan.schemaHash` is `undefined` and comparing
 it against `appliedSchemaHash` reports a **spurious mismatch on a clean
 migration**. The trap is unchanged from v11/v12/v13; printing the keys rather
 than assuming them is the fix.
+
+---
+
+## 2026-08-29 — Building an admin console: what the runtime does and does not offer
+
+Context: designing a space-wide administration surface for Larder Log — every
+household, every account, with no per-household membership to scope reads by.
+This is the first thing in the app that reads across households, so it exercises
+parts of the runtime nothing else had touched. Everything below was driven
+against a real capsule on `sf dev --port 4199` and, where stated, read out of
+`.spacefast/zero/artifact.json`.
+
+### 👍 `by_creation` is on **every** table, including one with no declared index
+
+`server/index.ts` declares no index at all on `households`. `ctx.db.households
+.withIndex('by_creation').order('desc').collect()` works anyway and returns
+every row newest-first. The docs say this in one sentence
+(*"Every table has a built-in `by_creation` index that reads rows in insertion
+order"*) and it is easy to read as *in addition to yours* rather than
+*unconditionally*. It is the latter, and it is what let a whole cross-cutting
+admin surface ship with **zero schema change** — `db.migrations` stayed `[]`.
+
+Worth promoting in the docs: it is the answer to "how do I list a table" and it
+currently reads like a footnote to the index section.
+
+### 👍 `ctx.env` reaches a **query** handler, not just mutations and endpoints
+
+The type says so (`QueryServerContext` has `env`) and it was worth confirming,
+because an env-driven authorization check is useless if it only works on the
+write side. It works. A `LARDER_ADMIN_IDS` in `.env.server` read back correctly
+inside a `query()`.
+
+### 👍 `.paginate()` works on `by_creation` and returns a usable envelope
+
+`{ page, isDone, continueCursor }`, with the cursor a base64 blob carrying a
+`queryHash` and the sort keys. Cheap and correct.
+
+### 👎 There is no aggregate of any kind, so **a count is a full scan**
+
+`QueryBuilder` is `order` / `collect` / `take` / `first` / `paginate`. There is
+no `count()`, no `sum()`, and no way to push a predicate into an index beyond
+`eq/gt/gte/lt/lte` on indexed fields. So *"how many items exist"* and *"how many
+items does each household have"* are both a `collect()` over the whole table
+and a loop.
+
+That is fine at our size and it does not scale, and there is no smarter query to
+write — the only fix available to an app is to denormalise counts into a row and
+maintain them from every mutation. **A `count()` on an indexed range would be
+the single highest-value addition to this query API.**
+
+### ❓ Nothing in a handler can see storage usage
+
+The boards for this console draw a storage figure per household and one for the
+space. A handler is given `{auth, content, db, env, gravatar, log, spam}` on the
+read side and adds `{email, invalidate, spam, transaction}` on the write side.
+There is no storage handle in either direction, and `storage` is exported only
+from `@spacefast/zero/client` (for uploads). `sf storage` exists as a CLI.
+
+So an app cannot show its own users what they are using. Not a bug — but it
+means the CLI knows something the runtime will not tell the app.
+
+### 👎 `endpoint()` handlers get an **untyped** `db`, where queries and mutations do not
+
+`capsule()` types `queries` and `mutations` through `SchemaQueries<TSchema>` /
+`SchemaMutations<TSchema>`, so `ctx.db.households` is fully typed. `endpoints`
+is `Record<string, unknown>` and the handler signature is
+`(ctx: ServerContext, req) => …` with `ServerContext`'s default
+`TDb = MutationDbContext = Record<string, WriteTableApi>` — so every row is
+`RowMetadata` and reading `row.name` is a compile error.
+
+Caught immediately by `tsc`, and the workaround is a cast, but it is an
+inconsistency with no obvious reason: an endpoint is on the same capsule and the
+same schema.
+
+### 👍 `@spacefast/zero/charts` exists, is undocumented in the runtime page, and is good
+
+`lineChartLayout({data, x, series, height})` returns a complete layout —
+`plot`, `niceTicks`-derived `ticks` with their `y`, `xLabels` with their `x`, and
+per-series `points`. There are `LineChart` / `BarChart` / `Sparkline` /
+`StatTile` components too, plus `seriesColor`, `niceTicks` and
+`formatCompactValue`.
+
+The **layout** function is the useful half for an app with its own design
+system: it does the arithmetic and hands back numbers, so the SVG can be painted
+in the app's own tokens. The components come with the platform kit's palette,
+which is the right default and the wrong one for a themed app.
+
+`zero-runtime.md` mentions "a stats chart" in the example app and never names
+the module or its exports. Worth a section.
+
+### ❓ `SPA false` turns out to be the right answer for a hidden surface
+
+Unknown paths are answered by the edge, so `/admin` 404s before the app is
+reached. We had logged this as friction for invite links (it forced
+`/?join=<code>`); here it is a feature — the platform's own 404 leaks less than
+any refusal we could draw, and it is identical for an administrator and a
+stranger. Recording it because the trade-off is genuinely two-sided and the docs
+present `SPA` as a deployment detail rather than a security-relevant one.
+
+---
+
+## 2026-08-29 (later) — Building the whole console: what the runtime taught us
+
+Context: the admin console went from nothing to twenty-five boards' worth of
+surface in one day — eight queries, six mutations, one new table. The earlier
+entry today covered what was learned before writing any of it; this is what only
+showed up once real handlers were running.
+
+### 👍 A new table is as flagless as a new column
+
+`activity` is the first table added since `profiles`, and the artifact treats it
+exactly as an additive column change: it appears under `server.schema` with all
+its defaults and `db.migrations` stays `[]` in a dry run, because the diff
+happens server-side at publish. Nothing about adding a table needed a flag, a
+command, or a different mental model from adding a column. That is a genuinely
+good property and it is not stated anywhere in the docs.
+
+### 👎 A millisecond is not enough resolution for an append-ordered table
+
+Two rows written by one mutation — `insert`, then `insert` — landed on the
+**same millisecond**, so an index on the timestamp could not order them. For an
+audit log that is not cosmetic: `by_at` descending put an ownership transfer
+above the deletion that caused it, and the log read as though a household had
+been handed over after the account was already gone.
+
+There is no monotonic counter, no sequence, and no insertion-order tiebreak
+available: `by_creation` exists but a query can only pick **one** index, and row
+ids are UUIDs under `sf dev` and sequential integers in production, so they are
+not an order either. The workaround is app-side — never emit a stamp equal to or
+below the last one — which works per-isolate and cannot work across them.
+
+**Suggestion:** either document that `by_creation` is a stable insertion order
+that can be relied upon as a tiebreak, or expose a monotonic sequence. Any
+append-only table hits this.
+
+### 👎 `QueryBuilder` can only use one index, so "ordered *and* filtered" is a scan
+
+`withIndex('by_at', r => r.gte(...).lt(...))` is fine because the range is on
+the indexed column. But a list that filters on one column and orders by another
+has no expression at all: `collect()` the table and sort in the handler. That is
+what six of the console's eight queries do.
+
+Combined with **no aggregate of any kind** — no `count()`, no `sum()` — it means
+every "how many X are there" in an admin surface is a full table read. We are
+small enough that it does not matter; the shape of the constraint is worth
+naming because it is invisible until you write the second screen.
+
+### ❓ `endpoint()` handlers still get an untyped `db`
+
+Re-confirming from this morning's entry, because it bit again: `queries` and
+`mutations` are typed through `SchemaQueries` / `SchemaMutations` and get the
+schema-typed `ctx.db`; `endpoints` does not, so every row is `RowMetadata` and
+`row.name` is a compile error. One-line fix with a cast, no obvious reason for
+the asymmetry.
+
+### 👍 `ctx.log.error` inside a `catch` is the only way to hear about a swallowed failure
+
+The audit log's write and its prune are both wrapped so a logging failure cannot
+roll back the thing being logged. That means they can fail silently by design —
+and `ctx.log` is the only route out, since an uncaught handler exception logs
+nothing at all. Worth repeating in the docs beside the error-handling advice:
+**if you swallow an error, `ctx.log` is not optional.**
+
+### 👍 `@spacefast/zero/charts` earns its place, and `lineChartLayout` is the useful half
+
+Second mention today, now that it has shipped in something. The layout function
+returns `plot`, tick positions, x-label positions and per-series points — all
+the arithmetic, none of the styling — which is exactly right for an app with its
+own design system. The `LineChart` component would have brought the kit's
+palette into a themed page.
+
+Still undocumented on `zero-runtime.md`, which mentions "a stats chart" in the
+example app and never names the module.
+
+### ❓ The bundler escapes typographic punctuation, which breaks a common check
+
+Our standing verification is to grep the built `client.js` for strings we
+expect. Copy containing `’` or `—` is emitted as `\u2019` / `\u2014`, so a
+`grep -F` for the literal returns **0** and looks exactly like a missing string.
+Twice now this produced a false alarm. Not a bug — but a line in the docs about
+what the bundle does to non-ASCII would save the next person the same detour.
+
+## 2026-08-30
+
+### 🐞 `sf db export` fails exactly like `sf db dump`, and the JSON names one root cause for both
+
+`sf db dump` has been broken since 2026-08-26 (`zero_db_dump_failed`, 500). Went
+looking for a way to read one column out of the live database — the account id
+that has to go into `LARDER_ADMIN_IDS` before the admin console is reachable —
+and `sf db export` fails the same way against the same healthy space:
+
+```
+$ npx sf db export --json -y
+"code": "zero_db_export_failed", "status": 500, "retryable": true,
+"details": { "runtimeDetails": { "table": "households",
+                                 "zero_db_code": "zero_db_connect_failed" },
+             "runtimePath": "…/zero/db/export&table=households&limit=500" }
+```
+
+`sf db dump --json` returns the identical `runtimeDetails` — `table:
+"households"`, `zero_db_code: "zero_db_connect_failed"` — so these are not two
+bugs. **Something on the export path cannot connect to the database that the
+running app is reading and writing all day.** `sf db` itself works in the same
+second and prints the live table list, and the published space serves data
+normally, so the space is healthy and only this path is not.
+
+`retryable: true` and the recovery text (*"Retry shortly or run `sf doctor`"*)
+are both misleading here — it has been failing for four days, and `sf doctor`
+is not a command this CLI has.
+
+Two request ids, a minute apart:
+`30400ed6-1b55-4b4c-b282-f61e5019c3c2` (export),
+`f9822573-0da9-4601-ad0b-c712ab3476bc` (dump).
+
+**Why it matters beyond backups.** With both of these down there is no way to
+read a single value out of a live database except to publish a keyed endpoint
+that returns it and publish again to take it away — two full versions to answer
+one question. `sf db console` opens a browser and is not a scripting route.
+
+### ❓ There is no supported way to learn your own `userId`
+
+Related, and worth a docs line on its own. An app that gates anything on a list
+of account ids — an admin allowlist, a feature flag, an owner override — needs
+those ids *before* the gate can be written, and nothing hands them over:
+
+- `ctx.auth` tells a handler about its **caller** only, so no query can report
+  somebody else's id.
+- `endpoint` handlers get a full `ServerContext` but **no `ctx.auth`**, so the
+  documented probe trick cannot answer "who am I" either.
+- `sf db dump` / `sf db export` — the two commands that would show the
+  `memberships` rows — are the ones broken above.
+
+The route that does work is undocumented and client-side: the SDK stores the
+identity at `localStorage['stattic_zero_identity']`, a JSON record carrying
+`token` and `userId`, so on the live site
+
+```js
+JSON.parse(localStorage.getItem('stattic_zero_identity')).userId
+```
+
+prints the id. That is fine as an answer, but it is an internal storage key
+found by reading `dist/client.js`, not an API. **`useAuth()` already returns
+`userId` to the client — the docs could simply say where to read it, or the SDK
+could export `readStoredIdentity()` publicly.**
+
+**Amended the same day: there are two `userId` namespaces and nothing says how
+they relate.** `sf share people ls --json` *does* print one, under
+`inheritedTeamAccess.members[]`, alongside a `membershipId`, a `displayName` and
+an `email`. But that is the **team** account id, and Zero's client builds its
+own from `pairwise_sub ?? sub ?? email` — pairwise being, by definition, scoped
+to the relying party. So the two are probably different strings, and a reader
+who finds the `share` one first has every reason to think they have the answer.
+Neither page mentions the other. **If they are the same, say so; if they are
+not, the `share` docs should say which namespace they are printing.**
+
+### 🐞 An unauthenticated request to a published space is handed `guest:local`, and nothing says so
+
+**The most expensive thing this project has learned about the platform, found
+twenty minutes after a publish.**
+
+`POST /__spacefast/zero/run` exists in production and answers **without any
+credentials** — which is documented behaviour for a public space, and fine on
+its own. What is not documented is *who the runtime says you are* when you do
+that. The answer is the SDK's own guest fallback:
+
+```
+userId 'guest:local'  displayName 'Local'  provider 'guest'
+isGuest true          isAuthenticated false
+```
+
+**That is byte-identical to what `sf dev` issues.** So any app that treats the
+dev identity as a development affordance — as this one did, in two places, with
+a comment explaining why it was safe — is shipping that affordance to the open
+internet. On v15 an anonymous `curl` got `{"admin": true}` from our own admin
+gate and read every household count in the space.
+
+Two things would each have prevented it:
+
+1. **Say in the docs what identity an unauthenticated hosted request carries.**
+   `zero-runtime.md` describes `ctx.auth` fields and never says the runtime
+   mints a guest for anonymous callers, still less that it reuses the dev
+   server's exact values. `guest:<name>` comes from `currentGuestName()`, whose
+   default is the literal `'local'` — the same default the CLI uses.
+2. **Make the two distinguishable.** A hosted anonymous caller and a local dev
+   guest are not the same principal and should not present the same four
+   fields. A different `provider`, or any marker of which runtime minted it,
+   turns a silent hole into a one-line check.
+
+**The trap underneath it is a verification one, and worth repeating.** This
+project had "verified" the equivalent bypass inert in production by probing the
+published space and reading back `schemes ["account"]` and `anyDevGuest false`
+— but that probe enumerated the *stored membership rows*, i.e. everyone who had
+ever signed in, and concluded something about *what an anonymous request
+receives*, which it never measured. The probe was well-built and answered a
+question nobody had asked. **Ask the runtime, not its data.**
+
+Filed as a bug rather than a docs gap because of how the values line up: reusing
+`local` as the hosted guest name is a choice that makes a whole class of
+dev-only bypass silently live.

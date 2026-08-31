@@ -2,7 +2,7 @@ import { capsule, query, mutation, endpoint, text, table, string, boolean, id } 
 
 import type { AuthContext, LogContext } from '@spacefast/zero/server';
 import type { ReadDb, WriteDb } from './schema';
-import { AccessError, assertInHousehold, isSignedIn, membershipState, requireCapability, requireMembership } from './auth';
+import { AccessError, administers, assertInHousehold, membershipState, requireAdminWrite, requireCapability, requireMembership, signedIn } from './auth';
 
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
@@ -10,10 +10,33 @@ import { normalizeQty, toInt, fromInt } from '../shared/qty';
 import { isSourceKind, sourceGroupWord, toSourceKind } from '../shared/source';
 import { normalizeSeason } from '../shared/season';
 import { normalizeSize } from '../shared/size';
-import { normalizeStamp, stampFrom } from '../shared/stamp';
+import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
+import {
+	ADMIN_IDS_VAR, adminWritesHeldFor, cumulativeByMonth, isDormant, isWithinDays,
+	matchScore, monthKeysBack, monthLabel, parseAdminIds, RECENT_DAYS,
+} from '../shared/admin';
+import {
+	encodeHeld, retentionCutoff, RETENTION_VAR, toRetentionMonths,
+} from '../shared/activity';
+import type { ActivityAction, Held, TargetKind } from '../shared/activity';
 import { byName, normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
 import { CODE_BYTES, PENDING_CODE, codeFromBytes, codeFromSeed, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
 import type {
+	AdminAccessResult,
+	AdminAccountResult,
+	AdminActivityExportResult,
+	AdminActivityResult,
+	AdminHouseholdDetailResult,
+	AdminHouseholdFilter,
+	AdminHouseholdRow,
+	AdminHouseholdSort,
+	AdminHouseholdsResult,
+	AdminOwnershipDecision,
+	AdminPeopleFilter,
+	AdminPeopleResult,
+	AdminPeopleSort,
+	AdminPersonRow,
+	AdminSummaryResult,
 	HouseholdListResult,
 	HouseholdResult,
 	HouseholdSummary,
@@ -306,6 +329,51 @@ export const schema = {
 		.index('by_item', ['itemId'])
 		.index('by_store', ['storeId'])
 		.index('by_household', ['householdId']),
+
+	// The admin console's audit log (D62). **The eleventh table, and the first
+	// new one since `profiles`.**
+	//
+	// Two things about its shape are forced by the platform and worth reading
+	// before editing it.
+	//
+	// **Every field is a string, including the counts**, because there is no
+	// numeric type — the same constraint `qty` lives under. Nothing sorts on
+	// them, so nothing is at risk from "10" < "2" here.
+	//
+	// **`held` is JSON in a string**, and that is the smaller of two bad
+	// options. Zero has no array or JSON type; the alternative is five columns
+	// that only a deletion row ever fills, and a column is permanent with
+	// nothing to backfill it (D44). `shared/activity.ts` owns the encoding and
+	// its decoder never throws, because a row is written once and read forever.
+	//
+	// **The denormalisation is deliberate and it is only here.** A deletion row
+	// is the only surviving record of the thing it describes, so it carries its
+	// own copy — `targetName`, `targetInk`, `targetId` and `held` — and an
+	// `id()` pointing at a deleted household would resolve to nothing. Every
+	// other row could join, and denormalises anyway so that one read answers.
+	//
+	// No `changedAt`: an audit row is never edited. `at` is ours rather than the
+	// platform's `createdAt` for D44's reason — a stamp this app sorts by is a
+	// stamp this app writes.
+	activity: table({
+		at: string(),
+		// '' for an actor that is not a person. See `ACTOR_KINDS`.
+		actorId: string().default(''),
+		actorName: string().default(''),
+		actorKind: string().default('person'),
+		action: string(),
+		targetKind: string().default(''),
+		targetId: string().default(''),
+		targetName: string().default(''),
+		// A household's colour token, so a deleted household's tile still draws
+		// in the log. '' for every other target.
+		targetInk: string().default(''),
+		// A role, a name — whatever the action moved between. Both '' when the
+		// action moved nothing.
+		fromValue: string().default(''),
+		toValue: string().default(''),
+		held: string().default(''),
+	}).index('by_at', ['at']),
 };
 
 export default capsule({
@@ -335,7 +403,7 @@ export default capsule({
 		 * disagree with the value beside it.
 		 */
 		profile: query(async (ctx): Promise<ProfileResult> => {
-			if (! isSignedIn(ctx.auth)) return { state: 'guest' };
+			if (! signedIn(ctx)) return { state: 'guest' };
 
 			const row = await ctx.db.profiles
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
@@ -364,7 +432,7 @@ export default capsule({
 		 * keep its checkmark honest while the other two queries re-run.
 		 */
 		households: query(async (ctx): Promise<HouseholdListResult> => {
-			if (! isSignedIn(ctx.auth)) return { state: 'guest' };
+			if (! signedIn(ctx)) return { state: 'guest' };
 
 			const rows = await ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
@@ -593,7 +661,7 @@ export default capsule({
 			// Checked before expiry: someone who is already in is already in, and
 			// telling them a link they cannot use has also run out would be two
 			// pieces of bad news for one non-problem.
-			if (isSignedIn(ctx.auth) && members.some((m) => m.userId === ctx.auth.userId)) {
+			if (signedIn(ctx) && members.some((m) => m.userId === ctx.auth.userId)) {
 				return { state: 'member', household, householdId: invite.householdId };
 			}
 
@@ -605,6 +673,707 @@ export default capsule({
 			}
 
 			return { state: 'valid', household, role, inviter, expiresAt: invite.expiresAt };
+		}),
+
+		/**
+		 * Whether the caller administers the space.
+		 *
+		 * The one console query that is cheap enough to run on every load, and
+		 * the only one anybody who is not an administrator ever calls: the
+		 * account menu subscribes to it to decide whether to draw its *Admin*
+		 * row, and everything else in the console is behind that row.
+		 *
+		 * It answers `false` rather than refusing, because it *is* the refusal —
+		 * the two console queries below use `denied`, and this one is what stops
+		 * a non-administrator from reaching them in the first place.
+		 */
+		adminAccess: query(async (ctx): Promise<AdminAccessResult> => {
+			/*
+			 * `writesHeld` rides along rather than being a second query or a
+			 * constant the client reads for itself. The rule depends on *who is
+			 * asking* now — a dev guest is exempt — and a client that worked that
+			 * out from its own identity would be a second copy of a security
+			 * rule, which is the arrangement `termBlock` exists to avoid.
+			 */
+			// A non-administrator is told `true`, which is the safe direction: it
+			// is not a permission (`requireAdminWrite` re-checks everything), it
+			// is what the client would render if it ever asked.
+			return {
+				admin: administers(ctx),
+				writesHeld: ! administers(ctx) || adminWritesHeldFor(ctx.auth),
+			};
+		}),
+
+		/**
+		 * Overview — four cards, twelve months, and what needs attention.
+		 *
+		 * **This scans the whole space, six tables of it**, and there is no
+		 * cheaper way: Zero's query builder is `collect` / `take` / `first` /
+		 * `paginate` with no aggregate at all, so a count is a scan and there is
+		 * nothing to push down. `by_creation` is what makes it possible without
+		 * a schema change — every table has one, including `households`, which
+		 * declares no index of its own.
+		 *
+		 * The cost is linear in the whole database and it is fine at the size
+		 * this app is: a few households, a few hundred items. **It stops being
+		 * fine somewhere in the low thousands**, and the fix when it does is a
+		 * denormalized counts row per household maintained by the mutations that
+		 * already invalidate, not a smarter query — there is no smarter query to
+		 * write. Recorded here rather than discovered later.
+		 */
+		adminSummary: query(async (ctx): Promise<AdminSummaryResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			const nowIso = new Date().toISOString();
+			const [households, memberships, items, invites] = await Promise.all([
+				ctx.db.households.withIndex('by_creation').collect(),
+				ctx.db.memberships.withIndex('by_creation').collect(),
+				ctx.db.items.withIndex('by_creation').collect(),
+				ctx.db.invites.withIndex('by_creation').collect(),
+			]);
+
+			// One pass each, keyed by household, so the per-household questions
+			// below are lookups rather than a filter per household.
+			const owners = new Set<string>();
+			const people = new Set<string>();
+			const memberFirstSeen = new Map<string, string>();
+
+			for (const m of memberships) {
+				if (toRole(m.role) === 'owner') owners.add(m.householdId);
+
+				people.add(m.userId);
+
+				// The earliest membership an account holds is the closest thing
+				// to when it joined — there is no accounts table to ask.
+				const seen = memberFirstSeen.get(m.userId);
+
+				if (! seen || m.createdAt < seen) memberFirstSeen.set(m.userId, m.createdAt);
+			}
+
+			const itemCount = new Map<string, number>();
+
+			for (const it of items) {
+				itemCount.set(it.householdId, (itemCount.get(it.householdId) ?? 0) + 1);
+			}
+
+			const lastActive = await lastActiveByHousehold(ctx.db, items);
+
+			let noOwner = 0, dormant = 0, empty = 0;
+
+			for (const h of households) {
+				if (! owners.has(h.id)) noOwner++;
+				if (isDormant(lastActive.get(h.id) ?? '', nowIso)) dormant++;
+				if (! itemCount.get(h.id)) empty++;
+			}
+
+			const months = monthKeysBack(nowIso);
+			const series = cumulativeByMonth(
+				households.map((h) => addedAtOf(h)),
+				months
+			).map((value, i) => ({
+				month: months[i],
+				// The year rides the ends only, which is what the board draws:
+				// `Sep 2025 · Dec · Mar · Jun · Aug 2026`.
+				label: monthLabel(months[i], i === 0 || i === months.length - 1),
+				value,
+			}));
+
+			return {
+				state: 'ready',
+				households: households.length,
+				people: people.size,
+				items: items.length,
+				// Live means neither revoked nor expired — the number an
+				// administrator could act on, not the number of rows.
+				invites: invites.filter((i) => ! i.revoked && ! isExpired(i.expiresAt, Date.now())).length,
+				newHouseholds: households.filter((h) => isWithinDays(addedAtOf(h), nowIso, RECENT_DAYS)).length,
+				newPeople: [...memberFirstSeen.values()]
+					.filter((iso) => isWithinDays(iso, nowIso, RECENT_DAYS)).length,
+				newItems: items.filter((i) => isWithinDays(addedAtOf(i), nowIso, RECENT_DAYS)).length,
+				noOwner,
+				dormant,
+				empty,
+				series,
+			};
+		}),
+
+		/**
+		 * The household list — searched, filtered by one chip, sorted, and paged.
+		 *
+		 * **Every one of those four happens here, over the whole scan**, and
+		 * that is deliberate rather than lazy. `paginate()` exists and would
+		 * page the raw table cheaply, but it cannot answer *matching* or the
+		 * three chip counts without reading the rest anyway, and it cannot sort
+		 * by a derived column at all — items and last-active are computed, not
+		 * stored. Slicing a list we already hold is the honest version of what
+		 * the boards draw. The scaling note on `adminSummary` applies here too.
+		 *
+		 * **Search covers the name and the id, and nothing else.** The boards say
+		 * *"Search by name, member or email"*; there are no emails to search
+		 * (D56 — a Spacefast account carries no `email` claim and a handler is
+		 * only ever told about its caller), so the placeholder says what is true.
+		 * Member names are searched, because those the app does hold.
+		 */
+		adminHouseholds: query(async (
+			ctx,
+			args: {
+				search?: string;
+				filter?: AdminHouseholdFilter;
+				sort?: AdminHouseholdSort;
+				offset?: number;
+				pageSize?: number;
+			} = {}
+		): Promise<AdminHouseholdsResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			const nowIso = new Date().toISOString();
+			const [households, memberships, items] = await Promise.all([
+				ctx.db.households.withIndex('by_creation').collect(),
+				ctx.db.memberships.withIndex('by_creation').collect(),
+				ctx.db.items.withIndex('by_creation').collect(),
+			]);
+
+			const byHousehold = new Map<string, typeof memberships>();
+
+			for (const m of memberships) {
+				const list = byHousehold.get(m.householdId);
+
+				if (list) list.push(m); else byHousehold.set(m.householdId, [m]);
+			}
+
+			const itemCount = new Map<string, number>();
+
+			for (const it of items) {
+				itemCount.set(it.householdId, (itemCount.get(it.householdId) ?? 0) + 1);
+			}
+
+			const lastActive = await lastActiveByHousehold(ctx.db, items);
+
+			const rows: AdminHouseholdRow[] = households.map((h) => {
+				const members = byHousehold.get(h.id) ?? [];
+				const active = lastActive.get(h.id) ?? '';
+				const count = itemCount.get(h.id) ?? 0;
+
+				return {
+					id: h.id,
+					name: h.name,
+					// Resolved here for the reason `HouseholdSummary.ink` is:
+					// every row written before D42 holds '' and one resolver
+					// beats a `householdInk()` at every render site.
+					ink: householdInk(h.ink, h.id),
+					// Three faces then a count — the stacked trio's existing cap
+					// (D55), applied before the DTO leaves rather than after.
+					faces: members.slice(0, 3).map((m) => ({ name: m.displayName, picture: m.picture })),
+					members: members.length,
+					items: count,
+					lastActive: active,
+					noOwner: ! members.some((m) => toRole(m.role) === 'owner'),
+					dormant: isDormant(active, nowIso),
+					empty: count === 0,
+				};
+			});
+
+			const counts = {
+				noOwner: rows.filter((r) => r.noOwner).length,
+				dormant: rows.filter((r) => r.dormant).length,
+				empty: rows.filter((r) => r.empty).length,
+			};
+
+			const filter = args.filter ?? 'all';
+			const chipped = rows.filter((r) => (
+				filter === 'no-owner' ? r.noOwner
+					: filter === 'dormant' ? r.dormant
+					: filter === 'empty' ? r.empty
+					: true
+			));
+
+			const needle = (args.search ?? '').trim().toLowerCase();
+			const searched = needle
+				? chipped.filter((r) => (
+					r.name.toLowerCase().includes(needle) ||
+					r.id.toLowerCase().includes(needle) ||
+					(byHousehold.get(r.id) ?? []).some((m) => m.displayName.toLowerCase().includes(needle))
+				))
+				: chipped;
+
+			const sort = args.sort ?? 'name';
+
+			searched.sort((a, b) => {
+				// A tie always falls back to the name, so a page boundary lands
+				// in the same place twice. Row ids are sequential integers on the
+				// hosted runtime and would sort as strings, which is not an order
+				// anybody could predict.
+				//
+				// `relevance` is only reachable while `needle` is set — the client
+				// drops it the moment the field is cleared — but it is checked
+				// against the needle here too, because a stale argument must not
+				// leave every row scoring zero and the list in id order.
+				if (sort === 'relevance' && needle) {
+					const sa = matchScore(needle, a.name, memberNames(byHousehold, a.id), a.id);
+					const sb = matchScore(needle, b.name, memberNames(byHousehold, b.id), b.id);
+
+					return sb - sa || a.name.localeCompare(b.name);
+				}
+
+				if (sort === 'items') return b.items - a.items || a.name.localeCompare(b.name);
+				if (sort === 'members') return b.members - a.members || a.name.localeCompare(b.name);
+				if (sort === 'recent') {
+					// '' sorts last rather than first: a household with nothing
+					// readable is not the most recently active one.
+					if (a.lastActive !== b.lastActive) {
+						if (! a.lastActive) return 1;
+						if (! b.lastActive) return -1;
+
+						return a.lastActive < b.lastActive ? 1 : -1;
+					}
+
+					return a.name.localeCompare(b.name);
+				}
+
+				return a.name.localeCompare(b.name);
+			});
+
+			const pageSize = Math.min(Math.max(Math.floor(args.pageSize ?? ADMIN_PAGE_SIZE), 1), 100);
+			// Clamped against the *filtered* length, so narrowing the chip while
+			// on page 4 lands on the last page rather than on nothing.
+			const offset = Math.max(0, Math.min(Math.floor(args.offset ?? 0), Math.max(0, searched.length - 1)));
+
+			return {
+				state: 'ready',
+				rows: searched.slice(offset, offset + pageSize),
+				matching: searched.length,
+				total: rows.length,
+				counts,
+				offset,
+				pageSize,
+			};
+		}),
+
+		/**
+		 * One household — board 3, the page the metadata-only rule is about.
+		 *
+		 * **Everything it returns is a count, a name, or a date.** That is not an
+		 * observation about what happens to be here; it is the rule, and this
+		 * handler is where it is enforceable. There is no route from it to an
+		 * item, a note, a quantity or a term name, and adding one would need this
+		 * comment deleted first.
+		 *
+		 * Unlike the two above, it reads through `by_household` rather than
+		 * scanning: it is about one row, so the indexes the app already declares
+		 * are exactly right and there is nothing to bucket.
+		 */
+		adminHousehold: query(async (
+			ctx,
+			householdId: string
+		): Promise<AdminHouseholdDetailResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			const household = householdId ? await ctx.db.households.get(householdId) : null;
+
+			// A household deleted while the page was open, or an id typed wrong.
+			// It is a state rather than a throw for the reason every query here is
+			// (see `QueryState`) — a query that throws never emits at all.
+			if (! household) return { state: 'missing' };
+
+			const id = household.id;
+			const [memberships, items, locations, types, stores, invites] = await Promise.all([
+				ctx.db.memberships.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+				ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+				ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+				ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+				ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+				ctx.db.invites.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+			]);
+
+			const nowIso = new Date().toISOString();
+			const now = Date.now();
+
+			// The same rule `lastActiveByHousehold` applies across the space, on
+			// one household's own rows: the newest stamp on anything it owns.
+			let lastActive = '';
+
+			for (const row of [...items, ...locations, ...types, ...stores]) {
+				const iso = changedAtOf(row);
+
+				if (iso && iso > lastActive) lastActive = iso;
+			}
+
+			// Who minted each invite, by name. `createdBy` is a userId and the
+			// membership rows are the only place this app can turn one into a
+			// name — an account that has since left the household resolves to ''
+			// and the client says *someone who has left* rather than an id.
+			const nameOf = new Map<string, string>();
+
+			for (const m of memberships) nameOf.set(m.userId, m.displayName);
+
+			const owned = memberships.some((m) => toRole(m.role) === 'owner');
+
+			return {
+				state: 'ready',
+				createdAt: addedAtOf(household) || household.createdAt,
+				household: {
+					id,
+					name: household.name,
+					ink: householdInk(household.ink, id),
+					faces: memberships.slice(0, 3).map((m) => ({ name: m.displayName, picture: m.picture })),
+					members: memberships.length,
+					items: items.length,
+					lastActive,
+					noOwner: ! owned,
+					dormant: isDormant(lastActive, nowIso),
+					empty: items.length === 0,
+				},
+				holds: {
+					items: items.length,
+					locations: locations.length,
+					stores: stores.length,
+					types: types.length,
+				},
+				members: memberships.map((m) => ({
+					id: m.id,
+					userId: m.userId,
+					name: m.displayName,
+					picture: m.picture,
+					role: toRole(m.role),
+					joinedAt: m.createdAt,
+				})),
+				// Live only. A revoked or expired invite is not a fact about the
+				// household any more, and a list that kept them would grow forever
+				// while saying less each time.
+				invites: invites
+					.filter((i) => ! i.revoked && ! isExpired(i.expiresAt, now))
+					.map((i) => ({
+						id: i.id,
+						role: toRole(i.role),
+						expiresAt: i.expiresAt,
+						issuedAt: i.createdAt,
+						issuedBy: nameOf.get(i.createdBy) ?? '',
+						// **No `code`.** See `AdminInvite` — a code is the
+						// authorization, so putting one here would hand every
+						// administrator a quiet way into any pantry, which is the
+						// one thing this page's own refusal card promises not to do.
+					})),
+			};
+		}),
+
+		/**
+		 * Board 4 — every person in the space.
+		 *
+		 * **A person is not a row.** There is no accounts table, so this is the
+		 * union of `profiles` and the distinct `userId`s across `memberships`,
+		 * and both halves are needed: a profile with no memberships is somebody
+		 * who named themselves and left everywhere, and a membership with no
+		 * profile is an account that predates D46.
+		 *
+		 * **There is no `LAST SEEN` column and the boards' one cannot be built.**
+		 * Nothing records a session. The nearest derivable value — the newest
+		 * activity across the households they belong to — is activity by *anyone*
+		 * in them, so it would attribute another member's edit to this person and
+		 * be confidently wrong on the exact screen an administrator would trust
+		 * it. `JOINED` takes the column instead, which is a date this app really
+		 * holds.
+		 *
+		 * The same scan caveat as `adminSummary` applies, and more so: this reads
+		 * five tables end to end.
+		 */
+		adminPeople: query(async (
+			ctx,
+			args: {
+				search?: string;
+				filter?: AdminPeopleFilter;
+				sort?: AdminPeopleSort;
+				offset?: number;
+				pageSize?: number;
+			} = {}
+		): Promise<AdminPeopleResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			const adminIds = parseAdminIds(ctx.env[ADMIN_IDS_VAR]);
+			const [households, memberships, profiles] = await Promise.all([
+				ctx.db.households.withIndex('by_creation').collect(),
+				ctx.db.memberships.withIndex('by_creation').collect(),
+				ctx.db.profiles.withIndex('by_creation').collect(),
+			]);
+
+			const rows = buildPeople(households, memberships, profiles, adminIds, ctx.auth);
+
+			const counts = {
+				admins: rows.filter((r) => r.admin).length,
+				noHousehold: rows.filter((r) => r.households === 0).length,
+				soleOwner: rows.filter((r) => r.soleOwnerOf > 0).length,
+			};
+
+			const filter = args.filter ?? 'all';
+			const chipped = rows.filter((r) => (
+				filter === 'admins' ? r.admin
+					: filter === 'no-household' ? r.households === 0
+					: filter === 'sole-owner' ? r.soleOwnerOf > 0
+					: true
+			));
+
+			const needle = (args.search ?? '').trim().toLowerCase();
+			const searched = needle
+				? chipped.filter((r) => (
+					r.name.toLowerCase().includes(needle) ||
+					r.userId.toLowerCase().includes(needle) ||
+					r.tiles.some((t) => t.name.toLowerCase().includes(needle))
+				))
+				: chipped;
+
+			const sort = args.sort ?? 'name';
+
+			searched.sort((a, b) => {
+				if (sort === 'relevance' && needle) {
+					const sa = matchScore(needle, a.name, a.tiles.map((t) => t.name), a.userId);
+					const sb = matchScore(needle, b.name, b.tiles.map((t) => t.name), b.userId);
+
+					return sb - sa || a.name.localeCompare(b.name);
+				}
+
+				if (sort === 'households') return b.households - a.households || a.name.localeCompare(b.name);
+				if (sort === 'joined') {
+					if (a.joinedAt !== b.joinedAt) {
+						if (! a.joinedAt) return 1;
+						if (! b.joinedAt) return -1;
+
+						return a.joinedAt < b.joinedAt ? 1 : -1;
+					}
+
+					return a.name.localeCompare(b.name);
+				}
+
+				return a.name.localeCompare(b.name);
+			});
+
+			const pageSize = Math.min(Math.max(Math.floor(args.pageSize ?? ADMIN_PAGE_SIZE), 1), 100);
+			const offset = Math.max(0, Math.min(Math.floor(args.offset ?? 0), Math.max(0, searched.length - 1)));
+
+			return {
+				state: 'ready',
+				rows: searched.slice(offset, offset + pageSize),
+				matching: searched.length,
+				total: rows.length,
+				counts,
+				offset,
+				pageSize,
+			};
+		}),
+
+		/**
+		 * Board 5 — one account: where they are a member, and what they can do
+		 * there.
+		 *
+		 * **What those households hold stays behind the same line the household
+		 * page draws.** A member count and an item count are counts; there is no
+		 * route from here to anything inside one.
+		 *
+		 * `soleOwner` on each household is the whole reason this query exists in
+		 * the shape it does — it is what the pre-flight has to ask about, and
+		 * computing it client-side would mean shipping every membership in the
+		 * space to work out one person's.
+		 */
+		adminAccount: query(async (ctx, userId: string): Promise<AdminAccountResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			if (! userId) return { state: 'missing' };
+
+			const adminIds = parseAdminIds(ctx.env[ADMIN_IDS_VAR]);
+			const [households, memberships, profiles, invites] = await Promise.all([
+				ctx.db.households.withIndex('by_creation').collect(),
+				ctx.db.memberships.withIndex('by_creation').collect(),
+				ctx.db.profiles.withIndex('by_creation').collect(),
+				ctx.db.invites.withIndex('by_creator', (r) => r.eq('createdBy', userId)).collect(),
+			]);
+
+			const person = buildPeople(households, memberships, profiles, adminIds, ctx.auth)
+				.find((p) => p.userId === userId);
+
+			// An id that names nobody. It is a state and not a throw for the
+			// reason every query here is — a throw never emits at all.
+			if (! person) return { state: 'missing' };
+
+			const items = await ctx.db.items.withIndex('by_creation').collect();
+			const itemCount = new Map<string, number>();
+
+			for (const it of items) {
+				itemCount.set(it.householdId, (itemCount.get(it.householdId) ?? 0) + 1);
+			}
+
+			const byId = new Map(households.map((h) => [h.id, h]));
+			const mine = memberships.filter((m) => m.userId === userId);
+
+			return {
+				state: 'ready',
+				person,
+				households: mine.flatMap((m) => {
+					const household = byId.get(m.householdId);
+
+					// A membership pointing at a household that is gone. `id()` is
+					// not a foreign key, so this is a real state rather than a
+					// defensive flourish — and a row nobody can reach is not a
+					// household this person is in.
+					if (! household) return [];
+
+					const siblings = memberships.filter((x) => x.householdId === m.householdId);
+					const owners = siblings.filter((x) => toRole(x.role) === 'owner');
+					const soleOwner = toRole(m.role) === 'owner' && owners.length === 1;
+
+					return [{
+						id: household.id,
+						name: household.name,
+						ink: householdInk(household.ink, household.id),
+						role: toRole(m.role),
+						members: siblings.length,
+						items: itemCount.get(household.id) ?? 0,
+						soleOwner,
+						// Only where the pre-flight will ask. A list of names per
+						// household per person is the whole membership table
+						// arriving to answer a question almost nobody asks.
+						candidates: soleOwner
+							? siblings
+								.filter((x) => x.userId !== userId)
+								.map((x) => ({ id: x.id, name: x.displayName || 'Someone' }))
+							: [],
+					}];
+				}),
+				invitesIssued: invites.filter((i) => ! i.revoked && ! isExpired(i.expiresAt, Date.now())).length,
+				isSelf: userId === ctx.auth.userId,
+			};
+		}),
+
+		/**
+		 * Board 9 — the audit log, newest first.
+		 *
+		 * **This is the one place in Larder Log where an observed timestamp is
+		 * the point.** The item sheet deliberately shows no timestamps anywhere;
+		 * that rule is about items, and a log whose rows cannot be placed in time
+		 * is not a log.
+		 *
+		 * It is the console's only query that reads **one** table, and the only
+		 * one that pages with `by_at` rather than by slicing a scan — an audit
+		 * log is append-only and ordered by the column it is indexed on, which is
+		 * the shape `paginate()` was built for. It is still `collect()`d here for
+		 * the total, which is the same scan caveat as everywhere else and the
+		 * first thing to change when the table has real rows in it.
+		 *
+		 * `targetGone` is resolved per row because only the server can look, and
+		 * it is what lets an opened entry say on its own face that the thing it
+		 * describes no longer exists.
+		 */
+		adminActivity: query(async (
+			ctx,
+			args: { offset?: number; pageSize?: number } = {}
+		): Promise<AdminActivityResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			const all = await ctx.db.activity.withIndex('by_at').order('desc').collect();
+			const pageSize = Math.min(Math.max(Math.floor(args.pageSize ?? ADMIN_PAGE_SIZE), 1), 100);
+			const offset = Math.max(0, Math.min(Math.floor(args.offset ?? 0), Math.max(0, all.length - 1)));
+			const page = all.slice(offset, offset + pageSize);
+
+			// One lookup per row on the page, not per row in the table.
+			const rows = await Promise.all(page.map(async (r) => {
+				let targetGone = false;
+
+				if (r.targetKind === 'household' && r.targetId) {
+					targetGone = ! (await ctx.db.households.get(r.targetId));
+				} else if (r.targetKind === 'account' && r.targetId) {
+					const still = await ctx.db.memberships
+						.withIndex('by_user', (q) => q.eq('userId', r.targetId))
+						.first();
+					const profile = await ctx.db.profiles
+						.withIndex('by_user', (q) => q.eq('userId', r.targetId))
+						.first();
+
+					targetGone = ! still && ! profile;
+				}
+
+				return {
+					id: r.id,
+					at: r.at || r.createdAt,
+					actorId: r.actorId,
+					actorName: r.actorName,
+					actorKind: r.actorKind,
+					action: r.action,
+					targetKind: r.targetKind,
+					targetId: r.targetId,
+					targetName: r.targetName,
+					targetInk: r.targetInk,
+					fromValue: r.fromValue,
+					toValue: r.toValue,
+					held: r.held,
+					targetGone,
+				};
+			}));
+
+			return {
+				state: 'ready',
+				rows,
+				total: all.length,
+				offset,
+				pageSize,
+				retentionMonths: toRetentionMonths(ctx.env[RETENTION_VAR]),
+			};
+		}),
+
+		/**
+		 * A slice of the log, for export.
+		 *
+		 * **A range, not everything.** A button that hands over every row invites
+		 * the habit of handing over every row, and an audit export is the one
+		 * thing in this console that leaves it entirely.
+		 *
+		 * The bounds are inclusive of `from` and exclusive of `to`, which is what
+		 * makes "one month" composable — the next month's `from` is this month's
+		 * `to`, and no row is counted twice or missed at the boundary.
+		 *
+		 * It is capped, and it **says** when the cap bit. A truncated audit
+		 * export that looks complete is worse than no export at all, so the flag
+		 * rides the result rather than being inferred from the row count.
+		 */
+		adminActivityExport: query(async (
+			ctx,
+			from: string,
+			to: string
+		): Promise<AdminActivityExportResult> => {
+			if (! administers(ctx)) return { state: 'denied' };
+
+			// Bad bounds return an empty range rather than the whole table. The
+			// failure mode of the opposite default is handing over everything.
+			const lower = Number.isFinite(Date.parse(from)) ? from : '';
+			const upper = Number.isFinite(Date.parse(to)) ? to : '';
+
+			if (! lower || ! upper || lower >= upper) {
+				return { state: 'ready', rows: [], from: lower, to: upper, capped: false, limit: EXPORT_LIMIT };
+			}
+
+			const page = await ctx.db.activity
+				.withIndex('by_at', (r) => r.gte('at', lower).lt('at', upper))
+				.order('desc')
+				.take(EXPORT_LIMIT + 1);
+
+			const capped = page.length > EXPORT_LIMIT;
+			const rows = (capped ? page.slice(0, EXPORT_LIMIT) : page).map((r) => ({
+				id: r.id,
+				at: r.at || r.createdAt,
+				actorId: r.actorId,
+				actorName: r.actorName,
+				actorKind: r.actorKind,
+				action: r.action,
+				targetKind: r.targetKind,
+				targetId: r.targetId,
+				targetName: r.targetName,
+				targetInk: r.targetInk,
+				fromValue: r.fromValue,
+				toValue: r.toValue,
+				held: r.held,
+				// Not resolved here. An export is a record of what the log says,
+				// and a column that means "true when you asked" is not a fact
+				// about the event — it would read as data and age into a lie.
+				targetGone: false,
+			}));
+
+			return { state: 'ready', rows, from: lower, to: upper, capped, limit: EXPORT_LIMIT };
 		}),
 	},
 
@@ -624,7 +1393,7 @@ export default capsule({
 		 * inside one, and this is reachable before any exists.
 		 */
 		setDisplayName: mutation(async (ctx, rawName: string) => {
-			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
+			if (! signedIn(ctx)) throw new AccessError('Sign in to use Larder Log.');
 
 			const displayName = normalizeDisplayName(rawName);
 
@@ -688,7 +1457,7 @@ export default capsule({
 		 * being signed in.
 		 */
 		syncAccountAvatar: mutation(async (ctx) => {
-			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
+			if (! signedIn(ctx)) throw new AccessError('Sign in to use Larder Log.');
 
 			const picture = accountAvatar(ctx);
 
@@ -722,7 +1491,7 @@ export default capsule({
 		 * and remains usable from a read-only query context.
 		 */
 		createHousehold: mutation(async (ctx, name: string, ink?: string, sources?: unknown) => {
-			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
+			if (! signedIn(ctx)) throw new AccessError('Sign in to use Larder Log.');
 
 			const now = Date.now();
 
@@ -1305,7 +2074,7 @@ export default capsule({
 		}),
 
 		redeemInvite: mutation(async (ctx, rawCode: string) => {
-			if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to join a household.');
+			if (! signedIn(ctx)) throw new AccessError('Sign in to join a household.');
 
 			const code = normalizeCode(rawCode);
 
@@ -1451,6 +2220,457 @@ export default capsule({
 
 			ctx.invalidate('households', 'household', 'pantry');
 		}),
+
+		/*
+		 * --- the admin console's writes (D62) ---
+		 *
+		 * Six mutations that reach into a household the caller is **not** a
+		 * member of, which is a thing nothing else in this capsule does. Every
+		 * one of them starts with `requireAdminWrite` and there is no second line
+		 * of defence anywhere beneath it — Zero has no row-level security, and an
+		 * administrator has no membership row to resolve against.
+		 *
+		 * **All six are switched off right now.** `requireAdminWrite` is
+		 * `requireAdmin` plus `ADMIN_WRITES_HELD`, and that flag is `true` while
+		 * the console is being read rather than used. The handlers below are
+		 * whole and unmodified on purpose: what is being tried out is the real
+		 * console, and turning it back on is one constant in `shared/admin.ts`.
+		 *
+		 * Three rules are carried over deliberately rather than reimplemented,
+		 * because an administrator is not exempt from any of them:
+		 *
+		 * - **D22's last-owner guard.** An admin cannot demote or remove a
+		 *   household's only owner. That is not a limitation, it is the flow: the
+		 *   fix for an ownerless household is to *promote* somebody, and a
+		 *   console that could strand one would be manufacturing the very state
+		 *   Overview flags as needing attention.
+		 * - **D21's invite revocation.** A demotion or a removal kills the
+		 *   invites that person minted, or an owner dropped to editor keeps
+		 *   minting editors through a link already in the wild.
+		 * - **The delete cascade**, children first, because Zero has none.
+		 *
+		 * Each invalidates the three console queries **and** the app's own, since
+		 * the people affected are elsewhere with the app open and the whole point
+		 * is that what they see changes.
+		 */
+
+		/** The household this admin write names, or a refusal. Never a membership. */
+		adminSetRole: mutation(async (
+			ctx,
+			householdId: string,
+			membershipId: string,
+			nextRole: string
+		) => {
+			requireAdminWrite(ctx);
+
+			const members = await adminMembersOf(ctx.db, householdId);
+			const target = members.find((m) => m.id === membershipId);
+
+			if (! target) throw new AccessError('That member is no longer in this household.');
+
+			const role = toRole(nextRole);
+
+			// D22, and it is what makes the ownerless case fixable rather than
+			// creatable: promoting is always allowed, demoting the last owner
+			// never is.
+			if (role !== 'owner' && wouldStrandHousehold(members, membershipId)) {
+				throw new AccessError(
+					'This household needs at least one owner. Make someone else an owner first.'
+				);
+			}
+
+			// Nothing to do, and saying so beats a write plus a refresh for
+			// every subscriber — the same short-circuit `setSourceKind` makes,
+			// and the reason a role menu's current row is a safe place to press.
+			if (toRole(target.role) === role) return;
+
+			const before = toRole(target.role);
+
+			await ctx.db.memberships.update(target.id, { role });
+			await revokeInvitesBy(ctx.db, householdId, target.userId);
+
+			await logActivity(ctx, {
+				action: 'member.role',
+				targetKind: 'membership',
+				targetId: target.id,
+				targetName: target.displayName,
+				fromValue: before,
+				toValue: role,
+			});
+
+			ctx.invalidate(
+				'adminHousehold', 'adminSummary', 'adminHouseholds', 'adminActivity',
+				'household', 'pantry'
+			);
+		}),
+
+		adminRemoveMember: mutation(async (ctx, householdId: string, membershipId: string) => {
+			requireAdminWrite(ctx);
+
+			const members = await adminMembersOf(ctx.db, householdId);
+			const target = members.find((m) => m.id === membershipId);
+
+			if (! target) throw new AccessError('That member is no longer in this household.');
+
+			if (wouldStrandHousehold(members, membershipId)) {
+				throw new AccessError(
+					'This household needs at least one owner. Make someone else an owner first.'
+				);
+			}
+
+			const household = await ctx.db.households.get(householdId);
+
+			await revokeInvitesBy(ctx.db, householdId, target.userId);
+			await ctx.db.memberships.delete(target.id);
+
+			await logActivity(ctx, {
+				action: 'member.remove',
+				targetKind: 'membership',
+				targetId: target.id,
+				targetName: target.displayName,
+				toValue: household?.name ?? '',
+			});
+
+			ctx.invalidate(
+				'adminHousehold', 'adminSummary', 'adminHouseholds', 'adminActivity',
+				'households', 'household', 'pantry'
+			);
+		}),
+
+		adminRevokeInvite: mutation(async (ctx, householdId: string, inviteId: string) => {
+			requireAdminWrite(ctx);
+
+			const household = await ctx.db.households.get(householdId);
+
+			if (! household) throw new AccessError('That household no longer exists.');
+
+			const invite = await ctx.db.invites.get(inviteId);
+
+			// The household id is checked against the row rather than trusted,
+			// even though an administrator could name any household anyway. It
+			// costs one comparison and it means a mismatched pair is a refusal
+			// instead of a revocation somewhere nobody was looking.
+			if (! invite || invite.householdId !== household.id) {
+				throw new AccessError('That invite no longer exists.');
+			}
+
+			if (invite.revoked) return;
+
+			await ctx.db.invites.update(invite.id, { revoked: true });
+
+			await logActivity(ctx, {
+				action: 'invite.revoke',
+				targetKind: 'invite',
+				targetId: invite.id,
+				// The invite's own name is the household it lets you into — a code
+				// is the one thing that must never reach this table.
+				targetName: household.name,
+				fromValue: toRole(invite.role),
+				toValue: household.name,
+			});
+
+			// `invitePreview` too: a stranger may be sitting on the landing card
+			// this link opened, and revoking is meant to reach them.
+			ctx.invalidate(
+				'adminHousehold', 'adminSummary', 'adminActivity', 'household', 'invitePreview'
+			);
+		}),
+
+		/**
+		 * Deletes a household and everything in it, on behalf of nobody in it.
+		 *
+		 * **The app's second typed confirmation, and it earns it.** The first —
+		 * deleting your own last household — earned the exception by destroying
+		 * data belonging to more than one screen. This destroys data belonging to
+		 * people who are not in the room, and the typing happens client-side
+		 * because the server has no way to tell a deliberate call from a careless
+		 * one and should not pretend otherwise.
+		 *
+		 * The cascade is `deleteHousehold`'s, verbatim and for the same reason:
+		 * join rows, then what they point at, then the household. Zero has no
+		 * cascading deletes, so a table missed here is rows that outlive every
+		 * route to them.
+		 */
+		adminDeleteHousehold: mutation(async (ctx, householdId: string) => {
+			requireAdminWrite(ctx);
+
+			const household = await ctx.db.households.get(householdId);
+
+			if (! household) throw new AccessError('That household no longer exists.');
+
+			// Counted **before** the cascade, because after it there is nothing
+			// left to count and this row is the only surviving record of what was
+			// there. That is the whole reason a deletion entry denormalises.
+			const held = await countHousehold(ctx.db, household.id);
+
+			await deleteHouseholdRows(ctx.db, household.id);
+
+			await logActivity(ctx, {
+				action: 'household.delete',
+				targetKind: 'household',
+				targetId: household.id,
+				targetName: household.name,
+				targetInk: householdInk(household.ink, household.id),
+				held,
+			});
+
+			ctx.invalidate(
+				'adminHousehold', 'adminSummary', 'adminHouseholds', 'adminActivity',
+				'households', 'household', 'pantry'
+			);
+		}),
+
+		/**
+		 * Hands a household over: one member becomes its owner, and everyone who
+		 * was an owner stops being one.
+		 *
+		 * **This is the capability the app did not have**, and it is not what the
+		 * role menu does. Promoting somebody adds an owner; transferring *moves*
+		 * ownership, which is two writes that have to happen together or the
+		 * household briefly has two owners and might keep them. Deletion is what
+		 * forced it to exist — and now that it does, the orphan case has
+		 * something to call.
+		 *
+		 * A household with **no** owner is the case this is really for, and it
+		 * needs no `from`: there is nobody to demote, so the transfer is the
+		 * promotion. That is why the demotion is derived from the row rather than
+		 * named by the caller — a client that had to say who the current owner
+		 * was would be a client that could get it wrong.
+		 */
+		adminTransferOwnership: mutation(async (
+			ctx,
+			householdId: string,
+			toMembershipId: string
+		) => {
+			requireAdminWrite(ctx);
+
+			const members = await adminMembersOf(ctx.db, householdId);
+			const target = members.find((m) => m.id === toMembershipId);
+
+			if (! target) throw new AccessError('That member is no longer in this household.');
+
+			// The promotion first, so there is never an instant with no owner —
+			// which is the state this exists to get a household *out* of.
+			if (toRole(target.role) !== 'owner') {
+				await ctx.db.memberships.update(target.id, { role: 'owner' });
+			}
+
+			const previousOwners: string[] = [];
+
+			for (const m of members) {
+				if (m.id === target.id || toRole(m.role) !== 'owner') continue;
+
+				previousOwners.push(m.displayName);
+				await ctx.db.memberships.update(m.id, { role: 'editor' });
+				// D21: a demoted owner's invites stop working, or somebody who
+				// has just been handed a household finds the previous owner still
+				// minting editors through a link already out.
+				await revokeInvitesBy(ctx.db, householdId, m.userId);
+			}
+
+			const household = await ctx.db.households.get(householdId);
+
+			await logActivity(ctx, {
+				action: 'household.transfer',
+				targetKind: 'household',
+				targetId: householdId,
+				targetName: household?.name ?? '',
+				targetInk: household ? householdInk(household.ink, household.id) : '',
+				fromValue: previousOwners.join(', '),
+				toValue: target.displayName,
+			});
+
+			ctx.invalidate(
+				'adminHousehold', 'adminAccount', 'adminPeople', 'adminHouseholds',
+				'adminActivity', 'household', 'pantry'
+			);
+		}),
+
+		/**
+		 * Deletes an account: every membership it holds, and its profile row.
+		 *
+		 * **It does not delete the identity, and it cannot.** A Spacefast account
+		 * lives on the platform; what this app owns is the rows keyed to its
+		 * `userId`. So this removes the person from Larder Log completely, and
+		 * signing in again would produce a stranger with the same id and no
+		 * history — which is the honest description and belongs in the copy.
+		 *
+		 * **The pre-flight is what makes it reachable at all.** D22 blocks a sole
+		 * owner from leaving a household; run that rule against every household
+		 * at once and deleting an account becomes a wall for exactly the people
+		 * most likely to want it. `decisions` turns each block into a choice, and
+		 * the handler refuses rather than guessing when one is missing.
+		 *
+		 * Order matters and it is the reverse of what reads naturally: every
+		 * decision is **validated before anything is written**, because a
+		 * half-applied deletion leaves a household transferred to somebody and an
+		 * account still present, with no record of either. Zero gives a mutation
+		 * one transaction, but a thrown error partway through is still the worst
+		 * possible moment to discover the third row was malformed.
+		 */
+		adminDeleteAccount: mutation(async (
+			ctx,
+			userId: string,
+			decisions: AdminOwnershipDecision[] = []
+		) => {
+			requireAdminWrite(ctx);
+
+			if (! userId) throw new AccessError('That account no longer exists.');
+
+			const mine = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', userId))
+				.collect();
+
+			const profile = await ctx.db.profiles
+				.withIndex('by_user', (r) => r.eq('userId', userId))
+				.first();
+
+			if (mine.length === 0 && ! profile) {
+				throw new AccessError('That account no longer exists.');
+			}
+
+			// Which households this account solely owns — the ones a decision is
+			// required for, recomputed here rather than trusted from the client.
+			const needed: { householdId: string; membershipId: string }[] = [];
+
+			for (const m of mine) {
+				const members = await ctx.db.memberships
+					.withIndex('by_household', (r) => r.eq('householdId', m.householdId))
+					.collect();
+
+				const owners = members.filter((x) => toRole(x.role) === 'owner');
+
+				if (toRole(m.role) === 'owner' && owners.length === 1) {
+					needed.push({ householdId: m.householdId, membershipId: m.id });
+				}
+			}
+
+			// --- validate everything, then write ---
+
+			const answered = new Map<string, AdminOwnershipDecision>();
+
+			for (const d of decisions) {
+				const need = needed.find((n) => n.householdId === d.householdId);
+
+				// A decision about a household that needed none means the client
+				// and the server disagree about the state. Dropping it quietly
+				// would let a stale dialog delete a household nobody chose.
+				if (! need) {
+					throw new AccessError('Something changed while you were deciding. Open this again.');
+				}
+
+				if (answered.has(d.householdId)) {
+					throw new AccessError('Something changed while you were deciding. Open this again.');
+				}
+
+				if (d.action === 'transfer') {
+					const members = await ctx.db.memberships
+						.withIndex('by_household', (r) => r.eq('householdId', d.householdId))
+						.collect();
+
+					const target = members.find((x) => x.id === d.toMembershipId);
+
+					if (! target || target.userId === userId) {
+						throw new AccessError('Choose someone else in that household to hand it to.');
+					}
+				} else if (d.action !== 'delete') {
+					throw new AccessError('Something changed while you were deciding. Open this again.');
+				}
+
+				answered.set(d.householdId, d);
+			}
+
+			const unanswered = needed.filter((n) => ! answered.has(n.householdId));
+
+			if (unanswered.length > 0) {
+				const household = await ctx.db.households.get(unanswered[0].householdId);
+
+				throw new AccessError(
+					household
+						? `Decide what happens to ${household.name} first.`
+						: 'Something changed while you were deciding. Open this again.'
+				);
+			}
+
+			// --- write ---
+
+			// The account's own name, captured before its profile goes. After the
+			// deletion there is nothing left to resolve it from, and this row is
+			// the only surviving record that the account existed.
+			const goingName = await accountNameOf(ctx.db, userId, ctx.auth);
+
+			for (const [householdId, decision] of answered) {
+				const household = await ctx.db.households.get(householdId);
+
+				if (decision.action === 'delete') {
+					// Counted before the cascade, and logged as its own entry: a
+					// household deleted this way is as gone as one deleted from its
+					// own page, and the log must not make the two look different.
+					const held = await countHousehold(ctx.db, householdId);
+
+					await deleteHouseholdRows(ctx.db, householdId);
+
+					await logActivity(ctx, {
+						action: 'household.delete',
+						targetKind: 'household',
+						targetId: householdId,
+						targetName: household?.name ?? '',
+						targetInk: household ? householdInk(household.ink, household.id) : '',
+						held,
+					});
+
+					continue;
+				}
+
+				const members = await ctx.db.memberships
+					.withIndex('by_household', (r) => r.eq('householdId', householdId))
+					.collect();
+
+				const target = members.find((x) => x.id === decision.toMembershipId);
+
+				// Re-found rather than carried from the validation pass: the same
+				// re-read-before-you-write rule every other handler follows.
+				if (target) {
+					await ctx.db.memberships.update(target.id, { role: 'owner' });
+
+					await logActivity(ctx, {
+						action: 'household.transfer',
+						targetKind: 'household',
+						targetId: householdId,
+						targetName: household?.name ?? '',
+						targetInk: household ? householdInk(household.ink, household.id) : '',
+						fromValue: goingName,
+						toValue: target.displayName,
+					});
+				}
+			}
+
+			// Everything that is left. A household that was deleted above has had
+			// its memberships removed with it, so this skips rows that are gone.
+			for (const m of mine) {
+				const still = await ctx.db.memberships.get(m.id);
+
+				if (! still) continue;
+
+				await revokeInvitesBy(ctx.db, m.householdId, userId);
+				await ctx.db.memberships.delete(m.id);
+			}
+
+			if (profile) await ctx.db.profiles.delete(profile.id);
+
+			await logActivity(ctx, {
+				action: 'account.delete',
+				targetKind: 'account',
+				targetId: userId,
+				targetName: goingName,
+				held: { households: mine.length },
+			});
+
+			ctx.invalidate(
+				'adminAccount', 'adminPeople', 'adminSummary', 'adminHouseholds', 'adminHousehold',
+				'adminActivity', 'households', 'household', 'pantry', 'profile'
+			);
+		}),
 	},
 
 	endpoints: {
@@ -1459,6 +2679,416 @@ export default capsule({
 });
 
 // --- helpers ---
+
+/**
+ * A household's members, for an admin write, or a refusal if it is gone.
+ *
+ * The console's equivalent of `requireCapability`'s return value: the app's
+ * mutations get a `membership` back and read `membership.householdId` from it,
+ * which is what makes an id a selector rather than an authority. An
+ * administrator has no membership, so this is the only re-read there is — and
+ * it doubles as the existence check, since a household with no row has no
+ * members and every caller here needs the list anyway.
+ */
+async function adminMembersOf(db: WriteDb, householdId: string) {
+	const household = householdId ? await db.households.get(householdId) : null;
+
+	if (! household) throw new AccessError('That household no longer exists.');
+
+	return db.memberships
+		.withIndex('by_household', (r) => r.eq('householdId', household.id))
+		.collect();
+}
+
+/**
+ * The last stamp this isolate handed to an audit row.
+ *
+ * **An audit log's one job is order, and millisecond stamps are not enough.**
+ * `adminDeleteAccount` writes a `household.transfer` and then an
+ * `account.delete`, and both landed on the same millisecond in testing — at
+ * which point `by_at` descending put the transfer *above* the deletion that
+ * caused it, so the log read as though a household had been handed over after
+ * the account was already gone. Caught by driving the real handler; nothing
+ * short of reading the rows back would have shown it.
+ *
+ * So a stamp is never reused: if the clock has not moved, the next row takes
+ * the previous stamp plus a millisecond. That makes `at` strictly increasing
+ * within an isolate, which is what `by_at` needs to be a true order.
+ *
+ * **It is per-isolate, not global**, and that is the honest limit: two
+ * concurrent requests on separate isolates can still tie. At this scale nothing
+ * writes concurrently, and the alternative is a sequence row and a write per
+ * write. Worth revisiting if the log ever becomes busy.
+ */
+let lastActivityStamp = 0;
+
+/**
+ * Writes one audit row (D62).
+ *
+ * **Every administrative write calls this, and nothing else does.** The log
+ * records administration — things done to a household or an account from the
+ * console — and nothing a household does to its own pantry. `addItem` must
+ * never appear here; a console that logged it would be the surveillance the
+ * household page refuses to be.
+ *
+ * The actor is resolved through `accountName()`, the same chain the member list
+ * uses, so a log row and a member row never print the same person differently.
+ * It is **denormalised on purpose**: an audit row that stops naming its actor
+ * once that account is deleted is an audit log you can erase by deleting
+ * yourself. That is a real erasure question and the design flags it for a
+ * lawyer's read; it is not a thing to decide by leaving the column joinable.
+ *
+ * It never throws. A write that succeeded and a log row that did not is bad; a
+ * write rolled back because the *log* failed is worse, and a log is not the
+ * thing the caller asked for.
+ */
+async function logActivity(
+	ctx: {
+		auth: AuthContext;
+		db: WriteDb;
+		env: Record<string, string | undefined>;
+		log: LogContext;
+	},
+	entry: {
+		action: ActivityAction;
+		targetKind?: TargetKind;
+		targetId?: string;
+		targetName?: string;
+		targetInk?: string;
+		fromValue?: string;
+		toValue?: string;
+		held?: Held;
+	}
+): Promise<void> {
+	const now = Date.now();
+	// Strictly increasing. See `lastActivityStamp`.
+	const at = now > lastActivityStamp ? now : lastActivityStamp + 1;
+
+	lastActivityStamp = at;
+
+	try {
+		await ctx.db.activity.insert({
+			at: stampFrom(at),
+			actorId: ctx.auth.userId,
+			actorName: await accountName(ctx),
+			actorKind: 'person',
+			action: entry.action,
+			targetKind: entry.targetKind ?? '',
+			targetId: entry.targetId ?? '',
+			targetName: entry.targetName ?? '',
+			targetInk: entry.targetInk ?? '',
+			fromValue: entry.fromValue ?? '',
+			toValue: entry.toValue ?? '',
+			held: entry.held ? encodeHeld(entry.held) : '',
+		});
+	} catch (err) {
+		// `ctx.log` is the only way anything is heard from the hosted runtime —
+		// an uncaught handler exception logs nothing at all. A missing audit row
+		// is exactly the kind of silence worth breaking.
+		ctx.log.error('activity log write failed', { action: entry.action, err: String(err) });
+	}
+
+	await pruneActivity(ctx);
+}
+
+/**
+ * Deletes expired audit rows, a few at a time.
+ *
+ * Called after every append, which is the only moment this app is guaranteed to
+ * be running code with a write handle — there is no scheduler. See
+ * `PRUNE_PER_WRITE` for what that costs.
+ *
+ * `by_at` ascending with `take()` is exactly the read this wants: the oldest
+ * rows first, bounded, and the index is already there for the log's own order.
+ *
+ * It never throws, for `logActivity`'s reason and one more: a failed prune must
+ * not roll back the row it was pruning *for*. An audit entry that was not
+ * written because the housekeeping after it failed is the worst possible trade.
+ */
+async function pruneActivity(ctx: { db: WriteDb; env: Record<string, string | undefined>; log: LogContext }): Promise<void> {
+	try {
+		const months = toRetentionMonths(ctx.env[RETENTION_VAR]);
+		const cutoff = retentionCutoff(new Date().toISOString(), months);
+
+		if (! cutoff) return;
+
+		const expired = await ctx.db.activity
+			.withIndex('by_at', (r) => r.lt('at', cutoff))
+			.order('asc')
+			.take(PRUNE_PER_WRITE);
+
+		for (const row of expired) await ctx.db.activity.delete(row.id);
+	} catch (err) {
+		ctx.log.error('activity prune failed', { err: String(err) });
+	}
+}
+
+/**
+ * A **third party's** name, for a log row about them.
+ *
+ * `accountName()` answers for the *caller* and walks their identity as the last
+ * link; this cannot, because the platform tells a handler about its caller and
+ * never about anybody else. So the chain is one link shorter — the profile,
+ * then any membership — with the caller's own identity used only when the
+ * account being named happens to be theirs, which is the self-deletion case.
+ *
+ * It resolves to `''` rather than to an id when there is nothing: a log row
+ * reading *deleted `account:7f3a…`'s account* says less than one that admits it
+ * never knew the name, and the client renders the absence.
+ */
+async function accountNameOf(db: WriteDb, userId: string, auth: AuthContext): Promise<string> {
+	const profile = await db.profiles
+		.withIndex('by_user', (r) => r.eq('userId', userId))
+		.first();
+
+	const memberships = await db.memberships
+		.withIndex('by_user', (r) => r.eq('userId', userId))
+		.collect();
+
+	return pickDisplayName(
+		profile?.displayName ?? '',
+		...memberships.map((m) => m.displayName),
+		userId === auth.userId ? auth.displayName : ''
+	);
+}
+
+/**
+ * What a household holds, for a deletion entry's own copy of it.
+ *
+ * Called **before** the cascade, because afterwards there is nothing left to
+ * count — which is the whole reason a deletion row denormalises rather than
+ * pointing at something.
+ */
+async function countHousehold(db: WriteDb, householdId: string): Promise<Held> {
+	const [items, locations, stores, types, members] = await Promise.all([
+		db.items.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+		db.locations.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+		db.stores.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+		db.types.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+		db.memberships.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+	]);
+
+	return {
+		items: items.length,
+		locations: locations.length,
+		stores: stores.length,
+		types: types.length,
+		members: members.length,
+	};
+}
+
+/**
+ * Every row a household owns, then the household — children first.
+ *
+ * Zero has **no cascading deletes**, so this list is the only thing standing
+ * between a deleted household and rows that outlive every route to them. It is
+ * `deleteHousehold`'s own order, extracted when the account pre-flight became a
+ * second caller: two copies of a cascade is one copy that will be missed the
+ * next time a table is added.
+ */
+async function deleteHouseholdRows(db: WriteDb, householdId: string): Promise<void> {
+	for (const name of [
+		'itemTypes',
+		'itemStores',
+		'items',
+		'locations',
+		'types',
+		'stores',
+		'invites',
+		'memberships',
+	] as const) {
+		const rows = await db[name]
+			.withIndex('by_household', (r) => r.eq('householdId', householdId))
+			.collect();
+
+		for (const row of rows) await db[name].delete(row.id);
+	}
+
+	await db.households.delete(householdId);
+}
+
+/**
+ * Every person in the space, from the two tables that between them define one.
+ *
+ * Shared by `adminPeople` and `adminAccount` so the list and the page cannot
+ * disagree about who somebody is — the account page reads one row out of the
+ * same array the list pages, rather than recomputing a person from the same
+ * tables by a second route.
+ *
+ * The name walks `pickDisplayName`'s chain, one link short: the profile, then
+ * any membership. There is no identity to fall back to, because the platform
+ * tells a handler about its **caller** and never a third party — so an account
+ * that has neither is rendered as *Someone* by the client rather than as a bare
+ * id here.
+ */
+function buildPeople(
+	households: readonly { id: string; name: string; ink: string }[],
+	memberships: readonly {
+		id: string; userId: string; householdId: string;
+		displayName: string; picture: string; role: string; createdAt: string;
+	}[],
+	profiles: readonly { userId: string; displayName: string; addedAt: string; createdAt: string }[],
+	adminIds: readonly string[],
+	auth: AuthContext
+): AdminPersonRow[] {
+	const householdById = new Map(households.map((h) => [h.id, h]));
+	const owners = new Map<string, number>();
+
+	for (const m of memberships) {
+		if (toRole(m.role) === 'owner') {
+			owners.set(m.householdId, (owners.get(m.householdId) ?? 0) + 1);
+		}
+	}
+
+	const byUser = new Map<string, typeof memberships[number][]>();
+
+	for (const m of memberships) {
+		const list = byUser.get(m.userId);
+
+		if (list) list.push(m); else byUser.set(m.userId, [m]);
+	}
+
+	const profileOf = new Map(profiles.map((p) => [p.userId, p]));
+	// The union, and it has to be a union: either table can hold a person the
+	// other does not.
+	const userIds = new Set<string>([...byUser.keys(), ...profileOf.keys()]);
+
+	return [...userIds].map((userId) => {
+		const mine = byUser.get(userId) ?? [];
+		const profile = profileOf.get(userId);
+		const tiles = mine.flatMap((m) => {
+			const household = householdById.get(m.householdId);
+
+			return household
+				? [{ id: household.id, name: household.name, ink: householdInk(household.ink, household.id) }]
+				: [];
+		});
+
+		// The earliest thing this app knows about the account. A profile row is
+		// stamped from birth (D46); a membership only has the platform's
+		// `createdAt`, which is enough because a membership is never re-inserted.
+		let joinedAt = profile ? (profile.addedAt || profile.createdAt) : '';
+
+		for (const m of mine) {
+			if (! joinedAt || (m.createdAt && m.createdAt < joinedAt)) joinedAt = m.createdAt;
+		}
+
+		return {
+			userId,
+			name: pickDisplayName(
+				profile?.displayName ?? '',
+				...mine.map((m) => m.displayName),
+				// The caller's own identity name, and only theirs — it is the one
+				// third-party name this runtime will never hand out.
+				userId === auth.userId ? auth.displayName : ''
+			),
+			picture: mine.find((m) => m.picture)?.picture ?? '',
+			tiles: tiles.slice(0, 3),
+			households: mine.length,
+			owned: mine.filter((m) => toRole(m.role) === 'owner').length,
+			soleOwnerOf: mine.filter(
+				(m) => toRole(m.role) === 'owner' && (owners.get(m.householdId) ?? 0) === 1
+			).length,
+			/*
+			 * Named in `LARDER_ADMIN_IDS`, and nothing else.
+			 *
+			 * It used to carry a second clause — *or the caller, when the caller
+			 * administers by some other route* — which existed solely because
+			 * `sf dev`'s guest administered by **bypass** rather than by being
+			 * named. There is no such route any more: a dev guest that
+			 * administers is in this list like anybody else, under its own
+			 * `guest:<name>` id. One rule, and the row now says the same thing
+			 * the gate does.
+			 */
+			admin: adminIds.indexOf(userId) !== -1,
+			joinedAt,
+		};
+	});
+}
+
+/** A household's member names, for the relevance ladder's second rung. */
+function memberNames(
+	byHousehold: Map<string, { displayName: string }[]>,
+	householdId: string
+): string[] {
+	return (byHousehold.get(householdId) ?? []).map((m) => m.displayName);
+}
+
+/** The console's page size. The boards' *Showing 1–25 of 412*. */
+const ADMIN_PAGE_SIZE = 25;
+
+/**
+ * How many expired audit rows one write may clear.
+ *
+ * **The log prunes itself as it grows**, because this app has no schedule to
+ * sweep with: `logActivity` deletes what has expired immediately after it
+ * appends. That is the whole enforcement mechanism, and it has one consequence
+ * worth stating — a log that stops being written to stops being pruned, so the
+ * last rows before a quiet period outlive their retention until something else
+ * happens. Acceptable: the alternative is a cron this platform has not been
+ * asked for, and rows nobody is adding to are rows nobody is reading either.
+ *
+ * The cap is what keeps a write bounded. A retention change that suddenly
+ * expires ten thousand rows must not turn the next role change into a ten
+ * thousand row delete; it takes a few each time and catches up.
+ */
+const PRUNE_PER_WRITE = 20;
+
+/**
+ * The most rows one export may carry.
+ *
+ * A live query's result crosses a websocket and is held in memory on both
+ * sides, so this is a real ceiling rather than a policy. When it bites, the
+ * answer is a narrower range — which is the shape the export already has.
+ */
+const EXPORT_LIMIT = 2000;
+
+/**
+ * When each household was last touched, as an ISO stamp.
+ *
+ * **There is no such column and there should not be one.** D44 gave `households`
+ * an `addedAt` and deliberately no `changedAt`, on the grounds that nothing
+ * orders households by recency and a rename is not an event anything reacts to.
+ * That is still true of the *app*; the console is the first thing that wants an
+ * answer, and it can compute one rather than make every mutation in the capsule
+ * maintain a column for a screen almost nobody opens.
+ *
+ * So it is the newest stamp across everything the household owns: its items,
+ * and its three taxonomies. `changedAtOf()` falls back through `addedAt` to the
+ * platform's `createdAt`, which is what makes a pre-D44 row answer at all — and
+ * why a household with rows always reports *something*, while an empty one
+ * falls back to when it was created.
+ *
+ * `items` is passed in because both callers have already scanned it. The three
+ * taxonomies are scanned here, once, for the same reason the items are: three
+ * `by_creation` passes beat one indexed read per household.
+ */
+async function lastActiveByHousehold(
+	db: ReadDb,
+	items: readonly { householdId: string; addedAt: string; changedAt: string; createdAt: string }[]
+): Promise<Map<string, string>> {
+	const newest = new Map<string, string>();
+
+	function note(householdId: string, iso: string) {
+		if (! iso) return;
+
+		const seen = newest.get(householdId);
+
+		if (! seen || iso > seen) newest.set(householdId, iso);
+	}
+
+	for (const it of items) note(it.householdId, changedAtOf(it));
+
+	const [locations, types, stores] = await Promise.all([
+		db.locations.withIndex('by_creation').collect(),
+		db.types.withIndex('by_creation').collect(),
+		db.stores.withIndex('by_creation').collect(),
+	]);
+
+	for (const row of [...locations, ...types, ...stores]) note(row.householdId, changedAtOf(row));
+
+	return newest;
+}
 
 /**
  * One term row as the client sees it.

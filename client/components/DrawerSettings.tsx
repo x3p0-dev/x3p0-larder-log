@@ -10,7 +10,7 @@ import { TermPanel } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
 import {
-	DRAWER_CARD_ROW, DRAWER_CHIP_ON, DRAWER_GHOST_DANGER, DRAWER_STEPPER, DRAWER_SUNK,
+	DRAWER_CARD_ROW, DRAWER_GHOST_DANGER, DRAWER_SEGMENT_ON, DRAWER_STEPPER, DRAWER_SUNK,
 } from '../lib/controlStyles';
 import type { Invite, Member, ThemeOverride } from '../../shared/types';
 import type { Role } from '../../shared/roles';
@@ -333,7 +333,7 @@ export function DrawerSettings({
 							<button
 								key={opt.key}
 								onClick={() => setThemeOverride(opt.key)}
-								class={`h-9 rounded-[10px] text-[14.5px] ${themeOverride === opt.key ? DRAWER_CHIP_ON : 'transition-colors text-on-dark-muted hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
+								class={`h-9 rounded-[10px] text-[14.5px] ${themeOverride === opt.key ? DRAWER_SEGMENT_ON : 'transition-colors text-on-dark-muted hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
 								aria-pressed={themeOverride === opt.key}
 							>
 								{opt.label}

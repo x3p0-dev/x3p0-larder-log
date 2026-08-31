@@ -35,11 +35,16 @@ out. Everything else exists to serve that loop.
 | **Item**     | A thing you have some quantity of. "Ground Beef (1lb pkgs)", qty 6.   |
 | **Location** | Where the item physically is. "Chest Freezer", "Pantry". One per item.|
 | **Type**     | What kind of food it is. "Meat", "Baking". Many per item.             |
-| **Store**    | Where you buy it. "Costco", "Publix". Many per item.                  |
+| **Source**   | Where it comes from. A shop, a garden or a kitchen ([D58](decisions.md#d58-a-source-carries-a-kind-and-the-group-is-named-for-what-it-holds)). Many per item. Called *Store* until a household has one that is not a shop |
 | **Status**   | Derived, never stored: `out` (qty 0), `low` (qty ≤ threshold), `ok`.  |
+| **Administrator** | Somebody who can see **every** household in the space — how much each holds, never what ([D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment)). Not a role: it is a name in the server environment, and nothing in the app grants it |
 
-Locations, Types, and Stores are per-household taxonomies — each household
+Locations, Types, and Sources are per-household taxonomies — each household
 names and colors its own.
+
+**An administrator is not a member of anything they administer**, and the
+console is deliberately narrow about what that buys: counts, names and dates
+across every household, and no route to a single item. See the non-goals.
 
 ## Goals
 
@@ -63,6 +68,14 @@ Explicitly out of scope, so we stop relitigating them:
   If you're offline, you're offline.
 - **Native mobile apps.** It's a responsive web app.
 - **Cross-household sharing or social features.** Households are islands.
+- **An administrator reading a household's items.** The admin console shows how
+  much a household holds, never what — *"support is not a reason to read
+  someone's shelves"*. A recorded, expiring, household-notified look was fully
+  designed and **decided against** on 2026-08-29
+  ([D62](decisions.md#d62-the-console-is-a-pane-in-the-app-drawer-and-an-administrator-is-a-name-in-the-environment)),
+  which also records what would reopen it. Support means asking somebody inside
+  the household. This is the one non-goal here that is a **decision with a
+  stated threshold** rather than a permanent no.
 
 ## Success criteria
 

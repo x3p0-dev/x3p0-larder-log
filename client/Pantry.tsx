@@ -34,6 +34,10 @@ import { usePantryData, useInvitePreview, useProfile } from './hooks/usePantryDa
 import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
 import { devItemsEnabled, runDemoSeed } from './lib/devItems';
 import { useAvatarSync } from './hooks/useAvatarSync';
+import { useAdminAccess } from './hooks/useAdminData';
+import { AdminConsole } from './components/AdminConsole';
+import type { AdminSection } from './components/AdminPane';
+import { adminDeepLink } from './lib/adminEntry';
 import { addedAtOf, changedAtOf } from '../shared/stamp';
 import { useToasts } from './hooks/useToasts';
 import { useTripChecks } from './hooks/useTripChecks';
@@ -49,7 +53,10 @@ import { statusKeyFor } from '../shared/status';
 import type { SourceKind } from '../shared/source';
 import type { SourceMix } from '../shared/seed';
 import { sourceGroupWord } from '../shared/source';
-import type { Item, ItemDraft, Member, Term, TermKind, ThemeOverride } from '../shared/types';
+import type {
+	AdminHouseholdFilter, AdminPeopleFilter,
+	Item, ItemDraft, Member, Term, TermKind, ThemeOverride,
+} from '../shared/types';
 import { DEFAULT_ROLE, can } from '../shared/roles';
 import type { Role } from '../shared/roles';
 import { toInt } from '../shared/qty';
@@ -559,6 +566,102 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * exists to clear, and seeding it true would hand that effect a slide-over
 	 * on a screen that has no room for one.
 	 */
+	/*
+	 * The admin console — `null` when it is closed, which is every load that did
+	 * not arrive at `?admin`.
+	 *
+	 * It is **not** in `useViewState` (D51) and that is deliberate. Everything
+	 * that record restores is a way of looking at *your* pantry, and it restores
+	 * it because coming back to a filter you set is coming back to where you
+	 * were. The console is somewhere else entirely: an app that reopens on a
+	 * list of every household in the space is an app that has forgotten what it
+	 * is for, and a `LARDER_ADMIN_IDS` that loses an id would leave a device
+	 * restoring a section it can no longer be shown.
+	 */
+	const [adminSection, setAdminSection] = useState<AdminSection | null>(
+		() => (adminDeepLink() ? 'overview' : null)
+	);
+	/*
+	 * Lifted out of the list so a *Needs attention* row on Overview can set the
+	 * chip on its way to the list. The search, the sort and the page stay inside
+	 * `AdminHouseholds`: nothing else has an opinion about any of them.
+	 */
+	const [adminFilter, setAdminFilter] = useState<AdminHouseholdFilter>('all');
+	/*
+	 * Which household's page is open, `''` for the list.
+	 *
+	 * Separate from the section rather than a fifth one, because the drawer's
+	 * *Households* row stays lit while a household is open: you are still in
+	 * Households, one level down, which is what the nav block should say.
+	 */
+	const [adminOpenId, setAdminOpenId] = useState('');
+	/** People's own chip and open account. The same pair, one section along. */
+	const [adminPeopleFilter, setAdminPeopleFilter] = useState<AdminPeopleFilter>('all');
+	const [adminOpenUserId, setAdminOpenUserId] = useState('');
+
+	/*
+	 * Choosing a section always lands on that section's top level.
+	 *
+	 * Both the drawer's nav rows and Overview's *Needs attention* go through
+	 * here, and the drawer's is why it exists: pressing **Households** while a
+	 * household's page is open has to return to the list, and it is the one
+	 * press that looks like a no-op if it does not — the row is already lit.
+	 */
+	/**
+	 * Opens the console, from either place the account menu appears.
+	 *
+	 * **`AccountMenu` is one component in two hosts** — the drawer's foot row
+	 * and the collapsed rail's flyout — so this is defined once and handed to
+	 * both. It shipped wired to the drawer alone for one round, which meant the
+	 * *Admin* row simply did not exist whenever the drawer happened to be
+	 * collapsed. Anything either host passes that menu belongs here.
+	 *
+	 * **It does not move the drawer, and neither does `closeAdmin`.** Going to
+	 * the console and coming back is a change of *what you are looking at*, not
+	 * a change of how much chrome you want beside it — and somebody who has
+	 * folded the drawer away has said what they want. It did un-collapse for one
+	 * round, on the reasoning that the console *is* the drawer pane and opening
+	 * it behind a folded drawer would leave no visible way back. That was true
+	 * until the rail learned the console's own state; now the rail carries
+	 * back-to-the-pantry and all four sections, so there is nothing to reveal.
+	 *
+	 * Below `md` there is no rail at all and this menu is only reachable from
+	 * inside the open slide-over, so the drawer is already open there and there
+	 * is nothing to set.
+	 */
+	function openAdmin() {
+		setAdminSection('overview');
+		setAdminOpenId('');
+		setAdminOpenUserId('');
+	}
+
+	/**
+	 * Leaves the console, from the drawer's back button or the rail's slot 2.
+	 *
+	 * It leaves the drawer exactly as it found it, for `openAdmin`'s reason —
+	 * and because the Members pane's own back button sets the precedent: going
+	 * up a level inside the drawer has never also closed it.
+	 */
+	function closeAdmin() {
+		setAdminSection(null);
+		setAdminOpenId('');
+		setAdminOpenUserId('');
+	}
+
+	function goAdmin(next: AdminSection) {
+		setAdminOpenId('');
+		setAdminOpenUserId('');
+		setAdminSection(next);
+	}
+
+	/*
+	 * Whether this account administers the space, which is the one console query
+	 * every load runs. It is a single boolean over no scan, and it is what draws
+	 * the account menu's row — so it cannot be gated behind the console being
+	 * open, or there would be no way in.
+	 */
+	const isAdmin = useAdminAccess();
+
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	/* Desktop only — folded away, with the header's menu button to bring it back. */
 	const [drawerCollapsed, setDrawerCollapsed] = useState(restored.drawerCollapsed);
@@ -1981,6 +2084,18 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
 					accountName={accountName} accountEmail={email} accountPicture={picture}
 					onSetDisplayName={renameAccount}
+					/* The same row, in the other host this menu has. */
+					onOpenAdmin={isAdmin ? openAdmin : undefined}
+					/*
+					 * While the console is open the rail is the console's, not the
+					 * pantry's — the switcher, the filter groups and Settings all
+					 * go. Without this the collapse control produced a screen with
+					 * the console in the column and a pantry rail beside it,
+					 * offering to filter a household nothing on screen was about.
+					 */
+					adminSection={adminSection}
+					onAdminSection={goAdmin}
+					onCloseAdmin={closeAdmin}
 					themeOverride={themeOverride} setThemeOverride={setThemeOverride}
 					dark={dark}
 					/*
@@ -2009,6 +2124,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				accountName={accountName} accountEmail={email} accountPicture={picture}
 				onSetDisplayName={renameAccount} onSignOut={onSignOut}
 				openMembers={openMembers}
+				adminSection={adminSection}
+				setAdminSection={goAdmin}
+				/*
+				 * Absent, not disabled, and absent for almost everybody (D30). A
+				 * non-administrator's account menu is the two-row menu it has
+				 * always been and never mentions a console.
+				 */
+				onOpenAdmin={isAdmin ? openAdmin : undefined}
+				onCloseAdmin={closeAdmin}
 				settings={{
 					themeOverride, setThemeOverride,
 					householdName,
@@ -2062,6 +2186,60 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			/>
 
 			<div class="flex-1 min-w-0 overflow-x-hidden">
+			{/*
+			  * The admin console takes the whole content column.
+			  *
+			  * It replaces the top bar rather than sitting under it: search, the
+			  * status pills, the sort and the run trigger are every one of them a
+			  * control over *a* household, and there is no household here. What
+			  * survives is everything outside this column — the drawer, the rail,
+			  * the account row — which is the entire argument for the console
+			  * being a pane rather than a surface.
+			  *
+			  * The mobile header keeps its menu button and its wordmark and loses
+			  * the rest, for the same reason: the filter badge counts a filter on
+			  * a pantry, and the household name under the wordmark says which
+			  * pantry, and neither is a fact about this screen.
+			  */}
+			{adminSection !== null ? (
+			<>
+			<header class="md:hidden">
+				<div class="flex items-center gap-[13px] px-5 pt-6 pb-3">
+					<button
+						onClick={() => { setDrawerOpen(true); setDrawerCollapsed(false); }}
+						class={`shrink-0 flex items-center justify-center w-11 h-11 rounded-[13px] ${PAGE_BUTTON_OUTLINE}`}
+						aria-label="Open menu"
+					>
+						<Menu size={19} />
+					</button>
+					<h1
+						class="min-w-0 font-disp text-wordmark font-extrabold leading-[1.06] tracking-[-0.015em]"
+						style={{ color: theme.textStrong }}
+					>
+						Larder <span class="italic" style={{ color: theme.accent }}>Log</span>
+					</h1>
+				</div>
+			</header>
+
+			<div class="px-[18px] md:px-[34px] pt-3 md:pt-[30px] pb-28 md:pb-[30px]">
+				<AdminConsole
+					section={adminSection}
+					onSection={goAdmin}
+					filter={adminFilter}
+					onFilter={setAdminFilter}
+					openId={adminOpenId}
+					onOpen={setAdminOpenId}
+					peopleFilter={adminPeopleFilter}
+					onPeopleFilter={setAdminPeopleFilter}
+					openUserId={adminOpenUserId}
+					onOpenPerson={setAdminOpenUserId}
+					theme={theme}
+					dark={dark}
+				/>
+			</div>
+			</>
+			) : (
+			<>
 			{/* Mobile only: above `md` the drawer carries the wordmark and the menu. */}
 			<header class="md:hidden">
 				{/*
@@ -2674,13 +2852,17 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					)}
 				</main>
 			</div>
+			</>
+			)}
 			</div>
 
 			{/*
 			  * Mobile's primary action, pinned rather than scrolled past. The grid
 			  * carries matching bottom padding so the last card clears it.
 			  */}
-			{mayEditItems && ! empty && (
+			{/* Gone in the console: it is the pantry's primary, and the console
+			  * has no pantry under it to add to. */}
+			{mayEditItems && ! empty && adminSection === null && (
 				<div
 					class="md:hidden fixed inset-x-0 bottom-0 z-30 px-5 pt-3.5 pb-5"
 					style={{ background: theme.ground, borderTop: `1px solid ${theme.border}` }}

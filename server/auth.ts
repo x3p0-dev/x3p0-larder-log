@@ -22,7 +22,8 @@ import type { AuthContext } from '@spacefast/zero/server';
 import type { ReadDb, WriteDb } from './schema';
 import { can, type Capability, type Role } from '../shared/roles';
 import { findMembership, selectMembership, type Membership } from '../shared/membership';
-import { isSignedIn } from '../shared/identity';
+import { DEV_GUESTS_VAR, isSignedIn } from '../shared/identity';
+import { ADMIN_HELD_REFUSAL, ADMIN_IDS_VAR, adminWritesHeldFor, isAdminUser } from '../shared/admin';
 
 /**
  * Errors whose message is safe to show a user.
@@ -34,20 +35,95 @@ import { isSignedIn } from '../shared/identity';
  */
 export class AccessError extends Error {}
 
-type AnyCtx = { auth: AuthContext; db: ReadDb | WriteDb };
+type AnyCtx = { auth: AuthContext; db: ReadDb | WriteDb; env: Record<string, string | undefined> };
 
 /**
  * Re-exported so every handler imports its auth predicates from one module.
  *
- * The dev-guest bypass this rests on lives in `shared/identity.ts` — it is the
- * app's only authentication hole, so it is kept where it can be unit-tested.
+ * The rule this rests on lives in `shared/identity.ts` — it is the app's
+ * authentication decision, so it is kept where it can be unit-tested.
  *
- * **Not yet confirmed inert in production.** D14's client-side bypass was
- * verified against the published space; this server-side one has not been. See
- * `.docs/notes.md`.
+ * **`signedIn(ctx)` is what handlers call, not `isSignedIn(auth)`.** The rule
+ * needs the environment now — the dev-guest allowance is a list in
+ * `LARDER_DEV_GUESTS` — and threading `ctx.env` through fifty call sites by
+ * hand is how one of them ends up passing the wrong thing. One helper, one
+ * reader of the variable.
  */
 export { isSignedIn };
 
+/** The signed-in check every handler uses. Reads the allowance from `ctx.env`. */
+export function signedIn(ctx: { auth: AuthContext; env: Record<string, string | undefined> }): boolean {
+	return isSignedIn(ctx.auth, ctx.env[DEV_GUESTS_VAR]);
+}
+
+
+/**
+ * Asserts the caller administers the whole space. **Mutations only.**
+ *
+ * The console's read side answers `{ state: 'denied' }` instead, because a
+ * query that throws never emits and is indistinguishable from loading. A
+ * mutation's rejection does reach the client, message intact, so this throws.
+ *
+ * **It is the only authorization in the capsule that is not about a
+ * membership.** Every other check in this file resolves the caller's own row in
+ * the household they named and works from what it finds — an id is a selector,
+ * never an authority. An administrator has no row in the household they are
+ * acting on and usually never will, so there is nothing to resolve: the whole
+ * check is *are you on the list*, and the list is `LARDER_ADMIN_IDS` in the
+ * server environment (D62).
+ *
+ * That makes this the single most load-bearing line in `server/`. Everything
+ * behind it reaches into households belonging to people who are not in the
+ * room, so `shared/admin.ts` is fail-closed in every direction and is unit
+ * tested for each of them.
+ *
+ * The message names no console. Someone who reaches a console mutation without
+ * the flag either guessed the name or is holding a stale client, and neither is
+ * owed confirmation that the surface exists — the same instinct that makes a
+ * revoked invite and an unknown one the same screen (D39).
+ */
+export function requireAdmin(ctx: { auth: AuthContext; env: Record<string, string | undefined> }): void {
+	if (! administers(ctx)) {
+		throw new AccessError('You do not have permission to do that.');
+	}
+}
+
+/**
+ * The administrator check every handler uses — `signedIn`'s twin.
+ *
+ * Both variables are read here and nowhere else, for the same reason: a rule
+ * that needs two environment lookups is a rule that gets one of them wrong at
+ * the eighth call site.
+ */
+export function administers(ctx: { auth: AuthContext; env: Record<string, string | undefined> }): boolean {
+	return isAdminUser(ctx.auth, ctx.env[ADMIN_IDS_VAR], ctx.env[DEV_GUESTS_VAR]);
+}
+
+/**
+ * The same check, plus *and writes are switched on* — what all six console
+ * mutations call.
+ *
+ * **A separate function rather than a line inside `requireAdmin`**, because the
+ * two refusals are different facts and must not share a sentence: one says you
+ * are not an administrator, the other says nobody is writing anything today.
+ * Collapsing them would send an administrator to `LARDER_ADMIN_IDS` looking for
+ * a problem that is not there.
+ *
+ * **The order matters and is the fail-closed one.** Admin first, so a stranger
+ * poking at mutation names learns only that they lack permission — telling them
+ * the console's writes are *temporarily* on hold would confirm the console
+ * exists, which is exactly what `requireAdmin`'s own message is careful not to
+ * do (D39's instinct again).
+ *
+ * This is the whole server half of the hold. There is no per-mutation flag,
+ * because `requireAdmin` is already the one line every console write begins
+ * with and a second list of six would be a list that goes stale.
+ */
+export function requireAdminWrite(ctx: { auth: AuthContext; env: Record<string, string | undefined> }): void {
+	requireAdmin(ctx);
+
+	if (adminWritesHeldFor(ctx.auth)) throw new AccessError(ADMIN_HELD_REFUSAL);
+}
 
 /** What a *query* gets back. Queries report; only mutations throw. */
 export type MembershipState =
@@ -81,7 +157,7 @@ export async function membershipState(
 	ctx: AnyCtx,
 	preferredHouseholdId?: string | null
 ): Promise<MembershipState> {
-	if (! isSignedIn(ctx.auth)) return { kind: 'guest' };
+	if (! signedIn(ctx)) return { kind: 'guest' };
 
 	const resolved = selectMembership(await membershipsOf(ctx), preferredHouseholdId);
 
@@ -104,7 +180,7 @@ export async function requireMembership(
 	ctx: AnyCtx,
 	householdId: string
 ): Promise<Membership> {
-	if (! isSignedIn(ctx.auth)) throw new AccessError('Sign in to use Larder Log.');
+	if (! signedIn(ctx)) throw new AccessError('Sign in to use Larder Log.');
 
 	const rows = await membershipsOf(ctx);
 

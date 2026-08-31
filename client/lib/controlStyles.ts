@@ -37,6 +37,18 @@ export const DRAWER_CHIP_ON =
 export const DRAWER_CHIP_ADD =
 	'transition-colors border border-dashed border-drawer-dashed text-on-dark-faint hover:border-on-dark-faint hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer';
 
+/**
+ * The dashed add row **inside the editing card** — the Filter tab's *Add a
+ * location / type / source*, which drops in when a group is being edited.
+ *
+ * `DRAWER_CHIP_ADD` is right for its two other callers, which sit on the pane's
+ * own gradient: the chip beside the filter chips, and *New invite*. This one is
+ * inside a `drawer-raised` card, so its ring offset painted the gradient over a
+ * card two steps lighter.
+ */
+export const DRAWER_CHIP_ADD_ON_CARD =
+	'transition-colors border border-dashed border-drawer-dashed text-on-dark-faint hover:border-on-dark-faint hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
 /** A solid secondary button — Sign out, Copy, Leave household. */
 export const DRAWER_BUTTON =
 	'transition-colors bg-drawer-raised text-on-dark-muted hover:bg-drawer-press hover:text-drawer-press-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer disabled:opacity-50 disabled:pointer-events-none';
@@ -54,6 +66,40 @@ export const DRAWER_ICON =
  */
 export const DRAWER_SUNK =
 	'transition-colors bg-drawer-line text-on-dark-muted hover:bg-drawer-raised-hover hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/**
+ * The **selected half of a drawer segmented control** — Filter / Settings, and
+ * Appearance's three theme options.
+ *
+ * Both wore `DRAWER_CHIP_ON`, which is right for a filter chip standing on the
+ * drawer gradient and wrong inside a `drawer-well` track for two reasons at
+ * once:
+ *
+ * 1. **The ring offset painted a colour that is not behind it.** `ring-offset-
+ *    drawer` puts a 2px band of the gradient between the pill and its ring,
+ *    where the pixels are actually the well — two steps darker.
+ * 2. **There is nowhere for an offset ring to go.** The track is `p-1` with
+ *    `gap-1`, so `ring-2 ring-offset-2` reaches exactly 4px out: flush against
+ *    the track's inner edge, and touching the neighbouring tab across the gap.
+ *
+ * So the ring goes **inside**, which is what the unselected half has always
+ * done — one control, one ring treatment.
+ *
+ * **And it had to change colour to survive that.** Inset means the ring lands
+ * on the pill's own `drawer-press` fill, where `ring-on-dark` measures
+ * **1.00:1** — it *is* that colour. `focus-dark` reaches only 3.01:1 there.
+ * `drawer-press-ink` is 13.70:1, and it is the pill's own label colour, so the
+ * ring is the text token doing what the shopping list's checkbox and the beta
+ * badge already do with a border.
+ *
+ * The unselected half keeps `ring-on-dark`: it sits on the well, at 15.09:1
+ * light and 16.62:1 dark.
+ *
+ * `transition-opacity` rather than `DRAWER_CHIP_ON`'s `transition-colors`,
+ * which never animated the `hover:opacity-90` beside it.
+ */
+export const DRAWER_SEGMENT_ON =
+	'transition-opacity bg-drawer-press text-drawer-press-ink font-semibold hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-drawer-press-ink focus-visible:ring-inset';
 
 /** The same control with its menu open — the rail's documented open state. */
 export const DRAWER_SUNK_ON =
@@ -693,3 +739,234 @@ export const TERM_SECTION_ICON =
 /** A filter chip, and the dashed one that starts a new term. */
 export const TERM_CHIP_SIZE =
 	'h-9 min-[1120px]:h-[34px]';
+
+/* ---------- the admin console ---------- */
+
+/**
+ * A nav row inside the console's raised block, at rest.
+ *
+ * Not `DRAWER_ROW`, and the difference is the same one `DRAWER_SUNK` exists
+ * for: these sit **on** `drawer-raised` rather than on the drawer gradient, so
+ * a hover to `drawer-raised` is a hover to the colour the row is already —
+ * D45's rule about moving away from the ground, on the drawer's own ramp.
+ * `drawer-raised-hover` is the step that is actually a step.
+ *
+ * The focus ring offsets against `drawer-raised` for the same reason.
+ */
+export const DRAWER_NAV_ROW =
+	'transition-colors hover:bg-drawer-raised-hover hover:text-on-dark active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/**
+ * One of Overview's four stat cards, and one household row on the list.
+ *
+ * A card on the page ground, so it sinks to `surface-alt` under the pointer
+ * where a control on the ground would lift (D45). Rows are pressable and cards
+ * are not, which is why only this one carries the press nudge — the cards take
+ * the border and the fill and leave the transform alone.
+ */
+export const ADMIN_ROW =
+	'transition-colors hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * *Remove from household* on a cream menu — `DRAWER_MENU_ROW_DANGER`'s light
+ * twin, for the console's role menu (D62).
+ *
+ * `text-accent` rather than the drawer's fixed `#D4636B`: on the page ground
+ * the crimson has to follow the theme, which is the whole reason `theme.accent`
+ * exists — the one wordmark that hard-coded the light crimson measured 3.11:1
+ * in dark. The hover sinks to `surface-alt`, the move every control on a card
+ * makes, so the crimson is doing nothing the neutral rows are not.
+ */
+export const PAGE_MENU_ROW_DANGER =
+	'flex items-center w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors text-accent hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The role word as a trigger, on a card — `DRAWER_SUNK`'s light twin.
+ *
+ * Sunk rather than raised, exactly as the drawer's is: the card it sits on is
+ * `surface`, so a `surface` control would have no edge until you touched it,
+ * and `surface-alt` is the step down the boards draw (`#F2EADC` on `#FDFAF4`).
+ * Its hover therefore goes *up* to `surface`, which is D45's rule met on a
+ * ground that is already the lighter of the two — the same inversion
+ * `LIST_GHOST` makes on the trip bar.
+ */
+export const PAGE_SUNK =
+	'transition-colors bg-surface-alt border border-line text-ink-body hover:bg-surface hover:border-line-strong hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * A horizontal scroller for the console's status chips, below `md` only.
+ *
+ * **The split is `md:`, not the measured column**, and this is D45's rule
+ * rather than the exception row 2's note warns about. Row 2 asks whether its
+ * labels *fit*, which a docked drawer changes without the viewport moving.
+ * This asks whether there is a **scroll gesture** — a mouse has none, so a
+ * docked drawer at 1280 must still wrap. Different question, different axis.
+ *
+ * The bleed cancels above `md`, so the chips run to the gutter on a phone and
+ * sit inside it on a desktop. Nothing is pinned: these are one status filter
+ * with one value on at a time, not a set you are dismantling.
+ */
+export const ADMIN_CHIP_SCROLLER =
+	'flex items-center gap-2 overflow-x-auto md:overflow-visible md:flex-wrap pr-[18px] -mr-[18px] md:pr-0 md:mr-0';
+
+/**
+ * `PAGE_BUTTON_QUIET` with its menu open — the sort trigger, in the app and in
+ * the console.
+ *
+ * It lived inside `SortMenu` as a local `TRIGGER_ON` while there was one
+ * caller. There are three now, and the console's two shipped without it: an
+ * `aria-expanded` trigger that looks identical open and shut says nothing to
+ * anyone using their eyes. Resting colours only, like the style it pairs with —
+ * the caller brings the box.
+ */
+export const PAGE_BUTTON_QUIET_ON =
+	'bg-surface-alt border-line-strong text-ink';
+
+/**
+ * The dismiss `×` on the console's refusal banner — `DRAWER_PANEL_X`'s light
+ * twin, and the same job: a control on a fill that is not the page ground.
+ *
+ * **It moves the fill and never the text.** The banner's crimson is inherited
+ * from the box, and a `hover:text-*` here would announce that pointing at the
+ * dismiss changed what the sentence beside it means. `DRAWER_GHOST_DANGER`
+ * makes the same choice for the same reason.
+ *
+ * The fill goes *up* to `surface`, which is D45's rule met on the lighter of
+ * the two grounds — `LIST_GHOST`'s inversion, because the banner is filled
+ * `surface-alt` and hovering to it would be hovering to nothing. The ring
+ * offsets against that fill rather than the canvas behind it.
+ */
+export const PAGE_BANNER_X =
+	'transition-colors rounded-[9px] hover:bg-surface active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
+
+/**
+ * A ghost row with crimson text, on a cream card — `DRAWER_GHOST_DANGER`'s
+ * light twin. *Delete household*, *Delete account*, *Revoke*.
+ *
+ * Crimson is how a destructive action is **offered** and never how it is
+ * executed: every one of these opens a dialog whose own primary is the ordinary
+ * ink/cream fill.
+ *
+ * **It exists because `LIST_GHOST_ON_CARD` plus an inline crimson is not the
+ * same thing and looks like it.** That pairing was what shipped, and an inline
+ * `color` beats a `hover:text-ink` class — so the style claimed a hover it
+ * could not perform, which is the failure the sort trigger and the mobile menu
+ * button have each already recorded once. Here the crimson is declared at rest,
+ * so nothing is being overridden and the hover is only the fill.
+ */
+export const PAGE_GHOST_DANGER =
+	'transition-colors text-accent hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The same offer, on a **sunk strip** rather than on the card — both *Delete*
+ * buttons, which sit in a `surface-alt` band under a hairline at the foot of
+ * their card.
+ *
+ * **The hover goes up, and it has to.** `PAGE_GHOST_DANGER` sinks to
+ * `surface-alt`, which *is* the strip these are on, so those two buttons shipped
+ * with a hover to the colour they were already sitting on and no visible state
+ * at all — reported as *"the delete account and delete household buttons have no
+ * interactive states"*, which is exactly what it was. The focus ring was
+ * offsetting against the wrong fill for the same reason.
+ *
+ * It is `LIST_GHOST` and `LIST_GHOST_ON_CARD` again, and `PAGE_KIND` a third
+ * time: **an interaction state moves away from its ground**, and on the lighter
+ * of the two grounds away means up. One rule, four components, and this is the
+ * fourth time it has had to be applied by hand — because a class string cannot
+ * see what is painted behind it, and neither can a check that only asks whether
+ * a `hover:` is present.
+ */
+export const PAGE_GHOST_DANGER_SUNK =
+	'transition-colors text-accent hover:bg-surface active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
+
+/**
+ * Appended to a control that is **present, visibly unavailable, and explained
+ * on the same screen** — the console's writes while `ADMIN_WRITES_HELD` is on.
+ *
+ * **This is D36's exception, not a hole in it.** *A disabled control cannot
+ * explain itself* is a rule about a reason that is off-screen; the pre-flight's
+ * own disabled primary already earns the exception by having its reason be the
+ * dialog it sits in, and every control this is applied to has a notice above it
+ * saying the same thing in words. Take the notice away and the rule bites
+ * again.
+ *
+ * **It fades rather than recolours**, which is the one thing worth getting
+ * right: the crimson on both *Delete* buttons is the app saying *this destroys
+ * something*, and that stays true while the button is asleep. Repainting it
+ * neutral would say the control had become something else.
+ *
+ * `pointer-events-none` on top of `disabled` is belt and braces on purpose —
+ * `disabled` already blocks the click and drops it from the tab order, and this
+ * is what stops the hover and the cursor from promising a press that will not
+ * happen.
+ */
+export const PAGE_HELD =
+	'disabled:opacity-45 disabled:pointer-events-none';
+
+/**
+ * The console's *selected* nav row — `DRAWER_CHIP_ON` with its ring offset
+ * moved to the fill the row actually sits on.
+ *
+ * `DRAWER_CHIP_ON` offsets against `drawer`, because a filter chip sits on the
+ * drawer gradient. These sit inside the `drawer-raised` block, so the shipped
+ * pairing drew the selected row's focus ring against a colour two steps away
+ * from the one behind it while the three rows around it — `DRAWER_NAV_ROW` —
+ * got it right. One block, one offset.
+ */
+export const DRAWER_NAV_ROW_ON =
+	'transition-opacity bg-drawer-press text-drawer-press-ink font-semibold hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-offset-2 focus-visible:ring-offset-drawer-raised';
+
+/**
+ * The same trigger on a **sunk row** rather than on a card — the pre-flight's
+ * *What happens to this household?*
+ *
+ * `PAGE_SUNK` is right for the console's role menu, which opens on a `Card`,
+ * and wrong here by exactly one token: the pre-flight's rows are filled
+ * `surface-alt`, so the ring has to offset against that or its 2px gap paints
+ * a colour nothing on that row is. The hover was already correct — `PAGE_SUNK`
+ * moves *up* to `surface` — which is why this one survived the first sweep and
+ * the two `Delete` buttons beside it did not.
+ */
+export const PAGE_SUNK_ON_ROW =
+	'transition-colors bg-surface-alt border border-line text-ink-body hover:bg-surface hover:border-line-strong hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
+
+/**
+ * The same, with nothing chosen yet.
+ *
+ * One utility apart, and it is a whole constant rather than a class appended
+ * beside it: two text utilities on one element are resolved by their order **in
+ * the sheet**, not in the attribute, so `text-ink-muted text-ink-body` is a coin
+ * toss that happens to land right. It shipped as an inline `color` instead,
+ * which resolved deterministically and beat the hover — so the one row still
+ * waiting on an answer was the one row that did not respond to being pointed at.
+ */
+export const PAGE_SUNK_ON_ROW_UNSET =
+	'transition-colors bg-surface-alt border border-line text-ink-muted hover:bg-surface hover:border-line-strong hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
+
+/**
+ * `PAGE_ICON` for a control sitting **inside a field** — the console's two
+ * search clears, which are the app's only ones.
+ *
+ * The field is `bg-surface`, so the ring offsets against that rather than
+ * against the page ground the field is standing on. `PAGE_ICON` itself stays
+ * as it is: its other three callers are on the item sheet, whose ground really
+ * is the near-`canvas` gradient.
+ */
+export const PAGE_ICON_IN_FIELD =
+	'transition-colors text-ink-muted hover:text-ink hover:bg-surface-alt rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * `PAGE_BUTTON_OUTLINE` with its menu open — Activity's *Export*.
+ *
+ * A complete constant rather than three utilities appended beside the closed
+ * one, for `PAGE_SUNK_UNSET`'s reason: two `bg-`, two `border-` and two `text-`
+ * utilities on one element are resolved by sheet order and not by the order
+ * they are written in.
+ *
+ * It lands on the same fill the sort trigger's open state does. The two are the
+ * only menu triggers on the console's page ground, and a menu opening under one
+ * of them should not look like a different kind of event to a menu opening
+ * under the other.
+ */
+export const PAGE_BUTTON_OUTLINE_ON =
+	'transition-colors bg-surface-alt border border-line-strong text-ink hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';

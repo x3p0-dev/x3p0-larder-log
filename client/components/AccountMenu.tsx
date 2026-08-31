@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { CircleDot, ExternalLink, LogOut, Pencil } from 'lucide-preact';
+import { CircleDot, ExternalLink, LogOut, Pencil, Shield } from 'lucide-preact';
 
 import { DrawerAvatar } from './DrawerAvatar';
 import { DrawerMenuRule } from './DrawerMenu';
@@ -29,11 +29,17 @@ import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName } from '../.
  * question is trying to avoid.
  */
 export function AccountMenu({
-	name, email, picture, onRename, onSignOut, onDone, theme,
+	name, email, picture, onRename, onOpenAdmin, onSignOut, onDone, theme,
 }: {
 	name: string;
 	email: string;
 	picture?: string;
+	/**
+	 * Opens the admin console. **Absent for everybody who is not an
+	 * administrator**, which is most people — they keep the two-row menu and
+	 * never learn the console exists.
+	 */
+	onOpenAdmin?: () => void;
 	/**
 	 * Writes the new display name. Absent for the dev guest, who has no account
 	 * to rename — the pencil goes with it rather than failing on press.
@@ -131,6 +137,33 @@ export function AccountMenu({
 			)}
 
 			<DrawerMenuRule theme={theme} />
+
+			{/*
+			  * *Admin* — the way into the console, above the account actions.
+			  *
+			  * **It is a destination, not something you do to your account**,
+			  * which is why it sits here rather than beside *Sign out*.
+			  *
+			  * **It takes no outbound arrow.** That mark means *this leaves the
+			  * app*, which is why *Change your picture* below carries one. Admin
+			  * is still Larder Log — the same drawer, one pane along.
+			  *
+			  * `onDone()` because this one *does* navigate: the menu is over the
+			  * drawer the console is about to fill, and leaving it open would put
+			  * a popover on top of the thing it just opened.
+			  */}
+			{onOpenAdmin && (
+				<>
+					<button
+						onClick={() => { onDone(); onOpenAdmin(); }}
+						class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left ${DRAWER_MENU_ROW}`}
+					>
+						<Shield size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Admin
+					</button>
+
+					<DrawerMenuRule theme={theme} />
+				</>
+			)}
 
 			{/*
 			  * *Change your picture* — the board's third row, its own block between

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { ChevronRight, ChevronsUpDown, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
 
 import { AccountMenu } from './AccountMenu';
+import { AdminPane, type AdminSection } from './AdminPane';
 import { DrawerAvatar } from './DrawerAvatar';
 import { DrawerMenu } from './DrawerMenu';
 import { FilterSection } from './DrawerFilters';
@@ -14,7 +15,7 @@ import { useScrollLock } from '../hooks/useScrollLock';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
 import type { TermFilter } from '../lib/actions';
-import { DRAWER_CHIP, DRAWER_CHIP_ON, DRAWER_ICON, DRAWER_ROW } from '../lib/controlStyles';
+import { DRAWER_CHIP, DRAWER_ICON, DRAWER_ROW, DRAWER_SEGMENT_ON } from '../lib/controlStyles';
 import type { SourceKind } from '../../shared/source';
 import { sourceGroupWord } from '../../shared/source';
 import type { HouseholdSummary, Item, Source, Term, TermKind } from '../../shared/types';
@@ -86,6 +87,18 @@ type Props = {
 	 */
 	openMembers: number;
 
+	/*
+	 * The admin console, pushed one level above the Settings tab rather than
+	 * inside it. Everything here is `undefined` for the overwhelming majority
+	 * of accounts, which is what keeps the console out of their menu entirely.
+	 */
+	/** Whether the console pane is showing, and which section it is on. */
+	adminSection: AdminSection | null;
+	setAdminSection: (section: AdminSection) => void;
+	/** Absent unless the caller administers the space. Draws the menu's row. */
+	onOpenAdmin?: () => void;
+	onCloseAdmin: () => void;
+
 	/**
 	 * `sourceKind` is the store group's alone — a location and a type have no
 	 * kind to compose, and pass nothing.
@@ -131,6 +144,7 @@ export function Drawer({
 	onSelectHousehold, onNewHousehold, onJoinHousehold,
 	accountName, accountEmail, accountPicture, onSetDisplayName, onSignOut,
 	settings, openMembers,
+	adminSection, setAdminSection, onOpenAdmin, onCloseAdmin,
 	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, onSetSourceKind, canEditTaxonomy, closeEditing,
 	theme,
 }: Props) {
@@ -202,6 +216,17 @@ export function Drawer({
 	 * render under a hidden tab bar — a screen with no way off it.
 	 */
 	const pushed = membersOpen && tab === 'settings';
+
+	/*
+	 * The console is a level **above** the tabs, not a third one beside them.
+	 *
+	 * Members is pushed out of Settings and belongs to it, so it is gated on
+	 * `tab === 'settings'`. The console belongs to the account, arrives from the
+	 * account menu, and is not about the household the tabs filter and
+	 * configure — so while it is open the switcher and the tabs both go, and the
+	 * Filter tab is not sitting behind it waiting to be returned to.
+	 */
+	const adminOpen = adminSection !== null;
 
 	return (
 		<>
@@ -289,7 +314,7 @@ export function Drawer({
 				  * a code or link* live, and hiding them until you already had
 				  * two would mean there was no way to get the second one.
 				  */}
-				{! pushed && (
+				{! pushed && ! adminOpen && (
 				<div class="relative mx-5 mt-3.5" ref={switcherRef}>
 					<button
 						onClick={() => setSwitcherOpen((v) => ! v)}
@@ -331,13 +356,13 @@ export function Drawer({
 				  * out of a second-level pane, and leaving a tab bar over one would
 				  * offer a sideways exit from somewhere nobody arrived sideways.
 				  */}
-				{! pushed && (
+				{! pushed && ! adminOpen && (
 				<div class="grid grid-cols-2 gap-1 mx-5 mt-[18px] p-1 rounded-xl" style={{ background: d.well }}>
 					{([['filter', 'Filter', ListFilter], ['settings', 'Settings', Settings]] as const).map(([key, label, Icon]) => (
 						<button
 							key={key}
 							onClick={() => setTab(key)}
-							class={`flex items-center justify-center gap-[7px] h-[34px] rounded-[9px] text-[13.5px] ${tab === key ? DRAWER_CHIP_ON : 'transition-colors text-on-dark-faint font-medium hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
+							class={`flex items-center justify-center gap-[7px] h-[34px] rounded-[9px] text-[13.5px] ${tab === key ? DRAWER_SEGMENT_ON : 'transition-colors text-on-dark-faint font-medium hover:text-on-dark hover:bg-drawer-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-on-dark focus-visible:ring-inset'}`}
 						>
 							<Icon size={14} /> {label}
 						</button>
@@ -346,7 +371,14 @@ export function Drawer({
 				)}
 
 				<div class="flex-1 min-h-0 overflow-y-auto">
-					{tab === 'filter' ? (
+					{adminOpen ? (
+						<AdminPane
+							section={adminSection}
+							onSelect={setAdminSection}
+							onBack={onCloseAdmin}
+							theme={theme}
+						/>
+					) : tab === 'filter' ? (
 						<div class="flex flex-col gap-[17px] px-5 pt-5 pb-5">
 							<FilterSection
 								title="Location" entities={locations}
@@ -420,6 +452,7 @@ export function Drawer({
 								email={accountEmail}
 								picture={accountPicture}
 								onRename={onSetDisplayName}
+								onOpenAdmin={onOpenAdmin}
 								onSignOut={onSignOut}
 								onDone={() => setAccountOpen(false)}
 								theme={drawerTheme(theme)}

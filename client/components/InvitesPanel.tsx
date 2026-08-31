@@ -6,7 +6,7 @@ import { panelSkin } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import {
 	DRAWER_CARD_ROW, DRAWER_CHIP_ADD, DRAWER_CHIP_ON, DRAWER_CHIP_OUTLINE,
-	DRAWER_GHOST_DANGER, DRAWER_ICON, DRAWER_PRIMARY,
+	DRAWER_GHOST_DANGER, DRAWER_ICON, DRAWER_PRIMARY, DRAWER_PRIMARY_ON_CARD,
 } from '../lib/controlStyles';
 import type { Invite } from '../../shared/types';
 import type { Role } from '../../shared/roles';
@@ -203,7 +203,10 @@ export function InvitesPanel({ invites, myRole, onCreate, onRevoke, creating, th
 								<div class="flex gap-2">
 									<button
 										onClick={() => void copyLink(invite)}
-										class={`flex-1 flex items-center justify-center gap-2 h-9 rounded-[11px] text-sm font-semibold ${DRAWER_PRIMARY}`}
+										/* On a card: the invite card is `drawer-raised`,
+										  * which is what `DRAWER_PRIMARY_ON_CARD` was
+										  * written for and this caller was missed by. */
+										class={`flex-1 flex items-center justify-center gap-2 h-9 rounded-[11px] text-sm font-semibold ${DRAWER_PRIMARY_ON_CARD}`}
 										style={{ background: d.ink, color: '#241E17' }}
 									>
 										{copied === invite.id ? <Check size={14} /> : <Copy size={14} />}

@@ -20,6 +20,45 @@ WordPress, say so rather than building it.
 
 ## Current state
 
+**Phase 5 — the admin console — is built and unpublished.** The whole of D62's
+design except board 10, in seven stages on 2026-08-29: the pushed drawer pane,
+Overview, the household list and page, People and the account page, ownership
+transfer, the account-deletion pre-flight, the audit log with retention and
+export, the orphan dialog, the list states and 390. **It brings the first
+schema change since D61** — `activity`, the eleventh table — so the next publish
+is a migrating one, unlike v14. **Nobody has clicked most of it**, and
+`.env.server` needs `LARDER_ADMIN_IDS` before it is reachable in production at
+all — see *Going live needs one id that nothing will tell you* below, which is
+the bootstrap. See *The admin console (D62)* below, which is the single account
+of it. **Its mobile layouts were looked at on 2026-08-30 and read correctly.**
+**Its interaction states were swept on 2026-08-30** — ten controls were missing
+hover, press, focus or an open state they were written to have, and all seven
+screens' `Loading…` became a state that can escalate; see *Every console
+control has its states now*, which also lists what is left in its *Gaps*.
+**Its six writes are switched off** as of 2026-08-30 — `ADMIN_WRITES_HELD` in
+`shared/admin.ts`, refused server-side by `requireAdminWrite` and greyed out on
+both screens that hold them, so the first look at the console cannot delete
+anything. See *The writes are held, and the console is read-only*.
+
+**Unpublished on `master`: the auth model is rebuilt.** Local is a named
+`?guest=` identity, production is authenticated accounts only, `guest:local` is
+refused everywhere, and the admin hold now exempts dev guests so the deletion
+flows are testable locally and unreachable live. **Two people can be tested on
+one machine for the first time.** See *Local is a named guest now* below.
+**`sf dev` needs `?guest=<name>` in the URL now** — a bare `http://127.0.0.1:4173/`
+shows a card telling you so.
+
+**v16 is live** as of 2026-08-30 (`ver_239edfa03f374616b519a0596ec77c25`),
+carrying the admin console and, one publish later, **the security fix v15
+needed**: `isAdminUser` had a dev-guest bypass, and the hosted runtime hands an
+unauthenticated caller exactly that identity, so v15 answered `adminAccess` with
+`{admin: true}` to anybody with a `curl`. **Read *The dev-guest identity is what
+production hands a stranger* before writing another auth check** — and note that
+`isSignedIn` still has the same bypass, on purpose, pending a decision.
+**v15** (`ver_f9e87dfdc2f64fbd87b7bcdafcc91b76`, 129 files, 17 uploaded, 23
+seconds) was the migrating publish: the `activity` table created, `applied:
+true`, `pendingOperationCount: 0`, both schema hashes equal, eleven tables live.
+
 **Phases 3 and 4 are built and published.** **v14 is live** as of 2026-08-29
 (`ver_baf737f272f144f59de420f12f8c2c55`, 125 files, 7 uploaded, 18 seconds) —
 **the first publish that is client-only**: no schema change, `db.migrations`
@@ -76,7 +115,10 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, five live queries, and nineteen mutations. The schema is
+`.docs/data-model.md`, **thirteen** live queries, and **twenty-five** mutations
+across **eleven** tables. Eight queries, six mutations and the `activity` table
+are the admin console's (D62) and are **unpublished** — built and
+verified locally, not yet in a version. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -1912,6 +1954,673 @@ the grow household and `Store` for the other two.
 surface, and `?signedout` does not reach first run — a fresh `sf dev` with no
 household does, and the dialog is one press from the drawer's switcher.
 
+### The admin console (D62) — 2026-08-29
+
+`.claude/docs/design/admin-console.md`, drawn on
+`.claude/docs/design/larderlogadminconsoleboards.html` — twenty-six boards on
+three pages, **built in seven stages in one day**. The whole of it except board
+10.
+
+**One schema change**: `activity`, the eleventh table, which applies on the next
+publish with no flag as `profiles` did. **Thirteen queries** and **twenty-five
+mutations** — eight new queries (`adminAccess`, `adminSummary`,
+`adminHouseholds`, `adminHousehold`, `adminPeople`, `adminAccount`,
+`adminActivity`, `adminActivityExport`) and six new writes (`adminSetRole`,
+`adminRemoveMember`, `adminRevokeInvite`, `adminDeleteHousehold`,
+`adminTransferOwnership`, `adminDeleteAccount`).
+
+**Board 10 — *seeing inside a household* — is decided against**, on 2026-08-29,
+and recorded in D62 as a decision rather than an omission because the design
+document asks for exactly that. Metadata-only holds; support means asking
+somebody inside the household. **Do not build it without reopening the
+decision** — and if it is reopened, the amber banner and the household being
+told are not negotiable parts of it.
+
+#### The shape
+
+- **The console is a pane, not a surface** — pushed into the app drawer exactly
+  as Members is, so the way out is the gesture the app already teaches and it
+  inherits collapse, the rail and the account row for free. **There is no admin
+  shell.** The content column swaps; everything outside it does not.
+- **`/admin` cannot exist** — `SPA false`, so the edge 404s it before the app is
+  reached, which is a **better** refusal than board 8's: it says less, and says
+  it identically to an administrator and a stranger. `?admin` is the deep link
+  and is **not a gate** — every console query re-checks the flag server-side.
+- **The console is not in `useViewState` (D51).** An app that reopens on a list
+  of every household in the space has forgotten what it is for.
+- **The collapsed rail is the console's while the console is open**, which is
+  the design's own instruction: **back-to-the-pantry takes slot 2**, where the
+  household switcher sits, *"for the same reason: it is the control that says
+  which thing you are looking at."* The four sections take the filter groups'
+  places and Settings goes with them — every one of those is a control over *a*
+  household, and the console is not about being in one. Expand, appearance and
+  you survive, because none of them is.
+
+#### Who administers
+
+- **A name in `LARDER_ADMIN_IDS`** in `.env.server`, read through `ctx.env`,
+  which **reaches query handlers** — confirmed against a running capsule, and
+  the fact the whole design rests on. **Fail-closed**: absent or empty means
+  nobody. **There is no admin role and nothing in the UI grants it**, ever.
+- **`sf dev`'s guest is an administrator, and that is the third deliberate
+  hole** after D14's client gate and `isSignedIn`'s server-side twin. Without it
+  the console cannot be clicked at all. Take it out with D14.
+- **`requireAdmin` is the most load-bearing line in `server/`.** The six console
+  mutations are the only ones in the capsule that reach a household the caller
+  is not a member of, and there is no backstop beneath them: Zero has no
+  row-level security and an administrator has no membership row to resolve
+  against.
+- **An administrator is exempt from none of the household's own rules** — D22's
+  last owner, D21's invite revocation on a demotion or removal, and the delete
+  cascade all carry over. A console that could strand a household would be
+  manufacturing the state its own Overview flags as needing attention.
+
+#### The two lines it will not cross
+
+- **The console never shows an invite code.** A code *is* the authorization
+  (D39), so showing it hands every administrator a silent route into any pantry
+  — which is what the refusal card in the other column of the same page promises
+  it does not do. *An administrator can already delete a household* does not
+  rescue it: **deleting is loud, recorded and irreversible; joining is none of
+  the three.** That sentence is the one to re-read if either rule is revisited.
+- **The log records administration and nothing a household does to its own
+  pantry**, verified rather than assumed — an `addItem` and a `createInvite`
+  both wrote zero rows. And it records no address, no device, no session.
+
+#### What the platform could not give
+
+Three board fields, and none is a later stage:
+
+- **Every email.** D56 — a Spacefast account carries no `email` claim and a
+  handler is only ever told about its caller. Search covers names and ids.
+- **Storage**, on Overview and per household. The server context carries no
+  storage handle in either direction. *Live invites* takes the fourth card.
+- **Last seen**, on People and on an account. Nothing records a session, and the
+  derivable proxy would attribute another member's edit to this person.
+
+Also cut: the `Awaiting deletion` chip, which needs a hold column (*Sole owner*
+takes its place and is more useful), and `Signs in with`, which D47 settled.
+
+#### Counting is a scan
+
+**`by_creation` is on every table, including `households`, which declares no
+index at all** — that is what let a cross-cutting surface ship with almost no
+schema change. It also means **a count is a full scan**, since Zero's query
+builder is `collect` / `take` / `first` / `paginate` with no aggregate. Six of
+the eight queries read whole tables. Fine at this size, **not fine in the low
+thousands**, and the fix then is a denormalised counts row per household
+maintained by the mutations that already invalidate, not a smarter query.
+
+**Last-active is computed, not stored.** `households` still has no `changedAt`
+(D44 argued it out); the console takes the newest `changedAtOf()` across a
+household's items and three taxonomies. **An unknown last-active is not
+dormant** — every pre-D44 row holds `''`, and the alternative flags the oldest
+households as abandoned.
+
+#### The audit log
+
+- **A deletion entry denormalises and nothing else does**, and its counts are
+  taken **before** the cascade. The card says so on its own face.
+- **`held` is JSON in a string** because Zero has no array, JSON or numeric
+  type. Its decoder **never throws**.
+- **The action is a stored slug; the sentence is assembled.** An unrecognised
+  slug still reads as a time and a person.
+- **A millisecond stamp was not enough, and this is the bug worth
+  remembering.** Two rows from one mutation landed on the same millisecond and
+  `by_at` descending put a transfer **above the deletion that caused it**.
+  `logActivity` never reuses a stamp now. Per-isolate, so concurrent requests
+  can still tie. **Nothing but reading the rows back would have found this.**
+- **`actorName` is a copy that survives the account.** An audit log you can
+  erase by deleting yourself is not one — and **both deletion screens say so**,
+  which the design asks for a lawyer's read on.
+- **Retention is enforced and is not a control in the console.** A deliberate
+  narrowing: an administrator who can shorten retention can erase the record of
+  what administrators did. `LARDER_RETENTION_MONTHS` sits beside
+  `LARDER_ADMIN_IDS`; enforcement is **append-time**, because there is no
+  scheduler, so **a log nothing is adding to is a log nothing is pruning**.
+- **Export is a range and it says when it was capped.** Bad bounds return
+  nothing, never everything. CSV, carrying the stored stamp.
+- **`client/lib/activityCsv.ts`, not `shared/`** — it reaches `Blob`, `URL` and
+  `document`, three identifiers the capsule compiler's denylist rejects. The
+  app's first download of any kind.
+
+#### One component in two hosts, and the bug that follows
+
+**`AccountMenu` is rendered twice** — the drawer's foot row and the collapsed
+rail's flyout — and the *Admin* row shipped wired to the drawer alone. The
+result was a menu that had the row or did not **depending on whether the drawer
+happened to be collapsed**, which is invisible to a typecheck, to the class
+diff, and to every handler test. It was found by using the app.
+
+Two fixes, and the second is the one that matters:
+
+- `CollapsedRail` takes `onOpenAdmin` and passes it through, like the drawer.
+- **`openAdmin` and `closeAdmin` are defined once in `Pantry`** and handed to
+  both hosts, rather than inlined at each call site. A handler written twice is
+  a handler that will be changed once.
+
+**Neither of them moves the drawer**, which is the correction that came with
+the rail's console state. `openAdmin` un-collapsed for one round, on the
+reasoning that the console *is* the drawer pane and opening it behind a folded
+drawer would leave no visible way back — true until the rail carried
+back-to-the-pantry and all four sections, and false the moment it did. **Going
+to the console and coming back is a change of what you are looking at, not a
+change of how much chrome you want beside it**, and somebody who has folded the
+drawer away has already said what they want. The household switcher never
+touched it and was right not to.
+
+**Below `md` there is no rail**, and the account menu is only reachable from
+inside the open slide-over — so the drawer is already open there and there is
+nothing for either handler to set.
+
+**The rule: anything either host hands `AccountMenu` has to be handed by both.**
+The same applies to `RoleMenu`, which has the drawer and the console.
+
+**And it exposed a worse state.** Collapsing the drawer while the console was
+open left the console in the content column beside a rail still offering to
+filter a pantry — two apps in one screen. That is what the rail's console state
+above fixes, and it is why the "deliberate gap" it used to be recorded as was
+not one.
+
+#### Components and craft
+
+- **The chart is `@spacefast/zero/charts`**, an undocumented platform module, so
+  it costs nothing against the bundle. `lineChartLayout` does the arithmetic;
+  every colour is overridden, because its slot palette is a blue that belongs to
+  nothing in this app.
+- **`RoleMenu` gained `onDark`** and is the console's one component that changes
+  surface, exactly as the design predicted.
+- **The Members card is the one card that does not clip.** A popover inside
+  `overflow-hidden` is cropped at the card's edge.
+- **The pre-flight is 520 rather than 420** — the console's one deviation from
+  the confirm shell, and `ModalShell` gained a `width` prop (a number, not a
+  class, because Tailwind scans for static strings). **Its disabled primary is
+  right there and nowhere else**: D36 is about a control whose reason is
+  off-screen, and here the reason *is* the screen.
+- **`adminTransferOwnership` is a real hand-over**, not a promotion: promote
+  first so there is never an instant with no owner, then demote every other
+  owner. It takes no `from` — the ownerless case has nobody to name.
+- **A refusal is a banner on the page, not a toast.** *Make someone else an
+  owner first* is an instruction about a control below it, and an instruction
+  must not time out.
+- **Crimson is still never a button.** Every destructive trigger is crimson text
+  on nothing; every confirm takes the ordinary ink primary.
+- **Searching adds *Best match* and takes the chips away**, and clearing the
+  field restores the sort the list had before. **Day one drops the search and
+  chips entirely** — `total === 0`, not `matching === 0`.
+- **At 390 the chips scroll and nothing is pinned**, every control clears 44px
+  and the rows clear 78. The `md:` split there is D45's rule (is there a scroll
+  gesture?), not row 2's (do the labels fit?).
+- **Activity is deliberately not drawn at 390.** Three of its four parts are
+  long; it may not belong on a phone at all.
+
+#### Verified, and how
+
+Typecheck clean, **548 assertions**, the artifact at eleven tables / thirteen
+queries / twenty-five mutations / `db.migrations: []` with `/api/status` still
+the only endpoint. Every class literal across the console's ten files diffed
+against the freshly built `zero.css` by unescaping the sheet's own selectors —
+printed, never hand-written, proved each round to discriminate against
+deliberately bogus classes, and **every `md:`/`lg:` override confirmed by byte
+offset to land after its base**.
+
+The **real handlers** were driven over `POST /__spacefast/zero/run` throughout,
+on throwaway households and seeded probe accounts so nothing of Justin's was
+ever at risk: every list axis; every pre-flight refusal with the household
+unchanged after all six; the delete cascade **scanned for orphans across all
+nine tables** (zero in each — Zero has no foreign keys, so nothing else would
+notice); pruning watched to actually delete (retention `0` took the log from 12
+rows to 1, then 24 pruned nothing); export returning nothing for reversed and
+garbage bounds; the orphan state manufactured and fixed; and **every query and
+mutation driven once with the dev-guest bypass disabled**, answering `denied` or
+refusing. Four throwaway probes were added and removed, each with the artifact
+printed to prove it went.
+
+**Two escaping traps, both found here**: the bundler escapes `’` as `\u2019`
+**and** `—` as `\u2014`, so a `grep -F` for copy containing either returns 0
+and looks exactly like a missing string.
+
+**Nobody has clicked most of it**, and the one thing that *was* clicked found a
+bug none of the checks above could: the *Admin* row was missing from the rail's
+account flyout. **To see it**: the account row → **Admin**, from the drawer's
+foot **or** the collapsed rail, or `http://127.0.0.1:4173/?admin`. The local database has
+`Preflight Test` and `Preflight Solo` to destroy and 7 audit rows to open. What
+it cannot show locally is a space with **no** households (day one), a second
+real person, or 390.
+
+### Every console control has its states now — 2026-08-30
+
+**Client only**: no schema change, no handler moved, no new decision. Eleven
+tables, thirteen queries, twenty-five mutations, `db.migrations` still empty —
+the artifact is byte-for-byte the shape D62 left it.
+
+A sweep of every button, field and menu in the console's ten files against the
+app's own control vocabulary. **Ten controls were missing states they were
+written to have**, and the shape of the failure is one the app has now recorded
+four times: **an inline style beats a `hover:` class, silently.**
+
+- **The console's two sort triggers had no shell at all.**
+  `PAGE_BUTTON_QUIET`'s own comment says it is *resting colours only* and names
+  the four things a caller has to bring — `border`, `transition-colors`,
+  `active:translate-y-px` and `PAGE_FOCUS`. `Pantry`'s two call sites bring all
+  four; the console's four brought `border`. So the console's sort trigger and
+  both back buttons had a hover, no transition, no press nudge and **no focus
+  ring**, and the sort trigger had **no open state** — an `aria-expanded` a
+  screen reader could hear and nobody could see. It borrows `SortMenu`'s open
+  fill, which is now `PAGE_BUTTON_QUIET_ON` in `controlStyles` rather than a
+  `TRIGGER_ON` local to that file; three callers is past where a shared rest and
+  two private opens is a good trade.
+- **Six inline `color`s were each byte-identical to the token beside them**, so
+  they changed nothing at rest and did exactly one thing: beat the style's own
+  `hover:text-*`. `theme.text` *is* `ink-body` in both themes, `theme.textMuted`
+  *is* `ink-muted`, `d.inkMuted` *is* `on-dark-muted`. The three pagers and the
+  pre-flight's unanswered row lost theirs outright; the drawer's four nav rows
+  had all three of theirs turned into classes, which is what makes
+  `DRAWER_NAV_ROW`'s `hover:text-on-dark` fire **for the first time** — the glyph
+  and the count now move one step with the label on `group-hover`, the run
+  segment's rule.
+- **The refusal banner's `×` was `class="shrink-0"` and nothing else** — the one
+  control in the app with no hover, no press and no ring of its own.
+  `PAGE_BANNER_X` is `DRAWER_PANEL_X`'s light twin and makes the same choice for
+  the same reason: **it moves the fill and never the text**, because the crimson
+  is inherited from the banner and a `hover:text-*` would announce that pointing
+  at the dismiss changed what the sentence beside it means. The fill goes *up*
+  to `surface`, D45's rule on the lighter of the two grounds.
+- **`PAGE_GHOST_DANGER` exists because `LIST_GHOST_ON_CARD` plus an inline
+  crimson is not the same thing and looks like it.** Three destructive triggers
+  wore that pairing, so each carried a `hover:text-ink` it could not perform.
+  The crimson is declared at rest now and the hover is only the fill — which is
+  `DRAWER_GHOST_DANGER`'s construction, one surface over. Crimson is still never
+  a button. **Two of the three then needed a second fix — see below.**
+- **Two utilities for one property is a coin toss, not an override**, and that
+  is the trap under the obvious fix. `text-ink-muted text-ink-body` on one
+  element is resolved by **sheet order**, not attribute order — so the
+  pre-flight's unanswered trigger and Activity's *Export* each got a whole
+  constant (`PAGE_SUNK_UNSET`, `PAGE_BUTTON_OUTLINE_ON`) rather than three
+  classes appended beside the closed one.
+- **`DRAWER_NAV_ROW_ON`** is `DRAWER_CHIP_ON` with its ring offset moved to
+  `drawer-raised`. The selected nav row was drawing its focus ring against the
+  drawer gradient while the three rows around it got it right; they are one
+  block and take one offset.
+
+**What was checked and found correct**: every menu row's missing press nudge
+(app-wide — `SortMenu`'s rows have none either), `PAGE_ICON` on both search
+clears, `RoleMenu` on both surfaces, the three confirms, the pager's disabled
+half, and the chevron rotations. The synthetic `<a download>` in
+`activityCsv.ts` never enters the document long enough to have a state.
+
+#### And the loading state could never become anything else
+
+`AdminLoading.tsx`, shared by all seven console screens, replacing seven copies
+of `Loading…` in 14px grey — which is the pre-`EmptyState` mistake repeated for
+loading rather than for emptiness.
+
+**The escalation is the reason it exists and the platform forces it.** Zero
+emits `query.result` on success only — there is no error path — so a query that
+throws leaves its subscription on the initial value **forever**, byte-identical
+to one still in flight. Nothing can tell those apart, so **time is the only
+signal there is**: past ten seconds the copy stops claiming to be loading and
+says something went wrong *probably*, which is the strongest honest claim
+available. The control is **Reload** rather than *Try again* because that is
+what it does — `useQuery` hands back no refetch handle and there is nothing to
+retry.
+
+**Nothing paints for the first half-second.** Every console subscription opens
+in the same tick as the pane, so the ordinary case resolves before this would
+draw, and a word that flashes and vanishes reads as a glitch. It is the pane's
+own scope-line argument — absent rather than wrong for a beat.
+
+**Denied still paints nothing at all**, which did not change: every console
+query re-checks the flag server-side, and a screen explaining the refusal would
+be the 403 the app decided against showing anybody.
+
+**Verified without a browser**: typecheck clean, 548 assertions, the dry-run
+artifact unchanged (eleven tables, thirteen queries, twenty-five mutations,
+`db.migrations: []`, `/api/status` the only endpoint), **all 657 class literals
+across the console's twelve touched files** and **all 58 utilities in the six
+new control styles** diffed against the freshly built
+`.spacefast/zero/public/zero.css` by unescaping the sheet's own selectors —
+printed, never hand-written, and proved each round to discriminate against a
+deliberately bogus class — with every variant confirmed by **byte offset** to
+land after the base it overrides (`hover:text-on-dark` after
+`text-on-dark-muted`, both `group-hover:` rules after their bases,
+`hover:bg-surface` after `bg-surface-alt`).
+
+**Nobody has clicked it**, and this one is entirely hover, press and focus: it
+wants a pointer, a Tab key and a screen that takes ten seconds to answer.
+
+#### A hover has to move against the ground, and a class cannot see the ground
+
+**Both *Delete* buttons shipped from the sweep above with no visible states at
+all, and the sweep is what put them there.** `PAGE_GHOST_DANGER` hovers to
+`surface-alt`; *Delete household* and *Delete account* each sit in a strip
+filled `surface-alt` at the foot of their card. So the hover landed on the
+colour the button was already on, and the focus ring offset against a fill that
+was not behind it. Reported from a real session as *"the delete account and
+delete household buttons have no interactive states"*, which is exactly what
+they had.
+
+**The rule was quoted in the constant's own comment and then not applied to the
+callers.** D45 — *an interaction state moves away from its ground* — is now on
+its fourth component, after the applied-filter chips, `LIST_GHOST` /
+`LIST_GHOST_ON_CARD` and `PAGE_KIND`. `PAGE_GHOST_DANGER_SUNK` is the twin whose
+hover goes **up** to `surface`, because on the lighter of the two grounds away
+means up. *Revoke* keeps the card form: it sits on the invite row, which is
+`surface`, and was correct all along — which is why one of the three survived.
+
+**The check that missed it was asking the wrong question.** A class-literal diff
+proves a rule exists in the sheet; it cannot see what is painted underneath, so
+`hover:bg-surface-alt` on a `surface-alt` strip passes it and does nothing on
+screen. The ground-aware check that replaced it resolves each control's nearest
+painted ancestor — expanding `controlStyles` constants, because `PAGE_MENU` *is*
+`bg-surface` and a popover read as unpainted blames its rows on whatever is
+behind it — and compares that against the hover target and the ring offset.
+**Across the console it now reports 36 controls and 0 flagged**, and every
+finding it produced along the way was read against the source before being
+acted on: three of its first five flags were its own bugs, not the app's.
+
+It found two smaller siblings of the same defect while it was there, both
+ring-offsets rather than dead hovers:
+
+- **The pre-flight's choice trigger** wore `PAGE_SUNK`, whose ring offsets
+  against `surface` because the console's role menu opens on a `Card`. The
+  pre-flight's rows are `surface-alt`. `PAGE_SUNK_ON_ROW` and its `_UNSET` twin
+  are that one token moved; the hover was already right, which is why it did not
+  read as dead.
+- **The console's two search clears** wore `PAGE_ICON`, whose `ring-offset-canvas`
+  is correct for its three item-sheet callers and wrong over a `bg-surface`
+  field. `PAGE_ICON_IN_FIELD` is the field's form. The app has no search clear of
+  its own — these are the first two.
+
+#### And the same bug across the app proper — 2026-08-30
+
+The check was then run over all 144 controls in `client/`, and every flag read
+against the source before being acted on. **Four were real.**
+
+- **Both drawer segmented controls** — Filter / Settings, and Appearance's three
+  theme options — wore `DRAWER_CHIP_ON` on their selected half, which is right
+  for a filter chip on the gradient and wrong inside a `drawer-well` track two
+  ways at once. The offset painted a colour that is not behind it, **and there
+  was nowhere for an offset ring to go**: the track is `p-1` with `gap-1`, so
+  `ring-2 ring-offset-2` reaches exactly 4px — flush to the track's inner edge
+  and touching the next tab across the gap. `DRAWER_SEGMENT_ON` puts the ring
+  **inside**, which is what the unselected half has always done.
+
+  **And going inset forced a colour change, which exposed the worse half of it.**
+  On the pill's own cream fill `ring-on-dark` measures **1.00:1** — it *is* that
+  colour — and `focus-dark` reaches only 3.01:1. `drawer-press-ink` is
+  **13.70:1** and is the pill's own label colour, so the ring is a text token
+  doing what the shopping-list checkbox and the beta badge already do with a
+  border. The unselected half keeps `ring-on-dark` at 15.09:1 light and 16.62:1
+  dark.
+- **`SortMenu`'s rows were `PAGE_MENU_ROW` character for character apart from
+  the focus ring** — `PAGE_FOCUS` offsets against `canvas`, and they are inside a
+  `surface` popover. They are `PAGE_MENU_ROW` now, which fixes the offset and
+  removes the duplicate in one line.
+- **The Filter tab's *Add a …* row inside the editing card** and **the invite
+  card's *Copy link*** each offset against the gradient while sitting on
+  `drawer-raised`. `DRAWER_CHIP_ADD_ON_CARD` is new; `DRAWER_PRIMARY_ON_CARD`
+  already existed for the install pill and this caller had been missed.
+
+**Five flags remain and all five are the checker's**, each confirmed by reading:
+the walk crosses a **sibling** carrying a fill — `Pantry`'s *Add item* beside the
+search `<label>`, the filter chips beside a `DRAWER_CHIP`, the switcher's rows
+beside their own selected row — and blames it as the ancestor.
+
+**The blind spot worth knowing**, because it is where the remaining real ones
+are: **the check can only name a fill that is a `theme.json` token.** A control
+inside `DrawerMenu` (`drawer.menu`, `#15110B`) or on a `panelSkin` panel
+(`#262019`) has an ancestor the check reads as unpainted, so it walks past.
+`AccountMenu`'s *Save*, the switcher's four controls and the invite composer's
+*Create* are all in that position, and **their offsets cannot be right**: the
+switcher alone is hosted by two surfaces with different fills, so no single
+offset serves it. `DRAWER_MENU_ROW`'s comment already states the answer —
+*"the menu's own fill is not a `theme.json` token, so there is nothing for a
+ring offset to resolve against"*, hence `ring-inset`. Switching those controls
+over is a real piece of work with a decision in it (inset everywhere, or promote
+`menu` to a token) and is **not** done.
+
+**The lesson, and it is the third of its kind here.** Typecheck, the class diff
+and the artifact read all passed on two buttons that did nothing under a
+pointer, exactly as they passed on an inert `ResizeObserver` and on a rail
+flyout missing its *Admin* row. **Every browserless check this project has
+verifies that something is present, and none of them verifies that it does
+anything.** The ground check narrows that gap by one class of bug and does not
+close it.
+
+#### The chart has a tooltip — 2026-08-30
+
+The design's *Dark* section specifies the surface and nothing else, and the
+surface is the whole of what it needed to say: **it is the rail's `Tip` with two
+lines in it.** The app already had a tooltip and it already borrows the drawer's
+darkest layer, so this stays a near-black box with cream text in **both** themes
+rather than inverting into a cream card on a dark chart — the toast's argument,
+one component over. `bg-drawer-well` on `border-drawer-line`, the month in
+`on-dark-faint` caps over the count in `on-dark`.
+
+- **A band, not a dot.** The twelve points are ~50 viewBox units apart and the
+  marker is 4 across, so hit-testing the dot would mean aiming at the one part
+  of the chart that moves as the data does. Each band runs midpoint-to-midpoint
+  with the two ends running out to the plot's edges, so the plot is covered and
+  there is no gap between months where nothing happens. It is *the whole row is
+  the checkbox*, applied to a chart.
+- **The scale is worked out, not assumed, and that is the load-bearing line.**
+  The `<svg>` is `width: 100%` with a fixed height, so its box and its `viewBox`
+  rarely share an aspect ratio — and the default `xMidYMid meet` then renders at
+  the **smaller** of the two scales and centres the slack. A wide card leaves
+  the chart centred horizontally at natural size; a narrow one shrinks it and
+  centres it vertically. Treating a point as *x over 640 of the width* puts the
+  tooltip beside the month it names, on most widths.
+- **It measures on `pointerenter`, so there is still no `ResizeObserver`** —
+  twelve measurements at most, never one a frame. That is what keeps the
+  chart's own comment true rather than quietly reversing it.
+- **A transparent backdrop under the bands clears the tooltip**, because
+  `pointerleave` on the `<svg>` is not enough: the axis strip and the
+  letterboxed slack are both *inside* the element, and on a narrow card that
+  slack is tens of pixels. Backdrop and bands are **siblings**, so entering one
+  leaves the other — one state change either way. A pair of `onPointerLeave`s on
+  the bands cannot do it: leave and enter are separate dispatches, so that
+  version renders a null between two months and flickers.
+- **The tooltip is clamped to the card and the marker is what makes that
+  honest.** Measuring the box would mean rendering it to find its width and
+  again to place it. When the clamp bites the box stops sitting over its own
+  dot — and the vertical rule and the marker are still on the month, which is
+  the half of the answer that has to be exact.
+- **The twelve values moved into the `aria-label` and the tooltip is
+  `aria-hidden`.** The label read only the ending value before, so the series
+  was pointer-only. The alternative — twelve focusable months — would put twelve
+  tab stops between the stat cards and *Needs attention*. The label spells the
+  year out on every month, because `label` alone reads `Mar` in the middle of
+  the range.
+- **No transition.** Twelve bands a pointer sweeps across would restart a fade
+  on each one, and the box is not appearing and disappearing so much as moving
+  between months.
+
+Verified with the rest of the pass: 675 class literals across the console's
+twelve files, 0 missing, and the artifact unchanged.
+
+**Nobody has hovered it.** What it cannot show locally is a space with twelve
+months of real households — `?demo` fills one household, not a year of them.
+
+#### A member row opens that person — 2026-08-30
+
+**Client and one DTO field**: no schema change, no new handler, no new class —
+every utility the row uses was already in the sheet. Eleven tables, thirteen
+queries, twenty-five mutations, `db.migrations` still empty.
+
+The seam between the console's two halves ran **one way**. An account page's
+household rows opened the household; a household's member rows opened nothing,
+so getting from *this household has a member called Nora* to *what else is Nora
+in* meant going back to People and searching for her by name. Reported from a
+real session, and it is the obvious thing to try on that card.
+
+- **`AdminMember` carries a `userId` beside its `id`, and the two are different
+  things.** `id` is the **membership** — what `adminSetRole` and
+  `adminRemoveMember` take. `userId` is the account, which is what the account
+  page is keyed by. The row writes to one and navigates to the other, which is
+  why it needs both. The handler's return type is
+  `Promise<AdminHouseholdDetailResult>`, so **`typecheck` is what proves the DTO
+  actually carries the new field** — an untyped object literal would not have
+  been caught.
+- **The row is two controls, not one, and that is forced.** The account page's
+  household rows are a single full-width `<button>`; a member row already holds
+  the role trigger, which is a button, so the same construction would nest one
+  inside another. The left part takes the padding, the `ADMIN_ROW` fill and the
+  chevron; the trigger keeps its own hit area outside it — which is also what
+  stops a press on *Owner* from navigating away from the menu it just opened.
+- **`ADMIN_ROW`'s ring offsets against `surface`, which is this card's fill**, so
+  the ground rule holds without a new twin (D45). Nothing new was added to
+  `controlStyles`.
+- **The `pl-3 pr-5` wrapper keeps the card's 20px gutter** while giving the
+  chevron and the role word the row's usual 12px between them. The card is
+  already `clip={false}` for the popover, so nothing crops.
+
+#### Going live needs one id that nothing will tell you — 2026-08-30
+
+**`LARDER_ADMIN_IDS` is the only thing standing between the console and
+production**, and it is fail-closed by design: absent means nobody, and there is
+no bootstrap path in the UI and never will be (D62). So the console cannot be
+opened until a real `account:…` id is written into `.env.server` — and **the
+platform offers no supported way to learn one**:
+
+- `ctx.auth` tells a handler about its **caller** only, so no query can report
+  somebody else's id, and the console's own queries are behind the gate anyway.
+- An `endpoint` gets a full `ServerContext` and **no `ctx.auth`**, so the probe
+  trick that answered the runtime questions cannot answer this one.
+- **`sf db export` fails exactly as `sf db dump` does** — both 500 with
+  `zero_db_connect_failed` on `households`, confirmed 2026-08-30 with two
+  request ids and written up in `.claude/docs/spacefast.md`. So the two commands
+  that would print the `memberships` rows are the two that are broken.
+
+**The route that works is client-side and undocumented.** The SDK stores the
+identity at `localStorage['stattic_zero_identity']` — a JSON record carrying
+`token` and `userId` — so signed in on the live space, devtools console:
+
+```js
+JSON.parse(localStorage.getItem('stattic_zero_identity')).userId   // "account:…"
+```
+
+`AUTH_STORAGE_KEY` is in `@spacefast/zero/dist/client.js`; **`readStoredIdentity`
+is not re-exported from the public `./client` entry**, so this is a storage key
+read out of `dist`, not an API. Do not build anything on it beyond this one
+lookup.
+
+**`LARDER_RETENTION_MONTHS=24` is already in `.env.server`**; `INVITE_SECRET` is
+too. Only the admin list is missing.
+
+#### The writes are held, and the console is read-only — 2026-08-30
+
+**One constant, and a copy pass beside it.** No schema change, no handler
+removed: eleven tables, thirteen queries, twenty-five mutations, `/api/status`
+the only endpoint, `db.migrations` still empty. The artifact is the shape D62
+left it.
+
+**`ADMIN_WRITES_HELD` in `shared/admin.ts` is `true`**, so the console can be
+read and nothing in it can be pressed. It went in *before* the console had ever
+been published, so the first people to open it cannot delete somebody's pantry
+with a mis-press.
+
+- **All six writes, not the three that were asked for.** The two deletions and
+  the role change were the request; member removal, invite revocation and the
+  ownership transfer went with them because they are one class of thing, and a
+  switch with exceptions is a switch nobody can reason about at a glance.
+- **`requireAdminWrite` is the whole server half** — `requireAdmin` plus the
+  flag, and the six mutations already began with the one line, so there is no
+  second list of six to go stale. **A separate function rather than a line
+  inside `requireAdmin`**, because the two refusals are different facts: one
+  says you are not an administrator, the other says nobody is writing anything
+  today, and collapsing them would send an administrator to
+  `LARDER_ADMIN_IDS` looking for a problem that is not there. **Admin is checked
+  first**, so a stranger guessing mutation names still learns only that they
+  lack permission — telling them the console's writes are *temporarily* held
+  would confirm the console exists (D39's instinct).
+- **The client hides the path and the server refuses it**, and the second is the
+  one that matters. A disabled button is one devtools call from a deleted
+  household; the flag is read on both sides from the same constant, which is
+  `termBlock`'s arrangement — one rule the server throws and the client renders.
+- **Nothing was deleted.** Every handler, dialog, confirm and audit path is
+  whole and still compiled, so what is being tried out is the real console with
+  its writes bolted shut rather than a smaller one. **Turning it back on is that
+  one constant**, plus deleting the notices.
+- **`AdminHeldNotice` is what earns the exception to D36.** *A disabled control
+  cannot explain itself* is a rule about a reason that is off-screen; the notice
+  puts it on-screen, once, above the controls it applies to. It draws only on
+  the household page and one account — **the two screens that have writes** —
+  because a notice above a screen you could only ever read would be an apology
+  for nothing. **Neutral, not amber**: amber in this console means *needs
+  attention*, and it is on the same page as the real ones.
+- **`PAGE_HELD` fades and never recolours.** The crimson on both *Delete*
+  buttons is the app saying *this destroys something*, and that stays true while
+  the button is asleep; repainting it neutral would say the control had become
+  something else.
+- **The role trigger is disabled, not removed**, and that is the one place D30's
+  *absent, not disabled* is deliberately not followed: this trigger is the only
+  place a member's role is **written on the page**, so hiding it would take a
+  fact away in order to disable a control. `RoleMenu` gained a `held` prop; the
+  drawer's own members pane never passes it.
+- **The orphan dialog changes its primary rather than disabling it.** It opens
+  by itself on arrival, so a dead button in it would be a thing nobody chose to
+  press offering something it cannot do. *Close*, and both bodies gain a
+  sentence saying the fix is on hold.
+
+**Verified against the real handlers**, over `POST /__spacefast/zero/run` on a
+throwaway `sf dev --port 4199`: **all six refuse with the hold's own sentence**,
+`adminAccess` still answers `{admin: true}`, and an ordinary `createHousehold`
+is untouched. Every id passed was a nonexistent one, and **the refusal arriving
+instead of *that household is gone* is the proof the hold short-circuits ahead
+of the row lookup**. 559 assertions, typecheck clean, 172 class literals across
+the six touched files diffed against the freshly built `zero.css` — proved to
+discriminate against a bogus class — and the artifact unchanged.
+
+#### American English, US dates, and the Oxford comma — 2026-08-30
+
+A copy pass over the console, done with the hold.
+
+- **Dates are `Mar 4, 2026` now, and there is one of them.** The console had
+  **four** copies of the day-first `4 Mar 2026` — three `MONTHS` arrays and four
+  near-identical formatters across `AdminHousehold`, `AdminPeople` and
+  `AdminActivity` — which had already drifted into two spellings (`Mar` on two
+  screens, `March` on a third). `usDate`, `usLongDate` and `usDateFrom` in
+  `shared/admin.ts` replace all of them, beside `monthLabel`, which was already
+  there. **UTC throughout**, unchanged: a date in the reader's zone would put a
+  household's creation on the day before it west of Greenwich, and the audit
+  log — which prints the zone — would then contradict the page it was opened
+  from. The fallback is a parameter because the callers mean different things by
+  an unreadable stamp (*unknown* for a join date, *at some point* for a
+  creation).
+- **`AdminActivity`'s range labels go through `monthLabel`**, so the log, the
+  chart and the range menu share one month vocabulary rather than three.
+- **Two British spellings shipped in user-facing copy** and are the only two:
+  `recognise` and `Unrecognised action`, both in the audit log's action
+  fallback. The tests asserted the old spelling, so they moved with it.
+- **Three missing Oxford commas**, all in lists of three: the delete dialog's
+  *its locations, sources, and types*, and both search placeholders. The
+  Activity blurb's four-item list takes none — it has no conjunction, so there
+  is nothing for a serial comma to precede.
+- **The comments are still written in British English** — *colour*, *centres*,
+  *behaviour* — throughout this file and the source. That was left alone: the
+  copy pass was about what ships, and rewriting hundreds of comments is churn
+  with a real chance of breaking a class literal quoted inside one. Worth a
+  deliberate decision rather than a drive-by.
+
+#### Still open in the console's own *Gaps*
+
+Unbuilt on purpose:
+
+- **Concurrent edits.** Two administrators can act on one household at once and
+  nothing says so. The console re-reads on every invalidate, so the second one
+  sees the first's result — it just never learns that is what happened.
+- **The rest of mobile.** Overview, People and one account have no 390 board.
+  They *render* at 390 — the counts go 2 × 2, every control clears 44px — and
+  **were looked at in a real browser on 2026-08-30 and read correctly**, which
+  closes the practical half of this. What is still true is that nothing was
+  drawn against, so the layouts are inherited rather than designed, and
+  **Activity at 390 is still the one deliberately left undecided**.
+- **Announcements** and **running cost**, both from *future-ideas*; the second
+  is one the platform cannot answer any more than storage.
+- **Can a household see the Activity rows that touch it?** Still admin-only,
+  still unasked.
+
 ### Empty results — 2026-08-26
 
 `EmptyState.tsx` is the app's one empty screen for the content column, drawn
@@ -2144,6 +2853,195 @@ term both restored with **both** stamps byte-identical and a visibly newer
 `createdAt`; a renamed store re-sorting alphabetically. **Nobody has clicked
 it.**
 
+### Local is a named guest now, and production is authenticated accounts only — 2026-08-30
+
+**The fix for the leak above, done properly rather than by deletion.** Nothing
+is published: this is on `master`, verified against a throwaway `sf dev`, and
+the live space is still v16.
+
+**The requirement was two things at once** — every feature testable locally,
+including the console and multi-person households, and a published space where
+only an authenticated account has any permission at all. The old arrangement
+achieved neither: it let a stranger in *and* it could not produce a second
+person locally.
+
+#### The discovery that made it possible
+
+**`sf dev` mints an identity from a `?guest=<name>` parameter.**
+`namedGuestAuth` in the CLI's `zero-dev-server.js` turns `?guest=alice` into
+`guest:alice` / `Alice` / `guest` / not authenticated. Undocumented, and it is
+the whole answer: **two names are two people**, so invites, roles, the members
+pane and the console's People list can all be exercised on one machine — which
+this file has said for months was impossible without the published space.
+
+**And production ignores the parameter, which is the load-bearing fact.**
+Checked against the live space on 2026-08-30: `?guest=alice`,
+`?stattic_zero_guest=alice` and `?guest=local` all returned the *same* identity
+as no parameter at all. So a named guest can only come from `sf dev`. **Re-test
+that if any of this is revisited** — it is the assumption everything below rests
+on, and it is the kind of assumption that broke last time.
+
+#### The rule
+
+`shared/identity.ts` is rewritten around one idea: **`guest:local` is the only
+identity a published space can mint, so it is the one that is never signed in.**
+
+- **`ANON_GUEST_NAME`** is `'local'`, excluded inside `parseDevGuests` rather
+  than at the call site — a rule enforced in one place cannot be forgotten in a
+  second. Naming it in `LARDER_DEV_GUESTS`, with or without the `guest:` prefix,
+  does nothing.
+- **`isSignedIn(auth, devGuests)`** is *a real account* (`! isGuest &&
+  isAuthenticated`, both required so a future identity setting only one is
+  refused) **or** a named guest the environment lists.
+- **`isAdminUser(auth, adminIds, devGuests)` is built on `isSignedIn`** instead
+  of repeating its conditions. There were two descriptions of *who is a person*
+  in this codebase and they disagreed about `guest:local` in the direction that
+  mattered. Now there is one.
+- **`signedIn(ctx)` and `administers(ctx)` in `server/auth.ts` are what handlers
+  call.** The rules need `ctx.env` now, and threading it through fifteen call
+  sites by hand is how one of them ends up passing the wrong variable.
+
+**`LARDER_DEV_GUESTS` ships to production and is safe by construction.**
+`.env.server` is the platform's only env source — there is no
+`.env.development`, checked — so it uploads whatever we do. It cannot open
+anything, because a published space cannot mint the identities it names.
+**Use random suffixes anyway** (`justin-9bfb4160`): the exclusion of `local` is
+the defence that holds today, and the suffix is what keeps this safe if the
+platform ever starts honouring `?guest=`. Two independent things would have to
+go wrong instead of one — which is exactly what the old bypass lacked.
+
+**`LARDER_ADMIN_IDS` holds both spellings of one person**: `account:LDV6…` on
+the published space, `guest:justin-…` locally. Justin's real id was read off the
+console's own People row on v15.
+
+#### What this costs, and the screen that pays for it
+
+**A bare `sf dev` is nobody now.** `DevGuestCard` is what a loopback visitor
+with no `?guest=` sees: the URL to use, and where the name has to be listed.
+Without it a local server would show the marketing page with no explanation,
+which is the worst version of a correct security change. The client gate in
+`client/index.tsx` moved with it — it accepts a *named* guest, never `local`.
+
+**`?demo`, `?members`, `?signedout` and the dev Gravatar are unchanged** and
+still loopback-only. They were never the hole: the hole was server-side, and a
+client gate is not security.
+
+#### The hold is a production hold now
+
+`ADMIN_WRITES_HELD` blocked the console's six writes everywhere, which made the
+deletion flows untestable anywhere — defeating the point of local testing.
+**`adminWritesHeldFor(auth)` exempts a dev guest**, and that is exact rather
+than approximate: a `guest:` id can only come from `sf dev`, so *exempt from the
+hold* and *running locally* are the same set.
+
+So **delete a household locally and watch the cascade and the audit row; you
+cannot do it on the live site.** `adminAccess` reports `writesHeld` alongside
+`admin`, and the console renders from that answer rather than reading the
+constant — the client must not hold a second copy of a security rule. It
+defaults to *held* while the query is in flight, which is the safe direction.
+
+#### Verified, and how
+
+`npm test` at **569 assertions**, with the identity and admin blocks rewritten
+as the tripwire: the anonymous guest refused with no list, with a list, when
+named as `local`, and when named as `guest:local` in **both** variables at once
+— which is the worst thing anybody could write in `.env.server`.
+
+Driven against a throwaway `sf dev --port 4199`, which is the part that matters:
+
+| as | `adminAccess` | console reads | admin write |
+|---|---|---|---|
+| no `?guest=` (production's stranger) | `admin:false` | `denied` | refused |
+| `?guest=justin-…` (listed, in `LARDER_ADMIN_IDS`) | `admin:true` | ready | **succeeds**, audit row written |
+| `?guest=alice-…` (listed, not an admin) | `admin:false` | `denied` | refused |
+| `?guest=…-unlisted` | not signed in | `denied` | refused |
+
+And a **complete two-person round trip on one machine**, which had never been
+possible: Justin names himself, creates a household, mints an editor invite;
+Alice previews it, redeems it, and is refused `createInvite` as an editor —
+D20's capability matrix running for real rather than in a unit test. The console
+then lists both people, with `admin=true` on one row and `false` on the other.
+
+### The dev-guest identity is what production hands a stranger — 2026-08-30
+
+**v15 leaked the admin console's data to anyone on the internet for about twenty
+minutes. v16 closed it.** This is the most important thing in this file about
+how to verify anything.
+
+**What happened.** `isAdminUser` opened with `if (isDevGuest(auth)) return
+true;` so the console could be clicked under `sf dev`. Immediately after
+publishing v15, a probe of the live space with **no credentials at all** —
+
+```bash
+curl -s -X POST -H 'content-type: application/json' \
+  -d '{"op":"query.run","name":"adminAccess","args":[]}' \
+  https://larderlog.view.fast/__spacefast/zero/run
+```
+
+— answered `{"admin": true}`, and `adminSummary` returned every household,
+person and item count in the space. `POST /__spacefast/zero/run` exists in
+production, needs no token, and **the hosted runtime hands an unauthenticated
+caller `guest:local` / `Local` / `guest` / not authenticated** — byte-identical
+to what `sf dev` issues, because the SDK's `currentGuestName()` defaults to the
+literal `'local'`.
+
+**The fix is one line and it is the absence of a line.** `isAdminUser` no longer
+has a dev-guest branch at all: a guest is never an administrator, whatever
+`LARDER_ADMIN_IDS` says. That also makes it safe for the list to contain
+`guest:local`, since that id only ever arrives attached to `isGuest: true`.
+**The console is therefore unreachable under `sf dev`** — flipping the function
+is a deliberate local edit that must never ship, and four assertions in
+`npm test` exist to stop it coming back.
+
+**The hold is what stopped this being catastrophic**, and that is luck rather
+than design. `ADMIN_WRITES_HELD` went in an hour before the publish; without it,
+`{"admin": true}` for anonymous callers would have put `adminDeleteHousehold` on
+the open internet.
+
+#### The verification lesson, which is the point of this entry
+
+**The bypass was checked, and the check was good, and it answered a question
+nobody had asked.** On 2026-08-27 a keyed probe reported `schemes ["account"]`
+and `anyDevGuest false` on production against `sf dev`'s `["guest"]` and `true`
+— it was even validated for discrimination by running it where the hole was
+known to be open. All of that is sound. But it enumerated **stored membership
+rows**: who had ever signed in. It said nothing whatever about **what identity
+an anonymous request is handed**, which is the actual condition, and that
+distinction survived three months and a dozen readings of the comment.
+
+- **Ask the runtime, not its data.** A question about what a request receives
+  is answered by making a request.
+- **A bypass keyed on an identity is only as safe as your knowledge of every
+  identity the runtime can mint** — and nothing here had ever asked the runtime
+  that directly.
+- **This is the fourth time a check certified something it could not see**,
+  after the inert `ResizeObserver`, the rail's missing *Admin* row, and the two
+  dead hover states. The first three were browserless checks missing behaviour.
+  **This one is different and worse: the check ran against production, passed,
+  and was about the wrong noun.**
+
+#### Closed the same day — see *Local is a named guest now* above
+
+**`isSignedIn` had the same bypass. It is gone.** What follows is what was true
+for the few hours between the two changes, kept because the scope analysis is
+the thing to redo if this is ever reopened.
+
+**`isSignedIn` had the same bypass.** An unauthenticated
+caller passes it, so anybody can act as user `guest:local` on the published
+space: `households` answers them `no-household`, and `createHousehold` would
+work. **No real user's data is exposed** — every household read resolves through
+`memberships`, and that identity holds none — so the exposure is anonymous
+writes and whatever any *other* anonymous caller created under the same shared
+id, not a breach of Justin's pantry.
+
+It was left in deliberately rather than fixed in the same publish: **removing it
+makes `sf dev` unusable**, since the CLI ships no sign-in flow and every local
+request is that guest. That is a development-halting trade and a decision, not a
+patch. The options are a real local sign-in stub from the platform, a
+`ctx.env`-gated dev flag that is scrubbed before publishing, or accepting that
+local work needs the bypass and narrowing what a guest may do. **Do not close
+this by deleting the branch without deciding how `sf dev` works afterwards.**
+
 ### Publishing works plainly again, and v14 is live — 2026-08-29
 
 **Phases 3 through 4.9 are published.** `sf publish` completed for the first
@@ -2364,24 +3262,29 @@ another route**.
    2026-08-25; the drawer's Account section names the dev guest instead, which
    is where someone looks to find out who they are. If that ever stops being
    true, put a marker back.
-2. **The server** (`shared/identity.ts`) accepts the exact identity `sf dev`
-   issues — `guest:local` / `Local` / `guest` / not authenticated, all four
-   matched. That value comes from `zeroGuestAuth()` in the `spacefast` CLI, so
-   it should never appear on a hosted runtime. **Verified inert in production
-   on 2026-08-27**, on v8, after two real people had signed in — which is what
-   the check needed and why it sat open from 2026-08-24. The keyed
-   `/api/probe` endpoint reported:
+2. **The server** (`shared/identity.ts`) used to accept the exact identity
+   `sf dev` issues — `guest:local` / `Local` / `guest` / not authenticated.
+   **That was never inert in production**: the hosted runtime mints those four
+   values for any unauthenticated caller, so `isSignedIn` returned true for
+   anybody with a `curl`. **It is gone** — see *Local is a named guest now*,
+   which replaced it with named `?guest=` identities that a published space
+   cannot produce. The probe quoted below is **evidence about the wrong thing**
+   — it enumerated stored membership rows, not what an anonymous request
+   receives — and it is kept only because understanding why it convinced
+   everybody is the whole lesson. The keyed `/api/probe` endpoint reported:
 
    ```
    production:  schemes ["account"]  anyDevGuest false   (4 memberships, 2 users)
    sf dev:      schemes ["guest"]    anyDevGuest true    (1 membership,  1 user)
    ```
 
-   **The second line is the point.** A `false` from a probe that cannot detect
-   the condition would mean nothing, so the same probe was run against `sf dev`
-   — where the hole is known to be open — and it came back `true`. The test
-   discriminates. Production issues only `account:` identities. (`sf db dump`
-   is the documented route for this and is still broken.)
+   **That reasoning was careful and still wrong.** The probe was checked for
+   discrimination — run against `sf dev`, where the hole is open, it came back
+   `true` — so it does detect *the condition it measures*. What it measures is
+   **which identities have rows in `memberships`**, which is a fact about who
+   has signed in, not about what the runtime hands somebody who has not.
+   Production issues `account:` identities *to people who sign in*, and
+   `guest:local` to everybody else. **Ask the runtime, not its data.**
 
 Don't widen either one, and take both out if Spacefast ships a local sign-in
 stub.
@@ -2460,7 +3363,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D61, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one** |
+| `.docs/decisions.md` | D1–D61, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -2473,6 +3376,8 @@ most of it is already decided.
 | `.claude/docs/design/larderloginstallmockup.html` | **The 5 boards for it** — desktop 1440, the row's states with the panel-edge finding drawn both ways, Preferences in three states × both themes, 390, and the appears-where matrix |
 | `.claude/docs/design/garden-and-kitchen.md` | **Garden and Kitchen** (rev. 29 Aug) — a source carries a kind, the shopping list becomes a run list of three bands with a segment over it, and an item gains a season. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list* wholesale**. **Read its *what is in v1 and what is a mockup* callout first**: everything about recipes, ingredients, quantities and units is a marked mockup (D59). **Its lede is stale** — it still promises an item gains "ingredients with quantities", which the callout eight lines below and the *Ingredients — on the recipe, never on the item* section both contradict. **Built: all of v1** — D58 (the kind, the rename, the menu, the card glyph), the run list, the item side, and **D61**, its *First run asks where your food comes from* section |
 | `.claude/docs/design/larderloggardenkitchenboards.html` | **The 9 boards for it** — **board 1 is first run** (the card, the hint in four states, the rejected second step, and the three seeded drawers with `STORE` becoming `SOURCE`); its card still draws the pre-D48 prefilled name and hint, which the build does not have. Then — the run list at 1440, entry and the three card types, ingredients (**mockup**), setting the kind with the STORE/SOURCE naming rule, the item side, where this goes (**mockup**), and the two structures that lost. Light theme only. **Board 2 draws both spellings of the trigger**; *To get* is the one chosen. **Board 1 draws the Make rows at 76px with a batch line, which is the mockup** — in v1 they are 56px like every other row |
+| `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
+| `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
 | `.claude/docs/design/larderlogbetabadgeboards.html` | **The 5 boards for it** — anatomy and the four surface pairings, the drawer header, 390 with six filters applied, what lost, and the marketing nav and footer in both themes. **Its marketing nav still draws the pre-D47 *Sign in with Gravatar* button** |
 | `.claude/docs/design/larderlogdrawerpreview.html` | **The redesigned drawer** — five screens in one page: the root Settings pane, the Members pane, changing a role, making an invite, and the account menu. Light theme only; the dark counterparts are a hex-for-hex map away |
@@ -2566,7 +3471,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 445 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 548 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -2577,7 +3482,10 @@ Cheapest first:
   avatar rule, D58's source-kind fallbacks, the group-word rule and the item card's
   one-glyph resolver, D61's source mix — including the absent-versus-empty pair
   and what each answer seeds — and
-  `?demo`'s fixture distribution and term resolution. **Add to it** when you touch any of those — that file is the app's
+  `?demo`'s fixture distribution and term resolution, and D62's admin rule —
+  every fail-closed branch, the dev-guest bypass, the console's month walk, and
+  the audit log's encoding, phrasing and retention.
+  **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
 - **`npm run typecheck`** — `strict` over `client/`, `server/`, `shared/`. Still

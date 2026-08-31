@@ -4447,3 +4447,617 @@ seeded term should never need it.
 - **A fourth term group, or a mode.** Both are D58's rejected list, unchanged.
 - **Backfilling the published household.** Same reasoning as D50: it would have
   to reason about terms a household has already renamed, recoloured or deleted.
+
+---
+
+## D62. The console is a pane in the app drawer, and an administrator is a name in the environment
+
+**Decided:** 2026-08-29 — supersedes the opening claim of *future-ideas → The
+administrator page*, which called the console "a fourth surface, not a screen".
+
+**The design document is
+[`.claude/docs/design/admin-console.md`](../.claude/docs/design/admin-console.md),
+drawn on `larderlogadminconsoleboards.html` — twenty-six boards on three pages.**
+
+**It is built, in seven stages on 2026-08-29**: the way in and the pushed pane,
+Overview, the household list, the household page and its three writes, People,
+the account page, ownership transfer, the account deletion pre-flight, the audit
+log, retention, export, the orphan dialog, the list states and the Mobile page.
+
+**Board 10 — *seeing inside a household* — is decided against**, deliberately
+and with a threshold for reopening it; see below. Three further things the
+boards draw cannot be built at all, and none is a later stage: every **email**,
+**storage**, and **last seen**. The rest of this decision is why each of those
+went the way it did.
+
+### The console is a pane, not a surface
+
+*Administration* is pushed into the app drawer exactly as *Members* is — the
+same 36px back button on `drawer-raised`, the same Playfair 600 21 heading with
+its scope in the meta beneath. So the way out is the gesture the app already
+teaches, and the console inherits collapse, the rail, the account row and the
+account menu for free.
+
+**There is no admin shell to design.** There is the app, with one more pane in
+it, and the content column swapped for the console's. Almost nothing is a new
+component: the drawer is the drawer, the confirms will be `ConfirmDialog`, the
+sort menu is the sort menu, and the household tile is already specced at four
+sizes. What changed against the design's own claim is that the console shares
+**the whole drawer** rather than "tokens and nothing else".
+
+### An administrator is a name in `LARDER_ADMIN_IDS`, and nothing else
+
+`ctx.env` reaches **query** handlers, not only mutations and endpoints —
+confirmed against a running capsule. So the flag is a comma-or-whitespace list
+of account user ids in `.env.server`, which syncs to the platform as a secret
+variable on publish exactly as `INVITE_SECRET` does.
+
+**Fail-closed in every direction.** An absent variable, an empty one, and one
+full of ids that are not yours all give the same answer. There is no bootstrap
+path and no first administrator: on a space with nothing set, nobody is one.
+
+**There is no admin *role*.** Roles are per household (D33) and say what you may
+do inside one; this says whether you may look at all of them, which is not a
+stronger version of the same thing. **Nothing in the UI grants it and nothing
+ever should** — the console can delete a household, and a console that can also
+mint administrators is one compromised account away from being the only account.
+The Activity log is where a grant will show up, attributed to *Out of band*,
+because that is the only place it can be seen at all.
+
+`shared/admin.ts` owns the rule, in `shared/` for the reason `shared/identity.ts`
+is: it is an authentication decision and it should be unit-testable without a
+running capsule. `npm test` is at **548 assertions**, of which 79 are the
+console's: the admin rule, the console's arithmetic, the audit log's encoding
+and retention, and the relevance ladder.
+
+**`sf dev`'s guest is an administrator, and that is the app's third deliberate
+hole** after D14's client gate and `isSignedIn`'s server-side twin. Without it
+the console cannot be clicked at all — `sf dev` issues one fixed identity that
+no production `LARDER_ADMIN_IDS` would ever name. It is **not** conditioned on
+the list being empty: writing a real id into a local `.env.server` to check the
+parsing must not lock the dev guest out of the thing it was checking. Take it
+out with D14, alongside `?signedout`, `?demo` and `?members`.
+
+### `/admin` cannot exist, and the platform's own 404 is better than ours
+
+The published space serves nothing at an unknown path — `SPA false`, the same
+fact that made an invite link `/?join=<code>` (D28). So `/admin` is answered by
+the edge before the app is reached.
+
+The design asks for the app's own 404 there, on the grounds that a 403 would
+confirm the console exists and that there is a flag worth getting. **An edge 404
+for an unrouted path says even less, and says it identically to everybody** —
+including to an administrator who typed it. `?admin` is the deep link, in the
+app's own `?join=` / `?demo` / `?members` idiom, and it is **not a gate**: every
+console query re-checks the flag server-side, so arriving with the parameter and
+without the flag opens a pane whose sections answer `denied` and draw nothing.
+
+### The metadata-only rule
+
+**Everything on a household page is a count, a name, or a date. If a field is
+ever not one of those three, it does not belong there.** It is stated on the
+page rather than merely observed by not drawing items, and it is the spine of
+the whole console. `AdminHouseholdRow` is where it is enforceable in code.
+
+### What the boards ask for and the platform cannot give
+
+Three of them, and none is a gap to fill later:
+
+- **Every email.** `nora@example.com`, *"Search by name, member or email"*, and
+  the Activity entry's *"actor with their email"*. `auth.email` is empty on a
+  Spacefast account by design (D56) and a handler is told about its **caller**
+  and never a third party, so no part of this app has ever held another person's
+  address. Search covers names and ids, and the placeholder says so.
+- **Storage** — `2.4 GB` on Overview, `1.1 MB` per household. The server context
+  is `{auth, content, db, env, gravatar, log, spam}` and carries no storage
+  handle in either direction. *Live invites* takes the fourth card instead:
+  real, administrative, and it keeps the row four across.
+- **"Last seen" on an account.** Nothing records a session, and nothing in the
+  schema can be made to imply one.
+
+### Counting is a scan, and that is the thing to watch
+
+Zero's query builder is `collect` / `take` / `first` / `paginate` with **no
+aggregate at all**, so a count is a scan and there is nothing to push down.
+Overview reads four tables end to end and the list reads six; `by_creation` is
+what makes it possible with no schema change, since every table has one —
+including `households`, which declares no index of its own.
+
+It is linear in the whole database and fine at this app's size. **It stops being
+fine somewhere in the low thousands**, and the fix then is a denormalised counts
+row per household maintained by the mutations that already invalidate, not a
+smarter query — there is no smarter query to write.
+
+### Last-active is computed, not stored, and `households` still has no `changedAt`
+
+D44 gave `households` an `addedAt` and deliberately no `changedAt`, because
+nothing orders households by recency and a rename is not an event anything
+reacts to. That is still true of the app; the console is the first thing to want
+an answer, and it computes one — the newest `changedAtOf()` across a household's
+items and its three taxonomies — rather than making every mutation in the
+capsule maintain a column for a screen almost nobody opens.
+
+**An unknown last-active is not dormant.** Every pre-D44 row holds `''`, so the
+alternative would flag the app's oldest households — the ones most likely to be
+real — as abandoned, on the strength of a column that did not exist when they
+were written.
+
+### The deltas say *new*, not `+`
+
+They count what arrived in the window and cannot count what left, because
+nothing records a deletion until the Activity log exists. `+34` would be a claim
+about the net; `34 new` is what is true.
+
+### The console never shows an invite code
+
+**Added with stage 2, and it is the sharpest thing the metadata-only rule
+turned out to imply.** The boards print
+`larderlog.app/?join=k3f9d2a7b1c8…` on the household page, beside the invite's
+role and expiry.
+
+A code **is** the authorization ([D39](#d39-an-invite-preview-is-the-one-query-that-answers-a-guest)):
+whoever holds one can join the household it belongs to. So printing it in the
+console would hand every administrator a silent route into any pantry in the
+space — and reading someone's shelves is the one thing the refusal card in the
+*other column of the same page* promises the console does not do. The card and
+the code cannot both be on that screen.
+
+The objection that an administrator can already delete a household does not
+rescue it, and stating why is the point: **deleting is loud, recorded and
+irreversible, and joining is none of the three.** The powers are not comparable
+just because one sounds larger. `AdminInvite` therefore carries a role, two
+dates and the name of whoever issued it, and the handler that builds it says in
+a comment why the fifth field is missing.
+
+### An administrator is exempt from none of the household's own rules
+
+Stage 3's four writes — `adminSetRole`, `adminRemoveMember`, `adminRevokeInvite`
+and `adminDeleteHousehold` — are the only mutations in this capsule that reach a
+household the caller is **not** a member of. Every one starts with
+`requireAdmin`, and there is no second line of defence beneath it: Zero has no
+row-level security, and an administrator has no membership row to resolve
+against. `requireAdmin` is therefore the single most load-bearing line in
+`server/`, which is why `shared/admin.ts` is fail-closed in every direction and
+unit tested for each of them.
+
+Three rules are carried over rather than reimplemented, and the reason each
+survives is worth stating:
+
+- **[D22](#d22-a-household-always-keeps-an-owner)'s last-owner guard.** An admin
+  cannot demote or remove a household's only owner. That is not a limitation but
+  the flow: the fix for an ownerless household is to *promote* somebody, and a
+  console that could strand one would be manufacturing the very state its own
+  Overview flags as needing attention.
+- **[D21](#d21-a-demotion-revokes-the-invites-that-person-made)'s invite
+  revocation.** A demotion or a removal kills the invites that person minted, or
+  an owner dropped to editor keeps minting editors through a link already out.
+- **The delete cascade**, children first, verbatim from `deleteHousehold` —
+  Zero has none of its own, so a table missed is rows that outlive every route
+  to them. Verified by scanning all nine tables for rows still naming a deleted
+  household: zero, in every one.
+
+**The console reaches the last-owner case the app never can.** In the drawer's
+Members pane the role menu only ever appears on somebody else's row and only to
+an owner, so the person you are looking at is never the last one — which is why
+that menu can honestly say nothing in it is disabled. An administrator is in
+neither position, so a demotion here really is refusable, and it is refused
+server-side with a sentence rather than hidden behind a disabled row (D36: a
+disabled control cannot explain itself).
+
+**A refusal lands in a banner on the page, not a toast.** The one that matters
+says *make someone else an owner first*, which is an instruction about a control
+two hundred pixels below it, and a message that dismisses itself after six
+seconds is the wrong shape for an instruction.
+
+### Deleting a household is the app's second typed confirmation
+
+The first — deleting your own last household — earned the exception by
+destroying data belonging to more than one screen. **This destroys data
+belonging to people who are not in the room**, and it is the only place in
+Larder Log where that is possible at all.
+
+`requireText` is the household's **name**, not its id: a name is the only string
+in this app that identifies a household to a human, and the id is a value to be
+copied rather than read. The typing is client-side, because the server cannot
+tell a deliberate call from a careless one and should not pretend to.
+
+**Crimson is still never a button.** Both the *Delete household* trigger and
+*Revoke* are crimson text on nothing — the way this app *offers* something
+destructive — and the confirm behind each takes the ordinary ink primary (D36).
+
+### Transferring ownership is a real hand-over, and deletion is what forced it
+
+The design doc says *"transferring ownership is a capability the app does not
+have yet — the role menu can promote someone to Owner, but nothing **hands
+over** a household."* Both halves are true, and the difference is two writes
+rather than one: promoting **adds** an owner, transferring **moves** ownership,
+and if the second is done as the first the household briefly has two owners and
+may well keep them.
+
+`adminTransferOwnership` promotes the target and demotes every other owner, in
+that order — so there is never an instant with no owner, which is the state it
+exists to get a household *out* of. It takes no `from`: a client that had to
+name the current owner is a client that could name it wrong, and the ownerless
+case has nobody to name at all. D21 applies to each demotion, so a handed-over
+household does not leave the previous owner minting editors through a link
+already out.
+
+**I was wrong about this one turn earlier**, having said the pre-flight's
+transfer was just a promotion inside the deletion. It is not: the same button
+has to work for the orphan case, where the account is not going anywhere.
+
+### The account pre-flight
+
+**Deleting an account removes it from Larder Log and cannot remove the
+Spacefast account itself.** What this app owns is the rows keyed to a `userId` —
+every membership, and the profile. That belongs in the copy rather than being
+left to be discovered, because signing in again produces a stranger with the
+same id and no history.
+
+**The pre-flight is what makes deletion reachable at all.** D22 blocks a sole
+owner from leaving a household; run that rule against every household at once
+and deleting an account becomes a wall for exactly the people most likely to
+want it. One row per solely-owned household, hand it over or delete it, and a
+tail line for the households where nothing has to be decided — so the dialog
+accounts for **every** household rather than only the ones with a question
+attached.
+
+Three things the handler does that are not obvious:
+
+- **It recomputes which households need an answer** rather than trusting the
+  list the dialog was built from.
+- **A decision about a household that needed none is refused, not ignored.** It
+  means the client and the server disagree about the state, and quietly dropping
+  it would let a stale dialog delete a household nobody chose.
+- **Everything is validated before anything is written.** A half-applied
+  deletion leaves one household transferred and an account still present, with
+  no record of either.
+
+**520 rather than 420 is the console's one deliberate deviation from the confirm
+shell**, and the design doc names it as such: a confirm asks one question and
+420 is right for it; a pre-flight asks two and has to show you what you are
+answering about. `ModalShell` gained a `width` prop — a number, not a class,
+because Tailwind resolves a class by scanning for a static string.
+
+**The disabled primary is right here and nowhere else.** D36's rule is that a
+disabled control cannot explain itself — which is about a control whose reason
+is off-screen. Here the reason **is** the screen: the unanswered rows are
+directly above the button.
+
+### What board 4 and board 5 could not have
+
+Three more, on top of the household page's:
+
+- **`LAST SEEN`, on both.** Nothing records a session. The nearest derivable
+  value — the newest activity across the households somebody belongs to — is
+  activity by *anyone* in them, so it would attribute another member's edit to
+  this person and be confidently wrong on exactly the screen an administrator
+  would trust. `JOINED` takes the column, which is a date the app really holds.
+- **`Awaiting deletion`**, the board's fourth People chip, which needs a
+  deletion hold and therefore a column. *Sole owner* takes its place and is the
+  more useful of the two: it is exactly the set of people whose account cannot
+  be deleted without answering a question first.
+- **`Signs in with`.** `auth.provider` describes the caller, and D47 settled
+  that this app does not name authentication lanes anyway.
+
+**The `Admin` flag is the one flag the console can really see**, and it is the
+only place in Larder Log where the flag is visible at all — nothing grants it
+and nothing else displays it. It reads `LARDER_ADMIN_IDS`, plus the caller's own
+row: `sf dev`'s guest administers by bypass rather than by being listed, so
+without that second clause the person reading the console would find their own
+row saying they are not an administrator.
+
+### The Activity log, and the one thing an audit log has to get right
+
+**The eleventh table, and the console's only schema change.** `activity`, on a
+`by_at` index, applying on the next publish with no flag as `profiles` did.
+
+**What belongs in it and what does not.** Administration — a household or an
+account deleted, ownership handed over, a role changed, an invite revoked.
+**Nothing a household does to its own pantry**: adding an item is not
+administration, and a console that logged it would be the surveillance the
+household page refuses to be. Verified rather than assumed — an item add and an
+invite mint both wrote zero rows.
+
+**And it does not record where you were.** No address, no device, no session.
+An address is a location and this is a log of actions, which is the same
+instinct that keeps items off the household page. If that turns out to be too
+little during a real incident it is a decision to revisit out loud, not a field
+to add quietly.
+
+**This is the one place in Larder Log where an observed timestamp is the
+point.** *Edit item* deliberately has none anywhere; that rule is about items,
+and a log whose rows cannot be placed in time is not a log. An opened entry
+gives the time to the second **and names the zone** — every stamp in this app is
+ISO 8601 UTC, and printing a local time without saying so is how two people
+reading the same incident disagree about when it happened.
+
+**A millisecond stamp was not enough, and finding out cost nothing but reading
+the rows back.** `adminDeleteAccount` writes a `household.transfer` and then an
+`account.delete`; both landed on the same millisecond, at which point `by_at`
+descending put the transfer **above the deletion that caused it**. So a stamp is
+never reused — if the clock has not moved, the next row takes the previous plus
+one — which makes `at` strictly increasing and `by_at` a true order. It is
+per-isolate, so two concurrent requests can still tie; at this scale nothing
+writes concurrently, and the alternative is a sequence row and a write per
+write.
+
+**A deletion entry denormalises and nothing else does.** Every other row can
+point at something that still exists; a deletion row is the only surviving
+record of the thing it describes, so it carries its own copy — the name, the
+colour, the id, and the counts as they stood — and the counts are taken
+**before** the cascade, because afterwards there is nothing to count. The card
+says so on its own face: *this household no longer exists; everything above is
+the log's own copy.*
+
+**`held` is JSON in a string, and that is a platform constraint.** Zero has no
+array or JSON type and no numeric type. The alternative is five string columns
+only a deletion row ever fills, which is five permanent columns (D44) bought for
+one row shape. `shared/activity.ts` owns the encoding, and its decoder **never
+throws** — a row is written once and read forever, so it has to survive `''`,
+a value written by a later version, and a corrupt string. A log entry that
+renders three of its four counts is worth more than one that renders a stack
+trace.
+
+**The action is a stored slug and the sentence is assembled.** D32's rule about
+term colours applied to a log: a row that stored *"Changed Nora's role to
+Editor"* could never be reworded or translated, and an unrecognised slug still
+reads as a time and a person, which is most of what an entry is for.
+
+**`actorName` is a copy and it stays after the account is gone.** An audit log
+you can erase by deleting yourself is not an audit log. **Erasure and an audit
+log pull in opposite directions and this picks a side**, which is a reason to
+say so on the deletion screen — both the account page and the pre-flight do —
+rather than a reason to leave it unsaid. It wants a lawyer's read before it
+ships.
+
+**Retention is stated, not enforced, and nothing prunes anything.** The design
+makes it the console's one real setting and pairs it with export, because they
+are one question. Both need somewhere to store the answer and a sweep to apply
+it, and this app has no schedule. `RETENTION_MONTHS` is a constant the log
+*reports*; making it true is the next thing this feature owes.
+
+**Two actor kinds are reserved and unwritten.** *Automatic* waits on a deletion
+hold; *Out of band* waits on grant detection, which would mean storing the
+last-seen `LARDER_ADMIN_IDS` to diff against. Both are in the vocabulary so the
+renderer handles them from the first row rather than being taught later, and
+both draw a blank disc with an italic label — a row is never attributed to
+somebody who did not do it.
+
+### Retention is enforced, and it is not a control in the console
+
+**This is a deliberate narrowing of the design**, which makes retention *"the
+only control in the console that is a setting rather than a list or a record"*
+and pairs it with export because they are one question: how long do you keep
+this, and how do you get it out.
+
+Reading is not destroying, so **export stays in the console**. Retention does
+not, and the argument is this decision's own, one shape along: **an
+administrator who can shorten retention can erase the record of what
+administrators did.** Dropping it from 24 months to one deletes twenty-three
+months of history, with the deletion itself being the only thing the log would
+have to say about it. That is the same failure as a console that could mint
+administrators — one compromised account away from being the only account — and
+it gets the same answer. `LARDER_RETENTION_MONTHS` sits beside
+`LARDER_ADMIN_IDS` in `.env.server`, and the console **reports** it.
+
+**Enforcement is append-time, because this app has no schedule.** `logActivity`
+prunes what has expired immediately after it appends, a bounded number per
+write so a retention change that suddenly expires ten thousand rows does not
+turn the next role change into a ten thousand row delete. One consequence,
+stated rather than discovered: **a log nothing is adding to is a log nothing is
+pruning**, so the last rows before a quiet period outlive their retention until
+something else happens. Acceptable — rows nobody is adding to are rows nobody is
+reading either, and the alternative is a scheduler this platform has not been
+asked for.
+
+Everything unparseable falls back to the default rather than refusing: a log
+that stops working over a typo in an environment variable is worse than one that
+keeps its rows a little longer than intended. **Zero is a real answer** and
+means keep nothing; a negative is not, and must not read as *keep forever*
+through the cutoff arithmetic.
+
+**The cutoff clamps the day of the month.** 31 March minus one month is 28
+February, not 3 March. A cutoff that overshoots by three days deletes three days
+of records nobody asked it to, and it would only do so on a 31st.
+
+### Export is a range, and it says when it was capped
+
+**A button that hands over all 2,904 rows invites the habit of handing over all
+of them**, so the menu offers months and a year and has no *everything* row.
+Bounds are `[from, to)` so consecutive months compose — the next month's `from`
+is this month's `to`, and no row is counted twice or missed at the boundary.
+
+**Bad bounds return an empty range, never the whole table.** Reversed, absent
+and unparseable all yield nothing: the failure mode of the opposite default is
+handing over everything.
+
+**A truncated audit export that looks complete is worse than no export**, so the
+cap rides the result as a flag rather than being inferred from the row count,
+which nobody could check without knowing the limit.
+
+CSV rather than JSON, because an export exists to be opened by something that is
+not this app — JSON is the better shape and the worse deliverable. It carries
+the **stored stamp**, not a rendering of one: an export is read by something
+that wants to sort and compare, and *3 days ago* cannot be either.
+
+`client/lib/activityCsv.ts` rather than `shared/`, and the boundary is the one
+this project already draws: the *shape* of a log row is shared because both
+halves speak it, but turning one into a file reaches `Blob`, `URL` and
+`document` — three identifiers the capsule compiler's denylist rejects outright.
+
+### The orphan dialog is what ownership transfer was for
+
+**Amber, because nothing is gone yet.** A household whose last owner left is
+stuck, not destroyed: until somebody is promoted nobody can rename it, invite
+anyone, or manage its locations and sources. Amber is *hold on* and crimson is
+*gone*, which is the blocked dialog's existing rule — and the primary goes where
+the problem is rather than doing anything itself, exactly as *Open Members*
+already does.
+
+**It opens on arrival**, which is what the board draws and the only arrangement
+that works: an ownerless household is broken in a way nobody looking at it would
+otherwise notice, and the whole point of Overview flagging the count is that
+somebody arrives here to fix it. Dismissal is per household, so leaving and
+coming back to a *different* broken one still asks.
+
+**With no members at all it asks a different question** — there is nobody to
+promote, so the only thing left to decide is whether to delete it, and the
+dialog says so rather than offering a primary that cannot work.
+
+### The list states, and the console at 390
+
+**Searching adds a sort option and takes the chips away.** *Best match* means
+nothing without a query, so offering it on an unsearched list would be a sort
+option that silently does nothing. Typing switches to it and **clearing the
+field restores the sort the list had before**, rather than leaving it on an
+option that has stopped existing. `matchScore` is the ladder — exact, prefix,
+anywhere in the name, then the same three against member or household names,
+then the id last. Nobody types an id hoping to sort by it, and a row that
+matched only because its id contains `ab` must never outrank one whose name
+starts with it.
+
+**The server checks the needle as well as the sort.** `relevance` is only
+reachable while something is typed, but a stale argument must not leave every
+row scoring zero and the list in id order — which on the hosted runtime is
+sequential integers sorted as strings, an order nobody could predict.
+
+**Day one has no search, no chips and no button**, and it returns before any of
+them are drawn. It is `total === 0`, **not** `matching === 0`: a filter that
+rules everything out is a different screen and keeps its controls, because the
+controls are how you get back. The empty state points at the thing that can
+create a household — a person signing in — because the console cannot.
+
+**At 390 the chips scroll and nothing is pinned.** The applied-filter row pins
+its clear because that row is a set you are dismantling; these are one status
+filter with one value on at a time, so there is nothing to keep in reach. The
+split is `md:` rather than the measured column, and that is D45's rule rather
+than the exception row 2's note warns about: row 2 asks whether its labels
+*fit*, which a docked drawer changes without the viewport moving, and this asks
+whether there is a **scroll gesture** — a mouse has none, so a docked drawer at
+1280 must still wrap.
+
+**Every control clears 44px below `md`** — the chips, both sort triggers, the
+pagers, the export, the role trigger, and both crimson ghosts — and the list
+rows clear 78. A 32px control inside a 78px row is the hit area the shopping
+list already corrected once.
+
+**Three things stack at 390 rather than truncating**: an invite row (a role, a
+date and a countdown do not share 358px), the account page's key/value rows (a
+132px label column leaves 226 for the value), and an opened log entry's fields.
+
+**Activity is deliberately not drawn at 390 and is not made to be.** A log row
+is a time, a person, an action and a target, and three of those are long. It may
+simply not belong on a phone — a thing to decide, not a layout to shrink into —
+so it stacks rather than truncating, which is the least-wrong version of
+undecided.
+
+### Seeing inside a household is decided, and the answer is no
+
+**Decided 2026-08-29, and recorded as a decision rather than left as an
+omission**, which is what the design document asks for in so many words:
+*"if it is never built, say so as a decision rather than an omission."*
+
+Board 10 draws both answers side by side so the choice would be visible rather
+than implied. **Metadata-only holds. Support means asking somebody inside the
+household.**
+
+The alternative was fully specified and is not being built: an explicit,
+recorded, expiring look — a required free-text reason, a duration, a persistent
+amber banner on the household page while it is open, read-only access, and the
+household being told. It is a good design. What settles it against building it
+*now* is that its load-bearing part is the one most likely to be dropped: **the
+household being told.** Without that, this is a console that reads people's
+shelves quietly, which is exactly what the refusal card on the household page
+promises it is not — and the card would have to come down, or become a lie.
+
+So the position the console already takes becomes the position it holds:
+
+- **The household page shows how much a household holds, never what.** Its
+  refusal card stays, and stays true.
+- **The console never shows an invite code** (above), which is the same rule
+  enforced against the back door rather than the front one. Both would have to
+  be revisited together.
+- **Support is a person, not a permission.** The console can tell you a
+  household has 41 items and 4 locations and has not been touched in eleven
+  days. It cannot tell you which jar is missing, and the answer to somebody who
+  needs that is somebody who is already inside.
+
+**What would reopen it**, stated so it is a threshold rather than a mood: the
+first real support request that metadata cannot answer — and the design's own
+line is the honest version of when that arrives, *"the first person who emails
+at 11pm saying their items vanished."* If it is reopened, the banner and the
+household's notification are not negotiable parts, because they are the whole
+difference between a recorded look and a quiet one.
+
+**One consequence to keep in view:** an administrator can already *delete* a
+household, so this is not a claim that the console is powerless over one. It is
+a claim about a specific asymmetry — **deleting is loud, recorded and
+irreversible; looking is none of the three** — which is the same argument that
+keeps invite codes out of the console, and it is the sentence to re-read if
+either is ever revisited.
+
+### Rejected
+
+- **A separate admin app, route or shell.** The design's own first claim, and
+  the boards disprove it: the drawer, the account row, collapse and the rail are
+  all wanted, and all of them already exist one level up.
+- **An `admins` table.** It survives an env change and an Activity row could
+  point at it, but nothing in the UI can write it either — so the grant path is
+  out of band regardless, and this way it is not also a schema change.
+- **`usePaginatedQuery`.** It pages the raw table cheaply and cannot answer
+  *matching*, the three chip counts, or a sort by a derived column. The boards
+  draw a pager with `Showing 1–25 of 412`, not infinite scroll.
+- **`formatCompactValue`.** `38.2K` saves eleven pixels and loses the count.
+  This app has never abbreviated a number anywhere.
+- **Hiding the People and Activity rows until they are built.** D30 removes a
+  control rather than disabling it, and that rule is about a permission you do
+  not have — where a disabled control cannot explain itself. A section that does
+  not exist *yet* is a different fact, and hiding it would quietly unmake a
+  promise the design's own nav block makes. They are drawn, disabled, and say
+  *Soon*, with their counts suppressed so the tag is not read as a near-miss.
+- **The invite code on the household card.** See above — it is the one field
+  on the boards that would make the refusal card beside it untrue.
+- **Letting an administrator override the last-owner guard.** Tempting, because
+  the console is the only place that can see an ownerless household — and wrong
+  for the same reason: it would be the only thing in the app able to *create*
+  one. Promoting is always allowed, which is the whole fix.
+- **Treating the pre-flight's transfer as a promotion.** Considered and wrong:
+  the same control has to serve the orphan case, where nobody is leaving, and
+  promoting there would add a second owner rather than hand the household over.
+- **Shipping `candidates` on every household row.** It is a list of names per
+  household per person, so it would be most of the membership table arriving to
+  answer a question almost nobody asks. It rides only the solely-owned rows,
+  which are the only ones the pre-flight offers a menu for.
+- **A toast for a refused write.** See above: the useful refusal is an
+  instruction, and an instruction must not time out.
+- **Logging anything a household does to its own pantry.** The line the whole
+  console rests on, and the log is where it would be easiest to cross.
+- **Five columns for a deletion's counts.** A column is permanent and nothing
+  backfills; one documented encoding with a guarded decoder is the smaller
+  commitment.
+- **Storing the sentence rather than the slug.** It could never be reworded.
+- **Retention as a setting, for now.** It needs storage and a sweep, and a
+  number that claims to be enforced and is not is worse than one that says what
+  the policy is.
+- **Retention as a console control.** See above — it is the one setting whose
+  own audit trail it would destroy.
+- **A scheduled sweep.** There is no scheduler, and append-time pruning needs
+  none. The cost is one stated caveat rather than a platform dependency.
+- **An *everything* row on the export menu.** The habit it invites is the
+  problem, not the volume.
+- **Resolving `targetGone` in an export.** It means *true when you asked*, which
+  is not a fact about the event — it would read as data and age into a lie.
+- **Offering *Best match* on an unsearched list.** A sort that does nothing.
+- **Keeping the search and chips on an empty space.** Three controls over
+  nothing, in front of the one sentence that says why there is nothing.
+- **Pinning anything in the mobile chip row.** These are not a set being
+  dismantled; there is nothing to keep in reach while scrolling past the rest.
+- **The recorded, expiring look inside a household (board 10).** Decided
+  against for now, above — not forgotten, and with a stated threshold for
+  reopening it.
+- **Restoring the console in `useViewState` (D51).** Everything that record
+  restores is a way of looking at *your* pantry. An app that reopens on a list
+  of every household in the space has forgotten what it is for — and a
+  `LARDER_ADMIN_IDS` that loses an id would leave a device restoring a section
+  it can no longer be shown.

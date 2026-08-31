@@ -4,7 +4,10 @@ import { ChevronUp, Pencil, Plus } from 'lucide-preact';
 import { TermPanel, TermRow } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import { chipDot, proposeColor } from '../lib/theme';
-import { DRAWER_CHIP, DRAWER_CHIP_ADD, DRAWER_CHIP_ON, DRAWER_ICON, TERM_CHIP_SIZE, TERM_SECTION_ICON } from '../lib/controlStyles';
+import {
+	DRAWER_CHIP, DRAWER_CHIP_ADD, DRAWER_CHIP_ADD_ON_CARD, DRAWER_CHIP_ON, DRAWER_ICON,
+	TERM_CHIP_SIZE, TERM_SECTION_ICON,
+} from '../lib/controlStyles';
 import type { TermFilter } from '../lib/actions';
 import type { SourceKind } from '../../shared/source';
 import { toSourceKind } from '../../shared/source';
@@ -343,7 +346,9 @@ export function FilterSection({
 									: (
 										<button
 											onClick={() => { startDraft(); setAdding(true); }}
-											class={`flex items-center justify-center gap-[7px] h-10 min-[1120px]:h-9 rounded-[11px] text-[13px] ${DRAWER_CHIP_ADD}`}
+											/* The card form: this row is inside the editing
+											  * card, not on the pane the other two sit on. */
+											class={`flex items-center justify-center gap-[7px] h-10 min-[1120px]:h-9 rounded-[11px] text-[13px] ${DRAWER_CHIP_ADD_ON_CARD}`}
 										>
 											<Plus size={13} strokeWidth={2.2} />
 											Add a {title.toLowerCase()}
