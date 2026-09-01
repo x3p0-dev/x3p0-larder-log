@@ -3,7 +3,7 @@ import { Check, Eye, EyeOff, RotateCcw } from 'lucide-preact';
 
 import type { Theme } from '../lib/theme';
 import { statusColor, statusFor, themed } from '../lib/theme';
-import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET, PAGE_BUTTON_PRIMARY } from '../lib/controlStyles';
+import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET, PAGE_BUTTON_PRIMARY_ON_SUNK } from '../lib/controlStyles';
 import { CheckBox } from './CheckBox';
 
 import { SOURCE_KIND_ICONS } from './SourceKindMenu';
@@ -865,7 +865,8 @@ function TripBar({ count, hidden, onToggle, onClear, onPutAway, theme }: {
 			{onPutAway && (
 				<button
 					onClick={onPutAway}
-					class={`inline-flex items-center shrink-0 h-[46px] md:h-[38px] px-4 md:px-[18px] rounded-[13px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY}`}
+					/* The bar is `surface-alt`, so the ring offsets against it — the ghost beside it always did (`LIST_GHOST`), and this half did not. */
+					class={`inline-flex items-center shrink-0 h-[46px] md:h-[38px] px-4 md:px-[18px] rounded-[13px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY_ON_SUNK}`}
 					style={{ background: theme.inkBg, color: theme.inkText }}
 				>
 					Put {count} away

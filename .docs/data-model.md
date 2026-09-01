@@ -712,6 +712,7 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `setDisplayName` | mutation | Upsert the account's name and write it through every membership. One of two writes not scoped to a household |
 | `syncAccountAvatar` | mutation | Reconcile `ctx.auth.picture` into every membership the caller holds, writing only the rows that disagree — [D55](decisions.md#d55-a-members-face-is-a-copy-on-the-membership-and-the-letter-is-not-a-fallback-to-be-ashamed-of). Takes no argument, called on load, and the other unscoped write |
 | `addItem` | mutation | Create an item and its join rows. Takes optional `addedAt` / `changedAt` — **undo only** |
+| `addItems` | mutation | A whole review table at once — bulk entry's only write ([D67](decisions.md#d67-bulk-entry-is-two-sources-one-review-and-one-write)). Resolves every draft before writing any, so a bad row refuses the call and leaves the table untouched. Capped at `BULK_MAX` (200); **no schema change and no new column** |
 | `updateItem` | mutation | Patch fields and reconcile join rows; bumps `changedAt` |
 | `adjustQty` | mutation | `+1` / `-1`, clamped at 0 — the hottest path; bumps `changedAt` |
 | `restockItems` | mutation | A whole trip's counts at once, plus one `restocks` row each, and it **ends the trip**. Resolves every entry before writing any — a put-away must not half-commit. It names its own trip rather than taking one from the client |

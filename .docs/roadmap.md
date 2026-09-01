@@ -1879,3 +1879,50 @@ watched to actually delete.
 **Trends tier 2 is the last unbuilt piece of `restock.md` and is decided
 against for now** — the log records put-aways, and two of the three ways to
 raise a count write nothing.
+
+### Bulk entry — the adoption wall ✅ (2026-08-31)
+
+`.claude/docs/design/bulk-entry.md`, governed by
+[D67](decisions.md#d67-bulk-entry-is-two-sources-one-review-and-one-write).
+**No schema change** — fourteen tables, fourteen queries, **twenty-nine**
+mutations, the new one being `addItems`.
+
+Twenty items is a sample dataset and a real pantry is two hundred. Every screen
+this app has been judged on was judged with a pantry somebody had already
+entered, which is exactly why the wall is invisible from inside a design
+document.
+
+- **Two sources, one review, one write.** A paste dialog and a common-items
+  checklist both land on the same review table, and **nothing is written until
+  Add**. That is what lets the checklist tick thirty-one things without putting
+  thirty-one rows on the shopping list on day one — counts default to 1 on the
+  review rather than 0 at the tick.
+- **The way in is a split on the primary**, the app's first split control. The
+  label opens the Add sheet unchanged; the chevron holds the other routes. Three
+  rounds of fitting *many* into the Add sheet lost to one objection: the sheet is
+  for one item.
+- **At 390 the chevron joins the pinned bar**, which is a knowing departure from
+  the board and the answer to the one number the design flags as most likely
+  wrong — the 34px cell was under the 44px floor.
+- **The parse works from the end**, guesses no shelf, shop or type, and never
+  claims the whole line. **`Set for checked`** is what keeps the review from
+  being three chips × two hundred rows. The review is **A–Z**, sorted once when
+  the batch arrives; the **count is the app's stepper**, and the **name is not
+  editable** — built and removed the same day, since correcting a word belongs
+  to the Add sheet.
+- **`addItems` resolves every draft before writing any**, so a refusal leaves
+  the table exactly as it was. **No undo, a plain toast**, which answers the
+  design's own first open question.
+
+**807 assertions** (61 new), typecheck clean, the artifact non-migrating, the
+data model diffed against it, and the real handler driven over
+`POST /__spacefast/zero/run` — including the resolve-first guarantee measured
+rather than asserted, a viewer refused, and a cross-household location refused.
+**All four new rules were proved by mutation**, and one of those mutations
+initially passed, which found a real gap in the duplicate test.
+
+**`Save and add another` was built and removed the same day** — the Add sheet's
+footer is too cramped for a third control. `ItemSheet.tsx` is byte-identical to
+what it was before the work.
+
+**Nobody has clicked it.**

@@ -180,6 +180,17 @@ export const DRAWER_ROW =
 export const PAGE_FOCUS =
 	'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
+/**
+ * The same ring, offset against a sunk strip rather than the page ground.
+ *
+ * `LIST_GHOST` already spells this offset out inline and is the proof it is a
+ * real position: a header band and a bottom bar are both `surface-alt`, and a
+ * ring that offsets against `canvas` there paints a halo of a colour that is not
+ * behind it.
+ */
+export const PAGE_FOCUS_ON_SUNK =
+	'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
+
 /** A term chip at rest — neutral, with the term's colour carried by its dot. */
 export const PAGE_CHIP =
 	'transition-colors bg-surface border border-line text-ink-body hover:border-line-strong hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
@@ -193,6 +204,36 @@ export const PAGE_CHIP =
 export const PAGE_CHIP_ON =
 	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
+/**
+ * Both chips again, on a **`surface` card** rather than on the page ground.
+ *
+ * The ring offset, and nothing else. Their three original callers are on the
+ * item sheet, whose gradient is near enough `canvas`; the review's rows sit on a
+ * card, which is a different colour in both themes.
+ */
+export const CARD_CHIP_ON =
+	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/** Its dashed twin, same one token moved. */
+export const CARD_CHIP_ADD =
+	'transition-colors border border-dashed border-line-strong text-ink-muted hover:border-ink-muted hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * A 22px checkbox that is its own target, on a card.
+ *
+ * **`LIST_TARGET` is a focus ring and nothing else**, and that is right where it
+ * came from: on the run list *the whole row is the checkbox*, so the row's own
+ * hover is the box's hover. The review's tick is a 22px button in a gutter with
+ * no row hover behind it, so it had no pointer feedback at all.
+ *
+ * **It paints 30px and occupies 22**, which is `CARD_CHEVRON`'s trick and its
+ * warning: `p-1 -m-1` gives back exactly the 8px the well added on each axis, so
+ * the box, the name field beside it and the row's height are all where they
+ * were. Do not resize it without re-deriving the row's `min-h`.
+ */
+export const CARD_CHECK_TARGET =
+	'transition-colors hover:bg-surface-alt active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
 /** The dashed "add one" chip. */
 export const PAGE_CHIP_ADD =
 	'transition-colors border border-dashed border-line-strong text-ink-muted hover:border-ink-muted hover:text-ink active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
@@ -200,6 +241,18 @@ export const PAGE_CHIP_ADD =
 /** The near-black primary — Add item, Save item, the stepper's plus. */
 export const PAGE_BUTTON_PRIMARY =
 	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-50 disabled:pointer-events-none';
+
+/**
+ * The primary on a **sunk bar** — the run list's trip bar and the review's
+ * commit bar, which are the same construction doing the same job.
+ *
+ * The ring offset alone. Both bars are `surface-alt`, and both shipped wearing
+ * the page ground's offset; the *ghost* beside each of them (`LIST_GHOST`) had
+ * always had it right, which is what makes the pair legible as a mistake rather
+ * than a choice.
+ */
+export const PAGE_BUTTON_PRIMARY_ON_SUNK =
+	'transition-opacity hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt disabled:opacity-50 disabled:pointer-events-none';
 
 /** An icon-only control that is quiet until touched — close, expand. */
 export const PAGE_ICON =
@@ -245,7 +298,7 @@ export const PAGE_BUTTON_OUTLINE =
 
 /** A field on the page. The border firms up on focus rather than glowing. */
 export const PAGE_INPUT =
-	'transition-colors bg-surface border border-line text-ink outline-none placeholder:text-ink-faint focus:border-ink-muted focus-visible:border-ink-muted';
+	'transition bg-surface border border-line text-ink outline-none placeholder:text-ink-faint focus:border-ink-muted focus-visible:border-ink-muted';
 
 /* ---------- destructive actions: the toast and the confirm dialog ---------- */
 
@@ -352,7 +405,7 @@ export const DRAWER_CHIP_OUTLINE =
  * appears on a control, and it is a glow, not a fill.
  */
 export const PANEL_FIELD_HALO =
-	'transition-shadow outline-none focus:shadow-[0_0_0_3px_rgba(190,51,70,0.14)]';
+	'transition outline-none focus:shadow-[0_0_0_3px_rgba(190,51,70,0.14)]';
 
 /**
  * The same halo in dark, at the dark crimson and a little more alpha.
@@ -362,7 +415,7 @@ export const PANEL_FIELD_HALO =
  * themes, which is dark either way.
  */
 export const PANEL_FIELD_HALO_DARK =
-	'transition-shadow outline-none focus:shadow-[0_0_0_3px_rgba(212,99,107,0.18)]';
+	'transition outline-none focus:shadow-[0_0_0_3px_rgba(212,99,107,0.18)]';
 
 /* ---------- the item card, whose controls sit on `surface` ---------- */
 
@@ -589,7 +642,30 @@ export const PAGE_BUTTON_CLEAR =
  * `ink-muted` clears 5:1 on all four surface-and-theme combinations.
  */
 export const PAGE_FIELD =
-	'transition-shadow bg-surface border border-ink-muted text-ink outline-none placeholder:text-ink-muted';
+	/*
+	 * **`transition`, not `transition-shadow`, because there are two properties
+	 * to move now** — and **every style in the field family moved with it**. Two
+	 * `transition-*` utilities on one element is the coin toss the console sweep
+	 * warns about: both set `transition-property` and sheet order decides. These
+	 * styles are *designed* to be worn together (`PAGE_FIELD` + a halo, at eight
+	 * call sites), so leaving one on `transition-shadow` would have made the pair
+	 * a toss at every one of them. `PAGE_INPUT` had that bug already, against
+	 * `PAGE_FIELD_HALO_WITHIN` on the top bar's search, and it is fixed here too.
+	 *
+	 * **The hover is the border stepping one shade toward the text**, which is
+	 * the run segment's rule: darker in light, brighter in dark, one expression.
+	 * It is a border rather than a fill for the reason a field cannot use D45 —
+	 * `bg-surface` is the field's *identity*, and this treatment sits on the item
+	 * sheet's gradient, on a `surface` card and inside a stepper, three grounds
+	 * that no single fill moves away from.
+	 *
+	 * **A field was the one control in the app with nothing under the pointer.**
+	 * It had a caret, a focus halo and a selection colour and no hover at all,
+	 * which reads as inert on any surface holding several of them — the review's
+	 * table of steppers is where it showed, and the item sheet is where it is
+	 * used most. It belongs to the field rather than to either screen.
+	 */
+	'transition bg-surface border border-ink-muted hover:border-ink text-ink outline-none placeholder:text-ink-muted';
 
 /**
  * One cell of a stepper — the `−` and the `+`.
@@ -615,11 +691,11 @@ export const PAGE_STEPPER_CELL =
  * and listens for focus below it.
  */
 export const PAGE_FIELD_HALO_WITHIN =
-	'transition-shadow focus-within:shadow-[0_0_0_3px_rgba(190,51,70,0.14)]';
+	'transition focus-within:shadow-[0_0_0_3px_rgba(190,51,70,0.14)]';
 
 /** The same, at the dark crimson and a little more alpha. See `PANEL_FIELD_HALO_DARK`. */
 export const PAGE_FIELD_HALO_WITHIN_DARK =
-	'transition-shadow focus-within:shadow-[0_0_0_3px_rgba(212,99,107,0.18)]';
+	'transition focus-within:shadow-[0_0_0_3px_rgba(212,99,107,0.18)]';
 
 /**
  * The unit menu's box and rows — the sort menu's construction, unchanged.
@@ -634,6 +710,24 @@ export const PAGE_MENU =
 /** One row of it. Selection is a check, never a fill — so hover still reads on it. */
 export const PAGE_MENU_ROW =
 	'flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The same row, on the Add / Edit sheet's ground rather than inside a popover.
+ *
+ * **One token moved, and it is the ring offset.** `PAGE_MENU_ROW` offsets
+ * against `surface`, which is the fill of the menu box its three callers open
+ * inside. The paste sheet's route out to the checklist sits on the sheet's own
+ * gradient, and every control already on that board — `PAGE_ICON` on Cancel and
+ * the close, `PAGE_BUTTON_PRIMARY` on Save — offsets against `canvas`. A ring
+ * painted against a fill that is not behind it is the defect the console's
+ * ground sweep found four times over.
+ *
+ * **The hover is unchanged and is already right**: `surface-alt` is a real step
+ * down from the sheet's gradient in both themes, so it moves away from the
+ * ground rather than onto it (D45).
+ */
+export const PAGE_MENU_ROW_ON_SHEET =
+	'flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 
 /**
  * The source-kind glyph on the item sheet's composer panel — `DRAWER_KIND`'s
@@ -823,6 +917,23 @@ export const PAGE_BUTTON_QUIET_ON =
 	'bg-surface-alt border-line-strong text-ink';
 
 /**
+ * The same pair, on a **sunk strip** — a card's header band, or a bar below one.
+ *
+ * **One token moved in each, and it is the fill.** `PAGE_BUTTON_QUIET` hovers to
+ * `surface-alt` and its open state *is* `surface-alt`, which is right on the
+ * page ground and dead on a strip already painted that colour: the review's
+ * three *Set for checked* triggers shipped with a hover you could not see and an
+ * `aria-expanded` only a screen reader could hear. On the lighter of the two
+ * grounds, away means up (D45), so both go to `surface`.
+ */
+export const PAGE_BUTTON_QUIET_SUNK =
+	'bg-transparent border-transparent text-ink-body hover:bg-surface hover:border-line hover:text-ink';
+
+/** Its open state. `PAGE_BUTTON_QUIET_ON`'s fill, moved for the same reason. */
+export const PAGE_BUTTON_QUIET_ON_SUNK =
+	'bg-surface border-line-strong text-ink';
+
+/**
  * The dismiss `×` on the console's refusal banner — `DRAWER_PANEL_X`'s light
  * twin, and the same job: a control on a fill that is not the page ground.
  *
@@ -970,3 +1081,44 @@ export const PAGE_ICON_IN_FIELD =
  */
 export const PAGE_BUTTON_OUTLINE_ON =
 	'transition-colors bg-surface-alt border border-line-strong text-ink hover:opacity-90 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
+
+/*
+ * ---------------------------------------------------------------------------
+ * The split primary — bulk entry's way in (D67)
+ * ---------------------------------------------------------------------------
+ *
+ * **The first split control in the app.** The primary keeps its fill, its
+ * radius and its height and grows a second cell: pressing the label opens the
+ * Add sheet exactly as it does today, pressing the chevron opens the menu that
+ * holds every other route in.
+ *
+ * **Each half lights on its own, and that is the entire affordance.** Two hit
+ * areas, one shape — hovering the label must never light the chevron. So the
+ * hover cannot be `PAGE_BUTTON_PRIMARY`'s `hover:opacity-90`: fading one half
+ * would show the page ground through it and put a seam down the middle of a
+ * control whose whole point is that it is one shape.
+ *
+ * It goes through a custom property for the reason `HouseholdTile`'s `--tile`
+ * trio and `RunSegment`'s `--tab-*` do, and it is the fifth time this app has
+ * hit it: **the resting fill is a stored value and therefore an inline style,
+ * and an inline `background` beats any `hover:` class.** A half painted inline
+ * would have no hover at all.
+ */
+export const PAGE_SPLIT_HALF =
+	'transition-colors hover:bg-[color:var(--split-hover)] active:bg-[color:var(--split-press)]';
+
+/**
+ * The box the two halves sit in.
+ *
+ * **One focus stop, not two.** The ring is `focus-within` on the wrapper and
+ * goes round the whole control, because two tab stops on one button is how a
+ * split control becomes tiresome with a keyboard. The chevron is
+ * `tabIndex={-1}` and `↓` opens the menu from the label — the split-button
+ * pattern's own answer — and Escape hands focus back.
+ *
+ * `overflow-hidden` so the two halves share the wrapper's radius; the rule
+ * between them is inset rather than full-height, so the fill reads as one shape
+ * with a seam rather than as two buttons pushed together.
+ */
+export const PAGE_SPLIT =
+	'relative flex items-stretch overflow-hidden focus-within:outline-none focus-within:ring-2 focus-within:ring-ink focus-within:ring-offset-2 focus-within:ring-offset-canvas';

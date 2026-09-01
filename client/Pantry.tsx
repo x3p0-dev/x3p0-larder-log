@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Archive, ChevronLeft, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
+import { Archive, ChevronLeft, ChevronRight, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
 import type { LucideIcon } from 'lucide-preact';
 
 import { CollapsedRail } from './components/CollapsedRail';
@@ -12,7 +12,7 @@ import { ItemSheet } from './components/ItemSheet';
 import { SuggestMenu, useSuggest } from './components/SuggestMenu';
 import type { SuggestGroup, SuggestRow } from './components/SuggestMenu';
 import {
-	PAGE_BUTTON_OUTLINE, PAGE_BUTTON_PRIMARY, PAGE_BUTTON_QUIET, PAGE_CHIP_ADD, PAGE_FIELD_HALO_WITHIN,
+	PAGE_BUTTON_OUTLINE, PAGE_BUTTON_QUIET, PAGE_CHIP_ADD, PAGE_FIELD_HALO_WITHIN,
 	PAGE_FIELD_HALO_WITHIN_DARK, PAGE_FOCUS, PAGE_ICON_IN_FIELD, PAGE_INPUT,
 } from './lib/controlStyles';
 import { AppliedFilters } from './components/AppliedFilters';
@@ -27,6 +27,11 @@ import { RunList } from './components/RunList';
 import { PutAwaySheet } from './components/PutAwaySheet';
 import { RunListTrigger } from './components/RunListTrigger';
 import { RunSegment, runSegmentPx } from './components/RunSegment';
+import { AddMenu } from './components/AddMenu';
+import type { AddRoute } from './components/AddMenu';
+import { PasteListSheet } from './components/PasteListSheet';
+import { CommonItems } from './components/CommonItems';
+import { BulkReview } from './components/BulkReview';
 import { ToastStack } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { NewHouseholdDialog } from './components/NewHouseholdDialog';
@@ -45,6 +50,9 @@ import { AdminConsole } from './components/AdminConsole';
 import type { AdminSection } from './components/AdminPane';
 import { adminDeepLink } from './lib/adminEntry';
 import { addedAtOf, changedAtOf } from '../shared/stamp';
+import { bulkDrafts, bulkSummary, rowsFromCatalog, rowsFromLines } from '../shared/bulkEntry';
+import type { BulkRow, BulkSource, ParsedLine } from '../shared/bulkEntry';
+import type { CatalogItem } from '../shared/catalog';
 import { useToasts } from './hooks/useToasts';
 import { useTripChecks } from './hooks/useTripChecks';
 
@@ -804,6 +812,23 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const [form, setForm] = useState<ItemDraft | null>(null);
 	const [formError, setFormError] = useState('');
 	const [saving, setSaving] = useState(false);
+
+	/**
+	 * Bulk entry's two screens, and the dialog that feeds them (D67).
+	 *
+	 * **`bulkMode` replaces the content column exactly as the run list does**, so
+	 * it is a peer of `listMode` rather than something layered over it — and the
+	 * two are mutually exclusive for the same reason two modes always are: row 2
+	 * has one left-hand exit.
+	 *
+	 * **It is deliberately not in `useViewState` (D51)**, on the console's
+	 * argument: an app that reopens on a half-reviewed paste has forgotten what
+	 * it is for, and the rows are not a record anything could restore anyway.
+	 */
+	const [bulkMode, setBulkMode] = useState<'common' | 'review' | null>(null);
+	const [bulkSource, setBulkSource] = useState<BulkSource>('paste');
+	const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
+	const [pasteOpen, setPasteOpen] = useState(false);
 
 	/**
 	 * The put-away sheet's rows, snapshotted when it opened. `null` while closed.
@@ -1642,7 +1667,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * confirmation that anything happened. `justPutAway` holds the mode open for
 	 * the one screen that says so.
 	 */
-	const listMode = trip.listMode && (toBuyTotal > 0 || justPutAway !== null);
+	const listMode = trip.listMode && (toBuyTotal > 0 || justPutAway !== null) && bulkMode === null;
+
+	/** What row 2 and the commit bar report about the review (D67). */
+	const bulkCounts = useMemo(() => bulkSummary(bulkRows), [bulkRows]);
 
 	/**
 	 * How many counts the trip just wrote, when that is the reason the list is
@@ -2234,6 +2262,82 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		setShowForm(false);
 	}
 
+	/*
+	 * -----------------------------------------------------------------------
+	 * Bulk entry (D67)
+	 * -----------------------------------------------------------------------
+	 *
+	 * **Paste and the checklist are both just sources; the review is the
+	 * destination, and nothing is written until Add.** That is the whole
+	 * structure and it is what stops the two features being two features.
+	 */
+
+	function openBulkRoute(route: AddRoute) {
+		if (! mayEditItems) return;
+
+		if (route === 'paste') { setPasteOpen(true); return; }
+
+		// Entering a mode leaves the other one: row 2 has one left-hand exit, and
+		// two modes claiming it is how a screen ends up with two ways back.
+		setListMode(false);
+		setBulkMode('common');
+	}
+
+	function readPastedList(lines: ParsedLine[]) {
+		setPasteOpen(false);
+
+		if (lines.length === 0) return;
+
+		setBulkSource('paste');
+		setBulkRows(rowsFromLines(lines, items));
+		setListMode(false);
+		setBulkMode('review');
+	}
+
+	function reviewCommonItems(entries: CatalogItem[]) {
+		if (entries.length === 0) return;
+
+		setBulkSource('common');
+		setBulkRows(rowsFromCatalog(entries, items, types, locations));
+		setBulkMode('review');
+	}
+
+	function leaveBulk() {
+		setBulkMode(null);
+		setBulkRows([]);
+	}
+
+	/**
+	 * The commit — one write of the whole table.
+	 *
+	 * **A plain toast, and no undo**, which is the one open question in
+	 * `bulk-entry.md` this build answers. D36 governs *records that go away*, and
+	 * nothing here does: twenty-two rows arrive, in the grid this screen returns
+	 * to. What a run of twenty-two lacks that a single add has is *visibility* —
+	 * one new card is obvious and twenty-two at once is a wall — so it gets the
+	 * plain 3.5s toast rather than the actionable one. Making it undoable would
+	 * mean a second, destructive bulk mutation written to reverse a constructive
+	 * one, and that is a bigger decision than this screen.
+	 */
+	async function commitBulk() {
+		const drafts = bulkDrafts(bulkRows, defaultThreshold, locations[0]?.id ?? '');
+
+		if (drafts.length === 0) return;
+
+		setSaving(true);
+		const count = await api.addItems(drafts);
+		setSaving(false);
+
+		// Refused. `api.error` already says why, and the table is exactly as it
+		// was — which is what *nothing is written until you press Add* promises
+		// on the way out as well as on the way in.
+		if (count === null) return;
+
+		leaveBulk();
+		// A **plain** toast: `lead` alone, no `onUndo`, so there is no control on it.
+		toasts.push({ lead: `${count} ${count === 1 ? 'item' : 'items'} added.` });
+	}
+
 	function startEdit(item: Item) {
 		setEditingId(item.id);
 		setEditError('');
@@ -2670,7 +2774,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  * so a press moved the thing you had just pressed; now the way in
 					  * and the way out are one button that never leaves its slot.
 					  */}
-					{! empty && toBuyTotal > 0 && (
+					{! empty && ! bulkMode && toBuyTotal > 0 && (
 						<span class="ml-auto shrink-0">
 							<RunListTrigger
 								active={listMode}
@@ -2794,14 +2898,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 								theme={theme}
 							/>
 						</div>
+						{/*
+						  * **The primary grows a chevron** (D67): pressing the label
+						  * opens the Add sheet exactly as it did, pressing the chevron
+						  * opens the menu holding the other routes. The Add sheet
+						  * carries none of it — the sheet is for one item and the
+						  * button is for choosing.
+						  */}
 						{mayEditItems && (
-							<button
-								onClick={openAddForm}
-								class={`shrink-0 hidden md:flex items-center gap-2.5 h-[50px] px-[22px] rounded-[15px] text-[15px] font-semibold ${PAGE_BUTTON_PRIMARY}`}
-								style={{ background: theme.inkBg, color: theme.inkText }}
-							>
-								<Plus size={17} strokeWidth={2.4} /> Add item
-							</button>
+							<AddMenu onAdd={openAddForm} onRoute={openBulkRoute} variant="inline" theme={theme} />
 						)}
 					</div>
 					)}
@@ -2839,7 +2944,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  * which is what buys the pills and the sort room to share a row
 					  * again at 390.
 					  */}
-					{! empty && (
+					{/*
+					  * **The top bar is absent at zero items — except in bulk mode.**
+					  * Every control on it is a control over nothing on an empty
+					  * pantry, which is why the empty state owns that screen. A review
+					  * table is not nothing: it has to carry its own way out, and the
+					  * exit lives in this row.
+					  */}
+					{(! empty || bulkMode !== null) && (
 					<div class={`flex items-center pt-6 pb-4 px-0.5 ${compact ? 'gap-2' : 'gap-3.5'}`}>
 						{/*
 						  * The row's left slot: the status pills in grid mode, the exit
@@ -2858,7 +2970,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							// In list mode there is nothing to hold still — the trigger
 							// has gone to the row's right end — so the slot is the
 							// exit's own words and the segment takes everything else.
-							listMode
+							listMode || bulkMode
 								? 'flex items-center shrink-0'
 								: (compact ? 'flex-1 min-w-0 flex items-center' : 'flex items-center')
 						}>
@@ -2881,7 +2993,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 								// They unmount now rather than going `invisible`. The
 								// width they were holding was the trigger's x, and the
 								// trigger is no longer measured from this slot.
-								(listMode ? 'hidden ' : '') +
+								(listMode || bulkMode ? 'hidden ' : '') +
 								(compact
 									? 'w-full min-w-0 flex items-center gap-2 overflow-x-auto p-1 -m-1'
 									: 'flex items-center gap-3.5 flex-wrap')
@@ -2929,9 +3041,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							  * segment, so the three controls on this row share one
 							  * height at both widths.
 							  */}
-							{listMode && (
+							{/*
+							  * One exit, and both modes take it. Bulk entry replaces the
+							  * content column exactly as the run list does, so the way
+							  * out is the same control in the same place — and the two
+							  * can never be on at once, which is what makes that safe.
+							  */}
+							{(listMode || bulkMode) && (
 								<button
-									onClick={() => setListMode(false)}
+									onClick={() => { if (bulkMode) leaveBulk(); else setListMode(false); }}
 									class={`shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap ${compact ? 'h-11 px-2.5' : 'h-10 px-3'} rounded-[11px] text-[13.5px] font-semibold border transition-colors active:translate-y-px ${PAGE_FOCUS} ${PAGE_BUTTON_QUIET}`}
 								>
 									<ChevronLeft size={16} strokeWidth={2.4} />
@@ -3047,7 +3165,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							  * Below `md` none of this applies — the trigger is in the
 							  * mobile header in both modes and never moves at all.
 							  */}
-							{! listMode && toBuyTotal > 0 && (
+							{! listMode && ! bulkMode && toBuyTotal > 0 && (
 								<span class="hidden md:inline-flex shrink-0">
 									<RunListTrigger
 										active={listMode}
@@ -3067,10 +3185,43 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							  *
 							  * Pulled to the edge so its padding does not read as a gap.
 							  */}
-							{! listMode && (
+							{/*
+							  * **Both modes drop the sort**, and for one reason: neither
+							  * is showing the item grid. The run list has one fixed
+							  * order; the review is the order the lines arrived in, which
+							  * is what makes it *the screen you just typed, read back to
+							  * you*.
+							  */}
+							{! listMode && ! bulkMode && (
 								<div class="-mr-2 md:mr-0">
 									<SortMenu open={sortMenuOpen} setOpen={setSortMenuOpen} sortBy={sortBy} setSortBy={setSortBy} compact={compact} theme={theme} />
 								</div>
+							)}
+
+							{/*
+							  * Bulk entry's own clause, in the slot the trip line holds
+							  * in list mode: `24 lines · 22 new · 2 already here`. It
+							  * shortens rather than truncating at the width where the
+							  * status pills already shorten.
+							  */}
+							{bulkMode === 'review' && (
+								<span
+									class={'text-right ' + (compact ? 'text-[12.5px]' : 'text-sm')}
+									style={{ color: theme.textMuted }}
+								>
+									{compact
+										? `${bulkCounts.selected} new · ${bulkCounts.existing} here`
+										: `${bulkCounts.lines} ${bulkCounts.lines === 1 ? 'line' : 'lines'} · ${bulkCounts.fresh} new · ${bulkCounts.existing} already here`}
+								</span>
+							)}
+
+							{bulkMode === 'common' && (
+								<span
+									class={'text-right ' + (compact ? 'text-[12.5px]' : 'text-sm')}
+									style={{ color: theme.textMuted }}
+								>
+									Common items
+								</span>
 							)}
 						</div>
 					</div>
@@ -3103,7 +3254,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  * swaps its contents, which is what makes the switch read as the
 					  * content changing rather than the app changing.
 					  */}
-					{! empty && (
+					{! empty && ! bulkMode && (
 						<AppliedFilters
 							filters={appliedFilters}
 							onRemove={removeTermFilter}
@@ -3121,7 +3272,37 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					  * narrowed to low and out: a Type filter of *Produce* gives you the
 					  * produce run, and a Store filter collapses it to one card.
 					  */}
-					{listMode ? (
+					{/*
+					  * **Three modes share this column and only one is ever on.** The
+					  * run list and the two bulk screens all *replace* the grid rather
+					  * than covering it, for the reason a modal was wrong for the first
+					  * of them: these are things you work through, not questions you
+					  * dismiss to continue.
+					  */}
+					{bulkMode === 'review' ? (
+						<BulkReview
+							source={bulkSource}
+							rows={bulkRows}
+							setRows={setBulkRows}
+							locations={locations}
+							types={types}
+							stores={stores}
+							saving={saving}
+							onCommit={() => void commitBulk()}
+							onBack={leaveBulk}
+							dark={dark}
+							theme={theme}
+						/>
+					) : bulkMode === 'common' ? (
+						<CommonItems
+							items={items}
+							types={types}
+							onReview={reviewCommonItems}
+							onBack={leaveBulk}
+							dark={dark}
+							theme={theme}
+						/>
+					) : listMode ? (
 						<RunList
 							bands={shownBands}
 							banded={banded && activeTab === 'all'}
@@ -3192,6 +3373,30 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 									action={mayEditItems ? { label: 'Add item', icon: Plus, onClick: openAddForm } : undefined}
 									theme={theme}
 								>
+									{/*
+									  * **Day one keeps both routes spelled out** rather than
+									  * taking the chevron (D67). This is the one screen in the
+									  * app with room and nothing else competing for it, and it
+									  * is also the screen where somebody is most likely to
+									  * have two hundred things to enter and no idea the app
+									  * can take them.
+									  *
+									  * A pressable sentence rather than a button: the primary
+									  * above it is the answer for most people, and a second
+									  * button beside it would be two of them asking equally.
+									  * It is a deliberate second idiom for one job, and the
+									  * argument for it is only as good as this screen — worth
+									  * revisiting if the app grows another empty state.
+									  */}
+									{mayEditItems && (
+										<button
+											onClick={() => setPasteOpen(true)}
+											class={`inline-flex items-center gap-1 h-9 px-2 -mx-2 rounded-[11px] text-[14.5px] font-semibold ${PAGE_BUTTON_QUIET} border border-transparent transition-colors active:translate-y-px ${PAGE_FOCUS}`}
+										>
+											Add several at once
+											<ChevronRight size={16} strokeWidth={2.4} />
+										</button>
+									)}
 									{/*
 									  * The one thing the stripped top bar took with it that
 									  * a viewer still needs: why there is nothing to press.
@@ -3284,13 +3489,23 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					class="md:hidden fixed inset-x-0 bottom-0 z-30 px-5 pt-3.5 pb-5"
 					style={{ background: theme.ground, borderTop: `1px solid ${theme.border}` }}
 				>
-					<button
-						onClick={openAddForm}
-						class={`flex items-center justify-center gap-2.5 w-full h-[54px] rounded-2xl text-base font-semibold ${PAGE_BUTTON_PRIMARY}`}
-						style={{ background: theme.inkBg, color: theme.inkText }}
-					>
-						<Plus size={18} strokeWidth={2.4} /> Add item
-					</button>
+					{/*
+					  * **At 390 the chevron joins the pinned bar, not row 1**, and that
+					  * is a knowing departure from the design's mobile board.
+					  *
+					  * That board draws the split beside search on the reasoning that
+					  * *the primary is already a 52px square at this width* — which is
+					  * not what the build has: below `md` row 1 is search alone and
+					  * mobile's primary is this bar. Putting a second one up there
+					  * would be three ways to add on one phone screen.
+					  *
+					  * It also answers the number the design flags as most likely to be
+					  * wrong. A 34px chevron cell was under the 44px floor every other
+					  * mobile control holds, and growing it in row 1 cost search
+					  * another 10px; down here there is a full row to spend, so the
+					  * chevron is 44 and search is untouched.
+					  */}
+					<AddMenu onAdd={openAddForm} onRoute={openBulkRoute} variant="bar" theme={theme} />
 				</div>
 			)}
 
@@ -3325,6 +3540,22 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			  * the screen, not about the list under it, and the two can never be
 			  * open at once because the trip bar is unreachable while either is.
 			  */}
+			{/*
+			  * Bulk entry's paste sheet, beside the other two rather than inside a
+			  * screen — every overlay in this app sits here, because an overlay is a
+			  * fact about the screen and not about the thing under it. It is
+			  * reachable from the chevron menu, from the empty larder's ghost, and
+			  * from the checklist it in turn offers.
+			  */}
+			<PasteListSheet
+				open={mayEditItems && pasteOpen}
+				onRead={readPastedList}
+				onCommonItems={() => { setPasteOpen(false); openBulkRoute('common'); }}
+				onClose={() => setPasteOpen(false)}
+				dark={dark}
+				theme={theme}
+			/>
+
 			<PutAwaySheet
 				open={putAway !== null}
 				rows={putAway ?? []}

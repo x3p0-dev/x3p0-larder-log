@@ -144,7 +144,12 @@ export function ModalShell({
 	}
 
 	return (
-		<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" onKeyDown={trapFocus}>
+		<div
+			class={
+				'fixed inset-0 z-[60] flex justify-center items-center p-4'
+			}
+			onKeyDown={trapFocus}
+		>
 			{/*
 			  * Scrim, Escape and Cancel are identical and all non-destructive —
 			  * there is no way to commit by getting out of the way.
@@ -172,7 +177,9 @@ export function ModalShell({
 				aria-modal="true"
 				aria-labelledby={labelledBy}
 				aria-describedby={describedBy}
-				class="relative w-full max-h-[90vh] overflow-y-auto p-[22px] rounded-[18px]"
+				class={
+					'relative w-full overflow-y-auto p-[22px] max-h-[90vh] rounded-[18px]'
+				}
 				style={{
 					maxWidth: `${width}px`,
 					background: theme.surface,

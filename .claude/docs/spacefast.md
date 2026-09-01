@@ -4717,3 +4717,22 @@ way the API does; distinguish a `config_update` from a `publish` in
 `channels history` and say what it changed; and look at why a zero-file settings
 version takes thirty-five minutes when a full capsule publish takes eight
 seconds.
+
+## 2026-08-31 — a second unbounded bulk mutation, and it needed nothing new (good)
+
+Built `addItems` for bulk entry (D67): one call writing up to 200 items with
+their join rows. It is the app's second mutation of that shape after
+`restockItems`, and the platform asked for nothing special — no batch API, no
+transaction ceremony, no size limit hit. `ctx.db.items.insert` in a loop inside
+one mutation body is the whole of it, and `changedTables` came back
+`["items","itemTypes","itemStores"]` for a three-row call.
+
+**Worth recording because the obvious worry did not materialise.** A 200-row
+call was refused by our own cap before the platform had an opinion, so the real
+ceiling is unknown and untested. If somebody needs it later, that is the number
+to go and find.
+
+**`--dry-run` again gave the whole answer for a non-migrating change**: fourteen
+tables, fourteen queries, twenty-nine mutations, `db.migrations: []`,
+`/api/status` still the only endpoint. Nothing about a cross-cutting feature
+that adds one handler needs a publish to verify.

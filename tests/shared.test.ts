@@ -53,6 +53,12 @@ import { putAwayMeta, putAwayRows, restockEntry, restockPrefill } from '../share
 import { isExtra, listNameFor, listRuleHint, listRuleLabel, listRuleOf, toListRule } from '../shared/listRule';
 import { NO_CLAIMS, claimInitial, claimPhrase, firstName, indexClaims } from '../shared/claim';
 import {
+	BULK_MAX, bulkDrafts, bulkSummary, bulkWritable, catalogGroups, checkedTerms,
+	countLines, findExisting, parseLine, parseList, rowsFromCatalog, rowsFromLines,
+	setTermForChecked, unitFromWord,
+} from '../shared/bulkEntry';
+import { placeMenu } from '../shared/menuPlacement';
+import {
 	MONTHS, hasSeason, isInSeason, monthName, monthNumber, monthOf, normalizeSeason, readyPhrase,
 } from '../shared/season';
 import { formatSize, hasSize, MAX_SIZE_DIGITS, normalizeSize, UNITS, unitFor } from '../shared/size';
@@ -69,6 +75,7 @@ import { GROCERY_CATALOG } from '../shared/catalog';
 import {
 	DEFAULT_SOURCE_KIND, SOURCE_KINDS, isSourceKind, itemSourceKinds, sourceGroupWord, toSourceKind,
 } from '../shared/source';
+import type { BulkRow } from '../shared/bulkEntry';
 import type { SourceKind } from '../shared/source';
 import type { Item, Term } from '../shared/types';
 
@@ -2261,6 +2268,368 @@ check('it skips a leading emoji', claimInitial('\u{1F955} Nora'), 'N');
 check('it skips leading whitespace', claimInitial('   bea'), 'B');
 check('and a nameless claim still draws a circle', claimInitial(''), '?');
 check('as does one with no letters in it', claimInitial('123 !'), '?');
+
+/*
+ * ---------------------------------------------------------------------------
+ * D67 — bulk entry
+ * ---------------------------------------------------------------------------
+ *
+ * The parse is invisible when wrong in exactly the way the filter rule is: a
+ * reading that takes *Butter 1 lb 2* as an item called *Butter 1* still
+ * compiles, still runs, and hands back a table full of plausible names nobody
+ * can explain. Every shape the design's own sample list carries is pinned here.
+ */
+
+/** The four shapes the design draws, read end-first. */
+check('name, size and count', parseLine('Basmati Rice, 5 lb, 2'), { name: 'Basmati Rice', qty: '2', size: '5', unit: 'pound' });
+check('a comma is only a separator', parseLine('Chickpeas 15 oz, 6'), { name: 'Chickpeas', qty: '6', size: '15', unit: 'ounce' });
+check('a bare trailing number is the count', parseLine('Chicken Thighs 4'), { name: 'Chicken Thighs', qty: '1'.replace('1', '4'), size: '', unit: '' });
+check('a size with no count is one of the thing', parseLine('Sour Cream 16 oz'), { name: 'Sour Cream', qty: '1', size: '16', unit: 'ounce' });
+check('a name alone is one of the thing', parseLine('Cumin'), { name: 'Cumin', qty: '1', size: '', unit: '' });
+
+// **The case that separates end-first from anything else.** Read left to right
+// this is an item called *Butter* with a size of 1 and a count of lb; read
+// end-first it is the row somebody meant.
+check('size and count together, unpunctuated', parseLine('Butter 1 lb 2'), { name: 'Butter', qty: '2', size: '1', unit: 'pound' });
+check('and again with two words in the name', parseLine('Soy Sauce 10 oz 2'), { name: 'Soy Sauce', qty: '2', size: '10', unit: 'ounce' });
+
+// A glued `15oz` is one token that is really two.
+check('a glued unit is split', parseLine('Chickpeas 15oz'), { name: 'Chickpeas', qty: '1', size: '15', unit: 'ounce' });
+// Plurals resolve, because a shopper writes *2 lbs*.
+check('a plural unit is the same unit', unitFromWord('lbs'), 'pound');
+check('so is the spelled-out word', unitFromWord('Pounds'), 'pound');
+check('and a trailing full stop', unitFromWord('oz.'), 'ounce');
+check('a word that is not a unit is not one', unitFromWord('bunch'), '');
+
+// **It never claims the whole line.** Popping a token that would leave no name
+// is how a parse silently deletes somebody's row.
+check('a bare number is an item called that', parseLine('12'), { name: '12', qty: '1', size: '', unit: '' });
+check('and so is a bare size', parseLine('15oz'), { name: '15oz', qty: '1', size: '', unit: '' });
+check('a name that ends in a unit word keeps it', parseLine('Six Pack'), { name: 'Six Pack', qty: '1', size: '', unit: '' });
+check('a leading number stays in the name', parseLine('2% Milk'), { name: '2% Milk', qty: '1', size: '', unit: '' });
+
+// A third number is part of the name — two passes, one count and one size, so
+// only the last number is ever a count and the rest stay where they were typed.
+check('only one count is claimed', parseLine('Ranch 3 2 1')?.name, 'Ranch 3 2');
+check('and it is the last one', parseLine('Ranch 3 2 1')?.qty, '1');
+
+check('a blank line is not a line', parseLine('   '), null);
+check('blank lines are dropped', parseList('Milk\n\n\nEggs').length, 2);
+check('and counted the same way', countLines('Milk\n\n\nEggs'), 2);
+check('a non-string parses to nothing', parseList(null).length, 0);
+
+// **The cap is real and the dialog reports it.** `parseList` stops; `countLines`
+// does not, because the sentence about the cap needs the true number.
+const longList = Array.from({ length: BULK_MAX + 40 }, (_, i) => `Item ${i}`).join('\n');
+check('the parse stops at the cap', parseList(longList).length, BULK_MAX);
+check('and the count does not, so the cap can be reported', countLines(longList), BULK_MAX + 40);
+
+// --- the review's rows ---
+
+const HAVE: Item[] = [item('Butter', '2', '4', ['s-costco']), item('Rice', '9', '2', [])];
+
+check('a name already in the pantry is found', findExisting('butter', HAVE)?.name, 'Butter');
+
+// **Exact, never a substring**, and it has to be pinned in *both* directions —
+// checking only one of them passes a deliberately broken `includes`, which is
+// what a mutation run of this file found. `Butter` must not match the pantry's
+// *Salted Butter*, and a pantry holding *Butter* must not claim a pasted
+// *Salted Butter* is already there.
+check('a longer pasted name does not match a shorter row', findExisting('Salted Butter', HAVE), null);
+check(
+	'and a shorter pasted name does not match a longer row',
+	findExisting('Butter', [item('Salted Butter', '1', '1', [])]),
+	null
+);
+check('whitespace does not fool it', findExisting('  Butter  ', HAVE)?.name, 'Butter');
+check('nothing matches nothing', findExisting('', HAVE), null);
+
+const pasted = rowsFromLines(parseList('Butter 1 lb 2\nCumin\nRice'), HAVE);
+
+// **A duplicate arrives unchecked**: nothing is going to be written to it, and
+// a row that is both amber and ticked would be asking to be pressed.
+check('a duplicate arrives unchecked', pasted.map((r) => r.checked), [false, true, false]);
+check('and carries the row it matched', pasted[0].existing?.name, 'Butter');
+check('a fresh row carries nothing', pasted[1].existing, null);
+
+// Two lines naming the same thing get two keys, or their count fields would be
+// tied together by the one they share.
+check('every row has its own key', new Set(rowsFromLines(parseList('Milk\nMilk'), []).map((r) => r.key)).size, 2);
+
+// **The table is A–Z, not paste order.** Invisible when wrong in the way an
+// ordering always is: a table in the order it was typed still looks like a
+// table, and only somebody hunting for one row in two hundred finds out.
+check(
+	'the rows sort by name',
+	rowsFromLines(parseList('Rice\nButter\nCumin'), []).map((r) => r.name),
+	['Butter', 'Cumin', 'Rice']
+);
+
+// The sort must not carry the key with it: a key is where the row *came from*,
+// and the second of two `Butter` lines is still the second one.
+check(
+	'and the key stays tied to the source line',
+	rowsFromLines(parseList('Rice\nButter'), []).map((r) => r.key),
+	['line-1', 'line-0']
+);
+
+// **The paste guesses no shelf, no shop and no type.** A paste cannot know them.
+check('a pasted row names no location', pasted[1].locationId, '');
+check('no type', pasted[1].typeIds, []);
+check('and no source', pasted[1].storeIds, []);
+
+const summary = bulkSummary(pasted);
+check('the summary counts the lines', summary.lines, 3);
+check('what is new', summary.fresh, 1);
+check('what is already here', summary.existing, 2);
+check('what is about to be written', summary.selected, 1);
+check('and what is being skipped', summary.skipped, 2);
+
+// --- what a commit carries ---
+
+const drafts = bulkDrafts(pasted, '7', 'l-1');
+check('only the ticked, fresh rows are written', drafts.map((d) => d.name), ['Cumin']);
+check('the parsed count rides with the row', drafts[0].qty, '1');
+// **`low at` is the household default, never anything the row holds.** It is a
+// count rather than a property, which is what D63 settled for the sheet.
+check('the threshold is the household default', drafts[0].threshold, '7');
+check('a row with no location takes the household first shelf', drafts[0].locationId, 'l-1');
+check('nothing this route can set is set', [drafts[0].listRule, drafts[0].notes, drafts[0].seasonFrom], ['', '', '']);
+check('and the retired flag is never raised', drafts[0].offShoppingList, false);
+
+// **A duplicate is never written, whatever its tick says.** The row has no
+// count field and no chips, so writing it would create a second *Butter* out
+// of a control nobody could see.
+const forced = pasted.map((r) => ({ ...r, checked: true }));
+check('a ticked duplicate is still not written', bulkDrafts(forced, '2', 'l-1').map((d) => d.name), ['Cumin']);
+
+// One rule, read by the button's number and by what the button writes, so the
+// two cannot disagree on screen.
+check('a duplicate is not writable', bulkWritable(pasted[0]), false);
+check('an ordinary row is', bulkWritable(pasted[1]), true);
+
+// --- setting a term on the whole batch ---
+//
+// **Invisible when wrong.** A toggle where a replace belongs still moves chips,
+// just not the way the press said it would; a checkmark computed from one row
+// rather than from all of them still draws. Both were reported from a real
+// screen as "confusing" rather than as broken, which is what that looks like.
+
+const BATCH: BulkRow[] = [
+	{ ...pasted[1], key: 'a', name: 'Cumin', checked: true, locationId: 'l-1', typeIds: ['t-spice'], storeIds: [] },
+	{ ...pasted[1], key: 'b', name: 'Dill', checked: true, locationId: 'l-1', typeIds: [], storeIds: ['s-costco'] },
+	// Unticked, and a duplicate: neither is a target, so neither is set and
+	// neither gets a say in what the menus report.
+	{ ...pasted[1], key: 'c', name: 'Mace', checked: false, locationId: 'l-9', typeIds: ['t-x'], storeIds: [] },
+	{ ...pasted[0], key: 'd', name: 'Butter', checked: true, locationId: 'l-9', typeIds: ['t-x'], storeIds: [] },
+];
+
+// **The menu is the batch's value.** `Dill` had no type and `Cumin` had a
+// different one; after one press both hold exactly what the menu now shows.
+const typed = setTermForChecked(BATCH, 'type', 't-dairy');
+check('a type lands on every checked row', [typed[0].typeIds, typed[1].typeIds], [['t-dairy'], ['t-dairy']]);
+check('a source does too', setTermForChecked(BATCH, 'store', 's-market')[1].storeIds, ['s-market']);
+check('and a location still replaces', setTermForChecked(BATCH, 'location', 'l-2')[0].locationId, 'l-2');
+
+// **A second term joins the set rather than replacing it** — the whole reason
+// the batch's value is a set and not a value. This is the assertion that
+// separates it from a single-select, and the one a `[id]` write fails.
+const twoTypes = setTermForChecked(typed, 'type', 't-spice');
+check('a second type joins the batch', twoTypes[0].typeIds, ['t-dairy', 't-spice']);
+check('on every row of it', twoTypes[1].typeIds, ['t-dairy', 't-spice']);
+check('and both are ticked', checkedTerms(twoTypes, 'type'), ['t-dairy', 't-spice']);
+
+// Sources are the same set, kept separately from types.
+const twoStores = setTermForChecked(setTermForChecked(BATCH, 'store', 's-market'), 'store', 's-costco');
+check('two sources on the batch', checkedTerms(twoStores, 'store'), ['s-market', 's-costco']);
+check('and the types did not move', checkedTerms(twoStores, 'type'), []);
+
+// Taking one out leaves the rest — a set, not a stack.
+check(
+	'dropping one leaves the other',
+	setTermForChecked(twoTypes, 'type', 't-dairy')[0].typeIds,
+	['t-spice']
+);
+
+// **A location is one shelf, so its set holds one.** Same rule, arity one.
+check(
+	'a second location replaces the first',
+	setTermForChecked(setTermForChecked(BATCH, 'location', 'l-2'), 'location', 'l-3')[0].locationId,
+	'l-3'
+);
+
+// An unticked row and a duplicate are left exactly as they were.
+check('an unticked row is untouched', [typed[2].typeIds, typed[2].locationId], [['t-x'], 'l-9']);
+check('and so is a duplicate', typed[3].typeIds, ['t-x']);
+
+// **The check is *every* target, not *some*.** `l-1` is on both ticked fresh
+// rows; `t-spice` is on one of them.
+check('a term on every target is ticked', checkedTerms(BATCH, 'location'), ['l-1']);
+check('a term on only one is not', checkedTerms(BATCH, 'type'), []);
+check('nor is one held only by rows nothing would write', checkedTerms(BATCH, 'store'), []);
+
+// The pair agree: what a set leaves behind is what the menu then reports.
+check('what was just set is what the menu ticks', checkedTerms(typed, 'type'), ['t-dairy']);
+
+// **Pressing a ticked term takes it out**, which is what makes the tick a
+// control rather than a report, and how *unset for all* is reached.
+check('pressing the ticked term clears the batch', setTermForChecked(typed, 'type', 't-dairy')[0].typeIds, []);
+check('and the tick goes with it', checkedTerms(setTermForChecked(typed, 'type', 't-dairy'), 'type'), []);
+check('a ticked location clears too', setTermForChecked(BATCH, 'location', 'l-1')[0].locationId, '');
+
+// With nothing to set there is no batch to describe. `every` over an empty list
+// is `true`, so an unguarded version ticks every term in the menu at once.
+const none = BATCH.map((row) => ({ ...row, checked: false }));
+check('nothing ticked means nothing checked', checkedTerms(none, 'location'), []);
+check('and setting touches nothing', setTermForChecked(none, 'type', 't-dairy'), none);
+
+// --- where a picker opens ---
+//
+// **Invisible when wrong in the way an ordering is.** A menu hung from the
+// wrong corner still opens, still lists every term and still picks correctly;
+// it clips only at one scroll position on one screen width, which is exactly
+// how both of these reached a real phone before anybody saw them.
+
+const SIZE = { width: 220, maxHeight: 320 };
+const PHONE = { width: 390, height: 780 };
+const DESK = { width: 1440, height: 900 };
+
+/** Does the panel this placement describes actually fit on the screen? */
+function fits(box: { top: number; bottom: number; left: number; right: number }, view: typeof PHONE) {
+	const p = placeMenu(box, view, SIZE);
+	const left = p.corner.endsWith('right') ? box.right - SIZE.width : box.left;
+	const top = p.corner.startsWith('up') ? box.top - p.maxHeight : box.bottom;
+
+	return left >= 0 && left + SIZE.width <= view.width && top >= 0 && top + p.maxHeight <= view.height;
+}
+
+// Room everywhere: down and to the left, which is the reading order.
+check(
+	'with room on every side it opens down and left',
+	placeMenu({ top: 200, bottom: 226, left: 40, right: 130 }, DESK, SIZE).corner,
+	'down-left'
+);
+check('and takes its full height', placeMenu({ top: 200, bottom: 226, left: 40, right: 130 }, DESK, SIZE).maxHeight, 320);
+
+// **The first report.** At 390 a row's chips sit in the right half of the row,
+// so a left-hung panel ran off the side of the screen.
+const chipRight = { top: 300, bottom: 326, left: 236, right: 320 };
+check('a chip near the right edge hangs from its right', placeMenu(chipRight, PHONE, SIZE).corner, 'down-right');
+check('and the panel is on the screen', fits(chipRight, PHONE), true);
+
+// The other direction, which is why a static `right-0` was no answer either:
+// the header band's triggers wrap to the left gutter at this width.
+const bandLeft = { top: 120, bottom: 152, left: 18, right: 98 };
+check('a trigger at the left gutter hangs from its left', placeMenu(bandLeft, PHONE, SIZE).corner, 'down-left');
+check('and that one is on the screen too', fits(bandLeft, PHONE), true);
+
+// **The second report.** The last row of a long table.
+const lastRow = { top: 700, bottom: 726, left: 60, right: 150 };
+check('a trigger near the fold opens upward', placeMenu(lastRow, PHONE, SIZE).corner, 'up-left');
+check('and never runs past the bottom', fits(lastRow, PHONE), true);
+
+// Tight both ways — a short window: it takes the roomier side and **shortens**
+// rather than opening a panel that hangs off the screen. This is the half the
+// corner alone cannot fix, and the reason the cap is computed rather than
+// left at 320.
+const SHORT = { width: 390, height: 500 };
+const squeezed = { top: 240, bottom: 266, left: 60, right: 150 };
+const squeezedAt = placeMenu(squeezed, SHORT, SIZE);
+check('with no room either way it takes the roomier side', squeezedAt.corner, 'up-left');
+check('and shortens to the room it has', squeezedAt.maxHeight, 228);
+check('so it still fits', fits(squeezed, SHORT), true);
+
+// A panel is never given a negative height, whatever the geometry says.
+check(
+	'a trigger flush against the fold gets no negative height',
+	placeMenu({ top: 0, bottom: 4, left: 0, right: 90 }, { width: 390, height: 4 }, SIZE).maxHeight,
+	0
+);
+
+// --- the catalog route ---
+
+const TYPES: Term[] = [term('t-dairy', 'Dairy', 'color-2'), term('t-produce', 'Produce', 'color-1')];
+const PLACES: Term[] = [term('l-1', 'Pantry', 'color-3'), term('l-fridge', 'Refrigerator', 'color-4')];
+
+const catalogRows = rowsFromCatalog(
+	[{ name: 'Sour Cream', type: 'Dairy', place: 'Refrigerator' }, { name: 'Ice', type: '', place: '' }],
+	[], TYPES, PLACES
+);
+
+// **This route fills the type and the shelf and the paste does not**, and the
+// difference is not an inconsistency: a catalog row *carries* both, and D63
+// already settled that picking one on the Add sheet reads them.
+// Found by name rather than by index — the rows are A–Z now, and an assertion
+// that reads `[0]` is asserting the sort by accident while claiming to assert
+// the fill.
+const sourCream = catalogRows.find((r) => r.name === 'Sour Cream')!;
+const ice = catalogRows.find((r) => r.name === 'Ice')!;
+
+check('a catalog row fills its type', sourCream.typeIds, ['t-dairy']);
+check('and its shelf', sourCream.locationId, 'l-fridge');
+check('never a source', sourCream.storeIds, []);
+check('a row that names neither fills neither', [ice.typeIds, ice.locationId], [[], '']);
+check('and every catalog row starts at one', sourCream.qty, '1');
+
+// The checklist hands these over grouped by type; the review is A–Z.
+check('the catalog route sorts by name too', catalogRows.map((r) => r.name), ['Ice', 'Sour Cream']);
+
+// A household that renamed *Dairy* gets nothing filled rather than something
+// wrong — absent rather than wrong, which is D30's instinct on a value.
+check(
+	'a renamed term fills nothing rather than the wrong thing',
+	rowsFromCatalog([{ name: 'Sour Cream', type: 'Dairy', place: '' }], [], [term('t-x', 'Dairy & Eggs', 'color-2')], [])[0].typeIds,
+	[]
+);
+
+// --- the checklist's grouping ---
+
+const grouped = catalogGroups([], TYPES, [
+	{ name: 'Milk', type: 'Dairy', place: 'Refrigerator' },
+	{ name: 'Apples', type: 'Produce', place: 'Pantry' },
+	{ name: 'Foil', type: '', place: 'Pantry' },
+	{ name: 'Gochujang', type: 'Condiments', place: 'Refrigerator' },
+]);
+
+// The household's own types, in its own order, then everything with nowhere to
+// go — the run list's storeless-group rule.
+check('cards follow the household types', grouped.map((g) => g.label), ['Dairy', 'Produce', 'Everything else']);
+check('the trailing group has no term and so no colour', grouped[2].term, null);
+check('a type this household does not have falls into it', grouped[2].entries.map((e) => e.name), ['Foil', 'Gochujang']);
+
+// **What the household already has is left out.** The checklist answers *what
+// should I add*, and offering something already on the shelf is the review's
+// amber row two steps early.
+check(
+	'what is already here is not offered',
+	catalogGroups([item('Milk', '1', '1', [])], TYPES, [{ name: 'Milk', type: 'Dairy', place: '' }]).length,
+	0
+);
+check(
+	'and the match is the same case-insensitive one',
+	catalogGroups([item('milk', '1', '1', [])], TYPES, [{ name: 'Milk', type: 'Dairy', place: '' }]).length,
+	0
+);
+
+// An empty card is a heading over an absence.
+check('a type with nothing left in it gets no card', grouped.every((g) => g.entries.length > 0), true);
+
+// **Every catalog row can be grouped**, which is the same guarantee D63 asserts
+// about its types and shelves — a row whose type is a typo would silently land
+// in *Everything else* for every household there has ever been.
+const REAL_TYPES: Term[] = SEED_TYPES.map((t, i) => term(`t-${i}`, t.name, t.ink));
+const realGroups = catalogGroups([], REAL_TYPES);
+const stranded = realGroups.find((g) => g.term === null);
+check(
+	'every catalog row with a type finds a seeded card',
+	(stranded?.entries ?? []).every((e) => e.type === ''),
+	true
+);
+check(
+	'and the whole catalog is accounted for',
+	realGroups.reduce((sum, g) => sum + g.entries.length, 0),
+	GROCERY_CATALOG.length
+);
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

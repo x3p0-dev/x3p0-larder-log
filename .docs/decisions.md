@@ -6001,3 +6001,299 @@ invisible rather than wrong.
   is exactly where this happens.
 - **A claim on an item somebody deletes mid-trip.** The cascade removes it; what
   the person holding it should be told is unanswered.
+
+---
+
+## D67. Bulk entry is two sources, one review, and one write
+
+**Date:** 2026-08-31 · **Design:** `.claude/docs/design/bulk-entry.md`
+
+Twenty items is a sample dataset and a real pantry is two hundred. That is the
+adoption wall, and the design document's own line about it is the honest one:
+it is **invisible from inside a design document**, because every screen this app
+has been judged on was judged with a pantry somebody had already entered.
+
+**Paste and the common-items checklist are both just *sources*. The review
+table is the destination, and nothing is saved until you press Add.**
+
+That single sentence is the whole structure, and it is what stops the two
+features being two features. A checklist that committed on its own would put
+thirty-one items into the pantry at 0 on hand — which, by the run list's own
+rule, is thirty-one rows on your shopping list on day one. Routing it through
+the same review the paste uses, where counts default to 1, avoids that without
+a special case anywhere.
+
+**No schema change**, which is the second thing to know about it. Fourteen
+tables, fourteen queries, **twenty-nine** mutations — the new one is `addItems`
+— and `db.migrations` is empty. A cross-cutting feature that costs one handler
+is a feature the data model was already shaped for.
+
+### The way in is a split primary
+
+The `Add item` primary grows a chevron. **Pressing the label opens the Add sheet
+exactly as it does today; pressing the chevron opens a menu holding the other
+routes.** The Add sheet carries none of it.
+
+Three rounds went into the sheet first — a ghost row under the header, a
+`One item / A list` segment in it, a footer link — and all three lost to the
+same objection once it was named: **the sheet is for one item, and every one of
+those makes it carry a permanent argument about many.** The sheet is for one
+item; the button is for choosing.
+
+**The default is deliberately absent from the menu.** Pressing the label already
+does it, and a menu that repeats its own button's action is a second way to do
+the same thing three pixels away.
+
+**Each half lights on its own, and that is the entire affordance** — two hit
+areas, one shape. Hovering the label must never light the chevron, and *open* is
+a state the **chevron** holds, because the button did not open anything. That
+rules out `PAGE_BUTTON_PRIMARY`'s `hover:opacity-90`: fading one half would show
+the page ground through it and put a seam down the middle of a control whose
+whole point is that it is one shape.
+
+**The hover is derived rather than looked up**, and it is the fifth component to
+go through custom properties for the reason the first four did: the resting fill
+is a stored value and therefore an inline style, and **an inline `background`
+beats any `hover:` class**. The design names `#332B22`, which is light's
+`drawer.raised` — one step lighter than ink. That token is no use in dark, where
+the primary is *cream* on a near-black ground and *away from the ground* (D45)
+means darker. So both ends come out of one `mixHex`, and the light end lands
+within three units of the number the design names.
+
+**One focus stop, not two.** The ring is `focus-within` on the wrapper and rings
+the whole control; the chevron is `tabIndex={-1}` and `↓` opens the menu from
+the label, which is the split-button pattern's own answer. Focus lands in the
+menu on open and returns to the label on Escape.
+
+### At 390 the chevron joins the pinned bar, not row 1
+
+**A knowing departure from the design's mobile board**, and it resolves the one
+number that document flags as most likely to be wrong.
+
+The board draws the split beside search on the reasoning that *the primary is
+already a 52px square at this width*. **The build has no such thing**: below
+`md` row 1 is the search field alone, and mobile's primary is the pinned bottom
+bar. Adding a second one up there would be three ways to add on one phone
+screen — and the 34px chevron cell it needed was under the 44px floor every
+other mobile control in these documents holds, with growing it costing search
+another 10px.
+
+The bar has a full row to spend. The chevron is 44 there, search is untouched,
+and the phone keeps one primary. The board's premise was false, not its
+arithmetic.
+
+### The review is a mode, and its commit bar says what it has not done
+
+**It replaces the content column exactly as the run list does.** Row 1 does not
+change; row 2 becomes `‹ Back to items` and the counts, in the slot the trip
+clause holds in list mode. A modal would be wrong here for the reason it is
+wrong for the run list: this is a reference you work through, not a question you
+dismiss to continue. **It is not in `useViewState` (D51)** — an app that reopens
+on a half-reviewed paste has forgotten what it is for.
+
+**`Set for checked` is the part that decides whether this works.** Bulk entry
+that leaves you assigning three chips per row two hundred times has not solved
+the wall it was built for.
+
+**Each menu *is* the batch's value** — amended 2026-09-01, on a real look at the
+screen, where the old behaviour read as *confusing* rather than as broken. Every
+ticked row is a term every row the band would write already carries; a press
+adds one to that set or takes it out, and **every target row then holds exactly
+what the menu shows**. So `Dairy` then `Baking` gives the batch both, and
+pressing `Dairy` again leaves it with `Baking` alone. A location's set holds one,
+because a shelf is one.
+
+**What that replaced was a toggle with a hidden direction.** A press added the
+term unless every checked row already carried it, in which case it took it off
+all of them — so what a press did depended on a fact about twenty rows that
+nothing on screen reported, and setting `Dairy` on a batch already holding
+`Baking` left the rows still disagreeing. **Two things fix it together**: the
+tick makes the direction visible, and writing the whole set makes one press
+enough to make every row agree. **Multi-select survives**, which a plain
+single-select would have cost — the batch really can be given two types.
+
+`checkedTerms` is a stronger claim than *some row has it*: a tick beside `Dairy`
+says the batch *is* Dairy, so it goes the moment one row stops being. **Nothing
+is ticked when nothing is ticked** — with no target rows there is no batch to
+describe, and an `every` over an empty list would otherwise claim every term in
+the menu at once. The menu **closes on a pick only for location**, which is the
+row chip's own rule and the rail quick-filter's: a set is built by pressing
+twice, and a menu that shut in between would have to be reopened for each one.
+
+**It was labelled *Set for all* and only ever touched the ticked rows** —
+amended 2026-09-01, on a real look at the screen. The handler always skipped a
+duplicate and always skipped anything unticked; the label was describing a reach
+the function declined to have. The label moved rather than the behaviour, since
+the behaviour is the one that is right: a screen whose whole left column is a
+column of ticks must not have a control that ignores them.
+
+**The table is A–Z** — amended 2026-09-01. The sort happens **once, when the
+batch arrives**, never derived from the live rows: the order is a property of
+the batch, and it is what puts two lines both saying *Butter* next to each other
+where they can be seen. `bulkWritable` is the one rule `setForChecked`,
+`bulkSummary` and `bulkDrafts` all read, so the button's number and what the
+button writes cannot disagree.
+
+**A picker opens where there is room, and where that is gets measured.** The
+review's two trigger groups both *wrap*, so where a trigger sits is decided by
+the content beside it rather than by the window — which means a static alignment
+is wrong in one direction or the other at every width. `placeMenu` in
+`shared/menuPlacement.ts` takes the trigger's box and the viewport and returns a
+corner and a height: it flips **up** only when there is not room below and there
+is more room above, hangs from whichever side **spills less**, and **shortens the
+panel to the room it has** rather than letting it run past the fold. It measures
+the trigger and never the panel, because the panel's width is a constant and its
+height has a cap. The clipping ancestor is the content column's
+`overflow-x-hidden`, which is load-bearing — the root cannot carry it without
+breaking the drawer's `sticky` — so the popover moved, not the wrapper.
+
+**The name is not editable on the review, and that is decided rather than
+missing.** It was built on 2026-09-01 — every row a field, duplicates included,
+with `findExisting` re-run on each keystroke so a row could be renamed out of
+its own collision — and **taken out the same day**. The review answers *which of
+these, and with what tags*; correcting a word belongs to the Add sheet, which is
+one screen away and is the surface that already asks it. Taking it out also
+restored `existing` as the one field on a row that nothing can change, which is
+what lets the amber row be read once rather than re-derived.
+
+**If it comes back, two rules came with it and are worth keeping.** The tick has
+to follow *writability and only writability* — a row that stops being a
+duplicate ticks itself because the reason it was unticked has gone, while one
+that was already writable keeps whatever was chosen. And `bulkWritable` has to
+refuse a **blank** name as well as a duplicate: `addItems` refuses a nameless
+draft and refuses the **whole call** with it, so one emptied field would take
+twenty-one good rows down and read as a broken server.
+
+**A duplicate arrives unchecked, in amber, showing what you already have** —
+**`In Pantry` beside its name**, *4 on hand · low at 6* under it, its
+real tags rather than dashed chips, and no count field, because nothing is going
+to be written to it. **Amber because amber is "hold on" and crimson is "gone"**,
+and nothing here is being destroyed. Its tick column stands empty and holds its
+width, which is the `NOT YET` row's rule: a row that loses its box must not slide
+its name 36px left.
+
+**The badge is beside the name and there is no `New` on the other rows** —
+amended 2026-09-01. It had been a 120px column at the row's far end, which put
+the answer to *have I got this already* a whole row's width from the word it
+answers about, and made every row reserve space for a marker two of them would
+use. And *New* said nothing: **new is what a row on this screen is unless it
+says otherwise**, so a marker for it was on twenty rows to distinguish them from
+two. A marker earns its place by being the exception. The wording moved with it
+— `Already here` is true of the row you are looking at as much as of the pantry,
+and **naming the pantry is what makes it an answer rather than a label**. Two
+words rather than three: a pill beside a name that truncates should spend as
+little of the line as it can.
+
+**The name is the only left-aligned thing, and that is what right-aligns the
+rest.** It takes the row's slack (`flex-1`); the stepper and the chip column are
+fixed widths after it, so their edges line up down the table without any of them
+knowing what the others measure. The chips are `justify-end` above `lg` so the
+column ends at the row's edge rather than fraying; below `lg` they follow the
+stepper on their own line, where left is the reading order and there is nothing
+to line up with.
+
+**A ticked duplicate is still never written.** The tick is belt and braces on
+top of the real guard in `bulkDrafts`, because a row with no count field and no
+chips creating a second *Butter* would be a write out of a control nobody could
+see.
+
+### The paste guesses nothing; the catalog reads what it carries
+
+**The parse reads a name, a count and a size, and never a location, store or
+type.** A paste cannot know them.
+
+**It works from the end**, which is the only reading that survives the four
+shapes a real list carries. `Butter 1 lb 2` read left to right is an item called
+*Butter* with a size of 1 and a count of *lb*; read end-first it is the row
+somebody meant. A bare trailing number is the count, a number followed by a unit
+word is the size, and commas are separators and nothing more — a list typed into
+Notes uses neither punctuation consistently. **It never claims the whole line**:
+`12` is an item called *12*, because popping a token that would leave no name is
+how a parse silently deletes somebody's row.
+
+**The checklist route fills the type and the shelf and the paste does not, and
+that is not an inconsistency.** A pasted line is a word somebody typed; a
+catalog row *carries* a type and a place, and D63 already settled that picking
+one on the Add sheet reads both. Matched by name against terms that already
+exist, so a household that renamed *Dairy* gets nothing rather than something
+wrong — and **never a source**, because where you buy a thing is one household's
+own vocabulary (D40).
+
+**The boards draw filled type chips on pasted rows.** The design's own prose and
+its board note both say the opposite twice, so the note wins and the drawn chips
+are the board being decorative.
+
+**What the household already has is left out of the checklist.** It answers
+*what should I add*, and offering something already on the shelf is the review's
+amber row two steps early — thirty-one ticks with twelve refused is a worse
+screen than a shorter list.
+
+### One write, and no undo
+
+`addItems` is `restockItems`' construction for `restockItems`' reason:
+**every draft is resolved before anything is written.** `id()` is not a foreign
+key, so that loop is the only thing between a bogus location and a row pointing
+at somebody else's household — and a refusal has to arrive with the table
+exactly as it was, because the table is where the typing is. One clock read for
+the whole run, so rows that arrived together say so. Capped at `BULK_MAX` (200).
+
+**There is no undo, and the design's own open question is answered here.** D36
+governs *records that go away*, and nothing here does. What a run of twenty-two
+lacks that a single add has is **visibility** — one new card is obvious and
+twenty-two at once is a wall — so it arms the **plain** toast (`lead` alone, no
+control) rather than the actionable one. Making it undoable would mean a second,
+*destructive* bulk mutation written to reverse a constructive one, which is a
+bigger decision than this screen gets to make.
+
+### The empty larder keeps both routes spelled out
+
+`+ Add item` in ink, and beneath it *Add several at once ›* as a pressable
+sentence rather than a button. **A deliberate second idiom for one job**, and it
+is allowed because this is the one screen in the app with room and nothing else
+competing for it — and the screen where somebody is likeliest to have two
+hundred things to enter and no idea the app can take them. The argument for it
+is only as good as that screen; worth revisiting if the app grows another empty
+state.
+
+### `Save and add another` was built and removed
+
+The design asks for a second commit on the Add sheet — save, clear, stay open,
+with the terms carrying over and the header counting the run. **It was built
+whole and taken out the same day**, on one look at it: three controls in a 480px
+footer, and a fourth full-width row at 390, is a cramped sheet. The rules it
+forced are worth keeping on the record — the terms carry and the item clears,
+the header is the confirmation rather than a toast, and *Cancel* has to relabel
+to *Done* once anything is saved — but the sheet is unchanged and
+`ItemSheet.tsx` is byte-identical to what it was before this work.
+
+### Rejected
+
+- **Any version that lives in the Add sheet** — a ghost row, a segmented header,
+  a footer link. Three rounds, one objection: the sheet is for one item.
+- **A checklist that commits on its own.** Thirty-one items at 0 on hand is
+  thirty-one rows on your shopping list on day one.
+- **A looser duplicate match.** Name-only and exact, which is autofill's rule. A
+  substring match would start refusing rows somebody meant, and *Butter* against
+  *Salted Butter* is the case it would get wrong in both directions.
+- **A `Set for checked` toast or confirm.** Setting a location on twenty-two unsaved
+  rows is not a record yet, so by *undo what comes back, confirm what doesn't*
+  it earns neither — and the chips are visibly on twenty-two rows a moment
+  after the press.
+- **A centred confirm shell at 390 for the paste box.** *Destructive actions*
+  centres a confirm because a confirm is a question. This is an entry surface
+  with a keyboard about to cover half the screen, so it takes the Add sheet's
+  shape.
+
+### Open
+
+- **Two lines naming the same thing** make two rows, both `NEW`, and both get
+  written. The duplicate check looks at the pantry, not at the paste.
+- **The duplicate check is name-only** and will not catch *Butter* against
+  *Salted Butter*. Nothing on the screen says so.
+- **Whether `Save and add another` comes back**, and in what shape. The footer
+  is the constraint, not the idea.
+- **Should the chevron menu's row order flip at 390?** Paste leads on desktop;
+  on a phone the checklist is the plausible one. Unchanged for now.
+- **Barcode**, still not drawn. It needs a product database and a camera
+  permission flow, and it fails differently from everything here: silently, on a
+  bad lookup.

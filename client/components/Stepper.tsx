@@ -47,6 +47,12 @@ export function Stepper({ value, onValue, label, compact, dark, theme }: {
 	 * two steppers are the heroes of their section. On the put-away sheet every
 	 * row has a name to read and there are several of them, so the stepper is a
 	 * peer of its row rather than the point of it.
+	 *
+	 * **116 below `lg`, and only the width moves.** On a phone the row form
+	 * shares its line with a name that has to stay readable, so the control
+	 * gives back what it can — 16px of it, from the two cells. **The 44 does not
+	 * move**: it is the touch floor, which is the whole of why *a little
+	 * smaller* is a width and not a scale.
 	 */
 	compact?: boolean;
 	dark: boolean;
@@ -61,7 +67,7 @@ export function Stepper({ value, onValue, label, compact, dark, theme }: {
 	const down = useHoldRepeat(() => step(-1));
 	const up = useHoldRepeat(() => step(1));
 
-	const cell = `flex items-center justify-center shrink-0 ${compact ? 'w-[42px]' : 'w-11'} ${PAGE_STEPPER_CELL}`;
+	const cell = `flex items-center justify-center shrink-0 ${compact ? 'w-[38px] lg:w-[42px]' : 'w-11'} ${PAGE_STEPPER_CELL}`;
 
 	/*
 	 * Two complete literals rather than a `dark:` variant. Tailwind's `dark:`
@@ -79,7 +85,7 @@ export function Stepper({ value, onValue, label, compact, dark, theme }: {
 			aria-label={label}
 			class={
 				'flex items-stretch overflow-hidden '
-				+ (compact ? 'w-[132px] h-11 rounded-[11px] shrink-0 ' : 'h-14 rounded-[13px] ')
+				+ (compact ? 'w-[116px] lg:w-[132px] h-11 rounded-[11px] shrink-0 ' : 'h-14 rounded-[13px] ')
 				+ `${PAGE_FIELD} ${dark ? PAGE_FIELD_HALO_WITHIN_DARK : PAGE_FIELD_HALO_WITHIN}`
 			}
 		>

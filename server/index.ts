@@ -11,6 +11,7 @@ import { isSourceKind, sourceGroupWord, toSourceKind } from '../shared/source';
 import { toListRule } from '../shared/listRule';
 import { normalizeSeason } from '../shared/season';
 import { normalizeSize } from '../shared/size';
+import { BULK_MAX } from '../shared/bulkEntry';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import {
 	ADMIN_IDS_VAR, adminWritesHeldFor, cumulativeByMonth, isDormant, isWithinDays,
@@ -1858,6 +1859,110 @@ export default capsule({
 				ctx.invalidate('pantry', 'households');
 
 				return { id: item.id };
+			}
+		),
+
+		/**
+		 * A whole review table, written at once.
+		 *
+		 * **The bulk-entry commit** (D67). A pasted list and the common-items
+		 * checklist both land on one review, and this is the only thing that writes
+		 * from it — twenty-two items that mean one act, from one press, so half of
+		 * them landing is the state it exists to prevent.
+		 *
+		 * `restockItems`' construction, for `restockItems`' reason: **every draft is
+		 * resolved before anything is written**. `id()` is not a foreign key, so
+		 * that loop is the only thing standing between a bogus location and a row
+		 * pointing at somebody else's household — and a refusal has to arrive with
+		 * the table still exactly as it was, because the table is where the typing
+		 * is.
+		 *
+		 * **There is no undo**, and that is a decision rather than an omission.
+		 * D36 governs records that go away; nothing here does. What the client arms
+		 * instead is a plain toast — the run of items is visible in the grid behind
+		 * it, and a bulk *un*-write would be a second destructive mutation built to
+		 * reverse a constructive one.
+		 */
+		addItems: mutation(
+			async (
+				ctx,
+				householdId: string,
+				drafts: {
+					name: string;
+					locationId: string;
+					qty?: string;
+					threshold?: string;
+					size?: string;
+					unit?: string;
+					typeIds?: string[];
+					storeIds?: string[];
+				}[]
+			) => {
+				const membership = await requireCapability(ctx, householdId, 'item:write');
+
+				if (! Array.isArray(drafts) || drafts.length === 0) {
+					throw new AccessError('There is nothing to add.');
+				}
+
+				if (drafts.length > BULK_MAX) {
+					throw new AccessError('That is more than one list.');
+				}
+
+				// Resolve everything first, exactly as the put-away does. A bad row
+				// refuses the whole call and leaves the review untouched, which is
+				// what lets the table say *nothing is written until you press Add*
+				// and still be true after a failure.
+				const resolved = [];
+
+				for (const draft of drafts) {
+					if (! isValidName(draft.name)) throw new AccessError('Every item needs a name.');
+
+					assertInHousehold(await ctx.db.locations.get(draft.locationId), membership, 'That location');
+
+					resolved.push({ draft, size: normalizeSize(draft.size, draft.unit) });
+				}
+
+				// One clock read for the whole list: rows that arrived together should
+				// say so, and two calls can straddle a millisecond. It is the same
+				// trade `createHousehold` makes across its fifteen seeded terms —
+				// staggering them would imply an order that is not real.
+				const at = stampFrom(Date.now());
+
+				for (const row of resolved) {
+					const item = await ctx.db.items.insert({
+						householdId: membership.householdId,
+						name: normalizeName(row.draft.name),
+						locationId: row.draft.locationId,
+						qty: normalizeQty(row.draft.qty),
+						threshold: normalizeQty(row.draft.threshold),
+						size: row.size.size,
+						unit: row.size.unit,
+						// Nothing this route can set, and each is `''`/false for a
+						// reason the review makes plain: it has a name, a count, a
+						// shelf and three chips, and no control for anything else.
+						offShoppingList: false,
+						listRule: '',
+						seasonFrom: '',
+						seasonTo: '',
+						notes: '',
+						addedAt: at,
+						changedAt: at,
+					});
+
+					await syncJoins(
+						ctx.db,
+						membership.householdId,
+						item.id,
+						row.draft.typeIds ?? [],
+						row.draft.storeIds ?? []
+					);
+				}
+
+				// `households` because the switcher shows an item count — the same
+				// pair `addItem` invalidates, for the same reason.
+				ctx.invalidate('pantry', 'households');
+
+				return { count: resolved.length };
 			}
 		),
 

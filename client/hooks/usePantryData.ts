@@ -82,6 +82,16 @@ export type PantryApi = {
 	 * it and the server stamps now.
 	 */
 	addItem: (draft: ItemDraft, stamps?: Stamps) => Promise<string | null>;
+	/**
+	 * A whole review table, written once (D67).
+	 *
+	 * One call rather than a loop of `addItem`, for `restockItems`' reason: a
+	 * bulk commit is many writes that mean one act, and half of them landing is
+	 * the state it exists to prevent. Resolves the number written, or `null` when
+	 * the server refused — which leaves the review exactly as it was, because
+	 * that is where the typing is.
+	 */
+	addItems: (drafts: readonly ItemDraft[]) => Promise<number | null>;
 	/** True when the server accepted the edit. False leaves the sheet open. */
 	updateItem: (id: string, patch: Partial<ItemDraft>) => Promise<boolean>;
 	adjustQty: (id: string, delta: number) => Promise<void>;
@@ -175,6 +185,7 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 	const rawCreateHousehold = useMutation<[string, string, SourceMix], { householdId: string }>('createHousehold');
 	const rawUpdateHousehold = useMutation<[string, { name?: string; defaultThreshold?: string; ink?: string }], void>('updateHousehold');
 	const rawAddItem = useMutation<[string, ItemDraft & Stamps], { id: string }>('addItem');
+	const rawAddItems = useMutation<[string, ItemDraft[]], { count: number }>('addItems');
 	const rawUpdateItem = useMutation<[string, string, Partial<ItemDraft>], void>('updateItem');
 	const rawAdjustQty = useMutation<[string, string, number], void>('adjustQty');
 	const rawRestockItems = useMutation<[string, RestockEntry[]], { count: number }>('restockItems');
@@ -275,6 +286,12 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 			const result = await run(() => rawAddItem(currentHouseholdId, { ...draft, ...stamps }));
 			return result ? result.id : null;
 		}, [run, rawAddItem, currentHouseholdId]),
+
+		addItems: useCallback(async (drafts) => {
+			const result = await run(() => rawAddItems(currentHouseholdId, [...drafts]));
+
+			return result ? result.count : null;
+		}, [run, rawAddItems, currentHouseholdId]),
 
 		// A refusal has to be distinguishable from success: the edit sheet stays
 		// open on false so the typing survives, the way `addItem` keeps its draft.

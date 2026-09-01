@@ -59,6 +59,18 @@ would be a confident sentence about a biased sample. See *Restock — the trip
 that ends (D64)*, *The list override is a tri-state (D65)* and *Claims are
 shared (D66)* below.
 
+**Built and unpublished: bulk entry (D67).** The adoption wall — twenty items is
+a sample dataset and a real pantry is two hundred. Built from
+`.claude/docs/design/bulk-entry.md` on 2026-08-31. **No schema change**:
+fourteen tables, fourteen queries, **twenty-nine** mutations, the new one being
+`addItems`, and `db.migrations` empty. Two sources — a paste dialog and a
+common-items checklist — feeding **one review table**, and nothing is written
+until Add. The `Add item` primary is a **split button** now, the app's first.
+**`Save and add another` was built and removed the same day** on Justin's own
+look at it: the sheet's footer is too cramped for a third control, and
+`ItemSheet.tsx` is byte-identical to what it was before the work. See *Bulk
+entry — the adoption wall (D67)* below.
+
 **D64 and D65 have been clicked and both work** — a real session on 2026-08-31,
 on the first pass, which no phase of this size has managed before; **390 and a
 twenty-row put-away are what it did not cover**. **D66 has been clicked in part**
@@ -227,11 +239,11 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, **fourteen** live queries, and **twenty-eight** mutations
+`.docs/data-model.md`, **fourteen** live queries, and **twenty-nine** mutations
 across **fourteen** tables. The `restocks`, `trips` and `claims` tables,
-`items.listRule` and four mutations are restock's (D64, D65, D66) and are
-**unpublished** — built and verified locally, not yet in a
-version. The schema is
+`items.listRule` and five mutations are restock's and bulk entry's (D64, D65,
+D66, D67) and are **unpublished** — built and verified locally, not yet in a
+version. **Only D64–D66 cost schema**; D67 added a handler and nothing else. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -3305,6 +3317,433 @@ across the trip; leaving a household taking the leaver's claims; and
 
 **Nobody has clicked it**, and this is the one that most wants two browsers open.
 
+### Bulk entry — the adoption wall (D67) — 2026-08-31
+
+`.claude/docs/design/bulk-entry.md`, drawn on
+`.claude/docs/design/larderlogbulkentrydesign.html` — eleven boards on three
+pages, light theme. **No schema change**: fourteen tables, fourteen queries,
+**twenty-nine** mutations — `addItems` — `db.migrations` empty and
+`/api/status` still the only endpoint. A cross-cutting feature that costs one
+handler is a feature the data model was already shaped for.
+
+**Paste and the common-items checklist are both just *sources*. The review
+table is the destination, and nothing is saved until you press Add.** That is
+the whole structure and it is what stops the two features being two features: a
+checklist that committed on its own would put thirty-one items into the pantry
+at 0 on hand, which by the run list's own rule is thirty-one rows on your
+shopping list on day one.
+
+- **The `Add item` primary is a split button, the app's first.** The label opens
+  the Add sheet exactly as it did; the chevron opens a menu holding the other
+  two routes. **The Add sheet carries none of it** — three rounds went into
+  fitting *many* into the sheet and all three lost to one objection: the sheet
+  is for one item, and the button is for choosing. **The default is deliberately
+  absent from the menu.**
+- **Each half lights on its own**, which rules out `PAGE_BUTTON_PRIMARY`'s
+  `hover:opacity-90`: fading one half shows the ground through it and puts a
+  seam down a control whose whole point is being one shape. So it goes through
+  `--split-hover` / `--split-press` — **the fifth time this app has hit *an
+  inline `background` beats any `hover:` class*** — and the hover is derived
+  with `mixHex` rather than looked up, because the design's `#332B22` is light's
+  `drawer.raised` and dark's primary is *cream* (away from the ground means
+  darker there, D45). The light end lands within three units of the drawn number.
+- **One focus stop.** `focus-within` on the wrapper, the chevron `tabIndex={-1}`,
+  `↓` opens the menu from the label, Escape hands focus back.
+- **At 390 the chevron joins the pinned bottom bar, not row 1**, and that is a
+  knowing departure. The mobile board draws it beside search on the reasoning
+  that *the primary is already a 52px square at this width* — **which the build
+  does not have**: below `md` row 1 is search alone and mobile's primary is the
+  bar. A second one up there is three ways to add on one phone screen. It also
+  answers the number the design flags as most likely to be wrong: the 34px
+  chevron cell was under the 44px floor, and down here there is a full row to
+  spend, so the chevron is 44 and search is untouched.
+- **The review replaces the content column exactly as the run list does.** Row 1
+  does not change; row 2 becomes `‹ Back to items` and the counts, in the trip
+  clause's slot. **Not in `useViewState` (D51)** — an app that reopens on a
+  half-reviewed paste has forgotten what it is for. `listMode` and `bulkMode`
+  are mutually exclusive, because row 2 has one left-hand exit.
+- **`Set for checked` is the part that decides whether this works.** Bulk entry that
+  leaves you assigning three chips per row two hundred times has not solved the
+  wall it was built for. **Location replaces and the other two toggle** — the
+  chip row's single-versus-multi rule applied to a column — and the toggle
+  direction reads what is already true of every row, which is the only way *Set
+  for all* is also *unset for all*.
+- **A duplicate arrives unchecked, in amber, showing what you already have.**
+  Its tick column **stands empty and holds its width** (the `NOT YET` rule: a
+  row that loses its box must not slide its name 36px left), and a ticked
+  duplicate is still never written — `bulkDrafts` is the real guard and the tick
+  is belt and braces.
+- **The parse works from the end**, which is the only reading that survives
+  `Butter 1 lb 2` — left to right that is an item called *Butter* sized 1 with a
+  count of *lb*. Commas are separators and nothing more. **It never claims the
+  whole line**: `12` is an item called *12*, because popping a token that would
+  leave no name is how a parse silently deletes a row.
+- **The paste guesses no shelf, shop or type; the checklist reads the two the
+  catalog carries.** Not an inconsistency — a pasted line is a word somebody
+  typed, a catalog row *carries* a type and a place, and D63 already settled
+  that picking one on the Add sheet reads both. **The boards draw filled type
+  chips on pasted rows and the design's own prose says the opposite twice**, so
+  the prose wins.
+- **The checklist leaves out what the household already has.** It answers *what
+  should I add*; thirty-one ticks with twelve refused is a worse screen than a
+  shorter list.
+- **`addItems` is `restockItems`' construction** — every draft resolved before
+  anything is written, one clock read for the run, capped at `BULK_MAX` (200).
+  **A refusal leaves the table exactly as it was**, which is what *nothing is
+  written until you press Add* has to mean on the way out as well as in.
+- **No undo, and that answers the design's own open question.** D36 governs
+  records that go away and nothing here does; what a run of twenty-two lacks is
+  *visibility*, so it arms the **plain** toast (`lead` alone, no control). An
+  undo would mean a second, destructive bulk mutation written to reverse a
+  constructive one.
+- **The empty larder keeps both routes spelled out** — the ink primary, then
+  *Add several at once ›* as a pressable sentence. A deliberate second idiom,
+  allowed because this is the one screen with room; worth revisiting if the app
+  grows another empty state.
+- **`ModalShell` gained `sheet`** — a bottom sheet below `md`. *Destructive
+  actions* centres a confirm because a confirm is a question; this is an entry
+  surface with a keyboard about to cover half the screen. **A sheet fades and
+  does not scale**, because the card's 96% entry pulls a bottom sheet away from
+  the edges it is flush with.
+
+**`Save and add another` was built whole and removed the same day**, on Justin's
+own look at it: three controls in a 480px footer and a fourth full-width row at
+390 is a cramped sheet. **`ItemSheet.tsx` is byte-identical to what it was
+before this work** — the removal is complete rather than hidden behind a flag.
+The rules it forced are on the record in D67 if it comes back: the terms carry
+and the item clears, the header is the confirmation rather than a toast, and
+*Cancel* has to relabel to *Done* once anything is saved.
+
+**Verified without a browser**: typecheck clean, **807 assertions** (61 new,
+covering all four parse shapes plus the end-first case that separates the rule
+from any other reading, the glued unit, plurals, the line the parse must not
+claim, the cap being real in `parseList` and deliberately *not* in
+`countLines`, the duplicate arriving unchecked, what a commit carries and what
+it must not, the catalog route's type and shelf against the paste's absence of
+both, and the checklist's grouping including that every catalog row finds a
+seeded card) — and **all four new rules were proved by mutation**: reading the
+parse left-to-right fails 16, a substring duplicate check fails 1, writing a
+ticked duplicate fails 1, and offering what the household already holds fails 2.
+**One of those mutations initially passed**, which found a real gap: the
+duplicate test only pinned one direction, and *Butter* against a pantry holding
+*Salted Butter* is the half it was missing. Both directions are asserted now.
+
+The artifact is fourteen tables / fourteen queries / twenty-nine mutations /
+`db.migrations: []`, and **`.docs/data-model.md` was diffed against it** — zero
+tables, columns, mutations or queries missing. **335 class literals across six
+files** plus **both new control-style constants' twelve utilities** diffed
+against the freshly built `.spacefast/zero/public/zero.css` by unescaping the
+sheet's own selectors — printed, never hand-written, and proved to find a real
+class and refuse a nonsense one — with every `md:` override confirmed by **byte
+offset** to land after its base.
+
+The **real handler** was driven over `POST /__spacefast/zero/run` on a throwaway
+`sf dev --port 4199`: the design's own three rows written at once and read back
+with their sizes, units and join rows intact and **one shared stamp across the
+run**; an empty payload and a non-array both refused; **a nameless row and a
+bogus location each refusing the whole call with the good rows beside them left
+unwritten**, which is the resolve-first guarantee measured rather than asserted;
+201 rows refused; `qty: "abc"` normalized to `0` and bogus type and store ids
+dropped while the row still landed; a **cross-household location** refused; and
+a **viewer** refused with D20's own sentence.
+
+**Nobody has clicked it.** Every interesting part is press-time: the split's two
+halves, the chevron menu, the paste sheet's parse, `Set for checked` across
+twenty-two rows, and the review at 390 where the row stacks two-deep. **To see
+it locally**: the chevron beside *Add item*, or `?demo` then the chevron, or a
+fresh household's empty state for the spelled-out pair.
+
+#### Six changes from the first look at it — 2026-09-01
+
+**Client and `shared/` only**: no schema change, no handler moved — fourteen
+tables, fourteen queries, twenty-nine mutations, `db.migrations` empty, the
+artifact byte-for-byte the shape D67 left it.
+
+- **The paste route is the Add / Edit sheet now, not a centred dialog.**
+  `PasteListDialog` is **`PasteListSheet`** — same scrim, same right-edge
+  geometry, same gradient, same header and sticky footer, the field filling the
+  panel on desktop and fixed at 220px below `md`. `PutAwaySheet` already made
+  this move; the argument is stronger here, because **this surface and the Add
+  sheet are two answers to one question**, reached from the two halves of one
+  split button. A card floating in the middle of the screen beside a panel
+  hinged to the right edge is that button saying they are different kinds of
+  act. The parse sentence moved **above** the field — every other hint on this
+  board reports on something already typed and this one is a rule you need
+  before the first line — and the primary wears an **arrow rather than the
+  board's check**, because every other primary there writes something and this
+  one hands the lines to the review. **`ModalShell`'s `sheet` prop is deleted**:
+  this was its only caller. **What the move gives up** is `ModalShell`'s focus
+  trap and its focus return, neither of which `ItemSheet` or `PutAwaySheet` has
+  either — worth fixing on all three at once or not at all.
+- **`Set for all` is `Set for checked`**, and **only the label moved**. The
+  handler always skipped a duplicate and always skipped anything unticked, so
+  the old label described a reach the function declined to have — on a screen
+  whose entire left column is ticks.
+- **The review card does not clip its own popovers.** `overflow-hidden` was
+  there to hold the header band's fill inside the radius and it cropped every
+  picker, from the band and from every row, at the card's edge — **the console
+  Members card's bug exactly**, and the same price: the band now rounds its own
+  `rounded-t-[19px]` (the card's 20 less its 1px border). **Where a picker opens
+  is measured, not assumed** — see below; the static breakpoint rule that first
+  replaced the clipping was wrong in both directions.
+- **The table is A–Z, sorted once when the batch arrives** — the order is a
+  property of the batch rather than something recomputed from the live rows, and
+  it is what puts two lines both saying *Butter* next to each other where they
+  can be seen. `key` stays tied to the **source** line, so the second of them is
+  still `line-7` however far up it sorted.
+- **The commit bar says *Nothing is saved until you press Add*.**
+- **`bulkWritable` is the one rule `setForChecked`, `bulkSummary` and
+  `bulkDrafts` all read**, so the button's number and what the button writes
+  cannot disagree. The row's fixed `md:h-[62px]` became a `min-h`.
+
+**The name was made editable and reverted the same day** — every row a field,
+duplicates included, with `findExisting` re-run per keystroke so a row could be
+renamed out of its own collision. **The review answers *which of these, and with
+what tags*; correcting a word belongs to the Add sheet**, one screen away. It
+also restored `existing` as the one field on a row nothing can change. **Two
+rules are worth keeping if it returns** and are written up in D67: the tick must
+follow *writability and only writability*, and `bulkWritable` must refuse a
+**blank** name as well as a duplicate — `addItems` refuses a nameless draft and
+refuses the **whole call** with it, so one emptied field would take twenty-one
+good rows down and read as a broken server.
+
+**Verified without a browser**: typecheck clean, **812 assertions**, and the
+A–Z sort **proved by mutation** — dropping it fails 3, one of them the key that
+must not move with it. Every class literal in the touched files diffed against
+the freshly built `.spacefast/zero/public/zero.css` by unescaping the sheet's
+own selectors — printed, never hand-written, proved to find a real class and
+refuse a bogus one — with `md:left-auto`, `md:right-0` and `md:py-2.5` confirmed
+by **byte offset** to land after their bases.
+
+**Nobody has clicked any of it.** The pickers near the card's edges want a
+pointer.
+
+#### And four more, from the second look — 2026-09-01
+
+**Client only**: the artifact is unchanged again — fourteen tables, fourteen
+queries, twenty-nine mutations, `db.migrations: []`.
+
+- **The tick is a gutter, and every line hangs off it.** The row was one flex
+  line that wrapped, so a wrapped line began *under the checkbox* — which reads
+  as belonging to the row above, because **a checkbox is a column, not the first
+  word of a paragraph**. It is a fixed 22px span now with everything else in one
+  column beside it, at every width. The tick takes **two derived offsets**: none
+  when the row is stacked, where the name is the first thing in the column and
+  `min-h-[22px]` makes that line a tick's height whatever the name measures, and
+  `lg:mt-[11px]` — (44 − 22) / 2 — when the row is one line and the column's
+  height is the stepper's.
+- **The count is the app's stepper**, in the row form it was extracted for
+  (D64), which brings the Add sheet's own field treatment because that is what a
+  `Stepper` is made of. It was the one number in the app you could not press.
+  **That moved the row's horizontal layout from `md` to `lg`**: 132px where a
+  bare field was 76, and at 768 with the rail beside it the fixed columns left
+  the name about 90px of a column it has to be readable in.
+- **Every control's states, checked against the ground it is painted on.** Three
+  real defects, and two of them are the console sweep's own bug on a new screen:
+  - **The three *Set for checked* triggers had a dead hover and an invisible open
+    state.** `PAGE_BUTTON_QUIET` hovers to `surface-alt` and opens to
+    `surface-alt`; the header band **is** `surface-alt`. `PAGE_BUTTON_QUIET_SUNK`
+    and `PAGE_BUTTON_QUIET_ON_SUNK` move that one token to `surface` — on the
+    lighter of the two grounds, away means up (D45).
+  - **The tick had no hover at all.** `LIST_TARGET` is a focus ring and nothing
+    else, which is right where it came from — on the run list *the whole row is
+    the checkbox*, so the row's hover is the box's. Here it is a 22px button in
+    a gutter with nothing behind it. `CARD_CHECK_TARGET` gives it a 30px well
+    that **occupies 22** (`p-1 -m-1`), which is `CARD_CHEVRON`'s trick and its
+    warning.
+  - **Four ring offsets named a colour that was not behind them** — both row
+    chips (`canvas`, on a `surface` card), the commit bar's primary and the
+    band's triggers (`canvas`, on `surface-alt`). `CARD_CHIP_ADD`,
+    `CARD_CHIP_ON`, `PAGE_BUTTON_PRIMARY_ON_SUNK` and `PAGE_FOCUS_ON_SUNK`.
+    **The run list's trip bar had the identical defect on the identical ground**
+    and was fixed with it — its *ghost* had always had the offset right, which is
+    what makes the pair legible as a mistake rather than a choice.
+- **`PAGE_FIELD` gained a hover, so every field in the app did.** The border
+  steps one shade toward the text — darker in light, brighter in dark, the run
+  segment's rule. **A border rather than a fill, because a field cannot use
+  D45**: `bg-surface` is the field's identity, and this style sits on the item
+  sheet's gradient, on a `surface` card and inside a stepper, three grounds no
+  single fill moves away from. **A field was the one control in the app with
+  nothing under the pointer** — a caret, a focus halo, a selection colour and no
+  hover — which reads as inert on any surface holding several. It survives the
+  name field's removal because it belongs to the field, not to that screen; the
+  review still wears it on every stepper.
+- **And the whole field family now agrees on one `transition` utility.** Two
+  `transition-*` classes on one element is the coin toss the console sweep
+  warns about — both set `transition-property` and **sheet order** decides. The
+  halos are *designed* to be worn with `PAGE_FIELD` at eight call sites, so
+  leaving one on `transition-shadow` would have made the pair a toss at every
+  one. **`PAGE_INPUT` had that bug already**, against `PAGE_FIELD_HALO_WITHIN` on
+  the top bar's search, and it is fixed here too.
+
+**Verified without a browser**: typecheck clean, 812 assertions, the artifact
+unchanged, 270 utilities across the two touched components and the thirteen
+control styles diffed against the freshly built `zero.css` by unescaping the
+sheet's own selectors — printed, never hand-written, proved to find
+`hover:border-ink` and refuse `hover:border-inkk` — with `hover:border-ink`,
+`lg:flex-row`, `lg:w-[300px]`, `xl:w-[340px]` and `lg:py-2.5` each confirmed by
+**byte offset** to land after the base it overrides.
+
+**And a ground-aware check over every control on the screen**, resolving
+each one's painted ancestor against its hover target and its ring offset: **0
+flagged**, proved to catch both classes of defect by injecting each in turn.
+**It reported two false positives first, and the cause is the standing trap** —
+its extractor read *comments* as source, so an apostrophe in `the field's
+identity` opened a string and swallowed the class list. **Sixth time a tokenizer
+in this project has read prose.** Strip comments before reading source, every
+time.
+
+**Nobody has clicked it.** All four are pointer-and-width work: the wrap at 390
+and between `md` and `lg`, the stepper in a row, and every hover the check can
+only prove exists. **The name field went in with these four and came out again
+the same day** — see the note above; what it leaves behind is the row's gutter,
+which was worth having on its own.
+
+#### A picker opens where there is room, and that is measured — 2026-09-01
+
+**Client, plus one `shared/` module**: the artifact is unchanged.
+`shared/menuPlacement.ts` is not imported by the capsule.
+
+**Two clipping reports, one cause.** At 390 the review's right-most pickers were
+cut off at the side of the screen, and a picker on the last row was cut off at
+the bottom. **The clipping ancestor is `Pantry.tsx`'s content column**, which
+carries `overflow-x-hidden` deliberately — the root cannot have it, because
+setting one overflow axis makes the other compute to `auto` and leaves the
+drawer's `position: sticky` with nothing to stick to. **And that is why both
+axes clip**: `overflow-x: hidden` gives `overflow-y: auto` by the same rule.
+**Do not fix this by loosening that wrapper.** A popover belongs inside the
+viewport; that is the layer that moved.
+
+- **A static breakpoint rule cannot answer this, and the first attempt proved
+  it in both directions.** The pickers had been hung *right above `md`, left
+  below it*. Both of the review's trigger groups **wrap** — the row's chips and
+  the band's three triggers — so where a trigger sits is decided by the content
+  beside it rather than by the window: at 390 the chips end up in the right half
+  of the row (left-hung ran off the right), while the band's triggers wrap to
+  the **left gutter** (right-hung would run off the other side). **A position
+  that depends on content cannot be derived from a breakpoint**, which is the
+  exact opposite of the run segment, whose widths really are arithmetic.
+- **`placeMenu` in `shared/menuPlacement.ts` is the rule, and it is pure.** It
+  takes the trigger's box, the viewport and the panel's own two numbers, and
+  returns a **corner** and a **height**. It names no browser global, so
+  `npm test` can see it — and it returns a corner rather than a class string,
+  so no Tailwind literal is ever written in a file the scanner is not reading
+  for one. The four literals stay in `BulkReview` as **complete strings**: two
+  utilities for one property is the coin toss sheet order decides.
+- **It measures the trigger and never the panel**, which keeps it to one pass —
+  the panel's width is a constant and its height has a cap, so both bounds are
+  known before it is drawn. That is the chart tooltip's rule reached the same
+  way. `useLayoutEffect`, because a `useEffect` runs after paint and the panel
+  would be drawn once in the wrong corner before moving.
+- **Two mechanisms, and they do different halves.** The corner flips **up** only
+  when there is not room below *and* there is more room above — a panel that
+  flips into a tighter space has moved for nothing. The height then **shortens
+  to the room it actually has**, so a squeezed window opens a shorter scrolling
+  panel rather than one hanging off the screen. The cap is an inline style,
+  which beats the `max-h-[320px]` class rather than fighting it.
+- **The horizontal side is chosen by which one spills less**, not by which half
+  of the screen the trigger is in, with a tie going left — the reading order.
+
+**Verified**: typecheck clean, **824 assertions** (12 new), and **all three
+rules proved by mutation** — pinning the corner to the left fails 2, *and one of
+the two is the reported bug reproduced* (`the panel is on the screen: got
+false`); never flipping up fails 3; leaving the height at its cap fails 3. The
+assertions are written as geometries rather than as expected corners alone:
+`fits()` recomputes the panel's rect from the placement and asserts it is inside
+the viewport, so a rule that returns a plausible corner and still clips is
+caught. Both reported cases are in there by their real numbers — a chip in the
+right half of a 390 row, and a trigger 54px off the fold.
+
+**Nobody has clicked it**, and this one especially wants a real phone: every
+number in it is a viewport measurement the test can only simulate.
+
+#### One badge, beside the thing it is about — 2026-09-01
+
+**Client only**; the artifact is unchanged.
+
+- **The `New` badge is gone.** It was on every row that was not a duplicate,
+  which is nearly all of them — and **new is what a row on this screen *is*
+  unless it says otherwise**, so the marker was on twenty rows to distinguish
+  them from two. **A marker earns its place by being the exception.**
+- **`Already here` is `In Pantry`, and it moved next to the name.** It
+  had been a 120px column at the row's far end, which put the answer to *have I
+  got this already* a whole row's width from the word it answers about, and made
+  every row reserve space for it. The wording moved with it: **`Already here` is
+  true of the row you are looking at as much as of the pantry**, and naming the
+  pantry is what makes it an answer rather than a label. **Two words, not
+  three** — a pill beside a name that truncates should spend as little of the
+  line as it can. Amber still, and still over its own *4 on hand · low at 6*.
+- **The name is the only left-aligned thing, and that is what right-aligns the
+  rest.** It takes the row's slack (`lg:flex-1`); the stepper and the chip
+  column are fixed widths after it, so their edges line up down the table
+  without any of them knowing what the others measure. The chips take
+  `lg:justify-end` so the column ends at the row's edge rather than fraying by
+  however wide three term names happen to be. **Below `lg` nothing changes** —
+  the chips follow the stepper on their own line, where left is the reading
+  order and there is nothing to line up with.
+- **The freed 120px went to the chips and the name**, 300 → 340 at `lg` and 340
+  → 380 at `xl`, which is what stops a row wearing *Refrigerator · Warehouse
+  Club · Canned Goods* from wrapping to two lines.
+
+**Verified**: typecheck clean, 824 assertions, artifact unchanged, 270 utilities
+diffed against the freshly built `zero.css` — `lg:justify-end`, `lg:w-[340px]`
+and `xl:w-[380px]` all present, a bogus `xl:w-[381px]` refused, and each
+confirmed by **byte offset** to land after its base. The bundle carries
+*Already in Pantry* once and neither `Already here`, `"New"`, nor the badge
+column's `w-[120px]` at all. Ground check still 10 controls, 0 flagged.
+
+**One thing to look at on a phone**: even at `IN PANTRY` the pill costs a 390
+title line something, so a long name on a duplicate row truncates harder than it
+did. That is the row whose point *is* the badge, so it is the right trade — but
+it is the first thing to check on a real screen.
+
+#### `Set for checked` is the batch's own value now — 2026-09-01
+
+**Client, plus two `shared/` functions**; the artifact is unchanged.
+
+Reported as *confusing* rather than as broken, which is what a hidden state
+looks like from the outside.
+
+- **Each menu *is* the batch's value.** Every ticked row is a term every row the
+  band would write already carries; a press adds one to that set or takes it out,
+  and **every target row then holds exactly what the menu shows**. `Dairy` then
+  `Baking` gives the batch both; pressing `Dairy` again leaves it with `Baking`.
+  A location's set holds one, because a shelf is one.
+- **What that replaced was a toggle with a hidden direction.** A press added the
+  term unless every checked row already carried it, in which case it took it off
+  all of them — **what a press did depended on a fact about twenty rows that
+  nothing on screen reported**, and setting `Dairy` on a batch already holding
+  `Baking` left the rows still disagreeing. **Two things fix it together**: the
+  tick makes the direction visible, and writing the whole set makes one press
+  enough to make every row agree. **Multi-select survives**, which a plain
+  single-select would have cost — and did, for one build.
+- **Each menu ticks what the whole batch already carries**, so a run of presses
+  can be read back rather than remembered. `checkedTerms` is a stronger claim
+  than *some row has it*: a tick beside `Dairy` says the batch **is** Dairy, and
+  it goes the moment one row stops being. **Nothing is ticked when nothing is
+  ticked** — with no target rows there is no batch to describe, and `every` over
+  an empty list is `true`, so an unguarded version ticks every term in the menu
+  at once.
+- **Pressing the ticked term clears it**, which is the only other thing a press
+  there could honestly mean — and the only way *unset for all* survives the
+  toggle going.
+- **The menu closes on a pick only for location** — the row chip's rule and the
+  rail quick-filter's, for the reason both have it: a set is built by pressing
+  twice, and a menu that shut in between would have to be reopened for each one.
+- **Both rules are in `shared/`** (`setTermForChecked`, `checkedTerms`) because
+  both are invisible when wrong: a toggle where a replace belongs still moves
+  chips, and a checkmark computed from one row rather than from all of them
+  still draws.
+
+**Verified**: typecheck clean, **845 assertions** (21 new), artifact unchanged,
+and **six mutations caught** — writing `[id]` instead of the set (the
+single-select build) fails 5, putting the old hidden toggle back fails 5 *and
+prints the reported bug* (`got [["t-spice","t-dairy"]]`), treating a location as
+a set fails 1, reading the check as *some* rather than *every* fails 1, dropping
+the empty-batch guard fails 1, and letting a set touch unticked rows fails 2.
+Ground check 10 controls, 0 flagged; the bundle carries `In Pantry` and neither
+of the two strings it replaced.
+
 ### The console's two seams land where they were aimed — 2026-08-31
 
 **Client only**: no schema change, no handler moved, no new class. Eleven
@@ -4136,7 +4575,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D63, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty** |
+| `.docs/decisions.md` | D1–D67, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -4153,6 +4592,8 @@ most of it is already decided.
 | `.claude/docs/design/larderlognameautofill.html` | **The 12 boards for it** — name field at 480 in both themes, row anatomy, 390, the rules, the settled picking behaviour, search at 1372 in both themes, search at 390 with the no-match state, what the search menu does, and two explorations. **The search boards draw a stale top bar** — `Showing 2 of 20`, a `Shopping list` trigger and `Sort · Recently added`, all three of which row 2's rework replaced — **and every item row on them carries a chevron the build does not draw**. **Explorations A and C are not a spec**; C is the answer to reach for if the duplicate watch-out bites |
 | `.claude/docs/design/restock.md` | **Restock — the trip that ends** (31 Aug) — a check becomes a claim, the trip bar's reserved right half becomes *Put N away*, and the put-away sheet writes a whole trip's counts at once. Its own doc for the reason `add-edit-item.md` is; it **replaces *Shopping list → Checks are local, and they expire* wholesale**. **Read its *what is specced and what is a consequence* callout first**: the claim, the trip, the bar, the sheet and the `Clear checks` delta are specced; the **`Always` / `Never` tri-state** and **trends tier 2** are separate features it merely unblocks. **Built** (D64) — **except shared claims**, deferred by request, so no row ever draws *In Sarah's cart* and `N in the cart` keeps its wording rather than becoming `N in your cart`. **Its *Claims are shared* section is built** (D66) — **but not its row layout**: the face moved from the count slot into the checkbox column the doc says to leave **empty**, and grew 18px → 22 to match the `CheckBox` it stands in for. **Its `Always` / `Never` section is built too** (D65) — **but not its hint copy**: all three sentences were rewritten on the first look at the built control, because *the list* names nothing a person can point at, *until you buy it* is false for anything you pick, and *count* is the wrong noun for what is on a shelf. **Its hint table therefore describes copy that does not ship**, and its segment is drawn without the sub-label the build gives it. **Trends tier 2 is the one part still unbuilt**, and the `restocks` log is collecting for it |
 | `.claude/docs/design/larderlogrestockmockup.html` | **The 6 boards for it** — the run list with three checked, the put-away sheet, the screen after, the trip bar's anatomy with its undo toast, the tri-state, and trends tier 2. Light theme, desktop; **mobile is not drawn at all** — the bar's three controls at 390 are specced in prose and the sheet as a bottom sheet is asserted rather than drawn. **Boards 1, 2 and 3 all draw a row claimed by Sarah**, which is the deferred half; **board 4's "where the green belongs" card is drawn left-aligned at 440** and the build takes `EmptyState`'s centred shape instead, since the two empty states share one slot. **Board 5 is built** (D65); **board 6 is not** |
+| `.claude/docs/design/bulk-entry.md` | **Bulk entry — the adoption wall** (31 Aug) — the split primary, the paste dialog, the review table, the common-items checklist, and what the empty larder does. Its own doc for the reason `add-edit-item.md` is. **It says of itself that it is a sketch, not a spec**, and about half of it was undecided — read *Open questions* before treating any of it as settled. **Built** (D67), **with five knowing departures**: the 390 chevron moved to the pinned bottom bar rather than row 1 (the board's premise — *the primary is already a 52px square at this width* — is false of the build); the bulk commit gets a **plain toast and no undo**, which answers its own first open question; the checklist **omits what the household already holds**; the paste fills no type, which is its prose over its boards; and **`Save and add another` was built and removed** for a cramped footer, so its board 4 describes a build that does not exist |
+| `.claude/docs/design/larderlogbulkentrydesign.html` | **The 11 boards for it** — seven on *The flow*, one at 390, three explorations. Light theme only. **Board 6's review rows draw filled `Type` chips on pasted lines**, which both the design's prose and its own board note contradict — the note wins. **Board 3's 390 panel draws the split beside search**, which the build does not do. **Board 4 is `Save and add another`, which is not built.** The Explorations page is explicitly not a spec |
 | `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
 | `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
@@ -4271,7 +4712,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 745 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 807 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -4293,7 +4734,10 @@ Cheapest first:
   reading the retired column wrong puts a muted item back on a list months after
   anybody last thought about it — and D66's claim split, where reading *whose*
   backwards hands back a screen that looks right and lets you buy the butter
-  twice.
+  twice — and D67's paste, where a line read left to right instead of end-first
+  still yields a plausible item name and quietly moves the size into it, and
+  where a duplicate check one character looser starts refusing rows somebody
+  meant.
   **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.
