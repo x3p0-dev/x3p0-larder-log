@@ -6297,3 +6297,362 @@ to *Done* once anything is saved — but the sheet is unchanged and
 - **Barcode**, still not drawn. It needs a product database and a camera
   permission flow, and it fails differently from everything here: silently, on a
   bad lookup.
+
+---
+
+## D68. Account deletion is *leave household* run against every household at once
+
+**Date:** 2026-09-01 · **Design:** `.claude/docs/design/delete-account.md`
+
+**Amends** D49 (*Your account* becomes a pushed pane and the display name moves
+into it), D36 (a third typed confirmation, and the icon-disc ramp generalised),
+and D22 (whose last-owner guard is what makes the whole flow necessary).
+**Supersedes** two lines of D62 — see *What this contradicts*.
+
+`Destructive actions` blocks a sole owner from leaving a household. Run that
+rule against every household somebody is in and deleting an account becomes a
+wall for exactly the people most likely to want it — and it is a wall made of
+dialogs, one per household, each of which sends you somewhere else to fix
+something before you can come back and be blocked by the next one.
+
+**One blocked dialog is a step; five is a wall.** That is the whole argument for
+a pre-flight: it turns every block into a choice, every choice into one row, and
+asks once at the end rather than five times on the way past.
+
+### The shape
+
+| Your position | What the app did | What deletion needs |
+|---|---|---|
+| One of several members | Leave. A confirm | Unchanged — no decision, so no screen |
+| The only owner, others remain | **Blocked** — *make someone else an owner first* | A choice: hand it over, or destroy it |
+| The only member | A typed confirm that deletes it | A statement, not a choice — but it must be visible |
+
+`fateOf` in `shared/accountDeletion.ts` is that table as three lines, and
+**both halves read it**: the dialog to draw its two groups, and the handler to
+decide which rows it is owed an answer for. Two descriptions of *which
+households are a question* would disagree exactly once, in production, over
+somebody's data.
+
+**`members <= 1` is tested before the role**, and that ordering is the rule
+rather than an implementation detail. Testing the role first makes a sole-member
+household a *question* — a screen offering a choice between handing it to nobody
+and deleting it — and `npm test` fails ten assertions on the swap.
+
+### Where it lives — a pushed pane
+
+The identity row in the account menu **loses its pencil, gains a chevron, and
+becomes the door**. The pane holds the display name, *Change your picture*,
+*Download your data*, and *Delete account* at the foot of the account's own card
+under a hairline.
+
+- **It is the third use of a construction that already exists** — Members,
+  Administration, and now this — so the way out is the gesture the app already
+  teaches, and it inherits collapse, the rail and the account row for free.
+- **`Delete account` sits inside the account's own card, under a hairline —
+  exactly where *Leave household* sits inside the Household card.** That
+  parallel is the argument rather than a coincidence: this *is* leaving, at the
+  scale of every household at once.
+- **It answers the menu's ceiling instead of walking into it.** Four rows was
+  already where this construction stops being a menu, and two account-scoped
+  rows arrived in one week. A menu absorbs one at a push; a pane absorbs both
+  without being asked.
+- **It is not in `useViewState` (D51)**, for the console's reason: an app that
+  reopens on the screen that deletes your account has forgotten what it is for.
+- **Opening it un-collapses the drawer, which is the opposite of `openAdmin`.**
+  The console has a rail form — back-to-the-pantry and all four sections — so
+  opening it behind a folded drawer still leaves a visible way through. This
+  pane has none, so a press on the rail's flyout would set a flag and reveal
+  nothing.
+
+**The cost is one thing.** The display name moves out of the menu, where D49 put
+it on purpose — *no modal, no profile screen; it is where you already were*. The
+idiom survives intact one push further in: a read-only row that flips in place,
+Escape cancels, no toast. That is the trade, and the crimson menu row that lost
+stays on the record as the fallback if it turns out to be the worse one.
+
+### The pre-flight
+
+520 rather than the confirm's 420, because it carries a list — the second caller
+of `ModalShell`'s `width`, after the console's own.
+
+- **Two groups, not the console's tail line.** A sole-member household is
+  *destroyed* and the rest are merely *left*; one sentence covering both
+  flattens the first into the second. `NOTHING TO DECIDE` gives the destroyed
+  one a row and a number, in the out text colour, on a screen where nothing is
+  pressable to fix it.
+- **One trigger, not two chips.** *Transfer* and *Delete* look like a pair until
+  you notice that transfer needs a **name** — so it is one question with several
+  answers, which is a menu.
+- **The row's meta line becomes the consequence.** Unanswered it says what the
+  household is; answered it says what is about to happen to it. That is the
+  confirm's own rule — the body names what is lost — applied once per row.
+- **The disc is amber, not crimson.** This screen is the blocked dialog turned
+  into a choice, so it keeps the blocked dialog's disc. Amber is *hold on*, and
+  this is the last screen where that is still true.
+- **The primary is the one in the app that does not name a destructive verb.**
+  Every other confirm says *Revoke invite*, *Leave household*, *Delete
+  household*. Pressing *Continue* destroys nothing; putting the verb here would
+  make the pre-flight a second confirmation.
+- **`role="dialog"`, not `alertdialog`** — it is a form with a decision in it,
+  and the confirmation is the alert. The distinction has not been needed before,
+  because every modal in the app was a question with two answers.
+- **It does not appear at all when there is nothing to decide**, and the
+  confirmation is the whole flow. A screen whose only content is *nothing to
+  decide* is the control that can only disappoint, one level up.
+
+### Ownership transfer
+
+**Promote is not transfer.** Setting somebody to Owner *adds* an owner;
+transferring hands it over — they become Owner and **you become an Editor**. The
+second half is the part the app had no control for at all, because your own row
+carries no trigger and there was nowhere to step yourself back from.
+
+- **A row in the role menu**, under its own hairline, above *Remove from
+  household*. Ordinary drawer body, **not crimson**: nothing is destroyed, and
+  ghost-plus-crimson-text is how this app *offers* destruction.
+- **Only the caller is demoted.** A household with two other owners keeps both —
+  handing yours over is not a claim about theirs.
+- **The promotion happens first**, so there is never an instant with no owner —
+  the state this exists to get a household out of.
+- **D21 applies to the demotion, not to the promotion.** An owner dropped to
+  editor keeps minting editors through a link already in the wild.
+- **The picker is cream, and no row is marked as current.** The sort menu and
+  the role menu both check the value you are on; a transfer has no incumbent, so
+  the check comes off and hover is the only state the rows have. It carries a
+  micro-label header, which no other menu in the app has: two kinds of row —
+  three people and one destruction — and without it the delete row reads as a
+  fourth person.
+- **The confirm's disc is crimson though nothing is destroyed, and that
+  generalises the ramp.** A **blocked** dialog is amber because it is a
+  *precondition*; a confirm is crimson because it is *final*. Losing ownership
+  passes the second test and fails the first, so **the ramp is picked by
+  finality, not by data loss** — the existing two users generalised, not a new
+  rule.
+
+### The confirmation, and there is no hold
+
+One confirmation over the whole thing rather than a sequence of them — which is
+the reason the pre-flight exists. 520 to match it, because they are one flow.
+
+- **The display name, not the email.** A typed confirmation buys a beat of
+  deliberation, not authentication: it is a rhythm-breaker, and nobody has ever
+  been stopped by one they could paste. So it takes the name a person thinks of
+  as theirs. (The email is `''` in production anyway — D56.)
+- **The body is a list, which is new.** Every other confirm's body is two lines,
+  because it names one thing that is lost. This names up to five households in
+  three fates, so the sentence says what the *account* loses and a read-only
+  recap accounts for the households one by one.
+- **The recap and the count read one function.** They were written separately
+  first, which put an unanswered row in the list as *deleted* and left it out of
+  *two of them go with you* — a sentence and a list on one dialog contradicting
+  each other.
+
+**Deleting is immediate.** The industry default is a thirty-day grace period; it
+was drawn in full and cut. **If somebody wants to delete their account, that is
+their decision, and the app does not hold onto people who have said no.**
+
+The design cost of a hold was never the three cards. A held account is *already
+out* of its households — holding the memberships too would leave somebody owning
+a household provisionally for a month, and **a grace period that reaches other
+people is not a grace period.** So the honest version hands you back, thirty days
+later, an account with nothing in it. **The accepted cost, stated:** somebody who
+deletes by mistake has no recourse and there is no support path, because there is
+nothing left to restore. That is the trade the app already makes for *Delete
+household*, one level up.
+
+### The card it leaves you on
+
+**The app's first screen that is neither signed out nor signed in.** The session
+is still live — deleting an account removes this app's rows and cannot reach the
+Spacefast identity behind them — so neither the shell nor the signed-out surface
+is right. It is the 440 card, with a **neutral** disc: sunk fill, `line` ring, a
+meta glyph, the console's 404 rule that a disc takes no status colour when it is
+making no claim. Its button **signs out**, or *Back to Larder Log* would land on
+the first-run screen offering to name a household. **No toast**, because there is
+no app left to show one in.
+
+**It is `Back to Larder Log`, not the design's `Back to larderlog.com`.** The
+app has no such domain, and naming one it does not have is worse than naming the
+thing it is.
+
+### Export is two features
+
+Drawing it against the deletion rules split it in half, because the pantry is
+the one thing this flow has established **is not yours**.
+
+| | Where | What |
+|---|---|---|
+| **Download your data** | The account pane | Four fields — name, email, memberships, invites issued. A legal obligation, not a feature |
+| **Export the pantry** | Settings → Pantry settings | The household's rows as CSV. The one anybody wants, and it survives your deletion because it was never yours |
+
+- **Four fields, because there is nothing else.** No per-item authorship
+  anywhere means an account has almost no data to hand back — which is the same
+  fact the deletion copy leans on when it says the pantries other people keep are
+  untouched. The shortness of the file is that argument in another form.
+- **No invite codes**, which departs from the design's `invites_issued[]`. A code
+  *is* the authorization (D39); a live one in a file on disk is a worse place for
+  it than the app it was minted in. What is named instead is the household, the
+  role and when the link dies.
+- **No join date**, and that is an omission rather than a choice: `memberships`
+  carries no stamp. D44 stamped five tables and skipped this one. Adding one now
+  is a schema change and the first thing to do if this file has to be complete.
+- **Owners and editors.** A Viewer reading a household is not the same as a
+  Viewer taking a copy of it away — the one place in the app where reading and
+  exporting come apart.
+- **Neither is a backup, because nothing imports one back.** Saying so is cheap;
+  the alternative is somebody deleting a household they thought they had saved.
+- **A pre-flight row set to *delete it* carries *Export it first*.** It is the
+  only moment in the app where a pantry is about to stop existing and somebody
+  is looking straight at it. A row set to transfer does not get it: that
+  household keeps its own copy and its own export row.
+
+### What this contradicts
+
+`admin-console.md` and D62 both describe a **hold**, and there is none.
+*Needs attention* lists *awaiting deletion*, and the Activity log's `Automatic`
+actor is defined as *an account deleted after its hold*. Neither state exists.
+The console's stat card drops that row, and `Automatic` is left with nothing to
+attribute unless the console's own deletions keep one — a decision for that doc.
+
+D62 also says the pre-flight is *the same dialog, two places; only the title
+changes*. That is no longer true: the app's has two labelled groups where the
+console's has a tail line, and two screens where the console's has one.
+
+### The flow is `Pantry`'s, and that is forced
+
+Both dialogs shipped rendered from the pane, **inside the drawer**, and drew at
+340px instead of over the screen. `ModalShell` is `fixed inset-0`; the drawer's
+`<aside>` carries a `transform` for its slide-over; **a transform on an ancestor
+becomes the containing block for every `position: fixed` descendant.** There is
+no CSS escape — the layer has to move.
+
+The rule was already in the codebase: `MembersPanel` has said since D49 that
+*the modal is owned by `Pantry`, which is the only place that can put one over
+the whole app*, and every other modal in the app obeys it. So `Pantry` owns the
+step, the decisions, the busy flag, the refusal and both dialogs, and **the pane
+hands over a snapshot** — `{ name, households }`, taken at the press — rather
+than the subscription. That is safe for the recap's reason: the server
+recomputes the plan from `fateOf` and refuses a decision it was not owed, so a
+stale snapshot can only be *refused*, never act on the wrong household. It also
+keeps the query to one subscription and leaves the dialogs with no loading state.
+
+**A `preact/compat` portal in `ModalShell` was measured and rejected.** It would
+fix every future caller in one place for almost nothing in the bundle, and that
+is exactly the objection: it makes the containing-block problem invisible again,
+and one idiom every modal already follows beats two.
+
+### A popover cannot live in a box that clips
+
+The transfer menu was cut off by **two** ancestors. The pre-flight's own
+`Needs a decision` block carried an `overflow-hidden` that was buying nothing —
+its rows have no fill, so nothing could poke past the radius — and that is gone;
+it is the third `overflow-hidden` this app has paid for, after the console's
+Members card and the bulk review table.
+
+The second cannot be removed. `ModalShell`'s card is
+`overflow-y-auto max-h-[90vh]`, because this is the tallest dialog in the app and
+a short window has to reach its footer — and a scroll container clips its
+absolutely-positioned descendants at its padding box. **So the popover moves
+layer**: `position: fixed`, placed from the trigger's measured box, which is D67's
+own conclusion reached from the other side.
+
+**`fixed` is the fix here and the bug one component over.** A dialog card has no
+transform; the drawer's `<aside>` has one. Both facts are the same three words.
+
+`placeMenu` names a corner, which is all an `absolute` panel needs.
+`menuOrigin` turns a corner into viewport coordinates for a panel that has to
+escape, clamping on both axes — a corner is chosen from the panel's *cap* and the
+panel is often shorter, and a trigger can sit closer to an edge than the inset by
+itself. The menu **closes on scroll and resize**, because a fixed panel does not
+travel with a scrolling ancestor and pretending otherwise is worse than closing.
+
+**The console's own pre-flight had the identical bug**, unreported because nobody
+has clicked it. Fixed with this one.
+
+### An administrator's account is not the app's to delete
+
+`LARDER_ADMIN_IDS` is set out of band and nothing in the app can edit it (D62),
+so deleting the rows of an account the environment names would leave the variable
+pointing at nothing — and the next sign-in with that identity would mint a
+brand-new empty account holding the console. **The fix for *this administrator
+should go* is `.env.server`**, which is where the trust was granted.
+
+Both paths refuse: `deleteMyAccount` on its caller, and `adminDeleteAccount` on
+its target — the sharper half, because one administrator removing a peer's rows
+is the case the console could otherwise reach and nothing else in the app can.
+Both check **before the row lookup**, so a named id holding nothing gets the
+guard's answer rather than *that account no longer exists*.
+
+**`isAdminId` is about a target and `isAdminUser` is about a caller, and the two
+must never be swapped.** `isAdminUser` refuses a guest outright, because the
+hosted runtime hands an anonymous caller a guest identity and v15 leaked the
+space on exactly that. `isAdminId` does **not** refuse guests, because
+`LARDER_ADMIN_IDS` legitimately holds a `guest:` id locally and the guard has to
+protect that account too — and it fails **open**, so an unset variable protects
+nobody rather than making the app undeletable by accident. Read as permission
+rather than as protection it would reintroduce the v15 hole by another name.
+
+**The client renders the reason, never the refusal.** A thrown message is
+invisible in production, so the `account` query reports `administers` and the
+console reads the `person.admin` flag its People list already carries. The
+throws are the enforcement; the sentences on screen come from `shared/`.
+
+**Absent rather than disabled, which differs from `ADMIN_WRITES_HELD` on
+purpose.** The hold is temporary and its controls come back, so they stay on
+screen and explain themselves. This is what the account *is* for as long as the
+environment says so, and a permanently dead button is worse than a sentence
+saying where the switch really is.
+
+### Rejected
+
+- **A crimson *Delete account* row in the account menu.** The cheap answer, and
+  it is the fifth row the ceiling was about: five rows and an identity block open
+  upward from a drawer foot already 72px off the bottom, with three hairlines in
+  a 292px panel — and the most destructive action in the app ends up one row from
+  the most routine one. Nothing else in Larder Log puts those two within 36px.
+- **A settings page outside the drawer.** The app does not have one and should
+  not grow one for this.
+- **A thirty-day hold**, drawn in full — three cards, a countdown, a *Keep my
+  account* primary. See above.
+- **Logging either write to the audit log.** The log records administration and
+  never what a person does to their own household (D62), which is why
+  `deleteHousehold` writes no row either.
+- **Sending a decision for a sole-member household.** The server sees that fate
+  for itself; sending one would be the client telling the server something the
+  server is holding — the instinct that makes a household id a selector rather
+  than an authority.
+- **Naming only three nouns in *what goes permanently*.** The board says items,
+  locations and types; the app's own *Delete household* confirmation has always
+  named the sources too, and this is the same act reached from another screen.
+
+### Open
+
+- **A pre-flight that has to scroll.** Five households fit. Eleven do not, and a
+  dialog that scrolls has to decide whether its footer is pinned.
+- **Display names are neither unique nor stable**, which the typed confirm now
+  leans on. Somebody called *J* gets a one-character confirmation. Fine for a
+  rhythm-breaker and not fine for anything more — and it makes a length floor on
+  the display name load-bearing where it was optional.
+- **The typed confirm with a keyboard up at 390.** The taller of the two
+  dialogs, with its field near the bottom above the footer pair. Not drawn.
+- **Nobody is told they now own a household.** There is no person-to-person
+  channel in the app: announcements are app-to-person, toasts are for what *you*
+  did, and email is a pipe nobody has built. She finds out in Members — and it is
+  sharper now that a transfer can arrive because somebody left.
+- **Concurrency.** Somebody leaves between the pre-flight and the confirmation;
+  another owner deletes the household you chose to transfer. The server refuses
+  and says so, and the dialog keeps your typing — but nothing tells you until you
+  press.
+- **Does an administrator deleting somebody else's account get the same
+  pre-flight?** The console draws it, so structurally yes; choosing a transfer
+  target on somebody else's behalf is a decision the console has never claimed.
+- **Retention beyond the account.** The audit log keeps its rows for 24 months
+  with the actor denormalised, and it now outlives an account that deleted itself
+  with no record of having done so. Both want the lawyer's read the console
+  already flagged, more urgently with no hold to soften it.
+- **Deleting the last account in a household with live invites out.** They die
+  with the membership, and nothing says so.
+- **An administrator who solely owns a household cannot leave it or delete their
+  account**, so their households have no self-service exit at all. Handing each
+  one over with *Transfer ownership* is the route, and nothing points at it from
+  the sentence that refuses.

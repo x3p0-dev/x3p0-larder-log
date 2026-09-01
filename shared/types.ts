@@ -12,6 +12,7 @@
 import type { Role } from './roles';
 import type { SourceKind } from './source';
 import type { Claim } from './claim';
+import type { AccountHousehold } from './accountDeletion';
 
 export type TermKind = 'location' | 'type' | 'store';
 
@@ -334,6 +335,58 @@ export type InvitePreviewResult = InvitePreview;
 export type ProfileResult =
 	| { state: 'guest' }
 	| { state: 'ready'; displayName: string; needsName: boolean };
+
+/**
+ * One live invite this account minted, for *Download your data* (D68).
+ *
+ * **No code.** A code *is* the authorization (D39), and a working one sitting
+ * in a file on disk is a worse place for it than the app it was minted in. What
+ * is left names the household, the role, and when the link dies — everything
+ * about the invite except the way in.
+ */
+export type AccountInvite = {
+	household: string;
+	role: Role;
+	expiresAt: string;
+	/** False once it is revoked or past its date. Both still describe you. */
+	live: boolean;
+};
+
+/**
+ * The account pane's one read: who you are, and every household you are in
+ * with enough about each to say what your deletion would do to it (D68).
+ *
+ * **Not a `QueryState`.** `no-household` is not one of its answers — an account
+ * in no households can still be named, exported and deleted, and that is the
+ * simplest path through this flow rather than an edge of it. `ProfileResult`
+ * declines the same union for the same reason.
+ *
+ * **It is subscribed only while the pane is pushed**, which is what makes its
+ * cost acceptable: five indexed reads per household is nothing once, and would
+ * be a page-load tax on everybody if it lived beside `pantry`.
+ */
+export type AccountResult =
+	| { state: 'guest' }
+	| {
+		state: 'ready';
+		/** The account's own display name — what the typed confirmation asks for. */
+		name: string;
+		/** `''` in production and always will be, and the export says so (D56). */
+		email: string;
+		/**
+		 * This account is named in `LARDER_ADMIN_IDS`, so it **cannot be
+		 * deleted** (D68).
+		 *
+		 * Reported by the server rather than derived on the client, for the
+		 * reason `adminAccess` reports `writesHeld`: the client must not hold a
+		 * second copy of a rule the server enforces, and it cannot read the
+		 * environment anyway. The pane draws `ADMIN_UNDELETABLE_NOTE` from this
+		 * — **not from the refusal**, whose text is invisible in production.
+		 */
+		administers: boolean;
+		households: AccountHousehold[];
+		invites: AccountInvite[];
+	};
 
 // --- the admin console ---
 

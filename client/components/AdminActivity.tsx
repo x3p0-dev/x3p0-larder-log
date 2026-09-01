@@ -11,7 +11,8 @@ import {
 	ADMIN_ROW, PAGE_BUTTON_OUTLINE, PAGE_BUTTON_OUTLINE_ON, PAGE_MENU, PAGE_MENU_ROW,
 } from '../lib/controlStyles';
 import { useDismiss } from '../hooks/useDismiss';
-import { activityCsv, downloadCsv, exportFilename } from '../lib/activityCsv';
+import { activityCsv, exportFilename } from '../lib/activityCsv';
+import { downloadCsv } from '../lib/download';
 import {
 	actionPhrase, actionTitle, decodeHeld, heldPhrase, isDestructive, toActorKind,
 } from '../../shared/activity';

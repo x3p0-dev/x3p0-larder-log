@@ -1,16 +1,20 @@
-import { useId, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useId, useMemo, useRef, useState } from 'preact/hooks';
 import { Check, ChevronDown, Trash2, UserMinus } from 'lucide-preact';
 
 import { DialogButtons, ModalShell } from './ModalShell';
 import { HouseholdTile } from './HouseholdTile';
 import { useDismiss } from '../hooks/useDismiss';
+import { useFixedMenu } from '../hooks/useFixedMenu';
 import type { Theme } from '../lib/theme';
 import { statusColor } from '../lib/theme';
 import {
-	PAGE_MENU, PAGE_MENU_ROW, PAGE_MENU_ROW_DANGER, PAGE_SUNK_ON_ROW,
+	PAGE_MENU_FIXED, PAGE_MENU_ROW, PAGE_MENU_ROW_DANGER, PAGE_SUNK_ON_ROW,
 	PAGE_SUNK_ON_ROW_UNSET,
 } from '../lib/controlStyles';
 import type { AdminOwnershipDecision, AdminPersonHousehold } from '../../shared/types';
+
+/** The menu's own width and height cap — the two numbers placement needs. */
+const MENU_SIZE = { width: 240, maxHeight: 240 };
 
 /**
  * Deleting an account — the pre-flight.
@@ -199,6 +203,15 @@ function HouseholdDecision({
 	theme: Theme;
 }) {
 	const ref = useDismiss<HTMLDivElement>(menuOpen, () => setMenuOpen(false));
+	const close = useCallback(() => setMenuOpen(false), [setMenuOpen]);
+	/*
+	 * **The identical fix the app's own pre-flight needed** (D68), and this one
+	 * was never reported because nobody has clicked the console's version: the
+	 * dialog card is `overflow-y-auto max-h-[90vh]`, and a scroll container
+	 * clips its absolutely-positioned descendants at its padding box. Two rows
+	 * are enough to put the second menu past the edge.
+	 */
+	const seat = useFixedMenu(menuOpen, ref, MENU_SIZE, close);
 	const others = household.candidates ?? [];
 
 	const label = chosen === undefined
@@ -248,42 +261,58 @@ function HouseholdDecision({
 					/>
 				</button>
 
-				{menuOpen && (
+				{menuOpen && seat && (
 					<div
 						role="menu"
-						class={`${PAGE_MENU} right-0 top-full mt-1.5 w-[240px] max-h-[240px] overflow-y-auto`}
-						style={{ boxShadow: theme.liftShadow }}
+						/* `fixed`, so the dialog's own scroll container cannot crop
+						 * it. The position and the height are measured — see
+						 * `useFixedMenu`. The panel is a column so that only the
+						 * people scroll: a long household would otherwise push the
+						 * crimson row past the cap, and the row that destroys
+						 * something must not be the part you have to go looking
+						 * for. Same treatment as the app's own pre-flight. */
+						class={`${PAGE_MENU_FIXED} w-[240px] flex flex-col`}
+						style={{
+							top: `${seat.top}px`,
+							left: `${seat.left}px`,
+							maxHeight: `${seat.maxHeight}px`,
+							boxShadow: theme.liftShadow,
+						}}
 					>
-						{others.length === 0 ? (
-							/*
-							 * Nobody to hand it to. The row still has an answer —
-							 * deleting — so this is a sentence rather than an empty
-							 * menu, and the crimson row below it is still live.
-							 */
-							<p class="m-0 px-2.5 py-2 text-[13px]" style={{ color: theme.textMuted }}>
-								Nobody else is in this household.
-							</p>
-						) : others.map((c) => (
-							<button
-								key={c.id}
-								role="menuitemradio"
-								aria-checked={chosen === c.id}
-								onClick={() => onChoose(c.id)}
-								class={PAGE_MENU_ROW}
-								style={{ color: theme.text, fontWeight: chosen === c.id ? 600 : 400 }}
-							>
-								<span class="flex-1 min-w-0 truncate">Transfer to {c.name}</span>
-								{chosen === c.id && <Check size={15} strokeWidth={2.4} style={{ color: theme.accent }} />}
-							</button>
-						))}
+						{/* `role="none"`: the box is layout, and the rows inside it
+						  * are still the menu's own. */}
+						<div role="none" class="min-h-0 overflow-y-auto">
+							{others.length === 0 ? (
+								/*
+								 * Nobody to hand it to. The row still has an answer —
+								 * deleting — so this is a sentence rather than an empty
+								 * menu, and the crimson row below it is still live.
+								 */
+								<p class="m-0 px-2.5 py-2 text-[13px]" style={{ color: theme.textMuted }}>
+									Nobody else is in this household.
+								</p>
+							) : others.map((c) => (
+								<button
+									key={c.id}
+									role="menuitemradio"
+									aria-checked={chosen === c.id}
+									onClick={() => onChoose(c.id)}
+									class={PAGE_MENU_ROW}
+									style={{ color: theme.text, fontWeight: chosen === c.id ? 600 : 400 }}
+								>
+									<span class="flex-1 min-w-0 truncate">Transfer to {c.name}</span>
+									{chosen === c.id && <Check size={15} strokeWidth={2.4} style={{ color: theme.accent }} />}
+								</button>
+							))}
+						</div>
 
-						<div class="h-px mx-2 my-[5px]" style={{ background: theme.divider }} />
+						<div class="shrink-0 h-px mx-2 my-[5px]" style={{ background: theme.divider }} />
 
 						<button
 							role="menuitemradio"
 							aria-checked={chosen === ''}
 							onClick={() => onChoose('')}
-							class={PAGE_MENU_ROW_DANGER}
+							class={`shrink-0 ${PAGE_MENU_ROW_DANGER}`}
 							style={chosen === '' ? { fontWeight: 600 } : undefined}
 						>
 							<Trash2 size={14} class="shrink-0 mr-2.5" />

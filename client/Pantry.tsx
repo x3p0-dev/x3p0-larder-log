@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Archive, ChevronLeft, ChevronRight, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
+import { Archive, ArrowRightLeft, ChevronLeft, ChevronRight, Link2Off, LogOut, Menu, Plus, Search, Trash2, UserCheck, UserMinus, X } from 'lucide-preact';
 import type { LucideIcon } from 'lucide-preact';
 
 import { CollapsedRail } from './components/CollapsedRail';
@@ -33,6 +33,10 @@ import { PasteListSheet } from './components/PasteListSheet';
 import { CommonItems } from './components/CommonItems';
 import { BulkReview } from './components/BulkReview';
 import { ToastStack } from './components/Toast';
+import { AccountDeleteConfirm } from './components/AccountDeleteConfirm';
+import { AccountGoneCard } from './components/AccountGoneCard';
+import { AccountPreflight } from './components/AccountPreflight';
+import { ExportPantry } from './components/ExportPantry';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { NewHouseholdDialog } from './components/NewHouseholdDialog';
 import type { ConfirmTone } from './components/ConfirmDialog';
@@ -46,6 +50,8 @@ import { DEV_MEMBERS, devMembersEnabled, isDevMember } from './lib/devMembers';
 import { devItemsEnabled, runDemoSeed } from './lib/devItems';
 import { useAvatarSync } from './hooks/useAvatarSync';
 import { useAdminAccess } from './hooks/useAdminData';
+import { useAccountWrites } from './hooks/useAccountData';
+import { downloadCsv } from './lib/download';
 import { AdminConsole } from './components/AdminConsole';
 import type { AdminSection } from './components/AdminPane';
 import { adminDeepLink } from './lib/adminEntry';
@@ -78,6 +84,9 @@ import { runBands, runCount, runIds } from '../shared/runList';
 import { putAwayRows, restockEntry } from '../shared/restock';
 import type { ClaimOwner } from '../shared/claim';
 import type { PutAwayRow } from '../shared/restock';
+import type { AccountHousehold, RecapRow } from '../shared/accountDeletion';
+import { decisionsFrom, needsPreflight, recapRows, transferBody, transferTitle } from '../shared/accountDeletion';
+import { pantryCsv, pantryFilename } from '../shared/exportData';
 import { monthOf } from '../shared/season';
 import type { RunTab } from './components/RunSegment';
 import { countTermFilters, matchesTermFilters, pruneTermFilter, toggleTermFilter } from '../shared/filter';
@@ -210,6 +219,16 @@ function viewKeyFor(userId: string) {
 type Pending =
 	| { kind: 'revoke-invite'; inviteId: string; role: Role }
 	| { kind: 'remove-member'; membershipId: string; name: string }
+	/**
+	 * Handing the household over (D68).
+	 *
+	 * **In the destructive family even though nothing is destroyed.** A confirm
+	 * takes crimson because it is *final*; a blocked dialog takes amber because
+	 * it is a *precondition*. Losing ownership passes the second test and fails
+	 * the first, so the ramp is picked by finality rather than by data loss —
+	 * which is the existing two users generalised, not a new rule.
+	 */
+	| { kind: 'transfer-ownership'; membershipId: string; name: string }
 	| { kind: 'leave' }
 	| { kind: 'leave-blocked' }
 	| { kind: 'delete-household' }
@@ -262,6 +281,15 @@ function dialogCopy(pending: Pending, facts: DialogFacts): DialogCopy {
 				title: `Remove ${pending.name}?`,
 				body: `They lose access to ${name} right away. You can invite them back with a new link.`,
 				confirmLabel: 'Remove member',
+			};
+
+		case 'transfer-ownership':
+			return {
+				tone: 'danger',
+				icon: ArrowRightLeft,
+				title: transferTitle(pending.name),
+				body: transferBody(pending.name, name),
+				confirmLabel: 'Transfer ownership',
 			};
 
 		case 'leave':
@@ -603,6 +631,57 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		() => (adminDeepLink() ? 'overview' : null)
 	);
 	/*
+	 * *Your account* — a drawer pane beside the console rather than inside
+	 * Settings (D68), and deliberately not in `useViewState` for the console's
+	 * own reason: an app that reopens on the screen that deletes your account has
+	 * forgotten what it is for.
+	 */
+	const [accountOpen, setAccountOpen] = useState(false);
+	/**
+	 * The recap of a deletion that has already happened, or `null`.
+	 *
+	 * **It is what replaces the whole app**, so it lives here rather than in the
+	 * pane it came from — the pane is inside the drawer the card is replacing.
+	 * The rows are captured before the write, because afterwards there is nothing
+	 * left to build them from.
+	 */
+	const [deletedRows, setDeletedRows] = useState<RecapRow[] | null>(null);
+	/** A refused ownership transfer, for the shell's banner. See below. */
+	const [transferError, setTransferError] = useState('');
+	/*
+	 * The account deletion flow (D68), owned here rather than by the pane that
+	 * starts it. **`MembersPanel` has had the reason written down since Phase
+	 * 4.12** — *the modal is owned by `Pantry`, which is the only place that can
+	 * put one over the whole app* — and here it is load-bearing rather than
+	 * tidy: the drawer's `<aside>` carries a `transform` for its slide-over, and
+	 * a transform on an ancestor is the containing block for everything
+	 * `position: fixed` beneath it. A dialog rendered from the pane is trapped
+	 * inside 340px of drawer.
+	 *
+	 * The snapshot is handed over rather than re-queried, which is safe for the
+	 * reason the recap is: the server recomputes the whole plan from `fateOf`
+	 * and refuses a decision it was not owed, so a stale one can only be
+	 * *refused* — with the server's own sentence, in the dialog.
+	 */
+	const [deleting, setDeleting] = useState<{ name: string; households: AccountHousehold[] } | null>(null);
+	/** `''` while the pre-flight is up, then the typed confirmation. */
+	const [deleteStep, setDeleteStep] = useState<'preflight' | 'confirm'>('preflight');
+	/** `householdId → membershipId`, or `''` meaning *delete this household*. */
+	const [deleteChosen, setDeleteChosen] = useState<Record<string, string>>({});
+	const [deleteBusy, setDeleteBusy] = useState(false);
+	const [deleteError, setDeleteError] = useState('');
+	/** The household `ExportPantry` is fetching, or null. See *Export it first*. */
+	const [exporting, setExporting] = useState<AccountHousehold | null>(null);
+	/* Stable: `ExportPantry`'s effect depends on it, and a fresh closure every
+	 * render would re-run the effect that hands over the file. */
+	const clearExport = useCallback(() => setExporting(null), []);
+	/*
+	 * The two account writes (D68). **Mutations, not a subscription** — this
+	 * costs nothing on a load, which is why it can live here while `useAccount`
+	 * is mounted by the pane that needs it.
+	 */
+	const accountWrites = useAccountWrites();
+	/*
 	 * Lifted out of the list so a *Needs attention* row on Overview can set the
 	 * chip on its way to the list. The search, the sort and the page stay inside
 	 * `AdminHouseholds`: nothing else has an opinion about any of them.
@@ -654,6 +733,77 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 		setAdminSection('overview');
 		setAdminOpenId('');
 		setAdminOpenUserId('');
+		// Both are drawer-level panes and only one column holds them. Leaving
+		// the account pane flagged behind the console would put it back the
+		// moment somebody left the console, which is not where they were.
+		setAccountOpen(false);
+	}
+
+	/**
+	 * Opens *Your account*, from either place the account menu appears (D68).
+	 *
+	 * **Defined once and handed to both hosts**, which is `openAdmin`'s own rule
+	 * and the thing the missing *Admin* row cost a real session to learn: a
+	 * handler written twice is a handler that will be changed once.
+	 *
+	 * **It un-collapses the drawer, and that is the opposite of `openAdmin`.**
+	 * The reason `openAdmin` leaves the drawer alone is that the collapsed rail
+	 * carries the console — back-to-the-pantry, all four sections — so opening it
+	 * behind a folded drawer still leaves a visible way through. This pane has no
+	 * rail form at all, so a press on the rail's flyout would set a flag and
+	 * reveal nothing. Both halves, for `onExpand`'s reason: un-collapsing is what
+	 * shows the docked drawer above the dock, and `open` is what slides it in
+	 * below.
+	 */
+	function openAccount() {
+		setAccountOpen(true);
+		setAdminSection(null);
+		setDrawerCollapsed(false);
+		setDrawerOpen(true);
+	}
+
+	/**
+	 * *Delete account*, from the pane's card.
+	 *
+	 * **The pre-flight is skipped when there is nothing to decide**, and the
+	 * confirmation is the whole flow: a screen whose only content is *nothing to
+	 * decide* is the control that can only disappoint, one level up.
+	 */
+	function startAccountDelete(snapshot: { name: string; households: AccountHousehold[] }) {
+		setDeleting(snapshot);
+		setDeleteChosen({});
+		setDeleteError('');
+		setDeleteStep(needsPreflight(snapshot.households) ? 'preflight' : 'confirm');
+	}
+
+	async function commitAccountDelete() {
+		if (! deleting || deleteBusy) return;
+
+		setDeleteBusy(true);
+
+		/*
+		 * The recap is taken **before** the write, because afterwards the query
+		 * that fed it answers about an account that no longer exists. The card at
+		 * the end is the only place those sentences are ever said, so they are
+		 * captured while there is still something to say them about — the audit
+		 * log's own denormalisation argument, one feature over.
+		 */
+		const rows = recapRows(deleting.households, deleteChosen);
+		const refusal = await accountWrites.deleteAccount(
+			decisionsFrom(deleting.households, deleteChosen)
+		);
+
+		setDeleteBusy(false);
+
+		/*
+		 * Refused — usually because somebody left or took over a household while
+		 * this was open. The dialog stays exactly where it is with the server's
+		 * sentence above its buttons, so the decisions and the typing survive.
+		 */
+		if (refusal) { setDeleteError(refusal); return; }
+
+		setDeleting(null);
+		setDeletedRows(rows);
 	}
 
 	/**
@@ -2165,6 +2315,25 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				if (await api.removeMember(action.membershipId)) toasts.push({ lead: 'Member removed.' });
 				return;
 
+			/*
+			 * **No toast.** The Members row you are looking at changes — they
+			 * become Owner and your own row becomes *Editor · You* — which is the
+			 * most visible confirmation the app has, and the same argument four
+			 * other triggers already settle on.
+			 *
+			 * A refusal goes through `api.error`'s banner rather than being
+			 * swallowed: the server's own sentences here are instructions.
+			 */
+			case 'transfer-ownership': {
+				const refusal = await accountWrites.transferOwnership(
+					api.currentHouseholdId,
+					action.membershipId
+				);
+
+				if (refusal) setTransferError(refusal);
+				return;
+			}
+
 			// No toast on either: the household you would announce it in is the
 			// one you just left.
 			case 'leave':
@@ -2410,6 +2579,30 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	 * need.
 	 */
 	/*
+	 * **The account is gone, and this is above everything** (D68).
+	 *
+	 * It has to be: the deletion removes the profile and every membership, so a
+	 * beat later `profile` reports `needsName` and `households` reports
+	 * `no-household` — which would put the first-run screen in front of somebody
+	 * who has just deleted their account, offering to name a household. The
+	 * session is still live, because deleting an account removes this app's rows
+	 * and cannot reach the Spacefast identity behind them, so neither the shell
+	 * nor the signed-out surface is the right answer either.
+	 *
+	 * **No toast.** There is no app left to show one in; the card is the
+	 * confirmation, which is the fifth settled case of what gets one.
+	 */
+	if (deletedRows) {
+		return (
+			<OutsideShell dark={dark} theme={theme}>
+				{/* Signing out is what makes *Back to Larder Log* land on the
+				  * marketing page rather than on a first-run screen. */}
+				<AccountGoneCard rows={deletedRows} onLeave={onSignOut} theme={theme} />
+			</OutsideShell>
+		);
+	}
+
+	/*
 	 * The display name comes before everything, the invite landing included.
 	 *
 	 * Both halves of this are load-bearing. Waiting on the query means the
@@ -2533,9 +2726,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					households={api.households} currentHouseholdId={api.currentHouseholdId}
 					onSelectHousehold={setSelectedHousehold}
 					onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
-					accountName={accountName} accountEmail={email} accountPicture={picture}
-					onSetDisplayName={renameAccount}
-					/* The same row, in the other host this menu has. */
+					accountName={accountName} accountPicture={picture}
+					/* Both of the menu's destinations, in the other host it has. */
+					onOpenAccount={openAccount}
 					onOpenAdmin={isAdmin ? openAdmin : undefined}
 					/*
 					 * While the console is open the rail is the console's, not the
@@ -2554,7 +2747,19 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					 * drawer at `lg`; `open` is what slides it in below that, where
 					 * un-collapsing alone would do nothing visible.
 					 */
-					onExpand={(tab) => { setDrawerTab(tab); setDrawerCollapsed(false); setDrawerOpen(true); }}
+					/*
+					 * It names a tab, so it has to leave the account pane — which is
+					 * a level *above* the tabs (D68). Without this, pressing
+					 * **Filter** on the rail expands onto *Your account*, which is
+					 * the drawer answering a question nobody asked. `goAdmin` makes
+					 * the same move one pane over.
+					 */
+					onExpand={(tab) => {
+						setDrawerTab(tab);
+						setAccountOpen(false);
+						setDrawerCollapsed(false);
+						setDrawerOpen(true);
+					}}
 					onSignOut={onSignOut}
 					theme={theme}
 				/>
@@ -2574,6 +2779,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				onNewHousehold={() => setNewHousehold(true)} onJoinHousehold={joinWithCode}
 				accountName={accountName} accountEmail={email} accountPicture={picture}
 				onSetDisplayName={renameAccount} onSignOut={onSignOut}
+				accountOpen={accountOpen}
+				onOpenAccount={openAccount}
+				onCloseAccount={() => setAccountOpen(false)}
+				onDeleteAccount={startAccountDelete}
 				openMembers={openMembers}
 				adminSection={adminSection}
 				setAdminSection={goAdmin}
@@ -2623,6 +2832,25 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							name: member?.displayName || 'this member',
 						});
 					},
+					onTransferOwnership: (membershipId) => {
+						const member = members.find((m) => m.id === membershipId);
+
+						setPending({
+							kind: 'transfer-ownership',
+							membershipId,
+							name: member?.displayName || 'this member',
+						});
+					},
+					/*
+					 * Built here rather than in the pane, because the rows are
+					 * already in this component: `pantry` is the household you are
+					 * in, and the file is that answer written down. Nothing is
+					 * fetched and nothing is asked of the server.
+					 */
+					onExportPantry: () => downloadCsv(
+						pantryFilename(householdName, new Date().toISOString()),
+						pantryCsv(items, locations, stores, types)
+					),
 					onLeaveHousehold: requestLeave,
 					leaveLabel: members.length <= 1 ? 'Delete household' : 'Leave household',
 				}}
@@ -2795,7 +3023,14 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			  * at all — a query that fails never emits — and every message a
 			  * handler throws is written to be read by a person.
 			  */}
-			{api.error && (
+			{/*
+			  * `transferError` rides the same banner rather than a second one.
+			  * `transferOwnership` is the app's one mutation outside
+			  * `usePantryData`, so its refusal has nowhere else to land — and two
+			  * alert regions saying the same kind of thing in the same place is
+			  * the drift the shared banner exists to prevent.
+			  */}
+			{(api.error || transferError) && (
 				<div class="px-[18px] md:px-[34px]">
 					<div
 						role="alert"
@@ -2806,8 +3041,12 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							border: `1px solid ${theme.dangerText}`,
 						}}
 					>
-						<span>{api.error}</span>
-						<button onClick={api.dismissError} aria-label="Dismiss" class="shrink-0">
+						<span>{api.error || transferError}</span>
+						<button
+							onClick={() => { api.dismissError(); setTransferError(''); }}
+							aria-label="Dismiss"
+							class="shrink-0"
+						>
 							<X size={15} />
 						</button>
 					</div>
@@ -3609,6 +3848,61 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 				dark={dark}
 				theme={theme}
 			/>
+
+			{/*
+			  * The account deletion flow (D68), at the app's top level with every
+			  * other modal — **not in the pane it is reached from**, whose
+			  * `<aside>` is a transformed ancestor and therefore the containing
+			  * block for anything `position: fixed` inside it.
+			  *
+			  * `deleting` is the snapshot the pane handed over, so both dialogs
+			  * draw the same households and neither re-queries.
+			  */}
+			{deleting && (
+				<>
+					<AccountPreflight
+						open={deleteStep === 'preflight'}
+						households={deleting.households}
+						chosen={deleteChosen}
+						onChoose={(householdId, value) => setDeleteChosen((prev) => ({ ...prev, [householdId]: value }))}
+						/*
+						 * **The dialog stays open.** The file arrives beside it, and
+						 * the decision the row is about has not been made yet —
+						 * closing the pre-flight to hand over a copy would throw away
+						 * every other answer on the screen.
+						 */
+						onExport={setExporting}
+						onContinue={() => setDeleteStep('confirm')}
+						onCancel={() => setDeleting(null)}
+						dark={dark}
+						theme={theme}
+					/>
+
+					<AccountDeleteConfirm
+						open={deleteStep === 'confirm'}
+						name={deleting.name}
+						households={deleting.households}
+						chosen={deleteChosen}
+						onConfirm={() => void commitAccountDelete()}
+						onCancel={() => setDeleting(null)}
+						busy={deleteBusy}
+						error={deleteError}
+						dark={dark}
+						theme={theme}
+					/>
+				</>
+			)}
+
+			{/* Renders nothing: it mounts, subscribes, downloads once, and asks to
+			  * be unmounted — the one-shot read in a client that only has
+			  * subscriptions. */}
+			{exporting && (
+				<ExportPantry
+					householdId={exporting.id}
+					householdName={exporting.name}
+					onDone={clearExport}
+				/>
+			)}
 
 			<NewHouseholdDialog
 				open={newHousehold}

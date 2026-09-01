@@ -5,12 +5,13 @@ import type { Theme } from '../lib/theme';
 import { statusColor, statusFor, themed } from '../lib/theme';
 import { LIST_GHOST, LIST_GHOST_ON_CARD, LIST_ROW, LIST_TARGET, PAGE_BUTTON_PRIMARY_ON_SUNK } from '../lib/controlStyles';
 import { CheckBox } from './CheckBox';
+import { PersonAvatar } from './PersonAvatar';
 
 import { SOURCE_KIND_ICONS } from './SourceKindMenu';
 import type { BandKind, RunBand, ShoppingGroup } from '../../shared/runList';
 import type { Item } from '../../shared/types';
 import { isExtra } from '../../shared/listRule';
-import { claimInitial, claimPhrase } from '../../shared/claim';
+import { claimPhrase } from '../../shared/claim';
 import type { ClaimOwner } from '../../shared/claim';
 import { toInt } from '../../shared/qty';
 import { formatSize } from '../../shared/size';
@@ -611,7 +612,7 @@ function ListRow({ item, first, checked, claimedBy, onToggle, dark, theme }: Row
 			  */}
 			<span class="w-[52px] md:w-14 shrink-0 flex items-center justify-center self-stretch">
 				{claimedBy
-					? <ClaimAvatar owner={claimedBy} theme={theme} />
+					? <PersonAvatar name={claimedBy.name} picture={claimedBy.picture} theme={theme} />
 					: <CheckBox checked={checked} theme={theme} />}
 			</span>
 			<span class={`${bodyClass} pr-4 md:pr-0`}>{body}</span>
@@ -645,73 +646,6 @@ function ListRow({ item, first, checked, claimedBy, onToggle, dark, theme }: Row
 				</button>
 			) : inner}
 		</li>
-	);
-}
-
-/**
- * The face in a claimed row's tick column.
- *
- * **A real Gravatar wherever there is one** (D55) — a person in this app has a
- * face on the Members pane, in the Settings trio, on the drawer's foot row and
- * across the admin console, and a claimed row is no different. It was drawn as
- * a letter first, on the argument that 18px is too small for a photograph; that
- * is a reason to accept a smudge, not a reason to invent a rule the rest of the
- * app does not follow.
- *
- * **`onError` is load-bearing and not defensive**, exactly as `DrawerAvatar`'s
- * is. The platform's URL carries `d=404` deliberately, so an account *without* a
- * Gravatar serves no image at all and the consumer draws its own initial —
- * without this, that account gets the browser's broken-image glyph, which is the
- * one outcome worse than the letter. It holds the URL that **failed** rather
- * than a boolean, so a changed picture retries with no effect to reset a flag.
- *
- * It cannot reuse `DrawerAvatar`, which is theme-independent because the drawer
- * is dark in both themes and hard-codes that palette. This sits on a cream card.
- *
- * The fallback fill is neutral rather than a term colour: term colours mean
- * *term* everywhere else, and a person is not a term — `DrawerAvatar`'s own
- * argument, one surface over.
- */
-function ClaimAvatar({ owner, theme }: { owner: ClaimOwner; theme: Theme }) {
-	const [failed, setFailed] = useState('');
-
-	/*
-	 * **22px, matching the checkbox it stands in for**, not the 18 the design
-	 * gave it — that number was for the count slot, beside 13px text. Here it
-	 * shares a column with `CheckBox`, and a circle four pixels shy of the boxes
-	 * above it reads as floating rather than as the same answer in a different
-	 * state.
-	 *
-	 * The letter is 0.44 of the side, which is `DrawerAvatar`'s rule and the
-	 * reason a fifth size would be a number rather than a table entry.
-	 */
-	const box = 'w-[22px] h-[22px] rounded-full shrink-0';
-
-	if (owner.picture && failed !== owner.picture) {
-		return (
-			<img
-				src={owner.picture}
-				alt=""
-				aria-hidden="true"
-				class={`${box} object-cover`}
-				style={{ border: `1px solid ${theme.borderStrong}` }}
-				onError={() => setFailed(owner.picture)}
-			/>
-		);
-	}
-
-	return (
-		<span
-			aria-hidden="true"
-			class={`inline-flex items-center justify-center font-semibold text-[10px] ${box}`}
-			style={{
-				background: theme.surfaceAlt,
-				border: `1px solid ${theme.borderStrong}`,
-				color: theme.textMuted,
-			}}
-		>
-			{claimInitial(owner.name)}
-		</span>
 	);
 }
 

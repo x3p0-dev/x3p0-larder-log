@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ChevronRight, LogOut, Minus, Pencil, Plus } from 'lucide-preact';
+import { ChevronRight, Download, LogOut, Minus, Pencil, Plus } from 'lucide-preact';
 
 import { DrawerAvatar } from './DrawerAvatar';
 import { HouseholdIdentity } from './HouseholdIdentity';
@@ -10,7 +10,8 @@ import { TermPanel } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
 import {
-	DRAWER_CARD_ROW, DRAWER_GHOST_DANGER, DRAWER_SEGMENT_ON, DRAWER_STEPPER, DRAWER_SUNK,
+	DRAWER_CARD_ROW, DRAWER_GHOST_DANGER, DRAWER_PRIMARY_ON_CARD, DRAWER_SEGMENT_ON,
+	DRAWER_STEPPER, DRAWER_SUNK,
 } from '../lib/controlStyles';
 import type { Invite, Member, ThemeOverride } from '../../shared/types';
 import type { Role } from '../../shared/roles';
@@ -42,6 +43,10 @@ type Props = {
 	onRevokeInvite: (inviteId: string) => void;
 	onChangeRole: (membershipId: string, role: Role) => void;
 	onRemoveMember: (membershipId: string) => void;
+	/** Hands the household over — owner only, and never on your own row (D68). */
+	onTransferOwnership: (membershipId: string) => void;
+	/** Hands over the household's rows as a CSV. Owners and editors (D68). */
+	onExportPantry: () => void;
 	/**
 	 * Asks to leave. Which of the three cases you are in — leave, blocked on
 	 * being the last owner, or delete because you are the last member — is
@@ -127,7 +132,7 @@ export function DrawerSettings({
 	householdInk, setHouseholdInk, itemCount,
 	defaultThreshold, setDefaultThreshold,
 	members, invites, me, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember,
-	onLeaveHousehold, leaveLabel, membersOpen, setMembersOpen, theme,
+	onTransferOwnership, onExportPantry, onLeaveHousehold, leaveLabel, membersOpen, setMembersOpen, theme,
 }: Props) {
 	const d = theme.drawer;
 	/* Panels paint from a Theme; hand them one whose surfaces are the drawer's. */
@@ -146,6 +151,14 @@ export function DrawerSettings({
 	 * values themselves still show, because they are information.
 	 */
 	const mayEditSettings = can(me.role, 'household:settings');
+	/*
+	 * `item:write` is the closest capability there is, and it is the right one:
+	 * owners and editors have it and a viewer does not, which is exactly the line
+	 * the design draws. A capability of its own would be a fourth column in
+	 * `shared/roles.ts` that no handler enforces — the export is built in the
+	 * client out of rows this person is already reading.
+	 */
+	const mayExport = can(me.role, 'item:write');
 
 	/* One in flight at a time, so a double tap cannot mint two codes. */
 	async function createInvite(role: Role) {
@@ -195,6 +208,7 @@ export function DrawerSettings({
 				onRevokeInvite={onRevokeInvite}
 				onChangeRole={onChangeRole}
 				onRemoveMember={onRemoveMember}
+				onTransferOwnership={onTransferOwnership}
 				creatingInvite={creatingInvite}
 				theme={inner}
 			/>
@@ -345,9 +359,10 @@ export function DrawerSettings({
 				</div>
 			</Block>
 
-			{/* Anything pantry-wide lands here. Today that is one row. */}
+			{/* Anything pantry-wide lands here. Today that is two rows. */}
 			<Block title="Pantry settings" theme={theme}>
-				<div class="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5 rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
+				<div class="flex flex-col rounded-[13px]" style={{ background: d.raised, border: `1px solid ${d.line}` }}>
+				<div class="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5">
 					<span class="flex-1 min-w-0 flex flex-col gap-px">
 						<span class="text-[14.5px]" style={{ color: d.inkMuted }}>New items are low at</span>
 						<span class="text-[12.5px]" style={{ color: inner.textFaint }}>Change it per item any time</span>
@@ -379,6 +394,45 @@ export function DrawerSettings({
 						<span class="shrink-0 text-body font-semibold tabular-nums" style={{ color: d.ink }}>
 							{defaultThreshold}
 						</span>
+				)}
+				</div>
+
+				{/*
+				  * **Pantry settings, not Preferences** (D68), and *scope is in the
+				  * label* already decides it: the pantry belongs to the household
+				  * you are in, so the export does too — and it survives your account
+				  * being deleted, because it was never yours.
+				  *
+				  * **Owners and editors.** A Viewer reading a household is not the
+				  * same as a Viewer taking a copy of it away, and that is the one
+				  * place in the app where reading and exporting come apart. Absent
+				  * rather than disabled, per D30.
+				  *
+				  * **One file, no picker.** A format choice is a question nobody has
+				  * an opinion about. **And it is not a backup**, because nothing
+				  * imports one back — saying so is cheap, and the alternative is
+				  * somebody deleting a household they thought they had saved.
+				  */}
+				{mayExport && (
+					<>
+						<span class="block h-px" style={{ background: d.line }} />
+
+						<div class="flex items-center gap-2.5 pl-3.5 pr-3 py-2.5">
+							<span class="flex-1 min-w-0 flex flex-col gap-px">
+								<span class="text-[14.5px]" style={{ color: d.inkMuted }}>Export the pantry</span>
+								<span class="text-[12.5px]" style={{ color: inner.textFaint }}>
+									{itemCount === 1 ? '1 item' : `${itemCount} items`}, as a spreadsheet. Not a backup
+								</span>
+							</span>
+							<button
+								onClick={onExportPantry}
+								class={`shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-[10px] text-[13.5px] font-semibold ${DRAWER_PRIMARY_ON_CARD}`}
+								style={{ background: d.ink, color: '#241E17' }}
+							>
+								<Download size={14} /> CSV
+							</button>
+						</div>
+					</>
 				)}
 				</div>
 			</Block>

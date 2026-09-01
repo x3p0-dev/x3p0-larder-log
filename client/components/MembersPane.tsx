@@ -23,7 +23,8 @@ import type { Role } from '../../shared/roles';
  */
 export function MembersPane({
 	householdName, members, invites, me,
-	onBack, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember, creatingInvite, theme,
+	onBack, onCreateInvite, onRevokeInvite, onChangeRole, onRemoveMember,
+	onTransferOwnership, creatingInvite, theme,
 }: {
 	householdName: string;
 	members: Member[];
@@ -34,6 +35,8 @@ export function MembersPane({
 	onRevokeInvite: (inviteId: string) => void;
 	onChangeRole: (membershipId: string, role: Role) => void;
 	onRemoveMember: (membershipId: string) => void;
+	/** Hands the household over — owner only, and never on your own row (D68). */
+	onTransferOwnership: (membershipId: string) => void;
 	creatingInvite: boolean;
 	theme: Theme;
 }) {
@@ -61,6 +64,7 @@ export function MembersPane({
 				me={me}
 				onChangeRole={onChangeRole}
 				onRemoveMember={onRemoveMember}
+				onTransferOwnership={onTransferOwnership}
 				theme={theme}
 			/>
 

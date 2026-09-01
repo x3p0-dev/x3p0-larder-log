@@ -12,10 +12,12 @@ import { toListRule } from '../shared/listRule';
 import { normalizeSeason } from '../shared/season';
 import { normalizeSize } from '../shared/size';
 import { BULK_MAX } from '../shared/bulkEntry';
+import type { AccountHousehold, HouseholdFate, OwnershipDecision } from '../shared/accountDeletion';
+import { fateOf } from '../shared/accountDeletion';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import {
-	ADMIN_IDS_VAR, adminWritesHeldFor, cumulativeByMonth, isDormant, isWithinDays,
-	matchScore, monthKeysBack, monthLabel, parseAdminIds, RECENT_DAYS,
+	ADMIN_IDS_VAR, ADMIN_UNDELETABLE_REFUSAL, adminWritesHeldFor, cumulativeByMonth, isAdminId,
+	isDormant, isWithinDays, matchScore, monthKeysBack, monthLabel, parseAdminIds, RECENT_DAYS,
 } from '../shared/admin';
 import {
 	encodeHeld, retentionCutoff, RETENTION_VAR, toRetentionMonths,
@@ -24,6 +26,8 @@ import type { ActivityAction, Held, TargetKind } from '../shared/activity';
 import { byName, normalizeInk, normalizeName, normalizeNotes, termBlock, termKey, isValidName } from '../shared/term';
 import { CODE_BYTES, PENDING_CODE, codeFromBytes, codeFromSeed, expiryFrom, isExpired, isCodeShaped, normalizeCode } from '../shared/invite';
 import type {
+	AccountInvite,
+	AccountResult,
 	AdminAccessResult,
 	AdminAccountResult,
 	AdminActivityExportResult,
@@ -602,6 +606,123 @@ export default capsule({
 			summaries.sort((a, b) => a.id.localeCompare(b.id));
 
 			return { state: 'ready', households: summaries };
+		}),
+
+		/**
+		 * The account pane's one read — you, and what your deletion would do (D68).
+		 *
+		 * **It answers whether or not you are in a household.** `no-household` is
+		 * not one of its states, because an account in none can still be named,
+		 * exported and deleted — that is the simplest path through this flow
+		 * rather than an edge of it. `profile` declines the same union for the
+		 * same reason.
+		 *
+		 * **Five indexed reads per household, and no scan of anything.** The
+		 * console's equivalent walks whole tables because it is answering about a
+		 * space; this is answering about one person, and every read here is
+		 * `by_household` on a household the caller is already in. That is what
+		 * makes it affordable — but it is still not free, which is why the client
+		 * subscribes only while the pane is pushed rather than beside `pantry`.
+		 *
+		 * The counts are per household and per taxonomy because a row set to
+		 * *delete it* says on its own face what goes with it, and a number nobody
+		 * can check is the one thing that screen must not print.
+		 */
+		account: query(async (ctx): Promise<AccountResult> => {
+			if (! signedIn(ctx)) return { state: 'guest' };
+
+			const userId = ctx.auth.userId;
+
+			const mine = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', userId))
+				.collect();
+
+			const households: AccountHousehold[] = [];
+			const invites: AccountInvite[] = [];
+			const now = Date.now();
+
+			const minted = await ctx.db.invites
+				.withIndex('by_creator', (r) => r.eq('createdBy', userId))
+				.collect();
+
+			for (const row of mine) {
+				const household = await ctx.db.households.get(row.householdId);
+
+				// A membership pointing at a household that is gone. `id()` is not
+				// a foreign key, so this is a real state rather than a defensive
+				// flourish — and a row nobody can reach is not a household to
+				// decide the fate of.
+				if (! household) continue;
+
+				const [members, items, locations, stores, types] = await Promise.all([
+					ctx.db.memberships.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
+					ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
+					ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
+					ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
+					ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
+				]);
+
+				households.push({
+					id: household.id,
+					name: household.name,
+					ink: householdInk(household.ink, household.id),
+					role: toRole(row.role),
+					members: members.length,
+					items: items.length,
+					locations: locations.length,
+					sources: stores.length,
+					types: types.length,
+					// The household's own word, so a garden household reads
+					// *sources* on this screen exactly as its drawer does (D58).
+					sourceWord: sourceGroupWord(stores.map((s) => ({ kind: toSourceKind(s.kind) }))),
+					/*
+					 * **Everyone else, whatever their role.** Receiving a household
+					 * promotes them, and the confirm says so out loud — filtering to
+					 * existing owners would hide the only candidate in a household
+					 * that has exactly one.
+					 */
+					candidates: members
+						.filter((m) => m.userId !== userId)
+						.map((m) => ({
+							id: m.id,
+							name: m.displayName || 'Someone',
+							picture: normalizeAvatarUrl(m.picture ?? ''),
+							role: toRole(m.role),
+						})),
+				});
+
+				for (const invite of minted) {
+					if (invite.householdId !== household.id) continue;
+
+					invites.push({
+						household: household.name,
+						role: toRole(invite.role),
+						expiresAt: invite.expiresAt,
+						live: ! invite.revoked && ! isExpired(invite.expiresAt, now),
+					});
+				}
+			}
+
+			// The same ordering the switcher takes, so the pre-flight lists the
+			// households in the order the app has been listing them all along.
+			households.sort((a, b) => a.id.localeCompare(b.id));
+
+			return {
+				state: 'ready',
+				name: await accountNameOf(ctx.db, userId, ctx.auth),
+				/*
+				 * Empty in production and always will be (D56) — a Spacefast
+				 * account carries no `email` claim. It is here because the export
+				 * has to describe what is held rather than what would be nice, and
+				 * an absent field is the honest answer.
+				 */
+				email: ctx.auth.email ?? '',
+				// The pane needs this to explain itself, because the refusal's own
+				// sentence never reaches a person in production.
+				administers: isAdminId(userId, ctx.env[ADMIN_IDS_VAR]),
+				households,
+				invites,
+			};
 		}),
 
 		/**
@@ -1612,7 +1733,7 @@ export default capsule({
 
 			// `invitePreview` names the inviter, and it is read by someone who is
 			// not signed in and cannot refresh anything themselves.
-			ctx.invalidate('profile', 'household', 'invitePreview');
+			ctx.invalidate('profile', 'household', 'invitePreview', 'account');
 		}),
 
 		/**
@@ -1749,7 +1870,7 @@ export default capsule({
 				});
 			}
 
-			ctx.invalidate('households', 'household', 'pantry', 'claims');
+			ctx.invalidate('households', 'household', 'pantry', 'claims', 'account');
 
 			return { householdId: household.id };
 		}),
@@ -2640,7 +2761,7 @@ export default capsule({
 				role: toRole(invite.role),
 			});
 
-			ctx.invalidate('households', 'household', 'pantry', 'invitePreview');
+			ctx.invalidate('households', 'household', 'pantry', 'invitePreview', 'account');
 
 			return { householdId: invite.householdId };
 		}),
@@ -2672,7 +2793,7 @@ export default capsule({
 			// an owner dropped to editor would otherwise keep minting editors.
 			await revokeInvitesBy(ctx.db, membership.householdId, target.userId);
 
-			ctx.invalidate('household');
+			ctx.invalidate('household', 'account');
 		}),
 
 		removeMember: mutation(async (ctx, householdId: string, membershipId: string) => {
@@ -2700,7 +2821,7 @@ export default capsule({
 			await endTripsFor(ctx.db, membership.householdId, target.userId);
 			await ctx.db.memberships.delete(target.id);
 
-			ctx.invalidate('households', 'household', 'claims');
+			ctx.invalidate('households', 'household', 'claims', 'account');
 		}),
 
 		leaveHousehold: mutation(async (ctx, householdId: string) => {
@@ -2726,7 +2847,7 @@ export default capsule({
 
 			// The list is what the client falls back through: losing this row is
 			// how it learns to show one of the others, or the first-run screen.
-			ctx.invalidate('households', 'household', 'pantry', 'claims');
+			ctx.invalidate('households', 'household', 'pantry', 'claims', 'account');
 		}),
 
 		/** Owner only. Deletes every row scoped to the household, children first. */
@@ -2757,7 +2878,253 @@ export default capsule({
 
 			await ctx.db.households.delete(membership.householdId);
 
-			ctx.invalidate('households', 'household', 'pantry', 'claims');
+			ctx.invalidate('households', 'household', 'pantry', 'claims', 'account');
+		}),
+
+		/*
+		 * --- your own account (D68) ---
+		 *
+		 * Two writes the app has never had, and the first exists because the
+		 * second needs it: a household cannot be left by its only owner (D22),
+		 * so an account that owns three of them cannot be deleted until
+		 * ownership is something a person can hand over.
+		 *
+		 * Neither is an admin write and neither is behind `ADMIN_WRITES_HELD`.
+		 * The console's six reach households the caller is not in; these two
+		 * reach only the caller's own memberships, and every one of them is
+		 * resolved through `requireCapability` or through `by_user` on the
+		 * caller's own id.
+		 */
+
+		/**
+		 * Hands a household over: they become Owner and **you become an Editor**.
+		 *
+		 * **Promote is not transfer**, and the second half is the part the app had
+		 * no control for at all — the role menu can add an owner, and your own row
+		 * carries no trigger, so there was nowhere to step yourself back from.
+		 *
+		 * Promotion happens first, so there is never an instant with no owner —
+		 * the state this exists to get a household *out* of. Only the caller is
+		 * demoted: a household with two other owners keeps both, because handing
+		 * yours over is not a claim about theirs.
+		 *
+		 * **D21 applies to the demotion, not to the promotion.** An owner dropped
+		 * to editor keeps minting editors through a link already in the wild, so
+		 * the caller's invites in this household die with their role. The person
+		 * receiving it is gaining privilege, and nothing they have issued is
+		 * suddenly too generous.
+		 */
+		transferOwnership: mutation(async (ctx, householdId: string, toMembershipId: string) => {
+			const membership = await requireCapability(ctx, householdId, 'member:role');
+
+			const members = await ctx.db.memberships
+				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
+				.collect();
+
+			const target = members.find((m) => m.id === toMembershipId);
+
+			if (! target) throw new AccessError('That member is no longer in this household.');
+
+			// Handing it to yourself is a no-op that would then demote you out of
+			// the household you still own — the one case where the obvious guard
+			// is load-bearing rather than defensive.
+			if (target.id === membership.id) {
+				throw new AccessError('Choose someone else to hand this household to.');
+			}
+
+			if (toRole(target.role) !== 'owner') {
+				await ctx.db.memberships.update(target.id, { role: 'owner' });
+			}
+
+			await ctx.db.memberships.update(membership.id, { role: 'editor' });
+			await revokeInvitesBy(ctx.db, membership.householdId, membership.userId);
+
+			ctx.invalidate('households', 'household', 'pantry', 'account');
+		}),
+
+		/**
+		 * Deletes your own account: every membership, every trip, and the profile.
+		 *
+		 * **It does not delete the identity, and it cannot.** A Spacefast account
+		 * lives on the platform; what this app owns is the rows keyed to its
+		 * `userId`. Signing in again would produce a stranger with the same id and
+		 * no history — which is the honest description, and it is what the card at
+		 * the end says in so many words.
+		 *
+		 * **The plan is the server's, not the client's.** `fateOf` in
+		 * `shared/accountDeletion.ts` decides what happens to each household, and
+		 * both halves read it: the dialog to draw its two groups, and this to
+		 * decide which rows it is owed an answer for. Two descriptions of *which
+		 * households are a question* would disagree exactly once, in production,
+		 * over somebody's data.
+		 *
+		 * Order matters and it is the reverse of what reads naturally: **every
+		 * decision is validated before anything is written**, because a
+		 * half-applied deletion leaves a household transferred to somebody and an
+		 * account still present, with no record of either.
+		 *
+		 * **Nothing is logged**, and that is D62's rule rather than an omission:
+		 * the audit log records *administration* — things done from the console to
+		 * households and accounts that are not the caller's — and never what a
+		 * person does to their own. `deleteHousehold` a few lines up writes no row
+		 * either, and this is the same act at the scale of an account.
+		 */
+		deleteMyAccount: mutation(async (ctx, decisions: OwnershipDecision[] = []) => {
+			if (! signedIn(ctx)) throw new AccessError('Sign in to use Larder Log.');
+
+			const userId = ctx.auth.userId;
+
+			/*
+			 * **An administrator's account is not the app's to delete.**
+			 * `LARDER_ADMIN_IDS` is set out of band and nothing in the app can
+			 * edit it, so removing the rows would leave the environment still
+			 * naming an account that no longer exists — and the next sign-in with
+			 * that identity would mint a brand-new empty one holding the console.
+			 * The fix for *this administrator should go* is `.env.server`, which
+			 * is where the trust was granted.
+			 *
+			 * It is checked here as well as being hidden in the pane, because a
+			 * hidden control is one devtools call from a deleted account — the
+			 * same arrangement `ADMIN_WRITES_HELD` has, and `termBlock`'s before
+			 * it: one rule the server throws and the client renders.
+			 */
+			if (isAdminId(userId, ctx.env[ADMIN_IDS_VAR])) {
+				throw new AccessError(ADMIN_UNDELETABLE_REFUSAL);
+			}
+
+			const mine = await ctx.db.memberships
+				.withIndex('by_user', (r) => r.eq('userId', userId))
+				.collect();
+
+			const profile = await ctx.db.profiles
+				.withIndex('by_user', (r) => r.eq('userId', userId))
+				.first();
+
+			// --- the plan, recomputed from the rows rather than trusted ---
+
+			/** `householdId → what happens to it`, for every household you are in. */
+			const plan = new Map<string, { fate: HouseholdFate; membershipId: string }>();
+
+			for (const m of mine) {
+				const household = await ctx.db.households.get(m.householdId);
+
+				// A membership pointing at a household that is gone: delete the
+				// row below and decide nothing about a household nobody can reach.
+				if (! household) continue;
+
+				const members = await ctx.db.memberships
+					.withIndex('by_household', (r) => r.eq('householdId', m.householdId))
+					.collect();
+
+				const owners = members.filter((x) => toRole(x.role) === 'owner').length;
+
+				plan.set(m.householdId, {
+					fate: fateOf(toRole(m.role), members.length, owners),
+					membershipId: m.id,
+				});
+			}
+
+			// --- validate every decision, then write ---
+
+			const answered = new Map<string, OwnershipDecision>();
+
+			for (const decision of Array.isArray(decisions) ? decisions : []) {
+				const entry = plan.get(decision.householdId);
+
+				/*
+				 * A decision about a household that needed none means the client
+				 * and the server disagree about the state — a household somebody
+				 * else took over while the dialog was open, or a stale one. Dropping
+				 * it quietly would let that dialog delete a pantry nobody chose.
+				 */
+				if (! entry || entry.fate !== 'decide' || answered.has(decision.householdId)) {
+					throw new AccessError('Something changed while you were deciding. Open this again.');
+				}
+
+				if (decision.action === 'transfer') {
+					const members = await ctx.db.memberships
+						.withIndex('by_household', (r) => r.eq('householdId', decision.householdId))
+						.collect();
+
+					const target = members.find((x) => x.id === decision.toMembershipId);
+
+					if (! target || target.userId === userId) {
+						throw new AccessError('Choose someone else in that household to hand it to.');
+					}
+				} else if (decision.action !== 'delete') {
+					throw new AccessError('Something changed while you were deciding. Open this again.');
+				}
+
+				answered.set(decision.householdId, decision);
+			}
+
+			for (const [householdId, entry] of plan) {
+				if (entry.fate !== 'decide' || answered.has(householdId)) continue;
+
+				const household = await ctx.db.households.get(householdId);
+
+				throw new AccessError(
+					household
+						? `Decide what happens to ${household.name} first.`
+						: 'Something changed while you were deciding. Open this again.'
+				);
+			}
+
+			// --- write ---
+
+			for (const [householdId, entry] of plan) {
+				const decision = answered.get(householdId);
+
+				/*
+				 * **`goes` is deleted without being asked about**, which is the one
+				 * place this handler acts on a household with no decision attached.
+				 * You are its only member: there is nobody to hand it to, so a
+				 * screen that asked would be offering a choice with one answer.
+				 */
+				if (entry.fate === 'goes' || decision?.action === 'delete') {
+					await deleteHouseholdRows(ctx.db, householdId);
+					continue;
+				}
+
+				if (decision?.action !== 'transfer') continue;
+
+				const members = await ctx.db.memberships
+					.withIndex('by_household', (r) => r.eq('householdId', householdId))
+					.collect();
+
+				// Re-found rather than carried from the validation pass — the same
+				// re-read-before-you-write rule every other handler follows.
+				const target = members.find((x) => x.id === decision.toMembershipId);
+
+				if (target) await ctx.db.memberships.update(target.id, { role: 'owner' });
+			}
+
+			// Everything that is left. A household deleted above has had its
+			// memberships removed with it, so this skips rows that are gone.
+			for (const m of mine) {
+				const still = await ctx.db.memberships.get(m.id);
+
+				if (! still) continue;
+
+				await revokeInvitesBy(ctx.db, m.householdId, userId);
+				/*
+				 * **Live trips go with the account** (D66). A claim is the one row
+				 * in this database that records who touched what, and it is
+				 * transient precisely so that deleting an account stays a clean
+				 * operation rather than a scrubbing job.
+				 */
+				await endTripsFor(ctx.db, m.householdId, userId);
+				await ctx.db.memberships.delete(m.id);
+			}
+
+			if (profile) await ctx.db.profiles.delete(profile.id);
+
+			ctx.invalidate(
+				'households', 'household', 'pantry', 'profile', 'claims', 'account',
+				// The console is looking at a space one fewer account and possibly
+				// two fewer households than it was.
+				'adminAccount', 'adminPeople', 'adminSummary', 'adminHouseholds', 'adminHousehold'
+			);
 		}),
 
 		/*
@@ -3060,6 +3427,21 @@ export default capsule({
 			requireAdminWrite(ctx);
 
 			if (! userId) throw new AccessError('That account no longer exists.');
+
+			/*
+			 * **Including the caller's own, and including every other
+			 * administrator.** One administrator deleting a peer's account is the
+			 * sharper half of this guard: the console can already reach any
+			 * household, and this is the one row it must not be able to remove,
+			 * because `LARDER_ADMIN_IDS` would still name it afterwards.
+			 *
+			 * `isAdminId`, not `isAdminUser` — the question is about the *target*,
+			 * who is not in the room, and `isAdminUser` answers a question about
+			 * a caller. See its docblock: the two must not be swapped.
+			 */
+			if (isAdminId(userId, ctx.env[ADMIN_IDS_VAR])) {
+				throw new AccessError(ADMIN_UNDELETABLE_REFUSAL);
+			}
 
 			const mine = await ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', userId))
@@ -3391,8 +3773,13 @@ async function pruneActivity(ctx: { db: WriteDb; env: Record<string, string | un
  * It resolves to `''` rather than to an id when there is nothing: a log row
  * reading *deleted `account:7f3a…`'s account* says less than one that admits it
  * never knew the name, and the client renders the absence.
+ *
+ * **`ReadDb`, not `WriteDb`**, because the `account` query calls it too (D68) —
+ * the typed confirmation asks you to type the name this resolves, so a second
+ * resolution written for the query would be the one place the two could
+ * disagree about who you are.
  */
-async function accountNameOf(db: WriteDb, userId: string, auth: AuthContext): Promise<string> {
+async function accountNameOf(db: ReadDb, userId: string, auth: AuthContext): Promise<string> {
 	const profile = await db.profiles
 		.withIndex('by_user', (r) => r.eq('userId', userId))
 		.first();

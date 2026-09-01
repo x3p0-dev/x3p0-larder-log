@@ -39,10 +39,18 @@ type Props = {
 	 * by `Pantry`, which is the only place that can put one over the whole app.
 	 */
 	onRemoveMember: (membershipId: string) => void;
+	/**
+	 * Asks to hand the household over. It does **not** hand it over.
+	 *
+	 * The confirm is owned by `Pantry` for `onRemoveMember`'s reason, and it is
+	 * a confirm rather than an undo for a sharper one: after it, only the other
+	 * person can hand it back.
+	 */
+	onTransferOwnership: (membershipId: string) => void;
 	theme: Theme;
 };
 
-export function MembersPanel({ members, me, onChangeRole, onRemoveMember, theme }: Props) {
+export function MembersPanel({ members, me, onChangeRole, onRemoveMember, onTransferOwnership, theme }: Props) {
 	const d = theme.drawer;
 	const mayManageRoles = can(me.role, 'member:role');
 
@@ -91,6 +99,7 @@ export function MembersPanel({ members, me, onChangeRole, onRemoveMember, theme 
 											role={member.role}
 											onChangeRole={(role) => onChangeRole(member.id, role)}
 											onRemove={() => onRemoveMember(member.id)}
+											onTransfer={() => onTransferOwnership(member.id)}
 											theme={theme}
 										/>
 									) : (

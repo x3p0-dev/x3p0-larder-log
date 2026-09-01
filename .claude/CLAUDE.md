@@ -59,6 +59,17 @@ would be a confident sentence about a biased sample. See *Restock — the trip
 that ends (D64)*, *The list override is a tri-state (D65)* and *Claims are
 shared (D66)* below.
 
+**Built and unpublished: delete account (D68).** The last capability the app had
+no control for — you could not hand a household over, so you could not leave the
+ones you solely own, so you could not delete your account at all. Built from
+`.claude/docs/design/delete-account.md` on 2026-09-01. **No schema change**:
+fourteen tables, **fifteen** queries, **thirty-one** mutations — `account`,
+`transferOwnership` and `deleteMyAccount` — and `db.migrations` empty. The
+account menu's identity row is a **door** now rather than a display, and the
+display name moved with it into a pushed *Your account* pane. **Export arrived
+with it and is two features**, in two places. See *Delete account — leaving every
+household at once (D68)* below.
+
 **Built and unpublished: bulk entry (D67).** The adoption wall — twenty items is
 a sample dataset and a real pantry is two hundred. Built from
 `.claude/docs/design/bulk-entry.md` on 2026-08-31. **No schema change**:
@@ -239,11 +250,12 @@ hosted runtime is not the engine `sf dev` runs* before writing any handler.
 A real Spacefast Zero project: `sf.jsonc`,
 `theme.json`, a Preact + TypeScript client in `client/`, pure domain logic in
 `shared/`, and a capsule in `server/` holding the full schema from
-`.docs/data-model.md`, **fourteen** live queries, and **twenty-nine** mutations
+`.docs/data-model.md`, **fifteen** live queries, and **thirty-one** mutations
 across **fourteen** tables. The `restocks`, `trips` and `claims` tables,
-`items.listRule` and five mutations are restock's and bulk entry's (D64, D65,
-D66, D67) and are **unpublished** — built and verified locally, not yet in a
-version. **Only D64–D66 cost schema**; D67 added a handler and nothing else. The schema is
+`items.listRule`, one query and eight mutations are restock's, bulk entry's and
+account deletion's (D64–D68) and are **unpublished** — built and verified
+locally, not yet in a version. **Only D64–D66 cost schema**; D67 and D68 added
+handlers and nothing else. The schema is
 declared inline in `server/index.ts` and **has to be** — see
 [D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)
 before editing it.
@@ -3744,6 +3756,460 @@ the empty-batch guard fails 1, and letting a set touch unticked rows fails 2.
 Ground check 10 controls, 0 flagged; the bundle carries `In Pantry` and neither
 of the two strings it replaced.
 
+### Delete account — leaving every household at once (D68) — 2026-09-01
+
+`.claude/docs/design/delete-account.md`, drawn on
+`.claude/docs/design/larderlogdeleteaccountboards.html` — six boards, light
+theme, desktop except board 6. **No schema change**: fourteen tables, **fifteen**
+queries, **thirty-one** mutations, `db.migrations` empty and `/api/status` still
+the only endpoint. A feature this size costing one query and two handlers is a
+feature the data model was already shaped for.
+
+**Account deletion is *leave household* run against every household at once**,
+and D22's last-owner guard does not survive the trip. **One blocked dialog is a
+step; five is a wall** — so every block becomes a choice, every choice becomes
+one row, and the set is asked once at the end rather than five times on the way
+past.
+
+- **`fateOf` in `shared/accountDeletion.ts` is the whole classification, and
+  both halves read it** — the dialog to draw its two groups, and
+  `deleteMyAccount` to decide which rows it is owed an answer for. Two
+  descriptions of *which households are a question* would disagree exactly once,
+  in production, over somebody's data. **`members <= 1` is tested before the
+  role**, and that ordering is the rule: testing the role first makes a
+  sole-member household a *question*, which is a screen offering a choice with
+  one answer. `npm test` fails ten assertions on the swap.
+- **The identity row in the account menu is a door now.** It lost its pencil,
+  gained a chevron, and opens *Your account* — the **third** use of the pushed
+  pane after Members and Administration, so the way out is the gesture the app
+  already teaches. **`Delete account` sits inside the account's own card under a
+  hairline, exactly where *Leave household* sits inside the Household card**;
+  that parallel is the argument rather than a coincidence.
+- **The cost is that the display name moved**, out of the menu D49 put it in on
+  purpose. The idiom survives intact one push further in — a read-only row that
+  flips in place, Escape cancels, no toast — and **the crimson menu row that lost
+  is on the record** as the fallback if this turns out to be the worse trade.
+- **`openAccount` un-collapses the drawer, which is the opposite of
+  `openAdmin`.** The console has a rail form and this pane has none, so a press
+  on the rail's flyout would set a flag and reveal nothing. Both handlers are
+  defined once in `Pantry` and handed to both hosts, which is the rule the
+  missing *Admin* row cost a real session to learn.
+- **The pre-flight is two groups, not the console's tail line.** A sole-member
+  household is *destroyed* and the rest are merely *left*; one sentence covering
+  both flattens the first into the second. Its disc is **amber** — this is the
+  blocked dialog turned into a choice, and the last screen where *hold on* is
+  still true — and **its primary is the one in the app that does not name a
+  destructive verb**, because the verb is on the next screen.
+- **One trigger, not two chips.** Transfer needs a **name**, so it is one
+  question with several answers, which is a menu. **No row in it is marked as
+  current**, because a transfer has no incumbent — and it carries a micro-label
+  header, which no other menu in the app has: without it the delete row reads as
+  a fourth person.
+- **Transfer is its own capability, and it is what unblocked all of this.**
+  `transferOwnership` promotes the target and **demotes the caller to Editor**,
+  in that order so there is never an instant with no owner. Only the caller is
+  demoted — handing yours over is not a claim about anybody else's. It is a row
+  in the role menu under its own hairline, **not crimson**: nothing is destroyed.
+- **Its confirm's disc is crimson though nothing is destroyed, and that
+  generalises the ramp.** Blocked is amber because it is a *precondition*; a
+  confirm is crimson because it is *final*. **The ramp is picked by finality, not
+  by data loss** — the existing two users generalised rather than a new rule.
+- **The app's third typed confirmation**, and it asks for the **display name**: a
+  typed confirm buys a beat of deliberation rather than authentication, so it
+  takes the name a person thinks of as theirs. **The body is a list, which is
+  new** — up to five households in three fates — so the sentence says what the
+  *account* loses and a read-only recap accounts for the households one by one.
+  **The recap and the count read one function**, which they did not at first: an
+  unanswered row showed as deleted in the list and was left out of *two of them
+  go with you*.
+- **There is no hold, and that is a decision.** A thirty-day grace period was
+  drawn in full and cut. **If somebody wants to delete their account, that is
+  their decision.** The design cost was never the three cards — a held account is
+  *already out* of its households, and **a grace period that reaches other people
+  is not a grace period**, so the honest version hands you back an account with
+  nothing in it. **The accepted cost is stated**: a mistake has no recourse and no
+  support path, which is the trade *Delete household* already makes.
+- **The card at the end is the app's first screen that is neither signed out nor
+  signed in.** The session is still live — this removes the app's rows and cannot
+  reach the Spacefast identity behind them — so it is the 440 card with a
+  **neutral** disc (the console's 404 rule: no status colour when it makes no
+  claim). **Its button signs out**, or *Back to Larder Log* lands on the
+  first-run screen offering to name a household. **No toast**: there is no app
+  left to show one in, which is the fifth settled case.
+- **Nothing is logged**, and that is D62's rule rather than an omission: the
+  audit log records *administration*, and never what a person does to their own
+  — `deleteHousehold` writes no row either.
+- **`account` is subscribed only while the pane is pushed.** Five indexed reads
+  per household is nothing once and a page-load tax on everybody beside
+  `pantry`, so `AccountPane` holds the hook and only exists while the pane is —
+  the console's own mounted-not-flagged arrangement.
+
+#### A transform traps every `fixed` beneath it, and the drawer has one
+
+**The two dialogs shipped inside the drawer and were 340px wide**, which is what
+the first look at this found: *the delete account cards are stuck inside the
+sidebar instead of modals over the entire screen*.
+
+`ModalShell` is `fixed inset-0`, and the drawer's `<aside>` carries
+`transition-transform` with `translate-x-0` for its slide-over. **A transform on
+an ancestor becomes the containing block for every `position: fixed`
+descendant**, so `inset-0` resolved against the drawer rather than the viewport.
+There is no CSS escape from that; the layer has to move.
+
+**The rule was already written down in this codebase and I walked past it.**
+`MembersPanel`'s docblock has said since Phase 4.12: *the modal is owned by
+`Pantry`, which is the only place that can put one over the whole app.* Every
+other modal in the app obeys it — `ConfirmDialog`, `NewHouseholdDialog`,
+`ItemSheet`, `PutAwaySheet`, `PasteListSheet` — and the console's own
+`AccountDeleteDialog` obeys it by accident, because `AdminConsole` renders in the
+**content column** while only `AdminPane`'s nav is in the drawer.
+
+So `Pantry` owns the flow now: both dialogs, the step, the chosen map, the busy
+flag, the refusal, and `ExportPantry`. **The pane hands over a snapshot rather
+than the subscription** — `{ name, households }`, taken at the press — and that
+is safe for the reason the recap is: the server recomputes the whole plan from
+`fateOf` and refuses a decision it was not owed, so a stale snapshot can only be
+*refused*, with the server's own sentence, in the dialog. It also keeps the
+query to **one** subscription and leaves the dialogs with no loading state.
+
+**A `preact/compat` portal inside `ModalShell` was measured and rejected.** It
+would have fixed every future caller in one place and costs almost nothing in
+the bundle — but it makes the containing-block problem invisible again, and the
+app already has one rule for this that every other modal follows. One idiom
+beats two.
+
+**A sweep found no second instance.** `AccountPreflight` and
+`AccountDeleteConfirm` were the only positioned-`fixed` elements ever rendered
+inside the drawer's subtree; the three other `fixed` matches in there are the
+word in prose.
+
+**This is the fifth time a browserless chain has certified something that could
+not work**, after the inert `ResizeObserver`, the rail's missing *Admin* row, the
+two dead hovers and the two `Delete` buttons. Typecheck, 920 assertions, the
+artifact read, the class-literal diff and the ground check all passed on two
+dialogs clipped to a quarter of the screen — because **every one of them asks
+whether a rule exists, and none of them asks what box it resolves against.**
+The ground check narrowed that gap for *colour*; nothing here sees *geometry*.
+**A `fixed` element is only as fixed as its ancestors' transforms allow.**
+
+#### And the transfer menu was cut off, by two different boxes
+
+Reported on the same look: **the *Choose* dropdown gets cut off.** Two clipping
+ancestors, and only one of them could be removed.
+
+- **The `Needs a decision` block carried `overflow-hidden`**, which was buying
+  nothing: its rows have no fill of their own — they sit on the dialog's surface
+  — so the only thing that could poke past the radius is a 1px rule at the
+  vertical middle, where the radius does not reach. It is gone. **Third time
+  this app has paid for an `overflow-hidden`**, after the console's Members card
+  and the bulk review table.
+- **`ModalShell`'s card is `overflow-y-auto max-h-[90vh]`, and that one stays.**
+  The pre-flight is the tallest dialog in the app, and a short window has to be
+  able to reach its footer. A scroll container clips its absolutely-positioned
+  descendants at its padding box, so **the popover moves layer instead**:
+  `position: fixed`, placed from the trigger's measured box. That is D67's own
+  sentence — *a popover belongs inside the viewport; that is the layer that
+  moved* — reached again from the other side.
+
+**`fixed` works here and would not work one component over**, which is the pair
+worth holding together: a dialog card has no transform, and the drawer's
+`<aside>` has one. The same three words are the fix in one place and the bug in
+the other.
+
+**`shared/menuPlacement.ts` gained `menuOrigin`.** `placeMenu` names a *corner*,
+which is all an `absolute` panel needs — the browser does the arithmetic from
+`left-0` or `right-0`. A panel escaping its ancestor needs the numbers, so this
+turns a corner into viewport coordinates and **clamps on both axes**: a corner is
+chosen from the panel's *cap* and the panel is often shorter, and a trigger can
+sit closer to an edge than the 12px inset all by itself. `client/hooks/useFixedMenu.ts`
+is the two reads of `window` around it, and **it closes the menu on scroll and
+resize** — a fixed panel does not travel with a scrolling ancestor, so rather
+than pretend otherwise it goes, which is what makes *the trigger cannot move
+while its own menu is open* true here rather than merely assumed.
+
+**The console's own pre-flight had the identical bug and nobody had reported
+it**, because nobody has clicked the console's version — same construction, same
+shell, same `overflow-y-auto`. It is fixed with this one.
+
+**Ten new assertions, and all three rules proved by mutation**: dropping the
+viewport clamp fails 4, hanging *up* from the trigger's bottom rather than its
+top fails 1, and right-aligning to the trigger's left edge fails 2. The
+assertions are written as **geometries** rather than as expected coordinates
+alone — `fixedFits` recomposes the panel's rect from the placement and asserts it
+is inside the viewport, so a rule returning plausible numbers that still clip is
+caught — and the reported case is in there by its real numbers.
+
+#### And then its last row was cut off, by a coin toss a variant always wins
+
+Reported next: **the delete row's second line is cut off on desktop and not on a
+phone.** That asymmetry *is* the diagnosis.
+
+The row was `${PAGE_MENU_ROW_DANGER} h-auto py-2 items-start` — three utilities
+appended beside a constant that already sets two of those properties. **Two
+utilities for one property is a coin toss settled by sheet order**, which the
+console sweep recorded twice and this is the third. Read off the built sheet by
+byte offset: `.h-11` lands at 17300 and `.h-auto` at 18401, so the base height
+lost and the row grew — but **`.md\:h-9` is in a media block at 75371**, after
+both, so above `md` the row was clamped to 36px and the second line was clipped.
+
+**A variant always beats a base utility**, because variants are emitted after the
+base layer. That is what makes this class of bug look like a *desktop-only* or
+*mobile-only* problem when it is neither.
+
+Both call sites are **whole constants** now, which is the remedy this file
+already names: `PAGE_MENU_ROW_DANGER_STACKED`, and `PAGE_MENU_FIXED` for the
+second collision in the same component — `PAGE_MENU` carries `absolute` and
+`fixed` was appended over it. That one was going the right way *by luck*
+(`.absolute` at 10385, `.fixed` at 10427), which is the worst state for a rule
+to be in.
+
+**A sweep for the whole class of bug now exists**, over every
+constant-plus-literal class list in `client/`: it expands the constants, groups
+utilities by the CSS property they set, and reports a collision — naming the
+variant explicitly when one is involved, because that case is a certainty rather
+than a toss. **143 sites, 11 collisions**, of which mine were two.
+
+**One more was real and is fixed**: the paste sheet's *Common items* row appended
+`w-[calc(100%+20px)]` over `PAGE_MENU_ROW_ON_SHEET`'s `w-full`, and lost the toss
+by 249 bytes — so it has been 20px short of its own negative margins since D67.
+It takes an inline width now, which beats any class outright.
+
+**The remaining nine are left alone, and that is a scope decision.** Eight are
+`rounded-*` pairs differing by 1–2px across the console, the drawer and three
+sheets, and one is a dead `h-9` that `PAGE_MENU_ROW` overrides to a *larger*
+touch target. Fixing them means quietly restyling eight components on the way
+past a dropdown, which is the trade D54 already refused for a hairline. They are
+on the record here instead.
+
+**And the check that found them re-taught the standing lesson on itself.** A
+hand-written `grep` for `.w-\[calc...\]` reported it **absent** from the sheet;
+the class-literal checker, which unescapes the sheet's own selectors, said it was
+there and was right — the hand-written pattern had the `%` and `+` escaping
+wrong. **Seventh round.** Print the selector; never hand-write the escaped form.
+
+#### And then the list inside it could not be scrolled — 2026-09-01
+
+Reported next, and clarified in the same breath: **the inner list is cut off,
+not the dropdown.** That distinction is the whole diagnosis — the panel was
+placed correctly and sized correctly, and its contents were unreachable.
+
+**`useFixedMenu` closed the menu on its own scroll.** The listener is
+`window.addEventListener('scroll', onClose, true)`, and `capture` is there for a
+real reason: a scroll inside the dialog card does not bubble to `window`, and a
+`fixed` panel does not travel with a scrolling ancestor, so it has to go. **But
+capture also sees the panel's own scroll events**, so the wheel over the list
+dismissed the thing being read. `overflow-y-auto` was on the box the whole time
+and working; it never survived a frame.
+
+- **The fix is one `contains`.** The panel is a DOM descendant of the trigger's
+  wrapper however far `fixed` has moved it on screen, so a scroll originating
+  inside it is the menu being read rather than the page moving under it. The
+  outer rule — *anything that moves the trigger closes the menu* — is unchanged,
+  and it is what makes *the trigger cannot move while its own menu is open* true
+  rather than merely assumed.
+- **It surfaced only when a household got a fifth candidate.** The menu is
+  header + people + divider + delete row: three candidates is ~249px against the
+  280 cap and nothing overflows, five is ~285 and it bites. Riverside Kitchen
+  went from one member to six the same morning. **A cap that has never been
+  reached is a scroller that has never been tested.**
+- **The panel is a flex column now and only the people scroll.** Scrolling the
+  whole box would take the header *and* the crimson row that destroys something
+  below the fold, which is the one row nobody should have to go looking for.
+  **`min-h-0` is the load-bearing utility**: a flex item's floor is its content
+  until it is told otherwise, so without it the list never shrinks and the panel
+  overflows exactly as before. The scroller takes `role="none"` so the rows stay
+  the menu's own children rather than becoming a group inside it.
+- **The console's copy had both halves of this too**, same construction, same
+  shell — fixed with it, and still unclicked.
+
+**One thing on the same path is knowingly left alone**: `menuOrigin` positions
+an **upward**-opening panel from its *cap* rather than its real height, so a
+menu with one or two candidates that flips up floats a gap above its trigger.
+The clean fix is to anchor the panel's bottom instead of its top, which changes
+the shared placement contract and its assertions; nobody has reported it.
+
+#### The account menu stopped repeating you — 2026-09-01
+
+Reported on the same look: **the popup from the profile row at the bottom
+should be *Your account ›*. No reason to repeat the user profile name.**
+
+The identity row shipped as the avatar, the name and the email over again, and
+the component's own comment defended it — *the same row one level further in, so
+it reads as continuing rather than as arriving somewhere new*. **The row you
+pressed to get here is that row, a few pixels below, still on screen.** A menu
+that opens with a copy of its own trigger has spent its widest row saying
+something you can already see; *Your account* is the only new fact in it, which
+is what is behind the door.
+
+- **All three rows are one row now** — glyph, label, `DRAWER_MENU_ROW` — and
+  **only this one takes a chevron**, because only this one pushes a level. That
+  mark is already spent on exactly that job by the Settings pane's *Members* row.
+- **One rule instead of two.** It used to sit under the identity row, which
+  earned it by being a taller card row among menu rows; three identical rows with
+  a rule between each pair reads as three unrelated things. *Your account* and
+  *Admin* are both places to go and now group together; signing out is not, and
+  keeps the rule above it.
+- **`name`, `email` and `picture` are gone from the component and from both
+  hosts**, which took `accountEmail` off `CollapsedRail` entirely — the rail has
+  never displayed one.
+- **What it costs is the collapsed rail**, where the flyout was the one place a
+  name appeared, its trigger being a bare 38px avatar. Not lost: that control's
+  own tooltip is `accountName`, and the pane behind the row opens on it. **The
+  drawer, where this was pure repetition, is the case that decides it**, and one
+  component in two hosts stays one component rather than growing a prop.
+
+Verified: typecheck clean, 947 assertions, client-only (the artifact is
+untouched — no capsule or `shared/` file moved for either fix), every class
+literal diffed against the **live** `/zero.css` off the running `sf dev` by
+unescaping the sheet's own selectors and proved to refuse nonsense, and the
+served bundle carrying both new panel class strings, `Your account` and
+`user-round` while carrying neither old panel string. **Neither has been
+clicked** — both are pointer work.
+
+#### An administrator's account cannot be deleted
+
+**`LARDER_ADMIN_IDS` is set out of band and nothing in the app can edit it**, so
+an account the environment names is not the app's to delete: removing the rows
+would leave the variable still naming an account that no longer exists, and the
+next sign-in with that identity would mint a brand-new empty one holding the
+console. **The fix for *this administrator should go* is `.env.server`**, which
+is where the trust was granted.
+
+- **`isAdminId(userId, raw)` in `shared/admin.ts` is about a *target*, and that
+  is the whole difference from `isAdminUser`.** That one answers *may you open
+  the console* and **refuses a guest outright**, because the hosted runtime hands
+  an anonymous caller a guest identity and v15 leaked the space for twenty
+  minutes on exactly that. This one answers *is this id written in the list*,
+  about somebody who is not in the room. **Swapping the two would reintroduce
+  that hole by another name**, and both docblocks say so.
+- **It does not refuse guests, deliberately.** `LARDER_ADMIN_IDS` legitimately
+  holds `guest:justin-…` beside the real `account:` id, so the local
+  administrator is protected too — otherwise the one guard that matters is the
+  one that cannot be exercised locally. A `guest:` id still administers nothing;
+  that is `isAdminUser`'s question and it is unchanged.
+- **It fails *open*, which is the opposite of every other rule in that file.**
+  With no list nobody is named, so nobody is protected and an ordinary account
+  deletes normally. A guard that refused everything on an unset variable would
+  make the app undeletable by accident.
+- **Both deletion paths refuse**: `deleteMyAccount` on the caller, and
+  `adminDeleteAccount` on the target — the sharper half, since one administrator
+  removing a peer's rows is the case the console could otherwise reach. Both
+  check **before the row lookup**, so a named id that holds nothing gets the
+  guard's answer rather than *that account no longer exists*.
+- **The client renders the reason and never the refusal.** A thrown message is
+  invisible in production (QuickJS replaces it), so the `account` query reports
+  `administers` and the pane draws `ADMIN_UNDELETABLE_NOTE` from it; the console
+  reads `person.admin`, which every People row already carries. The throws are
+  the enforcement, not the explanation — a hidden control is one devtools call
+  from a deleted account.
+- **The row is absent rather than disabled, and that differs from the hold on
+  purpose.** `ADMIN_WRITES_HELD` leaves its controls on screen wearing
+  `PAGE_HELD` because the hold is *temporary* and the control comes back. This is
+  not a hold: it is what the account **is** for as long as the environment says
+  so, and a permanently dead button is a worse thing to look at than a sentence
+  saying where the switch really is. D30's rule, with the sentence doing the job
+  the viewer's *View only* chip does. **The console's held notice goes with it**
+  on an administrator's page — a notice above a screen you could only ever read
+  would be an apology for nothing.
+
+**One mutation found dead code rather than a hole.** An `if (! userId) return
+false;` in front of the lookup survived every mutation aimed at it, because
+`parseAdminIds` drops blanks and *that is its stated job* — a trailing comma
+cannot put `''` in the list, so nothing with no id can match one. It is gone, and
+the three assertions about empty ids now pin the **composition**: deleting the
+filter in `parseAdminIds` fails five, one of which is the guard's own.
+
+**Verified against the real handlers** on a throwaway `sf dev --port 4199`:
+`adminAccess` `{admin:true}` and `account` `administers: true` for the named
+guest, `deleteMyAccount` refused with his rows untouched afterwards; a second
+guest not in the list reporting `administers: false` and deleting normally; the
+console refusing **its own caller's id** and refusing **a peer administrator's
+`account:` id** — one that holds no rows at all, which is the proof the guard
+short-circuits ahead of the lookup — and still deleting an ordinary account
+beside them, with People going from two rows to one.
+
+**Export arrived with it and is two features**, because the pantry is the one
+thing this flow has established **is not yours**. *Download your data* is four
+fields in the account pane — **four because there is nothing else**, which is the
+same fact the deletion copy leans on — and *Export the pantry* is the
+household's rows as CSV in Pantry settings, where scope is in the label, and it
+survives your deletion. **No invite codes in the export** (D39: a code *is* the
+authorization, and a live one on disk is a worse place for it) and **no join
+date**, which is an omission rather than a choice — `memberships` carries no
+stamp, because D44 stamped five tables and skipped this one. **Neither is a
+backup, because nothing imports one back.** A pre-flight row set to *delete it*
+carries *Export it first*, which is the only moment in the app where a pantry is
+about to stop existing and somebody is looking straight at it — and it is a real
+export rather than a message: `ExportPantry` mounts, subscribes to that
+household's `pantry`, downloads once and asks to be unmounted, which **is** the
+one-shot read in a client that only has subscriptions.
+
+**Three small extractions rode with it.** `ClaimAvatar` left `RunList` as
+`PersonAvatar` with a size, because the transfer trigger wanted the same face at
+18px; the download became `client/lib/download.ts`, so `activityCsv` and both new
+exports share one `<a download>`; and RFC 4180 moved to `shared/exportData.ts`,
+because three copies of *quote everything and double an embedded quote* is three
+chances to quote a comma differently.
+
+**It contradicts `admin-console.md` in two places and this wins.** *Needs
+attention* lists **awaiting deletion** and the log's `Automatic` actor is defined
+as *an account deleted after its hold*; **there is no hold**, so neither state
+exists. And D62's *same dialog, two places — only the title changes* is no longer
+true: the app's pre-flight has two labelled groups and two screens where the
+console's has a tail line and one.
+
+**Three interaction-state defects were found and fixed, and they are the same
+one.** Three cream primaries — the pane's *Done* pill, its *Get it*, and Pantry
+settings' *CSV* — took `DRAWER_PRIMARY`, whose ring offsets against the drawer
+gradient, while all three sit on a **raised card**. `DRAWER_PRIMARY_ON_CARD`
+already existed for the install pill and is exactly this. **D45 on its fifth
+component**, and the fourth time this project has shipped a control whose state
+was written against the wrong ground.
+
+**Verified without a browser**: typecheck clean, **947 assertions** (102 new,
+covering all three fates and the ordering that separates the rule from any other
+reading, the two groups, what the payload carries and what it must not, the
+copy in every branch including the serial comma and the source group's own word,
+the recap agreeing with the count, the possessive's `s`-ending form, the CSV's
+names-not-ids and its A–Z, and the account file's four fields with no code) —
+and **three rules proved by mutation**: testing the role before the member count
+fails 10, sending the sole-member households as decisions fails 5, and defaulting
+an unanswered row to *leave* fails 2. The dry-run artifact is fourteen tables /
+fifteen queries / thirty-one mutations / `db.migrations: []` with `/api/status`
+the only endpoint, and **`.docs/data-model.md` was diffed against it** — zero
+tables, columns, mutations or queries missing. **764 class literals across
+fifteen files** diffed against the freshly built
+`.spacefast/zero/public/zero.css` by unescaping the sheet's own selectors —
+printed, never hand-written, and **proved by injecting a nonsense class into a
+file under test and watching it be reported**. The new components introduce **no
+responsive variant of their own**, so there is no new byte-offset ordering to
+check: everything responsive here comes from `ModalShell` and control styles that
+already shipped.
+
+The **real handlers** were driven over `POST /__spacefast/zero/run` on a
+throwaway `sf dev --port 4199`, as three named dev guests at once. `transferOwnership`:
+handing it to yourself refused, a nonexistent membership refused, an **editor**
+refused with D20's own sentence, and the real hand-over promoting Bob and leaving
+Justin an Editor. `deleteMyAccount`: **no decisions refused by name**
+(*Decide what happens to Calfee Household first.*), a decision about a household
+that needed none refused, a transfer naming **yourself** refused, a bogus action
+refused, the same household twice refused — and **the account read back unchanged
+after all five**, which is the validate-then-write guarantee measured rather than
+asserted. Then the real one: Calfee handed to Alice, who is its sole owner
+afterwards; the two sole-member households **gone from the space** on the admin
+console's own household list; Justin gone from People entirely; his profile
+answering `needsName` again; and Bob's household untouched. An anonymous caller
+gets `guest` from the query and *Sign in to use Larder Log.* from both mutations.
+The two cascade lists — `deleteHousehold`'s own and `deleteHouseholdRows`' —
+were diffed and agree.
+
+**Nobody has clicked it**, and this is the one that most wants a real session:
+every interesting part is press-time and keyboard-time — the door, the pane's
+in-place rename, the trigger's menu, the two Escapes, the typed field, the
+transfer's confirm, and both downloads. **To see it locally**: the account row at
+the foot of the drawer → the identity row. A second `?guest=` name in another
+window is what makes the pre-flight have anything to decide.
+
 ### The console's two seams land where they were aimed — 2026-08-31
 
 **Client only**: no schema change, no handler moved, no new class. Eleven
@@ -4575,7 +5041,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D67, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo** |
+| `.docs/decisions.md` | D1–D67, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -4594,6 +5060,8 @@ most of it is already decided.
 | `.claude/docs/design/larderlogrestockmockup.html` | **The 6 boards for it** — the run list with three checked, the put-away sheet, the screen after, the trip bar's anatomy with its undo toast, the tri-state, and trends tier 2. Light theme, desktop; **mobile is not drawn at all** — the bar's three controls at 390 are specced in prose and the sheet as a bottom sheet is asserted rather than drawn. **Boards 1, 2 and 3 all draw a row claimed by Sarah**, which is the deferred half; **board 4's "where the green belongs" card is drawn left-aligned at 440** and the build takes `EmptyState`'s centred shape instead, since the two empty states share one slot. **Board 5 is built** (D65); **board 6 is not** |
 | `.claude/docs/design/bulk-entry.md` | **Bulk entry — the adoption wall** (31 Aug) — the split primary, the paste dialog, the review table, the common-items checklist, and what the empty larder does. Its own doc for the reason `add-edit-item.md` is. **It says of itself that it is a sketch, not a spec**, and about half of it was undecided — read *Open questions* before treating any of it as settled. **Built** (D67), **with five knowing departures**: the 390 chevron moved to the pinned bottom bar rather than row 1 (the board's premise — *the primary is already a 52px square at this width* — is false of the build); the bulk commit gets a **plain toast and no undo**, which answers its own first open question; the checklist **omits what the household already holds**; the paste fills no type, which is its prose over its boards; and **`Save and add another` was built and removed** for a cramped footer, so its board 4 describes a build that does not exist |
 | `.claude/docs/design/larderlogbulkentrydesign.html` | **The 11 boards for it** — seven on *The flow*, one at 390, three explorations. Light theme only. **Board 6's review rows draw filled `Type` chips on pasted lines**, which both the design's prose and its own board note contradict — the note wins. **Board 3's 390 panel draws the split beside search**, which the build does not do. **Board 4 is `Save and add another`, which is not built.** The Explorations page is explicitly not a spec |
+| `.claude/docs/design/delete-account.md` | **Delete account** (1 Sep) — where deletion lives, the pre-flight the sole-owner rule forces, the ownership transfer that forces, one typed confirmation and the card it leaves you on, and export. Its own doc for the reason `add-edit-item.md` is. **Built, all of it** (D68), **with five knowing departures**: the card's button says *Back to Larder Log* rather than naming a domain the app does not have; *what goes permanently* names the **sources** too, as the app's own *Delete household* confirm always has; the account export carries **no invite codes** (D39) and **no join date** (`memberships` has no stamp — D44); and the sole-member households answer themselves rather than being sent as decisions. **Its two contradictions with `admin-console.md` are real and this doc wins** — there is no hold, so neither *awaiting deletion* nor the log's `Automatic` actor describes a state that exists |
+| `.claude/docs/design/larderlogdeleteaccountboards.html` | **The 6 boards for it** — where it lives (with the crimson menu row that lost), the pre-flight in two states, ownership transfer, the confirmation and the card, export, and 390. Light theme, desktop except board 6. **Board 1's menu draws an *Announcements* row**, which is a different doc's feature and is not built — the menu here is the door, Admin, and Sign out. **Board 4's hold cards are the thing that was cut**, and the board says so. **Board 5's CSV sample uses the pre-D50 type names** (*Protein*, *Condiment*) and a `store` column the build spells `sources`, because an item may name several |
 | `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
 | `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
@@ -4712,7 +5180,7 @@ clean slate, or delete that file.
 
 Cheapest first:
 
-- **`npm test`** — 807 assertions over `shared/`, compiled with the project's
+- **`npm test`** — 947 assertions over `shared/`, compiled with the project's
   `tsc` and run on plain Node. No runner, no dependencies. It covers the things
   that are invisible when wrong: the D20 capability matrix, D18's
   one-household rule, D22's last-owner guard, invite expiry boundaries, D28's
@@ -4737,7 +5205,11 @@ Cheapest first:
   twice — and D67's paste, where a line read left to right instead of end-first
   still yields a plausible item name and quietly moves the size into it, and
   where a duplicate check one character looser starts refusing rows somebody
-  meant.
+  meant — and D68's `fateOf`, which is the sharpest of the lot: a household
+  filed under the wrong fate still draws a row, still reads as a sentence, and
+  quietly deletes or spares the wrong pantry, and **the server derives which
+  decisions it requires from the same function**, so a mistake in it is a
+  mistake on both sides at once.
   **Add to it** when you touch any of those — that file is the app's
   only authorization test, and the only place the filter rule is checked at
   all.

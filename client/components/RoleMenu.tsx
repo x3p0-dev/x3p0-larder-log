@@ -79,7 +79,7 @@ export const ROLE_BLURBS: Record<Role, string> = {
  * server-side with a sentence rather than disabled, for the reason above.
  */
 export function RoleMenu({
-	open, setOpen, memberName, role, onChangeRole, onRemove, onDark = true, held = false, theme,
+	open, setOpen, memberName, role, onChangeRole, onRemove, onTransfer, onDark = true, held = false, theme,
 }: {
 	open: boolean;
 	setOpen: (open: boolean) => void;
@@ -87,6 +87,21 @@ export function RoleMenu({
 	role: Role;
 	onChangeRole: (role: Role) => void;
 	onRemove: () => void;
+	/**
+	 * Hands the household over to this member (D68).
+	 *
+	 * **Absent in the admin console**, which has its own transfer — that one
+	 * takes no *from*, because an administrator is not the person stepping back.
+	 * Absent, not disabled: D30, and the console's own transfer is a press away
+	 * on the page this menu opens on.
+	 *
+	 * **Promote is not transfer**, which is why it is a row of its own rather
+	 * than a fourth role. Setting somebody to **Owner** adds an owner; this hands
+	 * it over — they become Owner and *you* become an Editor. The second half is
+	 * the part the app had no control for at all, because your own row carries no
+	 * trigger.
+	 */
+	onTransfer?: () => void;
 	/** False in the admin console, where this opens on a cream card. */
 	onDark?: boolean;
 	/**
@@ -192,6 +207,36 @@ export function RoleMenu({
 							</button>
 						);
 					})}
+
+					{/*
+					  * *Transfer ownership* — under its own hairline, between the
+					  * roles and the removal (D68).
+					  *
+					  * **Ordinary drawer body, not crimson.** Nothing is destroyed,
+					  * and ghost-plus-crimson-text is how this app *offers*
+					  * destruction — a crimson row here would say the same thing as
+					  * *Remove from household* two rows down, which is exactly the
+					  * distinction the placement is trying to make.
+					  *
+					  * **Both in one menu is the risk, and the label carries it.**
+					  * *Owner* is a role you set; *Transfer ownership* is a thing you
+					  * do. If that turns out to be too fine a distinction on a real
+					  * screen, it moves to the Household card beside *Leave
+					  * household*, where the verbs already live.
+					  */}
+					{onTransfer && (
+						<>
+							<DrawerMenuRule theme={theme} />
+
+							<button
+								role="menuitem"
+								onClick={() => { setOpen(false); onTransfer(); }}
+								class={`flex items-center w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left ${DRAWER_MENU_ROW}`}
+							>
+								Transfer ownership
+							</button>
+						</>
+					)}
 
 					<DrawerMenuRule theme={theme} />
 

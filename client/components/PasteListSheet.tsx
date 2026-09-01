@@ -204,8 +204,17 @@ export function PasteListSheet({ open, onRead, onCommonItems, onClose, dark, the
 
 					<button
 						onClick={onCommonItems}
-						class={`${PAGE_MENU_ROW_ON_SHEET} shrink-0 -mx-2.5 w-[calc(100%+20px)]`}
-						style={{ color: theme.text }}
+						class={`${PAGE_MENU_ROW_ON_SHEET} shrink-0 -mx-2.5`}
+						/*
+						 * The width is **inline**, because `PAGE_MENU_ROW_ON_SHEET`
+						 * already carries `w-full` and two utilities for one property
+						 * is a coin toss settled by sheet order — `.w-full` lands at
+						 * 20814 and `.w-[calc(100%+20px)]` at 20565, so the class lost
+						 * and this row has been 20px short of its own negative margins.
+						 * An inline value beats any class outright, which is the same
+						 * answer the fixed menus' measured height takes (D68).
+						 */
+						style={{ color: theme.text, width: 'calc(100% + 20px)' }}
 					>
 						<ListChecks size={15} strokeWidth={2} style={{ color: theme.textMuted }} />
 						<span class="flex-1 min-w-0 truncate">Nothing to paste? Start from common items</span>

@@ -380,6 +380,31 @@ export function usePantryData(selectedHouseholdId: string | null): PantryApi {
 }
 
 /**
+ * One household's pantry, for taking a copy of it away (D68).
+ *
+ * **Its own hook and mounted rather than flagged**, exactly as the console's
+ * heavy queries are: it names a household that is *not* the one the app is
+ * showing, so it cannot come from `usePantryData`'s subscription. The one
+ * caller renders for as long as it takes the answer to arrive and then unmounts
+ * itself, which is the honest version of a one-shot read in a client that only
+ * has subscriptions.
+ *
+ * The server resolves the id against the caller's own memberships, as every
+ * scoped query does — an id here is a selector and never an authority, so a
+ * household this account is not in answers with somebody else's default rather
+ * than with its contents.
+ */
+export function usePantryOf(householdId: string): PantryData | null {
+	const result = useQuery<PantryResult>('pantry', householdId);
+
+	if (isLoading(result) || result.state !== 'ready') return null;
+
+	const { state: _s, ...data } = result;
+
+	return data;
+}
+
+/**
  * What an invite link says about itself, live.
  *
  * Its own hook rather than a field on `usePantryData`, because the `?join=`

@@ -28,7 +28,8 @@ import {
 import {
 	ADMIN_HELD_NOTE, ADMIN_HELD_REFUSAL, ADMIN_IDS_VAR, ADMIN_WRITES_HELD, adminWritesHeldFor,
 	cumulativeByMonth,
-	daysBetween, DORMANT_DAYS, isAdminUser, isDormant, isWithinDays, matchScore, monthKey,
+	ADMIN_UNDELETABLE_NOTE, ADMIN_UNDELETABLE_REFUSAL,
+	daysBetween, DORMANT_DAYS, isAdminId, isAdminUser, isDormant, isWithinDays, matchScore, monthKey,
 	monthKeysBack, monthLabel, parseAdminIds, SERIES_MONTHS, usDate, usDateFrom, usLongDate,
 } from '../shared/admin';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
@@ -57,7 +58,19 @@ import {
 	countLines, findExisting, parseLine, parseList, rowsFromCatalog, rowsFromLines,
 	setTermForChecked, unitFromWord,
 } from '../shared/bulkEntry';
-import { placeMenu } from '../shared/menuPlacement';
+import type { MenuBox } from '../shared/menuPlacement';
+import { menuOrigin, placeMenu } from '../shared/menuPlacement';
+import type { AccountHousehold } from '../shared/accountDeletion';
+import {
+	andList, confirmBody, decisionsFrom, deleteConsequence, deletedHouseholds, fateFor, fateOf,
+	fateOfHousehold, goesLine, goneCardLines, householdMeta, leavingLine, needsPreflight,
+	preflightGroups, preflightLede, recapMeta, recapRows, transferBody, transferConsequence,
+	transferTitle, unanswered,
+} from '../shared/accountDeletion';
+import {
+	accountDataFilename, accountDataJson, csvCell, csvFile, PANTRY_COLUMNS, pantryCsv,
+	pantryFilename,
+} from '../shared/exportData';
 import {
 	MONTHS, hasSeason, isInSeason, monthName, monthNumber, monthOf, normalizeSeason, readyPhrase,
 } from '../shared/season';
@@ -2630,6 +2643,401 @@ check(
 	realGroups.reduce((sum, g) => sum + g.entries.length, 0),
 	GROCERY_CATALOG.length
 );
+
+
+// --- D68: deleting your own account ---
+//
+// **Classification is invisible when wrong here in the sharpest way this app
+// has.** A household filed under the wrong fate still draws a row, still reads
+// as a sentence, and quietly deletes or spares the wrong pantry — and the
+// server derives which decisions it *requires* from the same `fateOf`, so a
+// mistake in it is a mistake on both sides at once.
+
+function house(over: Partial<AccountHousehold> = {}): AccountHousehold {
+	return {
+		id: 'h1',
+		name: 'Calfee Household',
+		ink: 'color-3',
+		role: 'owner',
+		members: 4,
+		items: 47,
+		locations: 3,
+		sources: 3,
+		types: 15,
+		sourceWord: 'Store',
+		candidates: [
+			{ id: 'm-sarah', name: 'Sarah Calfee', picture: '', role: 'editor' },
+			{ id: 'm-nora', name: 'Nora Whitfield', picture: '', role: 'editor' },
+		],
+		...over,
+	};
+}
+
+// The three fates, straight.
+check('sole owner with others is a question', fateOf('owner', 4, 1), 'decide');
+check('one of two owners simply leaves', fateOf('owner', 4, 2), 'leave');
+check('an editor simply leaves', fateOf('editor', 4, 1), 'leave');
+check('the only member goes with the account', fateOf('owner', 1, 1), 'goes');
+
+// **The case that separates this rule from any other ordering of it.** Testing
+// the role first would make a sole-member household a *question* — a screen
+// asking you to choose between handing it to nobody and deleting it.
+check('a sole member is never a question', fateOf('owner', 1, 1) === 'decide', false);
+// And a household with one member who is not an owner still goes, rather than
+// being left behind as a pantry nobody can reach.
+check('a sole member who is not an owner still goes', fateOf('viewer', 1, 0), 'goes');
+
+// Read off a row's own counts, which is what both screens actually hold.
+check('a row resolves its own fate', fateOfHousehold(house()), 'decide');
+check(
+	'a co-owner in the candidates makes it a leave',
+	fateOfHousehold(house({ candidates: [{ id: 'm', name: 'Sarah', picture: '', role: 'owner' }] })),
+	'leave'
+);
+check('an empty candidate list is the sole-member row', fateOfHousehold(house({ members: 1, candidates: [] })), 'goes');
+
+const FIVE: AccountHousehold[] = [
+	house(),
+	house({ id: 'h2', name: 'Granny’s', members: 3, items: 128, locations: 4, types: 9, candidates: [
+		{ id: 'm-marcus', name: 'Marcus Bell', picture: '', role: 'editor' },
+	] }),
+	house({ id: 'h3', name: 'The Lake Cabin', members: 1, items: 34, candidates: [] }),
+	house({ id: 'h4', name: 'The Shop', role: 'editor', members: 2, items: 12, candidates: [
+		{ id: 'm-x', name: 'Someone', picture: '', role: 'owner' },
+	] }),
+	house({ id: 'h5', name: 'Mom’s Pantry', role: 'viewer', members: 2, items: 9, candidates: [
+		{ id: 'm-y', name: 'Mom', picture: '', role: 'owner' },
+	] }),
+];
+
+const preflight = preflightGroups(FIVE);
+check('two households need a decision', preflight.decide.map((h) => h.name), ['Calfee Household', 'Granny’s']);
+check('one goes with the account', preflight.goes.map((h) => h.name), ['The Lake Cabin']);
+check('two are simply left', preflight.leaving.map((h) => h.name), ['The Shop', 'Mom’s Pantry']);
+check('and the pre-flight is needed', needsPreflight(FIVE), true);
+check('with nothing to decide it is not', needsPreflight([FIVE[3], FIVE[4]]), false);
+check('nor for an account in no households at all', needsPreflight([]), false);
+
+// **Only the `decide` rows travel.** A `goes` household has one possible
+// outcome and the server sees it for itself — sending one would be the client
+// telling the server something the server is holding, and the handler refuses a
+// decision it was not owed.
+const CHOSEN = { h1: 'm-sarah', h2: '' };
+check('a transfer names the membership', decisionsFrom(FIVE, CHOSEN)[0], {
+	householdId: 'h1', action: 'transfer', toMembershipId: 'm-sarah',
+});
+check('an empty string is a deletion', decisionsFrom(FIVE, CHOSEN)[1], { householdId: 'h2', action: 'delete' });
+check('and nothing else is sent', decisionsFrom(FIVE, CHOSEN).length, 2);
+check(
+	'the sole-member household is never in the payload',
+	decisionsFrom(FIVE, CHOSEN).some((d) => d.householdId === 'h3'),
+	false
+);
+check('an unanswered row sends nothing', decisionsFrom(FIVE, { h1: 'm-sarah' }).length, 1);
+check('and is what the primary waits on', unanswered(FIVE, { h1: 'm-sarah' }).map((h) => h.name), ['Granny’s']);
+check('answered, nothing is waiting', unanswered(FIVE, CHOSEN).length, 0);
+
+// **The recap and the count read one function**, which they did not at first:
+// an unanswered row showed as *deleted* in the list and was left out of *two of
+// them go with you*, so a sentence and a list on one dialog disagreed.
+check('a chosen transfer is a transfer', fateFor(FIVE[0], CHOSEN), 'transfer');
+check('a chosen deletion is a deletion', fateFor(FIVE[1], CHOSEN), 'delete');
+check('a sole-member household is a deletion however it is answered', fateFor(FIVE[2], CHOSEN), 'delete');
+check('and everything else is a leave', fateFor(FIVE[3], CHOSEN), 'leave');
+check('an unanswered row reads as the loudest outcome', fateFor(FIVE[0], {}), 'delete');
+check(
+	'and the count agrees with it',
+	deletedHouseholds(FIVE, {}).map((h) => h.name),
+	['Calfee Household', 'Granny’s', 'The Lake Cabin']
+);
+check('answered, two go', deletedHouseholds(FIVE, CHOSEN).map((h) => h.name), ['Granny’s', 'The Lake Cabin']);
+
+const recap = recapRows(FIVE, CHOSEN);
+check('the recap has one row per fate, and one for the leavers', recap.length, 4);
+check('the transfer row names who takes it', recapMeta(recap[0]), 'Sarah Calfee owns it');
+check('a deleted row names what goes', recapMeta(recap[1]), 'Deleted · 128 items');
+check('the sole-member row is a deletion too', recapMeta(recap[2]), 'Deleted · 34 items');
+check('and the leavers are one row', recap[3].fate === 'leave' ? recap[3].households.length : 0, 2);
+check('which says the least', recapMeta(recap[3]), 'You leave');
+
+// The copy.
+check(
+	'the lede places you and says how much is a question',
+	preflightLede(FIVE),
+	'You own three of the five you’re in. Two of them other people use, so those two need a decision before your account can go.'
+);
+check(
+	'one question reads as one',
+	preflightLede([FIVE[0], FIVE[3]]),
+	'You own one of the two you’re in. Other people use one of them, so it needs a decision before your account can go.'
+);
+check(
+	'owning everything says so rather than saying two of the two',
+	preflightLede([FIVE[0], FIVE[1]]),
+	'You own both households you’re in. Two of them other people use, so those two need a decision before your account can go.'
+);
+check(
+	'and at three it counts them',
+	preflightLede([FIVE[0], FIVE[1], FIVE[2]]),
+	'You own all three of the households you’re in. Two of them other people use, so those two need a decision before your account can go.'
+);
+// Unreachable from the app — the pre-flight does not open with nothing to
+// decide — but a sentence reading *No of them other people use* is the kind of
+// copy that ships the day somebody makes it reachable.
+check(
+	'with nothing to decide the second sentence is absent, not zero',
+	preflightLede([FIVE[2]]),
+	'You own the one household you’re in.'
+);
+check('the sole-member row names its count', goesLine(FIVE[2]), 'Only you are in it, so it goes with your account. 34 items.');
+check('two leavers are both', leavingLine(2), 'You’ll leave both. Nothing in them changes.');
+check('one leaver is it', leavingLine(1), 'You’ll leave it. Nothing in it changes.');
+check('three are all three', leavingLine(3), 'You’ll leave all three. Nothing in them changes.');
+check('an unanswered row says what it is', householdMeta(FIVE[0]), '4 members · 47 items');
+check('a transfer says who takes it', transferConsequence('Sarah Calfee'), 'Sarah Calfee becomes the owner.');
+
+// **Four nouns and the serial comma**, which is the app's own copy rule — and
+// the source group takes the household's own word (D58), so a garden household
+// reads *sources* here exactly as its drawer does.
+check(
+	'a deletion names everything that goes with it',
+	deleteConsequence(FIVE[1]),
+	'128 items, 4 locations, 3 stores, and 9 types go permanently.'
+);
+check(
+	'and a garden household says sources',
+	deleteConsequence(house({ sourceWord: 'Source', items: 1, locations: 1, sources: 1, types: 1 })),
+	'1 item, 1 location, 1 source, and 1 type go permanently.'
+);
+
+check(
+	'the confirmation says what the account loses, then what the households do',
+	confirmBody(FIVE, CHOSEN),
+	'Your display name, email, and picture go permanently. You leave five households, and two of them go with you.'
+);
+check(
+	'nothing going says so',
+	confirmBody([FIVE[3], FIVE[4]], {}),
+	'Your display name, email, and picture go permanently. You leave two households. Nothing in them changes.'
+);
+check(
+	'everything going says so',
+	confirmBody([FIVE[2]], {}),
+	'Your display name, email, and picture go permanently. You leave one household, and it goes with you.'
+);
+check(
+	'and an account in none is still an account',
+	confirmBody([], {}),
+	'Your display name, email, and picture go permanently. You’re not in any households.'
+);
+
+// The card at the end — one sentence per transfer, one for the deletions, and
+// the last line always, because there is no hold and nothing to undo.
+check('the card names each new owner', goneCardLines(recap)[0], 'Calfee Household is Sarah Calfee’s now.');
+check('lists what is gone', goneCardLines(recap)[1], 'Granny’s and The Lake Cabin have been deleted.');
+check('and always ends with the same sentence', goneCardLines(recap)[2], 'Nothing here is recoverable.');
+check('a name ending in s takes the bare apostrophe', goneCardLines([
+	{ fate: 'transfer', household: FIVE[0], toName: 'Chris' },
+])[0], 'Calfee Household is Chris’ now.');
+check('one deletion is singular', goneCardLines([{ fate: 'delete', household: FIVE[2] }])[0], 'The Lake Cabin has been deleted.');
+check('and a deletion-free run still says the last line', goneCardLines([]), ['Nothing here is recoverable.']);
+
+// The transfer confirmation, which is the one dialog in the app whose disc is
+// crimson though nothing is destroyed: the ramp is picked by **finality**.
+check('the transfer asks about the person', transferTitle('Sarah Calfee'), 'Make Sarah Calfee the owner?');
+check(
+	'and names what they gain and what you lose',
+	transferBody('Sarah Calfee', 'Calfee Household'),
+	'Sarah Calfee’ll be able to rename Calfee Household, invite people, change roles, and remove members — including you. You become an Editor, and only Sarah can hand it back.'
+);
+
+check('the serial comma lands at three and not at two', andList(['a', 'b']), 'a and b');
+check('and at three it does', andList(['a', 'b', 'c']), 'a, b, and c');
+check('one is itself', andList(['a']), 'a');
+
+// --- D68: the two exports ---
+
+check('a cell is quoted and its quotes doubled', csvCell('He said "hi"'), '"He said ""hi"""');
+check('a comma needs no escaping inside quotes', csvCell('a,b'), '"a,b"');
+check('a file ends in a newline', csvFile(['a'], [['1']]), 'a\n"1"\n');
+
+const XLOC: Term[] = [term('l1', 'Pantry', 'color-1'), term('l2', 'Freezer', 'color-2')];
+const XTYPE: Term[] = [term('t1', 'Baking', 'color-3')];
+const XSRC = [{ ...term('s1', 'Publix', 'color-4'), kind: 'shop' as const }];
+
+const XITEMS = [
+	{
+		id: 'i2', name: 'Butter', locationId: 'l2', typeIds: ['t1'], storeIds: ['s1'],
+		qty: '2', threshold: '1', size: '1', unit: 'pound', offShoppingList: false, listRule: '',
+		seasonFrom: '', seasonTo: '', notes: 'salted', createdAt: '', addedAt: '', changedAt: '',
+	},
+	{
+		id: 'i1', name: 'Baking Soda', locationId: 'l1', typeIds: [], storeIds: [],
+		qty: '0', threshold: '1', size: '', unit: '', offShoppingList: false, listRule: '',
+		seasonFrom: '', seasonTo: '', notes: '', createdAt: '', addedAt: '', changedAt: '',
+	},
+];
+
+const CSV = pantryCsv(XITEMS, XLOC, XSRC, XTYPE).split('\n');
+check('the pantry export leads with its columns', CSV[0], PANTRY_COLUMNS.join(','));
+// **A–Z, sorted here.** An export is opened by something that is not this app,
+// and the order rows happened to be inserted in is not an order.
+check('and is A–Z rather than insertion order', CSV[1], '"Baking Soda","","0","1","Pantry","","",""');
+check('terms come out as names, never as ids', CSV[2], '"Butter","1 lb","2","1","Freezer","Publix","Baking","salted"');
+check('an item with no source is an empty cell', CSV[1].split(',')[5], '""');
+check('the filename is the household and the day', pantryFilename('Calfee Household', '2026-09-01T10:00:00Z'), 'calfee-household-2026-09-01.csv');
+check('a nameless household still gets a file', pantryFilename('   ', '2026-09-01T10:00:00Z'), 'pantry-2026-09-01.csv');
+
+const ACCOUNT = accountDataJson({
+	display_name: 'Justin Tadlock',
+	email: '',
+	member_of: [{ household: 'Calfee Household', role: 'owner' }],
+	invites_issued: [{ household: 'Calfee Household', role: 'editor', expires_at: '2026-09-15', live: true }],
+});
+check('your data is four fields', Object.keys(JSON.parse(ACCOUNT)), [
+	'display_name', 'email', 'member_of', 'invites_issued',
+]);
+// **No code.** A code *is* the authorization (D39), and a working one in a file
+// on disk is a worse place for it than the app it was minted in.
+check('and an invite in it carries no code', ACCOUNT.includes('code'), false);
+check('the account file is named for the day', accountDataFilename('2026-09-01T10:00:00Z'), 'larder-log-account-2026-09-01.json');
+
+
+
+// --- D68: a fixed popover's own corner ---
+//
+// `placeMenu` answers which corner of the trigger a panel hangs from, which is
+// all an `absolute` panel needs. A panel escaping a clipping ancestor cannot be
+// absolute, so it needs the numbers — and a placement that is off by a corner
+// still opens a menu and clips only at one scroll position on one width, which
+// is invisible in exactly the way the filter rule is.
+
+const VIEW = { width: 1440, height: 900 };
+const PANEL = { width: 284, height: 280 };
+
+// Hanging down-right: the panel's right edge meets the trigger's, and it sits
+// the 6px gap below — the `mt-1.5` the corner classes spend.
+check(
+	'down-right puts the panel under the trigger, right edges flush',
+	menuOrigin({ top: 300, bottom: 330, left: 900, right: 1000 }, 'down-right', PANEL, VIEW),
+	{ top: 336, left: 716 }
+);
+check(
+	'down-left hangs from the left edge instead',
+	menuOrigin({ top: 300, bottom: 330, left: 900, right: 1000 }, 'down-left', PANEL, VIEW),
+	{ top: 336, left: 900 }
+);
+// Up puts the panel's *bottom* against the trigger's top, so its own top is a
+// panel-height above it.
+check(
+	'up-right sits above the trigger by its own height',
+	menuOrigin({ top: 600, bottom: 630, left: 900, right: 1000 }, 'up-right', PANEL, VIEW),
+	{ top: 314, left: 716 }
+);
+
+// **Clamped on both axes**, because a corner is chosen from the panel's *cap*
+// and the panel is often shorter — and because a trigger can sit closer to an
+// edge than the 12px inset all by itself.
+check(
+	'a trigger hard against the left edge does not push the panel off it',
+	menuOrigin({ top: 300, bottom: 330, left: 2, right: 60 }, 'down-right', PANEL, VIEW).left,
+	12
+);
+check(
+	'nor off the right',
+	menuOrigin({ top: 300, bottom: 330, left: 1430, right: 1438 }, 'down-left', PANEL, VIEW).left,
+	1440 - 284 - 12
+);
+check(
+	'a trigger near the fold does not push the panel below it',
+	menuOrigin({ top: 860, bottom: 890, left: 100, right: 200 }, 'down-left', PANEL, VIEW).top,
+	900 - 280 - 12
+);
+check(
+	'nor above the top',
+	menuOrigin({ top: 20, bottom: 50, left: 100, right: 200 }, 'up-left', PANEL, VIEW).top,
+	12
+);
+
+// The pair the app actually uses: `placeMenu` names the corner, `menuOrigin`
+// turns it into coordinates, and the result has to be **on the screen**.
+function fixedFits(box: MenuBox, view: { width: number; height: number }, size: { width: number; maxHeight: number }) {
+	const seat = placeMenu(box, view, size);
+	const at = menuOrigin(box, seat.corner, { width: size.width, height: seat.maxHeight }, view);
+
+	return at.left >= 0 && at.top >= 0
+		&& at.left + size.width <= view.width
+		&& at.top + seat.maxHeight <= view.height;
+}
+
+check(
+	'the transfer menu fits beside a trigger at the right of a 390 dialog',
+	fixedFits({ top: 420, bottom: 450, left: 300, right: 358 }, { width: 390, height: 844 }, { width: 284, maxHeight: 280 }),
+	true
+);
+check(
+	'and beside one 54px off the fold',
+	fixedFits({ top: 760, bottom: 790, left: 300, right: 358 }, { width: 390, height: 844 }, { width: 284, maxHeight: 280 }),
+	true
+);
+check(
+	'and in a window barely taller than the panel',
+	fixedFits({ top: 150, bottom: 180, left: 900, right: 1000 }, { width: 1440, height: 320 }, { width: 284, maxHeight: 280 }),
+	true
+);
+
+
+
+// --- D68: an administrator's account cannot be deleted ---
+//
+// **A guard about a *target*, not about a caller**, and the distinction is the
+// whole of why this is its own function. `isAdminUser` answers *may you open the
+// console* and refuses a guest outright, because the hosted runtime hands an
+// anonymous caller a guest identity and v15 leaked the space for twenty minutes
+// on exactly that. Swapping the two would reintroduce that hole by another name.
+
+const ADMINS = 'account:LDV6, guest:justin-9bfb4160';
+
+check('an id in the list is protected', isAdminId('account:LDV6', ADMINS), true);
+check('an id not in it is not', isAdminId('account:OTHER', ADMINS), false);
+
+// **It does not refuse guests, and that asymmetry is deliberate.**
+// `LARDER_ADMIN_IDS` legitimately holds a `guest:` id beside the real one, so
+// the local administrator is protected too — otherwise the one guard that
+// matters is the one that cannot be exercised locally.
+check('a named dev guest is protected too', isAdminId('guest:justin-9bfb4160', ADMINS), true);
+check('an unnamed guest is not', isAdminId('guest:alice-a9a293b4', ADMINS), false);
+
+// **Fail-open, which is the opposite of every other rule in this file.** With no
+// list nobody is named, so nobody is protected and an ordinary account deletes
+// normally. A guard that refused everything on an unset variable would make the
+// app undeletable by accident.
+check('no list protects nobody', isAdminId('account:LDV6', undefined), false);
+check('an empty list protects nobody', isAdminId('account:LDV6', ''), false);
+check('and a list of separators protects nobody', isAdminId('account:LDV6', ' , , '), false);
+
+// **An empty id never matches, and the rule lives in `parseAdminIds`.** A guard
+// here was written first and survived every mutation aimed at it, because blanks
+// are dropped when the list is read — a trailing comma cannot put `''` in it. So
+// these three pin the *composition* rather than a second copy of the rule.
+check('an empty id is never protected', isAdminId('', ADMINS), false);
+check('nor an absent one', isAdminId(undefined, ADMINS), false);
+check('and a trailing comma does not create a protected empty id', isAdminId('', 'account:LDV6,'), false);
+check('because the list itself never holds a blank', parseAdminIds('account:LDV6, ,'), ['account:LDV6']);
+
+// **It must never be read as permission.** `guest:local` is what the hosted
+// runtime hands an anonymous caller, so a list containing it would mean
+// *everybody* if this answered a question about authority. It answers *is this
+// account spoken for*, and every caller uses it to refuse.
+check('the anonymous guest is protected when named, which is harmless', isAdminId('guest:local', 'guest:local'), true);
+check('and still administers nothing', isAdminUser(anonAdminGuest, 'guest:local', 'local'), false);
+
+// The two sentences are different jobs: one is read on a screen, one is thrown.
+check('the note names where the fix lives', ADMIN_UNDELETABLE_NOTE.includes('LARDER_ADMIN_IDS'), true);
+check('and so does the refusal', ADMIN_UNDELETABLE_REFUSAL.includes('LARDER_ADMIN_IDS'), true);
+check('the note is about this account', ADMIN_UNDELETABLE_NOTE.includes('This account'), true);
+check('the refusal is about that one', ADMIN_UNDELETABLE_REFUSAL.includes('That account'), true);
+
 
 console.log(fail === 0 ? `all ${total} assertions passed` : `${fail} of ${total} FAILED`);
 if (fail > 0) throw new Error(`${fail} assertion(s) failed`);

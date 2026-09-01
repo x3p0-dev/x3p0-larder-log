@@ -707,6 +707,30 @@ export const PAGE_FIELD_HALO_WITHIN_DARK =
 export const PAGE_MENU =
 	'absolute z-30 p-1.5 rounded-[14px] bg-surface border border-line';
 
+/**
+ * The same popover, **positioned against the viewport** rather than its parent.
+ *
+ * For a menu whose nearest scroll container would crop it — the two account
+ * pre-flights, inside `ModalShell`'s `overflow-y-auto max-h-[90vh]` card. A
+ * scroll container clips its absolutely-positioned descendants at its padding
+ * box, and that cap is load-bearing: the pre-flight is the tallest dialog in the
+ * app and a short window has to reach its footer. So the panel moves layer
+ * (D68), and `useFixedMenu` supplies the coordinates.
+ *
+ * **A whole constant rather than `${PAGE_MENU} fixed`**, which is what shipped
+ * first. Two utilities for one property is a coin toss settled by **sheet
+ * order**, not by attribute order — `.absolute` lands at 10385 and `.fixed` at
+ * 10427, so it was going the right way by luck. The console sweep already
+ * recorded this trap twice; this is the third.
+ *
+ * **Do not use it inside the drawer.** That `<aside>` carries a `transform`, and
+ * a transform on an ancestor becomes the containing block for everything `fixed`
+ * beneath it — so this would be trapped there exactly as `absolute` is trapped
+ * here. Same three words, opposite outcomes.
+ */
+export const PAGE_MENU_FIXED =
+	'fixed z-30 p-1.5 rounded-[14px] bg-surface border border-line';
+
 /** One row of it. Selection is a check, never a fill — so hover still reads on it. */
 export const PAGE_MENU_ROW =
 	'flex items-center gap-2.5 w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
@@ -873,6 +897,26 @@ export const ADMIN_ROW =
  */
 export const PAGE_MENU_ROW_DANGER =
 	'flex items-center w-full h-11 md:h-9 px-2.5 rounded-[9px] text-sm text-left transition-colors text-accent hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
+
+/**
+ * The same row, **two lines tall** — a label over what it costs.
+ *
+ * One caller: *Delete this household · 128 items, 4 locations… go permanently*
+ * in the account pre-flight's transfer menu (D68). It is the only menu row in
+ * the app that says what it means as well as what it is, and it earns that by
+ * being the one row in that menu which is not a person.
+ *
+ * **A whole constant rather than `${PAGE_MENU_ROW_DANGER} h-auto py-2
+ * items-start`**, which is what shipped first and was **cut off on desktop and
+ * not on a phone**. Three utilities fighting for two properties are settled by
+ * **sheet order**: `.h-11` lands at 17300 and `.h-auto` at 18401, so the base
+ * height lost and the row grew — but `.md\:h-9` is in a media block at 75371,
+ * far after both, so above `md` the row was clamped to 36px and the second line
+ * was clipped. **A variant always wins a coin toss with a base utility**, which
+ * is what made this look like a desktop-only bug.
+ */
+export const PAGE_MENU_ROW_DANGER_STACKED =
+	'flex items-start w-full h-auto py-2 px-2.5 rounded-[9px] text-sm text-left transition-colors text-accent hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
 /**
  * The role word as a trigger, on a card — `DRAWER_SUNK`'s light twin.

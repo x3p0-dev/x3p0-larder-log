@@ -1,40 +1,63 @@
-import { useState } from 'preact/hooks';
-import { ArrowLeft, CircleDot, ExternalLink, LogOut, Pencil, Shield } from 'lucide-preact';
+import { ArrowLeft, ChevronRight, LogOut, Shield, UserRound } from 'lucide-preact';
 
-import { DrawerAvatar } from './DrawerAvatar';
 import { DrawerMenuRule } from './DrawerMenu';
 import type { Theme } from '../lib/theme';
-import {
-	DRAWER_SUNK, DRAWER_MENU_ROW, DRAWER_PRIMARY, PANEL_FIELD_HALO_DARK,
-} from '../lib/controlStyles';
-import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName } from '../../shared/profile';
+import { DRAWER_MENU_ROW } from '../lib/controlStyles';
 
 /**
- * You, and the two things you can do about it.
+ * You, and the ways out.
  *
  * The Settings pane has no Account block any more: this is the only place the
  * account appears, and it never says whether you are signed in, because if you
- * are reading it you are. What it held that was worth keeping — the name, and
- * the way out — is two rows.
+ * are reading it you are.
  *
  * **Contents only.** Each host owns its own box and its own dismissal, the same
  * arrangement `HouseholdSwitcher` has: the drawer's foot row opens it upward in
  * a `DrawerMenu`, and the collapsed rail opens it in a `RailFlyout` beside the
  * avatar. One component, two states of the drawer.
  *
- * The pencil flips the identity row **in place**, exactly as the Filter tab's
- * sections do — no modal and no profile screen. There is no toast on save: the
- * row coming back read-only with the new name in it is the whole confirmation,
- * and a toast for a save you are looking at is the noise the plain-toast
- * question is trying to avoid.
+ * **The identity row is a door now, not a display** (D68), and a door does not
+ * have to be a portrait. It opens *Your account* — the pane that holds the
+ * display name, the export and the deletion — and it says so in two words.
+ *
+ * **It stopped repeating you.** It shipped as the avatar, the name and the
+ * email over again, on the reasoning that the same row one level in reads as
+ * continuing rather than as arriving — but the row you pressed to get here is
+ * that row, a few pixels below, still on screen. A menu that opens with a copy
+ * of its own trigger has spent its widest row saying something you can already
+ * see. *Your account* is the only new fact in it: what is behind the door.
+ *
+ * **So all three rows are one row now**, glyph and label, and only this one
+ * takes a chevron — because only this one pushes a level.
+ *
+ * **That answers the menu's ceiling instead of walking into it.** Four rows was
+ * already the point at which this construction stops being a menu, and the two
+ * account-scoped rows that arrived in one week would have taken it past. A menu
+ * absorbs one at a push; a pane absorbs both without being asked.
+ *
+ * **What it costs is the collapsed rail**, where the flyout was the one place a
+ * name appeared — the trigger there is a bare 38px avatar. It is not lost: the
+ * rail's own tooltip on that control is `accountName`, and the pane behind this
+ * row opens on it. The drawer, where this was pure repetition, is the case that
+ * decides it, and one component in two hosts stays one component.
+ *
+ * **The cost is that the display name moved.** *Settings tab* put it here on
+ * purpose — *no modal, no profile screen; it is where you already were* — and
+ * the pencil cannot live in two places. The idiom survives intact one push
+ * further in: a read-only row that flips in place, Escape cancels, no toast.
+ * That is the trade, and it is the thing to watch on a real screen.
  */
 export function AccountMenu({
-	name, email, picture, onRename, onOpenAdmin, adminOpen, onCloseAdmin,
+	onOpenAccount, onOpenAdmin, adminOpen, onCloseAdmin,
 	onSignOut, onDone, theme,
 }: {
-	name: string;
-	email: string;
-	picture?: string;
+	/**
+	 * Pushes the *Your account* pane. **Handed by both hosts, always** — the
+	 * drawer's foot row and the collapsed rail's flyout — which is the rule the
+	 * missing *Admin* row cost a real session to learn: anything either host
+	 * gives this component has to be given by both.
+	 */
+	onOpenAccount: () => void;
 	/**
 	 * Opens the admin console. **Absent for everybody who is not an
 	 * administrator**, which is most people — they keep the two-row menu and
@@ -51,103 +74,32 @@ export function AccountMenu({
 	adminOpen?: boolean;
 	/** Leaves the console. Handed by both hosts alongside `onOpenAdmin`. */
 	onCloseAdmin?: () => void;
-	/**
-	 * Writes the new display name. Absent for the dev guest, who has no account
-	 * to rename — the pencil goes with it rather than failing on press.
-	 */
-	onRename?: (next: string) => void;
 	onSignOut: () => void;
 	/** Closes the host's popover. Sign out takes it with them either way. */
 	onDone: () => void;
 	theme: Theme;
 }) {
 	const d = theme.drawer;
-	const [editing, setEditing] = useState(false);
-	const [draft, setDraft] = useState(name);
-	const valid = isValidDisplayName(draft);
-
-	/**
-	 * *Done* commits and returns the row to read-only.
-	 *
-	 * An emptied field is refused rather than saved: the server throws on a
-	 * blank name, and the refusal would arrive as a banner over a row that had
-	 * already closed. The pill is disabled on the same rule, so this is the
-	 * keyboard path — Enter in the field — rather than a second guard.
-	 */
-	function commit() {
-		const next = normalizeDisplayName(draft);
-
-		if (! next) return;
-
-		if (next !== name) onRename?.(next);
-		setEditing(false);
-	}
-
-	function cancel() {
-		setDraft(name);
-		setEditing(false);
-	}
 
 	return (
 		<div class="flex flex-col">
-			{editing ? (
-				<div class="flex items-center gap-2.5 p-1.5">
-					<input
-						value={draft}
-						onInput={(e) => setDraft(e.currentTarget.value)}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter') { e.preventDefault(); commit(); }
-							// Escape cancels the edit, and stops there — the menu
-							// behind it stays open, or the field would vanish along
-							// with the thing you were correcting.
-							if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
-						}}
-						maxLength={MAX_DISPLAY_NAME}
-						autoFocus
-						aria-label="Your display name"
-						class={`flex-1 min-w-0 h-10 px-3 rounded-[11px] text-sm ${PANEL_FIELD_HALO_DARK}`}
-						style={{ background: d.well, border: `1px solid ${d.line}`, color: d.ink }}
-					/>
-					<button
-						onClick={commit}
-						disabled={! valid}
-						class={`shrink-0 flex items-center h-[30px] px-[15px] rounded-[10px] text-[13.5px] font-semibold ${DRAWER_PRIMARY}`}
-						style={valid
-							? { background: d.ink, color: '#241E17' }
-							: { background: theme.disabledBg, color: theme.disabledText }}
-					>
-						Done
-					</button>
-				</div>
-			) : (
-				<div class="flex items-center gap-[11px] py-[9px] pl-2.5 pr-2">
-					<DrawerAvatar name={name} picture={picture} size={38} />
-					<span class="flex-1 min-w-0 flex flex-col gap-px">
-						<span class="text-body truncate" style={{ color: d.ink }}>{name || 'Account'}</span>
-						{/* Absent, not blank — the dev guest has no email. */}
-						{email && (
-							<span class="text-meta truncate" style={{ color: theme.textFaint }}>{email}</span>
-						)}
-					</span>
-					{/*
-					  * The card control, on the menu rather than a card — the only
-					  * place it appears off one. Its focus gap therefore resolves
-					  * against `drawer-raised` instead of the menu's own fill, which
-					  * is a 2px difference between two near-blacks.
-					  */}
-					{onRename && (
-						<button
-							onClick={() => { setDraft(name); setEditing(true); }}
-							class={`shrink-0 flex items-center justify-center w-[30px] h-[30px] rounded-[9px] ${DRAWER_SUNK}`}
-							aria-label="Change your display name"
-						>
-							<Pencil size={15} />
-						</button>
-					)}
-				</div>
-			)}
-
-			<DrawerMenuRule theme={theme} />
+			{/*
+			  * The door, named rather than portrayed. **The chevron is the whole
+			  * difference from the two rows below**: it is the only one that goes a
+			  * level deeper into the drawer, and the app already spends that mark
+			  * on exactly that — the Settings pane's *Members* row.
+			  *
+			  * `onDone()` because this navigates, exactly as *Admin* below does:
+			  * the menu sits over the drawer the pane is about to fill.
+			  */}
+			<button
+				onClick={() => { onDone(); onOpenAccount(); }}
+				class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left ${DRAWER_MENU_ROW}`}
+			>
+				<UserRound size={15} class="shrink-0" style={{ color: d.inkFaint }} />
+				<span class="flex-1 min-w-0 truncate">Your account</span>
+				<ChevronRight size={14} class="shrink-0" style={{ color: d.inkFaint }} />
+			</button>
 
 			{/*
 			  * *Admin* — the way into the console, above the account actions.
@@ -156,8 +108,9 @@ export function AccountMenu({
 			  * which is why it sits here rather than beside *Sign out*.
 			  *
 			  * **It takes no outbound arrow.** That mark means *this leaves the
-			  * app*, which is why *Change your picture* below carries one. Admin
-			  * is still Larder Log — the same drawer, one pane along.
+			  * app*, which is why *Change your picture* carries one — over in the
+			  * account pane, where D68 moved it. Admin is still Larder Log: the
+			  * same drawer, one pane along.
 			  *
 			  * `onDone()` because this one *does* navigate: the menu is over the
 			  * drawer the console is about to fill, and leaving it open would put
@@ -178,64 +131,33 @@ export function AccountMenu({
 			  * screen.
 			  */}
 			{onOpenAdmin && (
-				<>
-					<button
-						onClick={() => {
-							onDone();
-							if (adminOpen) onCloseAdmin?.();
-							else onOpenAdmin();
-						}}
-						class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left ${DRAWER_MENU_ROW}`}
-					>
-						{adminOpen ? (
-							<>
-								<ArrowLeft size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Back to the pantry
-							</>
-						) : (
-							<>
-								<Shield size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Admin
-							</>
-						)}
-					</button>
-
-					<DrawerMenuRule theme={theme} />
-				</>
+				<button
+					onClick={() => {
+						onDone();
+						if (adminOpen) onCloseAdmin?.();
+						else onOpenAdmin();
+					}}
+					class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left ${DRAWER_MENU_ROW}`}
+				>
+					{adminOpen ? (
+						<>
+							<ArrowLeft size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Back to the pantry
+						</>
+					) : (
+						<>
+							<Shield size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Admin
+						</>
+					)}
+				</button>
 			)}
 
 			{/*
-			  * *Change your picture* — the board's third row, its own block between
-			  * the identity and the way out, with the outbound arrow that means
-			  * **this leaves the app**.
-			  *
-			  * Naming Gravatar here is right where naming it on the sign-in button
-			  * was wrong (D47). That button went to a Spacefast account and only
-			  * looked like it went to Gravatar; this genuinely is Gravatar —
-			  * `auth.picture` is a `gravatar.com/avatar/…` URL, and that page is
-			  * where the image behind it is changed.
-			  *
-			  * The label stays the board's four words because the menu is 292px
-			  * and *Change your picture on Gravatar* does not fit one line; the
-			  * destination rides the accessible name instead, which contains the
-			  * visible label rather than replacing it.
-			  *
-			  * `/profile/avatars` rather than the profile root: it is the editor,
-			  * and Gravatar bounces a signed-out visitor through sign-in and back
-			  * to it. No `onDone()` — this opens a tab beside us rather than
-			  * navigating away, and a menu that shut itself would make coming back
-			  * feel like the app had forgotten where you were.
+			  * **One rule, and it separates the destinations from the way out.**
+			  * It used to sit under the identity row, which earned it by being a
+			  * taller card row among menu rows; three identical rows with a rule
+			  * between each pair reads as three unrelated things. *Your account*
+			  * and *Admin* are both places to go, and signing out is not.
 			  */}
-			<a
-				href="https://gravatar.com/profile/avatars"
-				target="_blank"
-				rel="noopener noreferrer"
-				aria-label="Change your picture on Gravatar (opens in a new tab)"
-				class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left no-underline ${DRAWER_MENU_ROW}`}
-			>
-				<CircleDot size={15} class="shrink-0" style={{ color: d.inkFaint }} />
-				<span class="flex-1 min-w-0 truncate">Change your picture</span>
-				<ExternalLink size={14} class="shrink-0" style={{ color: d.inkFaint }} aria-hidden="true" />
-			</a>
-
 			<DrawerMenuRule theme={theme} />
 
 			<button

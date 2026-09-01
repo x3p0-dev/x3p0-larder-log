@@ -213,18 +213,36 @@ export function ModalShell({
  * why it lives beside the shell.
  */
 export function DialogButtons({
-	cancelRef, onCancel, onConfirm, confirmLabel, armed, dark, theme,
+	cancelRef, onCancel, onConfirm, confirmLabel, armed, note, dark, theme,
 }: {
 	cancelRef?: { current: HTMLButtonElement | null };
 	onCancel: () => void;
 	onConfirm: () => void;
 	confirmLabel: string;
 	armed: boolean;
+	/**
+	 * Why the primary is asleep, beside the primary (D68).
+	 *
+	 * **The one caller is the account pre-flight**, and it is what earns that
+	 * dialog its exception to D36. *A disabled control cannot explain itself* is
+	 * a rule about a reason that is off-screen; here the reason is the list
+	 * directly above, and this names how much of it is still waiting.
+	 *
+	 * It takes the row's slack rather than a line of its own, so the buttons do
+	 * not move when it goes — and it goes the moment the primary arms, because a
+	 * sentence explaining a control that is now live is a sentence about nothing.
+	 */
+	note?: string;
 	dark: boolean;
 	theme: Theme;
 }) {
 	return (
-		<div class="flex justify-end gap-2.5 mt-5">
+		<div class="flex items-center justify-end gap-2.5 mt-5">
+			{note && (
+				<p class="m-0 flex-1 min-w-0 text-meta leading-[1.4]" style={{ color: theme.textMuted }}>
+					{note}
+				</p>
+			)}
 			<button
 				ref={cancelRef}
 				onClick={onCancel}

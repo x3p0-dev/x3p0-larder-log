@@ -35,6 +35,13 @@ export type MenuPlacement = {
  */
 const EDGE = 12;
 
+/**
+ * The gap between a trigger and its panel — the `mt-1.5` the corner classes
+ * spend, as a number, for the callers that position in pixels rather than in
+ * utilities.
+ */
+const GAP = 6;
+
 export function placeMenu(
 	box: MenuBox,
 	view: { width: number; height: number },
@@ -68,5 +75,45 @@ export function placeMenu(
 		// Never taller than the room it has. The last row of a long table opens a
 		// shorter, scrolling panel rather than one running past the fold.
 		maxHeight: Math.min(size.maxHeight, Math.max((up ? above : below) - EDGE, 0)),
+	};
+}
+
+/**
+ * Where a **fixed** panel's own top-left corner goes, in viewport coordinates.
+ *
+ * `placeMenu` answers *which corner of the trigger it hangs from*, which is all
+ * an `absolute` panel needs — the browser does the arithmetic from `left-0` or
+ * `right-0`. A panel that has to escape a clipping ancestor cannot be
+ * `absolute`, so it needs the numbers.
+ *
+ * **The case that forces it is a dialog that scrolls.** `ModalShell`'s card is
+ * `overflow-y-auto max-h-[90vh]`, because the account pre-flight is the tallest
+ * dialog in the app and a short window has to be able to reach its footer. A
+ * scroll container clips its absolutely-positioned descendants at its padding
+ * box, so a popover inside one is cut — and unlike the review card's
+ * `overflow-hidden`, this one cannot simply be removed. **A popover belongs
+ * inside the viewport; that is the layer that moves.**
+ *
+ * The `12px` inset is `EDGE`, so a panel pushed off an edge lands where a panel
+ * that chose that edge would have.
+ */
+export function menuOrigin(
+	box: MenuBox,
+	corner: MenuCorner,
+	size: { width: number; height: number },
+	view: { width: number; height: number }
+): { top: number; left: number } {
+	const up = corner.startsWith('up');
+	const right = corner.endsWith('right');
+
+	const top = up ? box.top - GAP - size.height : box.bottom + GAP;
+	const left = right ? box.right - size.width : box.left;
+
+	return {
+		// Clamped to the viewport on both axes, because a corner is chosen from
+		// the panel's *cap* and the panel is often shorter — and because a
+		// trigger can sit closer to an edge than `EDGE` all by itself.
+		top: Math.max(EDGE, Math.min(top, view.height - size.height - EDGE)),
+		left: Math.max(EDGE, Math.min(left, view.width - size.width - EDGE)),
 	};
 }

@@ -53,11 +53,19 @@ type Props = {
 	onNewHousehold: () => void;
 	onJoinHousehold: (code: string) => Promise<string | null>;
 	accountName: string;
-	accountEmail: string;
 	/** The Gravatar image, where the account has one. */
 	accountPicture?: string;
-	/** Renames the account. Absent for the dev guest, who has no account row. */
-	onSetDisplayName?: (name: string) => void;
+	/**
+	 * Pushes the *Your account* pane (D68). **Handed here as well as by the
+	 * drawer**, which is the same rule the missing *Admin* row taught: anything
+	 * either host gives `AccountMenu` has to be given by both, or the same menu
+	 * is two different menus depending on whether the drawer is folded.
+	 *
+	 * Unlike `onOpenAdmin`, `Pantry`'s handler **un-collapses the drawer**. The
+	 * console has a rail form and this pane has none, so a flag set from here
+	 * with nothing revealed would be a press with no result.
+	 */
+	onOpenAccount: () => void;
 	/**
 	 * Opens the admin console (D62). Absent unless the caller administers the
 	 * space, which is almost everybody.
@@ -223,7 +231,7 @@ export function CollapsedRail({
 	locationFilter, storeFilter, typeFilter,
 	autoOnly, itemCount, locationCounts, householdName, householdInk,
 	households, currentHouseholdId, onSelectHousehold, onNewHousehold, onJoinHousehold,
-	accountName, accountEmail, accountPicture, onSetDisplayName, onOpenAdmin,
+	accountName, accountPicture, onOpenAccount, onOpenAdmin,
 	adminSection, onAdminSection, onCloseAdmin,
 	themeOverride, setThemeOverride, dark, onExpand, onSignOut, theme,
 }: Props) {
@@ -551,10 +559,7 @@ export function CollapsedRail({
 			{menu === 'account' && (
 				<RailFlyout top={menuTop} onClose={() => setMenu(null)} label="Account" width={292} panelRef={panelRef}>
 					<AccountMenu
-						name={accountName}
-						email={accountEmail}
-						picture={accountPicture}
-						onRename={onSetDisplayName}
+						onOpenAccount={onOpenAccount}
 						onOpenAdmin={onOpenAdmin}
 						adminOpen={adminSection !== null}
 						onCloseAdmin={onCloseAdmin}

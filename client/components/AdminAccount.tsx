@@ -16,7 +16,7 @@ import {
 	PAGE_GHOST_DANGER_SUNK, PAGE_HELD,
 } from '../lib/controlStyles';
 import type { Role } from '../../shared/roles';
-import { usDate } from '../../shared/admin';
+import { ADMIN_UNDELETABLE_NOTE, usDate } from '../../shared/admin';
 import type { AdminPersonHousehold } from '../../shared/types';
 
 /**
@@ -99,8 +99,13 @@ export function AdminAccount({
 
 			{/* This page has exactly one write on it, and it is the largest one
 			  * in the app. The notice is what lets its button be asleep and still
-			  * mean something (D36). */}
-			{held && <AdminHeldNotice theme={theme} />}
+			  * mean something (D36).
+			  *
+			  * **Not on an administrator's page**, where that button is absent
+			  * rather than asleep (D68) — a notice above a screen you could only
+			  * ever read would be an apology for nothing, which is the same rule
+			  * that keeps it off Overview and the two lists. */}
+			{held && ! person.admin && <AdminHeldNotice theme={theme} />}
 
 			<button
 				onClick={onBack}
@@ -192,6 +197,27 @@ export function AdminAccount({
 						class="flex flex-col gap-1.5 px-5 py-3.5"
 						style={{ borderTop: `1px solid ${theme.divider}`, background: theme.surfaceAlt }}
 					>
+						{/*
+						  * **An administrator's account is not the console's to
+						  * delete either** (D68), and this is the sharper half of the
+						  * guard: one administrator removing a peer's rows would
+						  * leave `LARDER_ADMIN_IDS` still naming an account that no
+						  * longer exists, and the next sign-in with that identity
+						  * would mint an empty one holding the console.
+						  *
+						  * **Absent rather than disabled**, unlike the hold beside
+						  * it — and the two differ for a stated reason. The hold is
+						  * *temporary* and its control comes back, so it stays on
+						  * screen wearing `PAGE_HELD`. This is not a hold: it is what
+						  * this account **is**, for as long as the environment says
+						  * so, and a permanently dead button is a worse thing to look
+						  * at than a sentence saying where the switch really is.
+						  *
+						  * `person.admin` is the console's own flag, already on every
+						  * row of the People list — so this reads the same fact the
+						  * list filters on rather than a second one.
+						  */}
+						{! person.admin && (
 						<button
 							onClick={() => setDeleting(true)}
 							disabled={held}
@@ -201,6 +227,7 @@ export function AdminAccount({
 						>
 							<Trash2 size={16} /> Delete account
 						</button>
+						)}
 						<span class="text-[12.5px] leading-[1.45]" style={{ color: theme.textMuted }}>
 							{/*
 							  * The sentence changes with the situation, because the
@@ -208,12 +235,14 @@ export function AdminAccount({
 							  * decision waiting. A flat *this is permanent* would be
 							  * true and would say nothing the button does not.
 							  */}
-							{person.soleOwnerOf > 0
-								? `${isSelf ? 'You are' : 'They are'} the only owner of ` +
-									`${person.soleOwnerOf} ${person.soleOwnerOf === 1 ? 'household' : 'households'} ` +
-									`other people use. Deleting asks what happens to ` +
-									`${person.soleOwnerOf === 1 ? 'it' : 'each'} before it goes ahead.`
-								: 'Removes every membership and the display name. It cannot remove the Spacefast account itself, and the audit log keeps its record of what they did.'}
+							{person.admin
+								? ADMIN_UNDELETABLE_NOTE
+								: person.soleOwnerOf > 0
+									? `${isSelf ? 'You are' : 'They are'} the only owner of ` +
+										`${person.soleOwnerOf} ${person.soleOwnerOf === 1 ? 'household' : 'households'} ` +
+										`other people use. Deleting asks what happens to ` +
+										`${person.soleOwnerOf === 1 ? 'it' : 'each'} before it goes ahead.`
+									: 'Removes every membership and the display name. It cannot remove the Spacefast account itself, and the audit log keeps its record of what they did.'}
 						</span>
 					</div>
 				</Card>

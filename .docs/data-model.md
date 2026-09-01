@@ -727,6 +727,14 @@ mutation checks a capability from [Roles](#roles) before it writes.
 | `changeRole` | mutation | Promote or demote a member — owner only, last-owner guarded |
 | `removeMember` / `leaveHousehold` | mutation | Membership removal, last-owner guarded |
 | `deleteHousehold` | mutation | Owner only; cascades through every child table |
+| `transferOwnership` | mutation | Hands a household over — the target becomes Owner and **the caller becomes an Editor**, in that order so there is never an instant with no owner. Owner only, and it revokes the caller's own invites there (D21) |
+| `account` | query | The caller, and every household they are in with enough about each to say what deleting the account would do to it — [D68](decisions.md#d68-account-deletion-is-leave-household-run-against-every-household-at-once). Takes no argument, answers with no household, and is **subscribed only while the account pane is pushed**: five indexed reads per household is nothing once and a page-load tax on everybody |
+| `deleteMyAccount` | mutation | Every membership, every live trip and the profile, after one decision per household the caller solely owns and shares. The plan is recomputed server-side from `fateOf`, so a stale dialog cannot delete a pantry nobody chose. **The third write not scoped to a household**, and it **refuses an account named in `LARDER_ADMIN_IDS`** — as `adminDeleteAccount` does for its target |
+
+**Neither account write is logged.** The audit log records *administration* —
+things done from the console to households and accounts that are not the
+caller's — and never what a person does to their own, which is why
+`deleteHousehold` a few rows up writes no row either.
 
 ### The admin console's surface
 
@@ -752,7 +760,7 @@ beneath them.
 | `adminRevokeInvite` | mutation | Kills a link somebody else is holding |
 | `adminDeleteHousehold` | mutation | The full cascade, plus the audit row that records what it held |
 | `adminTransferOwnership` | mutation | Promotes one member and demotes every other owner, in that order |
-| `adminDeleteAccount` | mutation | Every membership and the profile, after one decision per solely-owned household |
+| `adminDeleteAccount` | mutation | Every membership and the profile, after one decision per solely-owned household. **Refuses a target named in `LARDER_ADMIN_IDS`**, including the caller's own id and every peer's — the variable is set out of band, so the app deleting the rows would leave it naming an account that no longer exists |
 
 **A console query answers `{ state: 'denied' }` and never throws**, for the
 reason every query here reports rather than throwing. A console *mutation*

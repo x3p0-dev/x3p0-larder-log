@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { ChevronRight, ChevronsUpDown, ListFilter, PanelLeftClose, Settings } from 'lucide-preact';
 
 import { AccountMenu } from './AccountMenu';
+import { AccountPane } from './AccountPane';
 import { AdminPane, type AdminSection } from './AdminPane';
 import { DrawerAvatar } from './DrawerAvatar';
 import { DrawerMenu } from './DrawerMenu';
@@ -19,6 +20,7 @@ import { DRAWER_CHIP, DRAWER_ICON, DRAWER_ROW, DRAWER_SEGMENT_ON } from '../lib/
 import type { SourceKind } from '../../shared/source';
 import { sourceGroupWord } from '../../shared/source';
 import type { HouseholdSummary, Item, Source, Term, TermKind } from '../../shared/types';
+import type { AccountHousehold } from '../../shared/accountDeletion';
 
 export type DrawerTab = 'filter' | 'settings';
 
@@ -78,6 +80,26 @@ type Props = {
 	/** Renames the account. Absent for the dev guest, who has no account row. */
 	onSetDisplayName?: (name: string) => void;
 	onSignOut: () => void;
+
+	/*
+	 * *Your account* — a pane one level in, opened by the menu's identity row
+	 * (D68). Owned by `Pantry` rather than by this component, because the
+	 * collapsed rail's flyout hosts the same menu and both have to hand the same
+	 * handler: a handler written twice is a handler that will be changed once.
+	 */
+	accountOpen: boolean;
+	onOpenAccount: () => void;
+	onCloseAccount: () => void;
+	/**
+	 * Starts the deletion flow, which `Pantry` owns and draws.
+	 *
+	 * **The dialogs cannot live in the pane**: this `<aside>` carries a
+	 * `transform` for its slide-over, and a transform on an ancestor becomes the
+	 * containing block for everything `position: fixed` beneath it — so a modal
+	 * opened from in here is trapped inside 340px of drawer. `MembersPanel` has
+	 * had the rule written down since Phase 4.12.
+	 */
+	onDeleteAccount: (snapshot: { name: string; households: AccountHousehold[] }) => void;
 
 	/** Everything the Settings pane needs, passed through untouched. */
 	settings: Omit<ComponentProps<typeof DrawerSettings>, 'theme' | 'membersOpen' | 'setMembersOpen'>;
@@ -143,6 +165,7 @@ export function Drawer({
 	householdName, householdInk, households, currentHouseholdId,
 	onSelectHousehold, onNewHousehold, onJoinHousehold,
 	accountName, accountEmail, accountPicture, onSetDisplayName, onSignOut,
+	accountOpen, onOpenAccount, onCloseAccount, onDeleteAccount,
 	settings, openMembers,
 	adminSection, setAdminSection, onOpenAdmin, onCloseAdmin,
 	onCreateTerm, onRenameTerm, onRecolorTerm, onDeleteTerm, onSetSourceKind, canEditTaxonomy, closeEditing,
@@ -161,7 +184,8 @@ export function Drawer({
 	const sourceWord = sourceGroupWord(stores);
 	const d = theme.drawer;
 	const [switcherOpen, setSwitcherOpen] = useState(false);
-	const [accountOpen, setAccountOpen] = useState(false);
+	/** The foot row's popover. Not the pane — see `accountOpen` in the props. */
+	const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
 	/*
 	 * Whether the Settings pane is one level down, in Members.
@@ -181,7 +205,7 @@ export function Drawer({
 	 * the closing — see `useDismiss`.
 	 */
 	const switcherRef = useDismiss<HTMLDivElement>(switcherOpen, () => setSwitcherOpen(false));
-	const accountRef = useDismiss<HTMLDivElement>(accountOpen, () => setAccountOpen(false));
+	const accountRef = useDismiss<HTMLDivElement>(accountMenuOpen, () => setAccountMenuOpen(false));
 
 	/*
 	 * Where the blocked "last owner" dialog sends you. Skips the first run: the
@@ -314,7 +338,7 @@ export function Drawer({
 				  * a code or link* live, and hiding them until you already had
 				  * two would mean there was no way to get the second one.
 				  */}
-				{! pushed && ! adminOpen && (
+				{! pushed && ! adminOpen && ! accountOpen && (
 				<div class="relative mx-5 mt-3.5" ref={switcherRef}>
 					<button
 						onClick={() => setSwitcherOpen((v) => ! v)}
@@ -356,7 +380,7 @@ export function Drawer({
 				  * out of a second-level pane, and leaving a tab bar over one would
 				  * offer a sideways exit from somewhere nobody arrived sideways.
 				  */}
-				{! pushed && ! adminOpen && (
+				{! pushed && ! adminOpen && ! accountOpen && (
 				<div class="grid grid-cols-2 gap-1 mx-5 mt-[18px] p-1 rounded-xl" style={{ background: d.well }}>
 					{([['filter', 'Filter', ListFilter], ['settings', 'Settings', Settings]] as const).map(([key, label, Icon]) => (
 						<button
@@ -371,7 +395,28 @@ export function Drawer({
 				)}
 
 				<div class="flex-1 min-h-0 overflow-y-auto">
-					{adminOpen ? (
+					{/*
+					  * *Your account* is a level **above** the tabs, beside the
+					  * console rather than inside Settings — it arrives from the
+					  * account menu and is not about the household the tabs filter
+					  * and configure. So while it is open the switcher and the tabs
+					  * both go, and back is the only way out.
+					  *
+					  * It is checked before the console because opening one closes
+					  * the other in `Pantry`; the order here only settles a frame
+					  * where both flags are briefly true.
+					  */}
+					{accountOpen ? (
+						<AccountPane
+							name={accountName}
+							email={accountEmail}
+							picture={accountPicture}
+							onBack={onCloseAccount}
+							onRename={onSetDisplayName}
+							onDelete={onDeleteAccount}
+							theme={theme}
+						/>
+					) : adminOpen ? (
 						<AdminPane
 							section={adminSection}
 							onSelect={setAdminSection}
@@ -435,7 +480,7 @@ export function Drawer({
 				  * component, two states of the drawer.
 				  */}
 				<div class="relative shrink-0" ref={accountRef}>
-					{accountOpen && (
+					{accountMenuOpen && (
 						<DrawerMenu
 							label="Account"
 							role="dialog"
@@ -448,28 +493,25 @@ export function Drawer({
 							theme={theme}
 						>
 							<AccountMenu
-								name={accountName}
-								email={accountEmail}
-								picture={accountPicture}
-								onRename={onSetDisplayName}
+								onOpenAccount={onOpenAccount}
 								onOpenAdmin={onOpenAdmin}
 								adminOpen={adminOpen}
 								onCloseAdmin={onCloseAdmin}
 								onSignOut={onSignOut}
-								onDone={() => setAccountOpen(false)}
+								onDone={() => setAccountMenuOpen(false)}
 								theme={drawerTheme(theme)}
 							/>
 						</DrawerMenu>
 					)}
 					<button
-						onClick={() => setAccountOpen((v) => ! v)}
+						onClick={() => setAccountMenuOpen((v) => ! v)}
 						class={`flex items-center gap-[11px] w-full px-5 py-3.5 text-left ${DRAWER_ROW}`}
 						style={{ borderTop: `1px solid ${d.line}` }}
 						aria-haspopup="dialog"
-						aria-expanded={accountOpen}
+						aria-expanded={accountMenuOpen}
 					>
 						{/* The cream ring marks the avatar as what opened the menu. */}
-						<DrawerAvatar name={accountName} picture={accountPicture} size={32} ring={accountOpen} />
+						<DrawerAvatar name={accountName} picture={accountPicture} size={32} ring={accountMenuOpen} />
 						<span class="flex-1 min-w-0 flex flex-col gap-px">
 							<span class="text-body truncate" style={{ color: d.ink }}>{accountName || 'Account'}</span>
 							{/* Absent, not blank. The dev guest has no email, and an
