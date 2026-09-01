@@ -453,6 +453,8 @@ export function Drawer({
 								picture={accountPicture}
 								onRename={onSetDisplayName}
 								onOpenAdmin={onOpenAdmin}
+								adminOpen={adminOpen}
+								onCloseAdmin={onCloseAdmin}
 								onSignOut={onSignOut}
 								onDone={() => setAccountOpen(false)}
 								theme={drawerTheme(theme)}

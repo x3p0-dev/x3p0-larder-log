@@ -556,6 +556,8 @@ export function CollapsedRail({
 						picture={accountPicture}
 						onRename={onSetDisplayName}
 						onOpenAdmin={onOpenAdmin}
+						adminOpen={adminSection !== null}
+						onCloseAdmin={onCloseAdmin}
 						onSignOut={onSignOut}
 						onDone={() => setMenu(null)}
 						theme={drawerTheme(theme)}

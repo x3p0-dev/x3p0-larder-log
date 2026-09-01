@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { CircleDot, ExternalLink, LogOut, Pencil, Shield } from 'lucide-preact';
+import { ArrowLeft, CircleDot, ExternalLink, LogOut, Pencil, Shield } from 'lucide-preact';
 
 import { DrawerAvatar } from './DrawerAvatar';
 import { DrawerMenuRule } from './DrawerMenu';
@@ -29,7 +29,8 @@ import { isValidDisplayName, MAX_DISPLAY_NAME, normalizeDisplayName } from '../.
  * question is trying to avoid.
  */
 export function AccountMenu({
-	name, email, picture, onRename, onOpenAdmin, onSignOut, onDone, theme,
+	name, email, picture, onRename, onOpenAdmin, adminOpen, onCloseAdmin,
+	onSignOut, onDone, theme,
 }: {
 	name: string;
 	email: string;
@@ -40,6 +41,16 @@ export function AccountMenu({
 	 * never learn the console exists.
 	 */
 	onOpenAdmin?: () => void;
+	/**
+	 * Whether the console is already open, which is what turns the row round.
+	 *
+	 * The menu is reachable from inside the console — the account row is at the
+	 * foot of the drawer the console fills, and the rail's flyout sits beside it
+	 * — so *Admin* was offering to go somewhere you already were.
+	 */
+	adminOpen?: boolean;
+	/** Leaves the console. Handed by both hosts alongside `onOpenAdmin`. */
+	onCloseAdmin?: () => void;
 	/**
 	 * Writes the new display name. Absent for the dev guest, who has no account
 	 * to rename — the pencil goes with it rather than failing on press.
@@ -151,14 +162,40 @@ export function AccountMenu({
 			  * `onDone()` because this one *does* navigate: the menu is over the
 			  * drawer the console is about to fill, and leaving it open would put
 			  * a popover on top of the thing it just opened.
+			  *
+			  * **It turns round inside the console**, because both hosts of this
+			  * menu are reachable from in there — the drawer's foot row is below
+			  * the console pane, and the rail's account flyout sits beside it — so
+			  * a row offering to open what you are looking at is a no-op wearing a
+			  * label. One row, two directions, the run list trigger's rule.
+			  *
+			  * **A back arrow, not a house.** The app names this destination *the
+			  * pantry* and marks it with a back mark in both of the two places it
+			  * already offers it — the rail's slot 2 and the console pane's own
+			  * header — and `Home` is spoken for a few pixels away: it is the
+			  * **Households** section's glyph in the nav block and in the rail. A
+			  * house here would be the third meaning of the second mark on one
+			  * screen.
 			  */}
 			{onOpenAdmin && (
 				<>
 					<button
-						onClick={() => { onDone(); onOpenAdmin(); }}
+						onClick={() => {
+							onDone();
+							if (adminOpen) onCloseAdmin?.();
+							else onOpenAdmin();
+						}}
 						class={`flex items-center gap-2.5 h-[38px] px-2.5 rounded-[9px] text-sm text-left ${DRAWER_MENU_ROW}`}
 					>
-						<Shield size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Admin
+						{adminOpen ? (
+							<>
+								<ArrowLeft size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Back to the pantry
+							</>
+						) : (
+							<>
+								<Shield size={15} class="shrink-0" style={{ color: d.inkFaint }} /> Admin
+							</>
+						)}
 					</button>
 
 					<DrawerMenuRule theme={theme} />
