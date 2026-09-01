@@ -4736,3 +4736,622 @@ to go and find.
 tables, fourteen queries, twenty-nine mutations, `db.migrations: []`,
 `/api/status` still the only endpoint. Nothing about a cross-cutting feature
 that adds one handler needs a publish to verify.
+
+## 2026-09-01 — a failed publish left production's runtime 422ing, and the platform looped — bug
+
+**Severity: production outage.** The app's entire server half is down. Static
+files serve (`/`, `/client.js`, `/zero.css`, `/site.webmanifest` all 200) and
+every capsule call fails:
+
+```
+GET  /api/status
+{"code":"zero_artifact_mode_invalid","status":422,
+ "detail":"A read handler cannot carry write-side capabilities."}
+
+POST /__spacefast/zero/run   {"op":"query.run","name":"households"}
+{"code":"zero_artifact_mode_invalid","status":422,
+ "detail":"Zero artifact mode does not match the invocation mode."}
+```
+
+Note the **two different `detail` strings under one code**, neither of which
+names a handler, a file or a line. `sf logs runtime` is **empty** — the artifact
+is rejected before any handler runs, so the one instrument this project relies
+on for hosted debugging has nothing in it.
+`https://spacefast.com/docs/errors/zero_artifact_mode_invalid` **404s**, and the
+404 body is 25 KB of HTML (the standing docs trap), so the `type` URI in the
+error envelope points at nothing.
+
+**What we did.** `npx sf publish -m "…"` on a clean tree, after a clean
+typecheck, 845 assertions and a read dry-run artifact. It printed:
+
+```
+Synced 4 server variables from .env.server.
+✓ Updating space  larderlog
+⠋ Creating version
+runtime_delivery_lock_timeout
+```
+
+`runtime_delivery_lock_timeout` is a **new failure mode** here, and a second one
+at the `Creating version` step after v18's `Runtime API request timed out after
+10000ms`.
+
+**Then the platform started minting versions by itself.** Four
+`config_update` versions in seven minutes, each taking the live channel, each
+followed by another in `finalizing`:
+
+| created | id | status |
+|---|---|---|
+| 15:37:00 | `ver_abe35cc5…` | ready |
+| 15:39:27 | `ver_c3b567b3…` | ready |
+| 15:41:51 | `ver_ad0f4440…` | ready → **live** |
+| 15:44:11 | `ver_fb19c6ff…` | finalizing |
+
+**`settingsDigest` never changed** (`14819df43bf50ca6` before and after), so
+none of them carries a settings change — the platform is re-delivering the
+runtime on a ~2.5 minute loop and each delivery lands invalid. Nothing on our
+side asked for any of them; the only publish was the one that failed.
+
+**No content was delivered, which is the one good thing.** The last `git`
+version is still v18 (`ver_f8f24058…`), and the live `/client.js` was diffed
+against the local build: it carries **none** of `restockItems`, `addItems`,
+`In Pantry`, or the new *Back to the pantry* row. So the failure was clean on
+the content side and the broken runtime is v18's own capsule, which served
+correctly for a day before this.
+
+**What would help:**
+
+1. `runtime_delivery_lock_timeout` should not leave the space mid-delivery. The
+   publish failed *after* `Updating space` succeeded and the env sync ran, and
+   the recovery loop it kicked off is worse than the original failure.
+2. A `config_update` version that changes no settings should be a no-op, not a
+   redelivery — and a redelivery that lands invalid should not immediately be
+   promoted to `live`.
+3. `zero_artifact_mode_invalid` needs to name what it rejected. Two different
+   details, no handler name, no logs, and a 404 at its own documentation URL is
+   as close to unactionable as an error can be.
+4. `sf logs runtime` being empty for a rejected artifact means there is no way
+   to tell a delivery failure from a capsule that simply never gets called.
+
+Toolchain: `spacefast@0.2.2` / `@spacefast/zero@0.2.2`, both the newest on npm
+as of today.
+
+### Resolved by a rollback, 15:49 — and `sf rollback` is the thing that worked
+
+Justin rolled the live channel back to `ver_28fb39a4…` — the **`config_update`
+version from 2026-08-31**, i.e. v18's content with the settings that were live
+before today. Production came back immediately:
+
+| | before | after |
+|---|---|---|
+| `/api/status` | 422 `zero_artifact_mode_invalid` | **`ok`** |
+| anon `query.run` `households` | 422 | **`{"state":"guest"}`** |
+
+**The redelivery loop stopped on its own, and the rollback had nothing to do
+with it.** The last one, v23, was promoted at **15:46:36**; the pattern up to
+then was a new version created *one second* after the previous was promoted, and
+no v24 appeared. The rollback was **15:49:08** — two and a half minutes later,
+by which time the chain had already given up. It is a bounded retry, not a
+runaway.
+
+**The outage was space-wide, not session-scoped.** It presented as "the app is
+breaking for me", and the instinct is to suspect the browser or the account —
+but an **anonymous `curl`** with no token, no cookie and no session got the same
+422 from both `/api/status` and `POST /__spacefast/zero/run`. The runtime was
+refusing every caller. Worth recording because the app has one regular user, so
+*only I can see it* and *everyone would see it* look identical from the inside.
+
+**So `sf rollback` earns its place in the checklist.** CLAUDE.md records that
+the whole release surface is hidden behind a `--help` that does not list it, and
+that the conclusion *there is no rollback* was drawn here once. This is the
+first time it has been used in anger, and it restored a dead space in seconds
+with nothing rebuilt — exactly as `/docs/publish/versions` describes.
+
+**A rollback target need not be a `git` version.** The one used here is a
+`config_update`, which is what the live channel happened to be pointing at
+yesterday. That is worth knowing: the last *known-good* version and the last
+*content* version are not the same row, and the channel history is what says
+which is which.
+
+### What a `config_update` version actually is — investigated 2026-09-01
+
+**It is a pure redelivery that changes nothing.** Read off `sf versions get
+<id> --json`, all five of them are identical on every field that matters, and
+identical to **v18, the git version they copy**:
+
+| field | v18 (`git`) | v19–v23 (`config_update`) |
+|---|---|---|
+| `manifestHash` | `sha256:2c485076a031…` | **the same hash** |
+| `fileCount` | 131 | 131 |
+| added / changed / removed | 4 / 12 / 0 | **0 / 0 / 0** |
+| `config` | `{}` | `{}` |
+| `variables` | `null` | `null` |
+| `buildLog` | the Zero publish log | `null` |
+| `publisher` | `api_key` · Spacefast CLI · authorized by Justin Tadlock | **`system` · Spacefast** |
+
+So the name is misleading twice over: it updates no config, and nothing about
+the space's configuration had changed. **`.env.server` has not been modified
+since Aug 30 18:30 and `sf.jsonc` since Aug 25** — both predate v18, which
+published cleanly.
+
+**They are new behaviour, and the changeover is exact.** Every version from v1
+to v18 — eighteen of them across a week, 2026-08-24 to 08-31 — is `git`. **Every
+version since is `config_update`**, and the first appeared **ten minutes after
+the v18 publish**. Nothing resembling one exists anywhere earlier in the space's
+history.
+
+| | |
+|---|---|
+| v1 – v18 | `git`, 2026-08-24 → 08-31 18:35 |
+| v19 | `config_update`, 08-31 18:45 — 10 min after v18 |
+| v20 – v23 | `config_update`, 09-01 15:37 → 15:44 |
+
+**Today's four are a bounded retry chain**, and the timings say so plainly —
+each created **one second** after the previous was promoted, each taking ~2m22s
+to reach `ready`:
+
+```
+v20  created 15:37:00   ready 15:39:25   promoted 15:39:26
+v21  created 15:39:27   ready 15:41:49   promoted 15:41:50
+v22  created 15:41:51   ready 15:44:09   promoted 15:44:10
+v23  created 15:44:11   ready 15:46:35   promoted 15:46:36   ← chain ends
+```
+
+v19 is the odd one out: **35 minutes** from created to ready (18:45:26 →
+19:20:24), and a lone event rather than a chain. That is the one this log
+already records as having broken sign-in.
+
+**`status: ready` is not a claim that the runtime works.** All four report
+`status: ready`, `failureCode: null`, `failedStage: null`, `diagnostics: []` —
+while the runtime they had just delivered was answering 422 to `/api/status` and
+to every `query.run`. There is no field on a version record that would have told
+us the space was down.
+
+**The channel history cannot tell a redelivery from a publish.** Every promotion
+in `sf channels history --json` is `actorType: "system"`, `actorId:
+"version-finalize"`, `kind: "publish"` — the config_updates included. Only the
+rollback is distinguishable (`actorId: "version-promote"`, `kind: "rollback"`).
+So a log of what moved production reads as eleven publishes when five of them
+were the platform redelivering the same manifest.
+
+**Leading hypothesis for `runtime_delivery_lock_timeout`, not proven.** The
+publish prints its steps in order:
+
+```
+Synced 4 server variables from .env.server.
+✓ Updating space  larderlog
+⠋ Creating version          ← dies here
+```
+
+**v20 was created at 15:37:00, inside the same minute.** The `.env.server` sync
+is unconditional — it ran and reported four variables even though the file is
+three days old and no value changed — and the `Updating space` step that follows
+it appears to kick off a runtime redelivery. That redelivery plausibly holds the
+runtime delivery lock, and `Creating version` then times out waiting for the
+lock the CLI's own previous step just took. It would explain the error name, the
+timing, and why v19 also trails a publish by minutes.
+
+If that is right, **the fix is for a variable sync that changes no value to be a
+no-op**, which would remove the trigger entirely.
+
+**One thing that is *not* wrong: a `config_update` version is not inherently
+broken.** v19 is one, it is what the rollback restored, and the space has been
+serving correctly on it since 15:49. The defect is in the delivery, not in the
+version kind.
+
+### The trigger, with timestamps — `sf publish` rewrites every variable unconditionally
+
+`sf env ls --json` — an entire command family this log had never recorded —
+reports each variable's `updatedAt`, and all four carry the moment of the failed
+publish:
+
+```
+INVITE_SECRET            2026-09-01T15:36:58
+LARDER_RETENTION_MONTHS  2026-09-01T15:36:58
+LARDER_ADMIN_IDS         2026-09-01T15:36:59
+LARDER_DEV_GUESTS        2026-09-01T15:36:59
+v20 (config_update)      2026-09-01T15:37:00   ← created one second later
+```
+
+**`.env.server` has not been modified since Aug 30 18:30**, so not one of those
+four values changed. The publish rewrote all four anyway — an unconditional
+write rather than a diff-and-skip — and the platform minted a config-only
+redelivery **one second** after the last write. The chain reads:
+
+```
+15:36:58-59  four variables rewritten with identical values
+15:37:00     v20 config_update created — the runtime redelivers
+             …which holds the runtime delivery lock…
+             Creating version → runtime_delivery_lock_timeout
+```
+
+That is the CLI's own earlier step taking the lock its next step then waits for.
+
+**And `--config-only` is a documented flag on `sf publish`** — *"Publish a
+config-only version that carries the prior artifact forward without building or
+uploading content"* — which is exactly what v19–v23 are, down to the identical
+manifest hash and `+0/~0/-0`. So `config_update` is not a mysterious platform
+event: it is the config-only publish path, invoked internally by the variable
+sync. **Nobody here ever passed that flag.**
+
+**The single-line fix, from outside:** a variable write whose value is unchanged
+should not write, and therefore should not redeliver.
+
+**A dry run does not do any of this.** `--dry-run` printed no *Synced 4 server
+variables* line and left the variables' `updatedAt` alone, which is what makes
+it useless for reproducing this and safe for everything else.
+
+**`sf env` is undocumented here and worth knowing**: `sf env ls` lists with
+masked values, and a variable can carry **separate production, preview and
+branch values** (`--production-value` / `--preview-value`). All four of ours are
+`secret=true` with no target, i.e. one value for every environment.
+
+### Confirmed against the CLI's own source — 2026-09-01, later
+
+The hypothesis above is no longer a hypothesis. `syncServerEnvVariables` in
+`node_modules/spacefast/dist/commands/publish.js` (bundled from
+`src/server-env.ts`) was read directly:
+
+- **The sync is a blind `PUT` per variable.** `for (const entry of entries)` →
+  `PUT /v1/spaces/{id}/variables/{name}` with `secret: true`. There is **no
+  GET, no compare, no diff** — every runtime publish rewrites every variable
+  even when nothing changed. Four PUTs at 15:36:58–59, four `config_update`
+  redeliveries queued; **four variables, four redeliveries** may not be a
+  coincidence.
+- **The irony one screen down**: the settings patch in the same flow goes
+  through `publishSettingsPatchIsNoOp()` before being sent. **Settings are
+  no-op-checked; variables are not.** The no-op guard exists in this codebase
+  and was applied to one of the two writes.
+- **`--target preview` does not avoid it.** The sync call site is gated only on
+  `runtimeStep` (any Zero project) and runs *before* the progress group starts —
+  before `Creating version` is even printed. `publishChannelForCommand` maps
+  `preview → channel: null`, which affects only the finalize step. So a preview
+  publish protects the live *channel* and still fires the variable sync at the
+  live *runtime*.
+- **`config_update` is confirmed as the config-only publish path**: the version
+  create body carries `input.configOnly ? { kind: "config_update" } : {}` — the
+  exact `source.kind` on v19–v23. The platform's internal redelivery uses the
+  same kind the `--config-only` flag would.
+- **`runtime_delivery_lock_timeout` appears nowhere in the CLI or SDK** — it is
+  a server-minted code passed through verbatim. Nothing client-side can retry,
+  extend or avoid the lock.
+- **Skipping the sync is possible and proven safe by code.** Only three things
+  skip it: `--dry-run`, an anonymous space, and an **absent or empty
+  `.env.server`**. `loadEnvFileSource` returns `null` on ENOENT →
+  `entries = []` → `skipped: "empty"` **before any API call**. And the
+  delete branch — the one that removes server variables not in the file — runs
+  **only** when the source file is `.env.lakebed.server`, never for
+  `.env.server`. So temporarily renaming `.env.server` aside means **zero
+  variable API calls and zero deletions**: the four values already stored
+  server-side (updatedAt 15:36:58–59) stay exactly as they are.
+
+**The tested-safe publish recipe that follows from the code** (not yet run):
+
+```bash
+mv .env.server .env.server.hold       # sync reports "empty", writes nothing
+npx sf publish --target preview       # version created, channel: null, live untouched
+mv .env.server.hold .env.server
+```
+
+Residual exposure: version finalize itself (server-side; the thing that has now
+failed twice at `Creating version`), and whatever schema application preview
+finalize performs against the shared database — additive-only here, and v19's
+capsule cannot see tables it does not declare, so old-runtime behaviour is
+unchanged by design.
+
+**Still open: what minted v19 on Aug 31.** Today's chain is explained
+(PUT → redelivery), but v19 trailed the v18 publish by **ten minutes**, not one
+second, and today's sync overwrote the variables' `updatedAt`, so the Aug 31
+write times are gone. The earlier note attributing it to a dashboard settings
+change and this session's sync-triggered theory cannot both be checked any more.
+
+### The recipe ran, and it worked — v24, 2026-09-01 16:12
+
+`.env.server` moved aside, `npx sf publish --target preview`, file restored.
+**33 seconds, first try, no lock timeout** — the step that had now failed twice
+(`Creating version`) sailed through the moment no variable writes preceded it.
+
+| check | result |
+|---|---|
+| `Synced N server variables` line | **absent** — the skip worked |
+| variables' `updatedAt` | all four still `15:36:58–59` — untouched |
+| live channel | still `ver_28fb39a4…` (v19), timestamp still the rollback's |
+| live `/api/status` | `ok`; live `client.js` still carries no new code |
+| `config_update` versions after 16:12 | **zero**, checked 3+ minutes later |
+| v24 | `git`, `ready`, unpromoted; preview URL runtime-backed (`x-spacefast-version: ver_01c5577…`) |
+
+**The zero-config_updates row is the experiment's real finding**: a publish
+*without* variable writes triggers no redelivery, which confirms the causal
+chain by its absence — it was the PUTs, not the publish.
+
+**And a preview publish does not migrate the shared database.** `sf db --json`
+still reports **eleven** tables — no `restocks`, `trips`, `claims` — with
+`applied: true`, `pendingOps: 0`, hashes equal. The schema apparently applies at
+promotion (or production finalize), not at version creation. Two consequences:
+
+1. **Isolation is better than expected** — a preview stages content and capsule
+   without touching live's schema at all.
+2. **The preview runtime may be degraded**: if v24's capsule serves the preview
+   URL against the shared 11-table database, every query touching the three
+   missing tables (`claims` runs on every pantry load) will throw — and a
+   throwing query is a permanent spinner (no error path). Whether preview gets
+   its own schema view is unknowable from outside the cookie gate. **Expect the
+   run list's claims and any restock write to fail on the preview URL**, and do
+   not read that as a bug in the app.
+
+The promote path when ready: `npx sf promote v24` — which is presumably the
+moment the migration runs. Unverified.
+
+### v24 promoted, 422 again, rolled back — and the failure is now characterized — 2026-09-01 16:1x–16:25
+
+`sf promote v24 --yes` succeeded (`promoted: true`; note `sf promote` without
+`--yes` refuses with `confirmation_required` even though `sf publish` prompts
+interactively). The migration applied — `sf db` reported **fourteen tables**,
+`applied: true`, hashes equal — and the runtime immediately answered
+**422 `zero_artifact_mode_invalid`** on every capsule call, exactly as the
+morning's redeliveries had. Polled for 2.5 minutes: no recovery. Presentation
+for a signed-in user: **the permanent Loading… screen** (every query fails;
+Zero has no error path, so subscriptions hold their initial value forever),
+while signed-out pages render fine because they make no server calls.
+
+Justin rolled back to v19 (an agent-initiated `sf rollback` was refused with a
+person-approval gate — `confirmation_required` with a pollUrl/continuationToken
+protocol, and a retry without the token gets *"This exact action already has a
+decision"*; `promote` had no such gate, which is inconsistent). Live healthy
+again immediately.
+
+**`sf db` reflects the live version's declared schema, not the physical
+database.** With v24 live it said 14 tables; after the rollback it says 11
+again. So *"the migration applied"* as reported by that command is a statement
+about the live artifact's schema plan, and it un-says it on rollback.
+
+**The characterization, and it is clean:**
+
+| delivery | content | delivered | result |
+|---|---|---|---|
+| v18/v19 | v18's manifest | Aug 31 | **works, still serving** |
+| v20–v23 | **byte-identical** to v18 (same `manifestHash`) | Sep 1 15:37–15:44 | 422 |
+| v24 | new content, same toolchain (0.2.2) | Sep 1 16:12, live 16:2x | 422 |
+
+Identical bytes, opposite outcomes, separated only by delivery date. **The
+platform's runtime loader changed between Aug 31 ~18:45 and Sep 1 ~15:37**:
+artifacts delivered before the change keep running (rollback re-points without
+redelivering — which is why it works); **every delivery since is rejected**,
+old bytes and new alike. Nothing in our code can matter to this.
+
+**The artifact declares no "mode" anywhere.** The error vocabulary — *"artifact
+mode does not match the invocation mode"*, *"a read handler cannot carry
+write-side capabilities"* — implies a per-handler read/write mode contract. Our
+artifact, compiled by `spacefast@0.2.2` (**the newest published release**), has
+`server.{queries,mutations,actions,endpoints,sockets}` as plain lists with no
+mode field at all (checked by walking the whole JSON for keys containing
+"mode"; only `realtime.mode: central` exists). **The serving runtime appears to
+validate a field the published compiler does not emit** — the platform is ahead
+of its own npm toolchain, and every space that publishes today presumably hits
+this.
+
+**Consequence: no version of this app can ship until Spacefast fixes delivery.**
+Re-publishing even v18's exact bytes fails. The preview/promote flow itself
+worked exactly as designed and is exonerated — v24 is staged, ready, and one
+`sf promote v24` from live the moment deliveries validate again. This is the
+headline item for the feedback report.
+
+### Can we tell whether publishing works yet? — 2026-09-01, evening
+
+A read-only sweep, live untouched. Four signals, none of them conclusive on its
+own, and one test that would be.
+
+| check | answer |
+|---|---|
+| a newer CLI on npm | **no** — `spacefast` and `@spacefast/zero` are both still `0.2.2`, published Aug 28. The toolchain has not moved |
+| new `config_update` versions since the loop stopped | **none** — the list still ends at v24 (16:12); v23 at 15:44 was the last redelivery. The retry chain has stayed dead for hours |
+| live health | `GET /api/status` on v19 → **`ok`** |
+| the two error codes in the published registry | **neither is there** |
+
+**Neither code we hit exists in the error reference**, which announces *"There
+are 481 error codes in the registry."* `zero_artifact_mode_invalid` is absent —
+the registry lists five `zero_artifact_*` codes (`abi_mismatch`, `invalid`,
+`malformed`, `path_invalid`, `unreadable`) and not that one — and
+`runtime_delivery_lock_timeout` is absent too. Its own `type` URI still 404s.
+So both failure modes are minted by a serving runtime that is **ahead of the
+platform's own documented surface**, which is the same gap the missing
+compiler-side mode field points at.
+
+**And the platform derives a mode field the compiler does not emit.** The live
+runtime's record carries one on our single endpoint:
+
+```
+runtime.app.capsule.endpoints = [{"mode":"read","method":"GET","path":"/api/status"}]
+local artifact.json           = [{           "method":"GET","path":"/api/status"}]
+```
+
+**That is v19's record, and it is the only capsule record the API will hand
+over.** `sf versions get <any-id>` returns `data.runtime.app` describing the
+**live** runtime, not the version asked about — both reads come back byte
+identical at 2530 bytes with `artifactId: zero_ver_28fb39a4…` (v19) whichever id
+is passed, and `data.runtime.pendingApp` is `null`. So a failing version's
+derived metadata cannot be inspected from outside at all; there is no
+`data.version.app`. Worth knowing before designing any check around it.
+
+
+#### The decisive test exists and does not touch live
+
+**v24 is still staged, `ready`, and has its own runtime-backed hostname** —
+`https://v24--larderlog.view.fast/`, the same `vN--` shape the dashboard
+thumbnail uses for v19. Hitting `/api/status` there invokes v24's capsule
+through the real loader **without promoting anything**: `ok` means deliveries
+validate again, a 422 means they still do not. No channel moves either way.
+
+**It cannot be driven from here.** Every `vN--` hostname answers **403 "This
+space is private"** — to an anonymous curl, to a `Bearer` CLI API key, and to
+that key as a cookie. The response carries `x-spacefast-runtime: 1` and
+`x-spacefast-version: ver_01c5577…`, so the request reaches the runtime edge and
+the gate sits in front of the capsule. The API redacts the way through: the
+space record's `thumbnail.sourceUrl` is `https://v19--larderlog.view.fast/?__=`
+followed by a literal `[redacted]`, so the signed `__=` token that the dashboard
+and the screenshot service use is never returned to the CLI.
+
+**So it is a browser check**: open v24 from the dashboard's version list — that
+link carries the token — and add `/api/status` to it. That is the whole test.
+
+*Friction*: a CLI-authenticated API key opens every management endpoint and
+cannot open a preview of the version it just created. There is no
+`sf versions open`, no `--preview-url`, and no documented way to mint the `__=`
+token, so the one non-destructive way to validate a staged version is
+unreachable from automation — which is exactly where a publish check belongs.
+
+### v24 still 422s — and the SDK contradicts the runtime in its own type signature — 2026-09-01, evening
+
+The browser check ran. `https://v24--larderlog.view.fast/api/status` answered:
+
+```json
+{"code":"zero_artifact_mode_invalid","status":422,
+ "title":"Zero artifact mode invalid",
+ "detail":"A read handler cannot carry write-side capabilities.",
+ "type":"https://spacefast.com/docs/errors/zero_artifact_mode_invalid"}
+```
+
+and the app itself hangs on `Loading…`. **Deliveries are still rejected**, on a
+version created before the check and untouched since. The live channel never
+moved; this cost nothing.
+
+**The detail is a claim about our artifact, so it was tested — and it is true,
+for a reason that is in `@spacefast/zero@0.2.2`'s own `server.d.ts`.**
+
+```ts
+export type QueryServerContext<TDb = DbContext> = {
+    auth; content; db: TDb; env; gravatar; log;
+    spam: Pick<RequestSpamCheck, "check">;
+};
+export type ServerContext<TDb = MutationDbContext> =
+    Omit<QueryServerContext, "db" | "spam"> & {
+        db: TDb;              // WriteTableApi
+        email: SendEmail;
+        invalidate: InvalidateQueries;
+        spam: RequestSpamCheck;
+        transaction: Transaction;
+    };
+
+export declare function query   (handler: (ctx: QueryServerContext<TDb>, …) => …);
+export declare function mutation(handler: (ctx: ServerContext<TDb>,      …) => …);
+export declare function endpoint(route: EndpointRoute,
+                                 handler: (ctx: ServerContext, req) => …);
+```
+
+**`endpoint()` hands its handler `ServerContext` — the write-side context, the
+same one `mutation()` gets — unconditionally, whatever the HTTP method.** The
+file's own comment above `QueryServerContext` calls it *"What a read handler
+gets"* and says the withheld services *"come back in full on the write-side
+contexts below"*. So the SDK already speaks in exactly the two nouns the error
+does, and it gives every endpoint the write-side one.
+
+The platform then classifies a `GET` endpoint as `mode: "read"` (its record
+above). A read-mode handler holding `transaction`, `email`, `invalidate`, full
+`spam` and a `WriteTableApi` **is** a read handler carrying write-side
+capabilities. **The toolchain cannot express the shape the runtime now
+requires**: there is no `mode` option on `EndpointRoute`, no read-only endpoint
+variant, and no way to ask for a narrower context — checked, the whole `.d.ts`
+contains no `mode` at all.
+
+**Our handler is `endpoint({ method: 'GET', path: '/api/status' }, () => text('ok'))`.**
+It ignores the context entirely. It cannot *use* a write capability; it is
+merely handed one, and the capability set travels with the handler kind rather
+than with the code.
+
+#### The one-line experiment this suggests, priced but not run
+
+Deleting the endpoints block changes **exactly one field** in the compiled
+artifact — verified by building it both ways and diffing every leaf:
+
+```
+.server.endpoints   before [{"method":"GET","path":"/api/status"}]   after []
+```
+
+14 tables, 14 queries, 29 mutations, schema, bundles, `realtime` and
+`db.migrations` all identical. Typecheck clean once `endpoint` and `text` come
+off the import. `/api/status` is a health check this project added for its own
+publish checklist — nothing in the app calls it.
+
+**If the artifact is rejected as a whole because of that one handler, removing
+it unblocks publishing without waiting for Spacefast.** If the artifact-level
+mode is something else, it changes nothing and costs one preview version. The
+second `detail` — *"Zero artifact mode does not match the invocation mode"* on
+`query.run`, where our queries take the correct read-side context — is the
+evidence for a whole-artifact rejection rather than a per-handler one.
+
+**How it would be run, and why it is safe**: the `.env.server`-aside recipe (no
+variable writes, therefore no redelivery), `--target preview` (no channel
+moves), then open the new `vN--` link from the dashboard. Because a preview
+runs against the **live** database, which the rollback returned to eleven
+tables, `claims` will throw there regardless — so the discriminator is *does the
+item grid render at all*, not *does everything work*. A rejected artifact is a
+permanent `Loading…` with no query answering; an accepted one renders the grid
+and fails only the run list's claims.
+
+#### For the report
+
+`zero_artifact_mode_invalid` is unactionable by construction: it is absent from
+the 481-code error registry, its `type` URI 404s, `sf logs runtime` is empty
+because nothing runs, the failing version's own capsule metadata is not
+retrievable through the API, and **the published SDK cannot emit a conforming
+artifact** — `endpoint()` has one context type and it is the write-side one. Any
+Zero space with a single `GET` endpoint appears to be in this position.
+
+### The probe could not be run: version creation itself is failing now — 2026-09-01, evening
+
+Four `sf publish --target preview` attempts, all with `.env.server` moved aside,
+all dying at the same step:
+
+```
+✓ Updating space  larderlog
+⠋ Creating version
+Runtime API request failed: Runtime API request timed out after 10000ms.
+```
+
+**Three were the endpoint-less probe; the fourth was a control** — the tree
+restored to exactly the content that created v24 successfully at 16:12, six
+hours earlier. **The control failed identically.** So this is the platform, not
+our artifact: an artifact declaring zero endpoints is not what version creation
+is choking on, and the probe's question is still unanswered.
+
+**Nothing was created by any of the four.** `sf versions ls` still ends at v24,
+the live channel is still `ver_28fb39a4…` at 16:25:38, live `/api/status` is
+`ok`, and all four variables still carry their 15:36:58–59 stamps — the
+env-aside recipe held, exactly as it did for v24.
+
+**And the runtime API is not down — only its write path is.** In the same
+minutes, `sf db --json` answered through it (eleven tables, `applied: true`,
+`pendingOps: 0`) and `sf doctor` came back **all green**, including
+`api  API reachable`, `runtime  state=active live=ver_28fb39a4…:ready` and
+`publish  latest=ver_01c5577…:ready`. A green doctor and a publish that cannot
+create a version is a bad pair: **nothing in the CLI's own diagnostics reports
+the one thing that is broken.**
+
+**The 10s timeout is server-minted, not a client cap.** The earlier note called
+it *"a client-side 10s cap rather than a server refusal"* — that was an
+inference and it is wrong. Neither `Runtime API request failed` nor
+`Runtime API request timed out after 10000ms` appears anywhere in
+`node_modules/spacefast/` or `node_modules/@spacefast/` (`timed out after` turns
+up only in the unrelated MCP proxy). The text arrives from the API. So it is
+the platform's own internal call to its runtime API that gives up after ten
+seconds, and there is no client-side knob to extend.
+
+**Rate limiting arrived alongside it.** The dashboard began refusing Justin for
+too many requests while these attempts ran, and recovered a few minutes later.
+Four publishes and a handful of `versions ls` / `env ls` / `db` reads is not a
+lot, and part of that budget was spent by the CLI itself; worth knowing that a
+publish-retry loop can lock a person out of the admin UI they would use to
+diagnose the failed publish.
+
+#### Where this leaves things
+
+| | |
+|---|---|
+| live | v19, healthy, untouched throughout |
+| deliveries | still rejected — v24 re-checked in a browser today, still 422 |
+| new versions | **cannot be created at all** as of this evening |
+| our tree | clean; the probe is a two-line change, written up above |
+
+Two distinct platform failures are now stacked: **the loader rejects every
+artifact delivered since ~15:37 today** (`zero_artifact_mode_invalid`), and
+**version creation times out** (`Runtime API request timed out after 10000ms`).
+The second has to clear before the first can even be tested.
