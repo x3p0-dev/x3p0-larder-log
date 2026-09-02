@@ -14,7 +14,7 @@ import { normalizeSize } from '../shared/size';
 import { BULK_MAX } from '../shared/bulkEntry';
 import type { AccountHousehold, HouseholdFate, OwnershipDecision } from '../shared/accountDeletion';
 import { fateOf } from '../shared/accountDeletion';
-import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
+import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import {
 	ADMIN_IDS_VAR, ADMIN_UNDELETABLE_REFUSAL, adminWritesHeldFor, isAdminId,
 	countByMonth, isDormant, isWithinDays, itemBuckets, matchScore, monthKeysBack, monthLabel,
@@ -237,6 +237,13 @@ export const schema = {
 		// Gravatar, and every row written before this column existed.
 		picture: string().default(''),
 		role: string().default('viewer'),
+		// When this account joined this household, ISO 8601 UTC. D44 skipped this
+		// table on the grounds that nothing ordered it by time; the console does
+		// — *Recently joined* is one of `adminPeople`'s sorts and three surfaces
+		// print the date — so by D44's own rule the app writes its own. Read it
+		// through `joinedAtOf`, never raw: every row written before this column
+		// holds nothing and falls back to the platform's `createdAt`.
+		joinedAt: string().default(''),
 	})
 		.index('by_user', ['userId'])
 		.index('by_household', ['householdId']),
@@ -669,6 +676,9 @@ export default capsule({
 					name: household.name,
 					ink: householdInk(household.ink, household.id),
 					role: toRole(row.role),
+					// Your own membership's stamp, which is what the account
+					// export names — the pre-flight itself has no use for it.
+					joinedAt: joinedAtOf(row),
 					members: members.length,
 					items: items.length,
 					locations: locations.length,
@@ -1048,9 +1058,10 @@ export default capsule({
 
 				// The earliest membership an account holds is the closest thing
 				// to when it joined — there is no accounts table to ask.
+				const joined = joinedAtOf(m);
 				const seen = memberFirstSeen.get(m.userId);
 
-				if (! seen || m.createdAt < seen) memberFirstSeen.set(m.userId, m.createdAt);
+				if (! seen || joined < seen) memberFirstSeen.set(m.userId, joined);
 			}
 
 			const itemCount = new Map<string, number>();
@@ -1360,7 +1371,7 @@ export default capsule({
 					name: m.displayName,
 					picture: m.picture ?? '',
 					role: toRole(m.role),
-					joinedAt: m.createdAt,
+					joinedAt: joinedAtOf(m),
 				})),
 				series,
 				// Live only. A revoked or expired invite is not a fact about the
@@ -1842,6 +1853,10 @@ export default capsule({
 				displayName: await accountName(ctx),
 				picture: accountAvatar(ctx),
 				role: 'owner',
+				// The same `now` the household took, so a creator's join and the
+				// household's birth are one instant rather than two a
+				// millisecond apart.
+				joinedAt: stampFrom(now),
 			});
 
 			// Seed the taxonomies. Without at least one location the household
@@ -2748,6 +2763,7 @@ export default capsule({
 		redeemInvite: mutation(async (ctx, rawCode: string) => {
 			if (! signedIn(ctx)) throw new AccessError('Sign in to join a household.');
 
+			const now = Date.now();
 			const code = normalizeCode(rawCode);
 
 			if (! isCodeShaped(code)) throw new AccessError('That invite code is not valid.');
@@ -2759,7 +2775,7 @@ export default capsule({
 			// One message for missing, revoked, and expired alike — a code is a
 			// bearer credential, and separating the cases tells a guesser which
 			// codes exist.
-			if (! invite || invite.revoked || isExpired(invite.expiresAt, Date.now())) {
+			if (! invite || invite.revoked || isExpired(invite.expiresAt, now)) {
 				throw new AccessError('That invite is no longer valid.');
 			}
 
@@ -2784,6 +2800,7 @@ export default capsule({
 				displayName: await accountName(ctx),
 				picture: accountAvatar(ctx),
 				role: toRole(invite.role),
+				joinedAt: stampFrom(now),
 			});
 
 			ctx.invalidate('households', 'household', 'pantry', 'invitePreview', 'account');
@@ -3896,7 +3913,8 @@ function buildPeople(
 	households: readonly { id: string; name: string; ink: string }[],
 	memberships: readonly {
 		id: string; userId: string; householdId: string;
-		displayName: string; picture: string; role: string; createdAt: string;
+		displayName: string; picture: string; role: string;
+		joinedAt: string; createdAt: string;
 	}[],
 	profiles: readonly { userId: string; displayName: string; addedAt: string; createdAt: string }[],
 	adminIds: readonly string[],
@@ -3936,12 +3954,15 @@ function buildPeople(
 		});
 
 		// The earliest thing this app knows about the account. A profile row is
-		// stamped from birth (D46); a membership only has the platform's
-		// `createdAt`, which is enough because a membership is never re-inserted.
+		// stamped from birth (D46) and a membership is stamped from the join,
+		// with the platform's `createdAt` behind both for rows that predate
+		// either column.
 		let joinedAt = profile ? (profile.addedAt || profile.createdAt) : '';
 
 		for (const m of mine) {
-			if (! joinedAt || (m.createdAt && m.createdAt < joinedAt)) joinedAt = m.createdAt;
+			const joined = joinedAtOf(m);
+
+			if (! joinedAt || (joined && joined < joinedAt)) joinedAt = joined;
 		}
 
 		return {

@@ -18,8 +18,9 @@
  * diverge exactly once per undo, which is the whole point.
  *
  * **Every table this app orders by time carries its own pair** — `addedAt` and
- * `changedAt` on `items`, `locations`, `types` and `stores`, and `addedAt`
- * alone on `households`, which nothing modifies in a way worth stamping. The
+ * `changedAt` on `items`, `locations`, `types` and `stores`, `addedAt` alone on
+ * `households`, which nothing modifies in a way worth stamping, and `joinedAt`
+ * alone on `memberships`, where the one moment worth recording is the join. The
  * platform's `createdAt` survives only as the fallback for rows written before
  * the columns existed, and `updatedAt` is not used at all: it is managed the
  * same way `createdAt` is, so it cannot survive an undo either.
@@ -72,4 +73,30 @@ export function addedAtOf(row: { addedAt: string; createdAt: string }): string {
  */
 export function changedAtOf(row: { changedAt: string; addedAt: string; createdAt: string }): string {
 	return row.changedAt || addedAtOf(row);
+}
+
+/**
+ * When an account joined a household, tolerant of rows written before the column.
+ *
+ * D44 gave `memberships` no stamp at all, on the grounds that nothing ordered
+ * them by time and a membership is never re-inserted by an undo. **The first
+ * half stopped being true when the console shipped**: *Recently joined* is one
+ * of `adminPeople`'s four sorts, and an account page and every member row print
+ * this date — so it is a key this app orders by, which by D44's own rule is a
+ * key this app has to write.
+ *
+ * The fallback is `createdAt` and it is permanent, not transitional: every
+ * membership on the published space today holds no `joinedAt` and nothing
+ * backfills. Both sides are ISO 8601 UTC on the same scale, so a list mixing
+ * the two still orders correctly — and for a row that has never been rewritten
+ * they are the same instant anyway.
+ *
+ * **`||` rather than `??`, and that is load-bearing.** A column added after
+ * rows exist reads back as `null` rather than the declared `''`, and the
+ * generated row type says `string` either way, so `typecheck` cannot see it —
+ * the finding that disabled `useAvatarSync` for as long as `memberships.picture`
+ * has existed. `||` catches `null`, `undefined` and `''` alike.
+ */
+export function joinedAtOf(row: { joinedAt: string; createdAt: string }): string {
+	return row.joinedAt || row.createdAt;
 }

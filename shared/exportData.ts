@@ -114,16 +114,15 @@ export function pantryFilename(householdName: string, isoDay: string): string {
  * working keys. What it names instead is the household, the role and when the
  * link dies — which is everything about the invite except the way in.
  *
- * **No join date**, and that is an omission rather than a choice: `memberships`
- * carries no stamp at all. D44 stamped five tables and deliberately skipped
- * this one, because a column is permanent and nothing ordered memberships by
- * time. Adding one now is a schema change and the first thing to do if this
- * file ever has to be complete.
+ * **`joined` is a date the app writes**, not the platform's insert stamp:
+ * `memberships.joinedAt`, added once the console started sorting *Recently
+ * joined* on it. A membership written before that column falls back to
+ * `createdAt`, which for a row nothing has rewritten is the same instant.
  */
 export type AccountData = {
 	display_name: string;
 	email: string;
-	member_of: { household: string; role: string }[];
+	member_of: { household: string; role: string; joined: string }[];
 	invites_issued: { household: string; role: string; expires_at: string; live: boolean }[];
 };
 

@@ -108,10 +108,19 @@ memberships: table({
   displayName: string(),               // denormalized for the member list
   picture: string().default(""),       // ditto, the avatar URL — "" for none
   role: string().default("viewer"),    // "owner" | "editor" | "viewer"
+  joinedAt: string().default(""),      // ISO 8601 UTC — see stamp.ts
 })
   .index("by_user", ["userId"])
   .index("by_household", ["householdId"])
 ```
+
+`joinedAt` is the app's own stamp, written by the two mutations that insert a
+membership — `createHousehold` and `redeemInvite`. D44 originally skipped this
+table on the grounds that nothing ordered it by time; the console does, so by
+D44's own rule the app writes it rather than sorting on the platform's
+`createdAt`. **Read it through `joinedAtOf()`, never raw**: every membership
+written before the column falls back to `createdAt`, permanently, because
+nothing backfills.
 
 `by_user` is the hot path: every request resolves the caller's household through
 it, and it now returns **several rows for one user**

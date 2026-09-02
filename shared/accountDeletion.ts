@@ -57,6 +57,8 @@ export type AccountHousehold = {
 	/** Already resolved by the server (D42) — never `''`. */
 	ink: string;
 	role: Role;
+	/** When you joined it, resolved by the server. Named by the export only. */
+	joinedAt: string;
 	members: number;
 	items: number;
 	locations: number;

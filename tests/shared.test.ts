@@ -48,7 +48,7 @@ import {
 } from '../shared/seed';
 import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
-import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
+import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import { needsBuying, runBands, runCount } from '../shared/runList';
 import { putAwayMeta, putAwayRows, restockEntry, restockPrefill } from '../shared/restock';
 import { isExtra, listNameFor, listRuleHint, listRuleLabel, listRuleOf, toListRule } from '../shared/listRule';
@@ -1053,6 +1053,42 @@ check(
 	'a row from before both columns falls back to createdAt',
 	changedAtOf({ changedAt: '', addedAt: '', createdAt: '2026-07-01T00:00:00.000Z' }),
 	'2026-07-01T00:00:00.000Z'
+);
+
+// The join stamp. D44 skipped `memberships` because nothing ordered it by time;
+// the console does, so the app writes its own — and every membership on the
+// published space today predates the column, which makes the fallback the real
+// value for all of them rather than an edge case.
+check(
+	'a membership from before the column falls back to createdAt',
+	joinedAtOf({ joinedAt: '', createdAt: '2026-05-02T00:00:00.000Z' }),
+	'2026-05-02T00:00:00.000Z'
+);
+check(
+	'a stamped one uses its own',
+	joinedAtOf({ joinedAt: '2026-08-30T00:00:00.000Z', createdAt: '2026-08-30T00:00:01.000Z' }),
+	'2026-08-30T00:00:00.000Z'
+);
+// **The case `typecheck` cannot see.** A column added after rows exist reads
+// back as `null` and the generated row type still says `string` — the finding
+// that left `useAvatarSync` inert for as long as `memberships.picture` has
+// existed. `??` would hand `null` straight through to a date formatter.
+check(
+	'a null from an old row is not a stamp',
+	joinedAtOf({ joinedAt: null as unknown as string, createdAt: '2026-05-02T00:00:00.000Z' }),
+	'2026-05-02T00:00:00.000Z'
+);
+// *Recently joined* is a real sort, which is the whole reason this column
+// exists — so the ordering it produces is the assertion, not the resolver alone.
+const joins = [
+	{ joinedAt: '', createdAt: '2026-04-01T00:00:00.000Z' },
+	{ joinedAt: '2026-08-01T00:00:00.000Z', createdAt: '2026-08-01T00:00:00.000Z' },
+	{ joinedAt: null as unknown as string, createdAt: '2026-06-01T00:00:00.000Z' },
+];
+check(
+	'stamped and unstamped rows sort together on one scale',
+	[...joins].sort((a, b) => joinedAtOf(b).localeCompare(joinedAtOf(a))).map((r) => r.createdAt),
+	['2026-08-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-04-01T00:00:00.000Z']
 );
 
 // --- terms are A–Z, and that is the only order any of them appear in ---
@@ -2716,6 +2752,7 @@ function house(over: Partial<AccountHousehold> = {}): AccountHousehold {
 		name: 'Calfee Household',
 		ink: 'color-3',
 		role: 'owner',
+		joinedAt: '2026-03-04T00:00:00.000Z',
 		members: 4,
 		items: 47,
 		locations: 3,
@@ -2948,7 +2985,7 @@ check('a nameless household still gets a file', pantryFilename('   ', '2026-09-0
 const ACCOUNT = accountDataJson({
 	display_name: 'Justin Tadlock',
 	email: '',
-	member_of: [{ household: 'Calfee Household', role: 'owner' }],
+	member_of: [{ household: 'Calfee Household', role: 'owner', joined: '2026-03-04T00:00:00.000Z' }],
 	invites_issued: [{ household: 'Calfee Household', role: 'editor', expires_at: '2026-09-15', live: true }],
 });
 check('your data is four fields', Object.keys(JSON.parse(ACCOUNT)), [

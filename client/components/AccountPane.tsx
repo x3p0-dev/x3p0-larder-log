@@ -106,7 +106,7 @@ export function AccountPane({
 			accountDataJson({
 				display_name: data.name,
 				email: data.email,
-				member_of: data.households.map((h) => ({ household: h.name, role: h.role })),
+				member_of: data.households.map((h) => ({ household: h.name, role: h.role, joined: h.joinedAt })),
 				invites_issued: data.invites.map((i) => ({
 					household: i.household,
 					role: i.role,

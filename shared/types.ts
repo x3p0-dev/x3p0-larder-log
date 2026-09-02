@@ -550,12 +550,14 @@ export type AdminMember = {
 	picture: string;
 	role: string;
 	/**
-	 * When they joined, from the platform's `createdAt`.
+	 * When they joined, resolved through `joinedAtOf` — `memberships.joinedAt`,
+	 * with the platform's `createdAt` behind it for every row written before
+	 * that column existed.
 	 *
-	 * D44 deliberately gave `memberships` no stamps of its own, on the grounds
-	 * that nothing ordered them by time. Nothing still does — this is a date on
-	 * a row, not a sort key — and a membership is never re-inserted by an undo,
-	 * which is the whole reason the app's other tables could not use `createdAt`.
+	 * D44 originally skipped this table because nothing ordered it by time.
+	 * The console does: *Recently joined* is one of `adminPeople`'s four sorts,
+	 * and this date is printed here, on an account page and in the account
+	 * export. A key the app orders by is a key the app writes.
 	 */
 	joinedAt: string;
 };

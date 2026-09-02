@@ -2871,6 +2871,116 @@ bars draw one column, and `?demo` fills one household rather than a space. The
 backdating that made the verification possible is not something a person
 clicking the app can do.
 
+### `memberships` carries its own join stamp (D44, amended) — 2026-09-02
+
+**The tenth additive schema change since Phase 2**: `memberships.joinedAt`,
+ISO 8601 UTC defaulting to `''`. Counts are unmoved — **fourteen tables, fifteen
+queries, thirty-one mutations** — because this is a column on a table that
+already existed, written by two mutations that already ran.
+
+**D44's own condition came true.** That decision left `memberships` unstamped
+*"unless any of them ever grows a chronological view"*, and the console grew
+four: *Recently joined* is one of `adminPeople`'s sorts, and the date prints on
+an account page, on every member row of a household, and in D68's account
+export. All four were sorting on the platform's `createdAt`, which is the exact
+thing D44 exists to stop.
+
+- **Two write sites, and they are the only two**: `createHousehold` stamps the
+  creator with **the same `now` the household took**, so a creator's join and
+  their pantry's birth are one instant rather than two a millisecond apart;
+  `redeemInvite` stamps the joiner. `redeemInvite` gained a `now` of its own and
+  its expiry check reads it, so the refusal and the stamp cannot disagree.
+- **`joinedAtOf()` in `shared/stamp.ts` is the one reader**, falling back to
+  `createdAt` — **permanently, not transitionally**: every membership on the
+  published space predates the column and nothing backfills. For a row nothing
+  has rewritten the two are the same instant, which is why the fallback costs
+  nothing.
+- **`||` and not `??`, and that is the load-bearing character.** A column added
+  after rows exist reads back **`null`**, not the declared `''`, and the row type
+  says `string` either way — the finding that left `useAvatarSync` inert for as
+  long as `memberships.picture` has existed. `npm test` pins the null case *and*
+  the ordering it produces, because a raw read sorts a `null` **above** a real
+  stamp and hands back a list that is plausible and wrong.
+- **The account export gained its join date**, which `shared/exportData.ts` had
+  been carrying a comment about since D68 — *"an omission rather than a choice…
+  the first thing to do if this file ever has to be complete."* It is
+  `member_of[].joined` now, and `AccountHousehold` carries `joinedAt` for it.
+- **`memberships` still has no `changedAt`**, deliberately. A role change, a name
+  write-through and an avatar sync all rewrite the row and nothing orders by it —
+  the same test that gated `joinedAt` until today.
+
+**Verified**: typecheck clean, **973 assertions** (4 new), and the resolver
+**proved by mutation** — dropping the fallback fails 3, one of them the ordering
+rather than the resolver, which is the assertion that would catch it in
+production. The **real handlers** were driven over `POST /__spacefast/zero/run`
+on a throwaway `sf dev --port 4199` as two named dev guests: both insert paths
+stamping, and a row blanked back to `''` — the state every published row is in —
+resolving to its `createdAt` through `adminHousehold`, `adminPeople` and
+`account` alike. Three throwaway endpoints were added and removed.
+
+**The artifact was not read, and that is the one step missing.** `npx sf publish
+--dry-run` refuses with `credential_expired`; it needs `sf login` before the
+column can be confirmed at `server.schema.memberships.columns` with
+`db.migrations` still empty.
+
+### Overview is not slow. It is capped, and above 1,000 rows it is wrong — 2026-09-02
+
+**Measured rather than reasoned about**, and it inverts the question. A
+throwaway `sf dev` was seeded to ~3,200 items across 54 households and
+`adminSummary` timed against `adminAccess` as a baseline: **~3.5ms against
+~0.9ms, and it does not move as the data grows.** It cannot, and the reason is
+the finding.
+
+**`collect()` returns at most 1,000 rows, silently.** Not a table limit, not a
+write limit, and not specific to an index — **any single result set**, with or
+without a range predicate. Proved by the sum of 54 scoped reads (3,045)
+exceeding any one read (1,000), and confirmed in the CLI's own bundle:
+`MAX_LOCAL_QUERY_ROWS = 1e3`, applied as `results.slice(0, maxRows)` **whether
+or not a `limit()` was asked for**. Written up in `.claude/docs/spacefast.md`.
+
+**So the scaling note in `adminSummary`'s own docblock is wrong in the direction
+that matters.** It says the scan *"stops being fine somewhere in the low
+thousands"* and that the fix is a denormalised counts row. It never gets slow —
+it silently stops counting at 1,000 per table:
+
+| what breaks | how |
+|---|---|
+| *Items tracked*, *Households*, *People* | cap out at 1,000 each |
+| *Pantry sizes* (D69) | households whose items sort late read as **empty** — the adoption chart reporting the opposite of the truth |
+| *Needs attention* → holding nothing | inflated by the same rows |
+| `dormant` | `lastActiveByHousehold` reads truncated items *and* three truncated term tables |
+| `adminHouseholds` | `total`, `matching`, every row's `items`, and the **items sort** |
+
+**Demonstrated, not inferred**: with a 1,200-item household in the space, the
+console named a **40-item** household as the biggest pantry in it.
+
+**And it is not only the console.** `pantry` reads a household's items and both
+join tables with the same scoped `collect()`, so **the join tables truncate
+first** — an item may name several types and several sources, so `itemStores`
+reaches 1,000 well before `items` does, and store chips would start vanishing
+from cards at roughly 600–700 items. D67 caps a bulk *batch* at 200 and nothing
+caps a pantry's total.
+
+**`paginate()` is the way out and it costs nothing.** `numItems` is clamped to
+the same 1,000 but the cursor walks: measured at **3,245 rows in 4 pages, 13ms**
+flat, and **1,200 in 2 pages** on a scoped range where `collect()` returned
+1,000. For any result under the cap it is one call with `isDone` already true —
+identical to `collect()` — so a `collectAll()` helper is a strict improvement at
+every call site rather than a trade.
+
+**What is not known, and cannot be settled from here.** Every constant is named
+`MAX_LOCAL_*`, which reads as a dev-harness limit. **That is a guess**, and it is
+the same shape of guess that made `isAdminUser`'s dev-guest branch look safe
+before it leaked the console to anonymous callers in v15. An admin query answers
+`denied` to an anonymous caller and the live space holds 1,000 of nothing, so
+there is no probe that answers it — it wants a documented answer from the
+platform. **The fix is correct either way**: if the hosted runtime has no cap, a
+paginate loop still returns everything in one page.
+
+**Nothing has been changed for this yet.** The sweep is `collect()` →
+`collectAll()` across the console's whole-table reads and `pantry`'s scoped ones,
+and it is a decision worth taking deliberately rather than on the way past.
+
 ### Autofill — the name field and search (D63) — 2026-08-31
 
 `.claude/docs/design/autofill.md`, drawn on

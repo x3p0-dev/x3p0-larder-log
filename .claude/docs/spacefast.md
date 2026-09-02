@@ -5907,3 +5907,119 @@ contract as schemas in `@spacefast/common` and still emits
 `stattic.zero.capsule.v1` with no mode metadata — so every Zero space that
 publishes today is rejected with an error code (`zero_artifact_mode_invalid`)
 that is absent from your 481-code registry.*
+
+---
+
+## 2026-09-02 — `collect()` truncates at 1,000 rows, silently
+
+Context: seeding a `sf dev` space with a few thousand rows to measure the admin
+console's Overview, which reads six whole tables per load. The goal was a timing
+number. What turned up instead is a correctness ceiling.
+
+### 🐛 `collect()` returns at most 1,000 rows, with no error and no flag
+
+`ctx.db.<table>.withIndex(…).collect()` slices its result to 1,000 rows. It is
+not a table limit, not a write limit and not specific to one index — it applies
+to **any single result set**, with or without a range predicate.
+
+Measured on `sf dev` with `--state-backend sqlite`, from inside a throwaway
+endpoint:
+
+```json
+{
+  "householdsScanned": 54,
+  "itemsBySumOfScopedReads": 3045,   // 54 scoped reads, each under the cap
+  "biggestHousehold": 1000,          // a household that really holds 1,200
+  "itemsByOneFlatCollect": 1000      // ctx.db.items.withIndex('by_creation').collect()
+}
+```
+
+The sum of many small reads (3,045) exceeding any single read (1,000) is what
+proves it is a per-result-set cap rather than a stale count.
+
+It is in the CLI's own bundle, `node_modules/spacefast/dist/commands/dev.js`:
+
+```js
+var MAX_LOCAL_QUERY_ROWS = 1e3;
+…
+const maxRows = typeof this.max === "number"
+  ? Math.min(MAX_LOCAL_QUERY_ROWS, Math.max(0, countOrZero(this.max)))
+  : MAX_LOCAL_QUERY_ROWS;
+results = results.slice(0, maxRows);
+```
+
+The `: MAX_LOCAL_QUERY_ROWS` branch is the one that bites — **an unbounded
+`collect()` is capped exactly as a `limit(1000)` is**, and the caller cannot
+tell the two apart. `@spacefast/zero-compile/dist/runtime-host.js` builds its
+SQL with `state.limit === null ? "" : " LIMIT " + state.limit`, so reading
+*that* file suggests `collect()` is unbounded. It is the dev harness that
+slices, after the query returns.
+
+**Why this is worth fixing rather than documenting.** A truncated read is
+indistinguishable from a complete one, so it does not surface as an error, a
+slow page, or a warning — it surfaces as a number that is quietly too small,
+months later, in whatever the app built on top of it. Our admin console reports
+a *biggest pantry* of 40 items in a space whose biggest household holds 1,200,
+and it is not wrong by a little: the 1,200-item household is invisible to the
+scan entirely because its rows sort after the cut.
+
+Three things would each be enough, in increasing order of usefulness:
+
+1. **Throw.** An unbounded `collect()` over more than the cap is almost always a
+   bug in the caller; refusing it is kinder than answering it wrongly. This is
+   what `insert` already does when the space is full — *"Zero DB row limit was
+   exceeded."* — and that asymmetry is the sharpest part of the report: **writes
+   fail loudly and reads truncate silently.**
+2. **Return the truncation.** `{ rows, truncated: true }`, or an `isDone` the
+   way `paginate()` already has one.
+3. **Expose `count()`.** The dev builder *has* one — `count() { return
+   this.filteredRows().length }`, before the slice — and it is not in
+   `QueryBuilder` in `@spacefast/zero/dist/server.d.ts`. Since the query API is
+   `collect` / `take` / `first` / `paginate` with no aggregate at all, counting
+   anything today means materialising it, which is what walks into the cap in
+   the first place.
+
+### ❓ Whether the hosted runtime does the same is unanswerable from here
+
+Every constant involved is named `MAX_LOCAL_*`, which reads as a dev-harness
+limit rather than a platform one. That is a guess, and this project has been
+burned by exactly that guess before: `isAdminUser`'s dev-guest branch was safe
+by the same reasoning and leaked the console to anonymous callers in v15.
+
+It cannot be settled from here — an admin query answers `denied` to an
+anonymous caller, and the live space does not hold 1,000 of anything to test
+with. **It needs a documented answer rather than a measurement**, because the
+consequence is silent either way.
+
+`docs/zero-runtime.md` has a *Limits* section and does not mention a row cap on
+reads at all.
+
+### 👍 `paginate()` is the escape hatch, and it works past the cap
+
+Same data, same endpoint:
+
+| read | rows | pages | ms |
+|---|---|---|---|
+| `collect()` over `by_creation` | 1,000 | — | ~3 |
+| `paginate({ numItems: 1000 })` loop | **3,245** | 4 | 13 |
+| `collect()` scoped to one household | 1,000 | — | — |
+| `paginate()` scoped to the same household | **1,200** | 2 | 16 |
+
+`numItems` is clamped to the same 1,000, but the cursor walks, so a
+paginate-until-`isDone` loop is complete. For any result under the cap it is one
+call and `isDone` is true immediately, so it costs the same as `collect()` —
+which makes it a strict improvement and the obvious thing for the SDK to do
+inside `collect()` itself.
+
+### 👎 The dev backend's total row budget is 16,384, and it is not documented
+
+`MAX_LOCAL_TOTAL_ROWS = 16384`, across *all* tables. Seeding 300 households ×
+60 items hit it and returned a 500:
+
+```
+zero_dev_endpoint_failed — "Zero DB row limit was exceeded."
+```
+
+That is the right behaviour and a clear message. The friction is only that
+nothing says the number in advance, so the way you learn your load-test is too
+big is by running it. Worth a line in the *Limits* section beside the read cap.

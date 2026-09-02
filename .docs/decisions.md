@@ -2190,6 +2190,43 @@ orders them by time today, and every column is permanent — dropping one needs
 `sf db migrate --drop`. If any of them ever grows a chronological view, it needs
 its own stamps *before* the rows that would want them exist.
 
+### Amended 2026-09-02 — `memberships` grew the chronological view, and gained `joinedAt`
+
+The paragraph above named the condition and the condition came true. The admin
+console (D62) sorts People by **Recently joined**, and prints the date on an
+account page, on every member row of a household, and — since D68 — in the
+account export. That is four consumers of an ordering, which by this decision's
+own rule is a stamp the app has to write.
+
+`memberships.joinedAt`, ISO 8601 UTC defaulting to `''`, written by the two
+mutations that insert a membership: `createHousehold` and `redeemInvite`. Read
+through **`joinedAtOf()`**, which falls back to the platform's `createdAt` —
+permanently, not transitionally, because every membership on the published space
+predates the column and nothing backfills. For a row nothing has rewritten the
+two are the same instant, which is why the fallback is not a compromise.
+
+**It is `||` and not `??`, and that is the load-bearing character.** A column
+added after rows exist reads back as **`null`** rather than the declared `''`,
+and the generated row type says `string` either way — the finding that left
+`useAvatarSync` inert for as long as `memberships.picture` has existed. `??`
+passes `''` straight through to a date formatter; `||` catches `null`,
+`undefined` and `''` alike. `npm test` pins the null case *and* the ordering it
+produces, because a raw read sorts a `null` above a real stamp and hands back a
+list that is plausible and wrong.
+
+**Still not covered:** `invites`, the two join tables, and `memberships`' own
+*changed* half. A role change, a name write-through and an avatar sync all
+rewrite a membership and none of them is ordered by time, so the same test
+applies to `changedAt` here as applied to `joinedAt` before today — it goes in
+when something wants to sort on it, and not before.
+
+Verified against the real handlers over `POST /__spacefast/zero/run` on a
+throwaway `sf dev`, as two named dev guests: `createHousehold` stamping the
+creator's row with the same instant the household took, `redeemInvite` stamping
+the joiner's, and a row blanked back to `''` — the state every published row is
+in — resolving to its `createdAt` through `adminHousehold`, `adminPeople` and
+`account` alike.
+
 Verified against the real handlers over `POST /__spacefast/zero/run`: three
 items added in order, the middle one removed and undone, and the list read back
 — `addedAt` order keeps it in the middle while `createdAt` order (the bug) puts
