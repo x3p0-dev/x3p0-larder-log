@@ -20,6 +20,15 @@ import {
 	preflightLede, transferConsequence, unanswered,
 } from '../../shared/accountDeletion';
 
+/**
+ * How many household tiles the *leaving* row draws.
+ *
+ * Four is what fits beside its own sentence at 520: 4 x 28 with 4px between
+ * them is 124px, and `You'll leave all 14. Nothing in them changes.` wants most
+ * of what is left. Raising it means re-deriving that, not just the number.
+ */
+const LEAVING_TILES = 4;
+
 /** The transfer menu's own width and height cap — what placement needs. */
 const MENU_SIZE = { width: 284, maxHeight: 280 };
 
@@ -183,19 +192,31 @@ export function AccountPreflight({
 
 						{leaving.length > 0 && (
 							<Quiet rule={goes.length > 0} theme={theme}>
-								<HouseholdTile ink={leaving[0].ink} name={leaving[0].name} size={28} dark={dark} />
+								{/*
+								  * **The tiles are one cluster, and it is capped.** They were
+								  * the row's first tile with every other one trailing *after*
+								  * the text, so a household you are merely leaving cost 28px
+								  * that nothing could shrink: at fourteen the tiles alone
+								  * wanted ~530px of a 448px row and ran clean out of the box.
+								  *
+								  * **No bubble standing in for the ones not drawn** — the
+								  * Members card's rule, and it costs nothing here because the
+								  * sentence under the names already says *all 14*. The tiles
+								  * say these are households; the line says how many.
+								  */}
+								<span class="shrink-0 flex items-center gap-1">
+									{leaving.slice(0, LEAVING_TILES).map((h) => (
+										<HouseholdTile key={h.id} ink={h.ink} name={h.name} size={28} dark={dark} />
+									))}
+								</span>
 								<span class="flex-1 min-w-0 flex flex-col gap-px">
 									<span class="truncate text-[14.5px] font-semibold" style={{ color: theme.textStrong }}>
 										{namesOf(leaving)}
 									</span>
-									<span class="text-meta" style={{ color: theme.textMuted }}>
+									<span class="truncate text-meta" style={{ color: theme.textMuted }}>
 										{leavingLine(leaving.length)}
 									</span>
 								</span>
-								{/* The rest of the tiles, so the row shows what it covers. */}
-								{leaving.slice(1).map((h) => (
-									<HouseholdTile key={h.id} ink={h.ink} name={h.name} size={28} dark={dark} />
-								))}
 							</Quiet>
 						)}
 					</div>
