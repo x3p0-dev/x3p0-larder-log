@@ -16,8 +16,10 @@ import type { AccountHousehold, HouseholdFate, OwnershipDecision } from '../shar
 import { fateOf } from '../shared/accountDeletion';
 import { addedAtOf, changedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
 import {
-	ADMIN_IDS_VAR, ADMIN_UNDELETABLE_REFUSAL, adminWritesHeldFor, cumulativeByMonth, isAdminId,
-	isDormant, isWithinDays, matchScore, monthKeysBack, monthLabel, parseAdminIds, RECENT_DAYS,
+	ADMIN_IDS_VAR, ADMIN_UNDELETABLE_REFUSAL, adminWritesHeldFor, isAdminId,
+	countByMonth, isDormant, isWithinDays, itemBuckets, matchScore, monthKeysBack, monthLabel,
+	parseAdminIds,
+	RECENT_DAYS,
 } from '../shared/admin';
 import {
 	encodeHeld, retentionCutoff, RETENTION_VAR, toRetentionMonths,
@@ -1060,24 +1062,32 @@ export default capsule({
 			const lastActive = await lastActiveByHousehold(ctx.db, items);
 
 			let noOwner = 0, dormant = 0, empty = 0;
+			// One entry per household, **zeros included** — the map only holds
+			// households that have items, so its values alone would drop every
+			// empty one and leave the first band reading zero forever.
+			const sizes: number[] = [];
 
 			for (const h of households) {
+				const items = itemCount.get(h.id) ?? 0;
+
 				if (! owners.has(h.id)) noOwner++;
 				if (isDormant(lastActive.get(h.id) ?? '', nowIso)) dormant++;
-				if (! itemCount.get(h.id)) empty++;
+				if (! items) empty++;
+
+				sizes.push(items);
 			}
 
 			const months = monthKeysBack(nowIso);
-			const series = cumulativeByMonth(
-				households.map((h) => addedAtOf(h)),
-				months
-			).map((value, i) => ({
-				month: months[i],
-				// The year rides the ends only, which is what the board draws:
-				// `Sep 2025 · Dec · Mar · Jun · Aug 2026`.
-				label: monthLabel(months[i], i === 0 || i === months.length - 1),
-				value,
-			}));
+			// Per month, and therefore not a running total: these bars sum to
+			// what arrived in the window, never to the card's figure.
+			const series = countByMonth(households.map((h) => addedAtOf(h)), months)
+				.map((value, i) => ({
+					month: months[i],
+					// The year rides the ends only, which is what the board
+					// draws: `Sep 2025 · Dec · Mar · Jun · Aug 2026`.
+					label: monthLabel(months[i], i === 0 || i === months.length - 1),
+					value,
+				}));
 
 			return {
 				state: 'ready',
@@ -1095,6 +1105,7 @@ export default capsule({
 				dormant,
 				empty,
 				series,
+				buckets: itemBuckets(sizes),
 			};
 		}),
 
@@ -1288,6 +1299,19 @@ export default capsule({
 
 			const nowIso = new Date().toISOString();
 			const now = Date.now();
+			const months = monthKeysBack(nowIso);
+
+			// Items added per month, on rows this handler has already collected
+			// for `holds.items` — so the chart costs the arithmetic and not a
+			// second scan. `addedAtOf` rather than `changedAtOf`: an item edited
+			// last week did not arrive last week, and a chart that said so would
+			// make every active household look like it was still filling up.
+			const series = countByMonth(items.map((i) => addedAtOf(i)), months)
+				.map((value, i) => ({
+					month: months[i],
+					label: monthLabel(months[i], i === 0 || i === months.length - 1),
+					value,
+				}));
 
 			// The same rule `lastActiveByHousehold` applies across the space, on
 			// one household's own rows: the newest stamp on anything it owns.
@@ -1338,6 +1362,7 @@ export default capsule({
 					role: toRole(m.role),
 					joinedAt: m.createdAt,
 				})),
+				series,
 				// Live only. A revoked or expired invite is not a fact about the
 				// household any more, and a list that kept them would grow forever
 				// while saying less each time.

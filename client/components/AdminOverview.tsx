@@ -1,13 +1,12 @@
-import { useRef, useState } from 'preact/hooks';
-import { lineChartLayout } from '@spacefast/zero/charts';
 import { ArrowUpRight, ChevronRight } from 'lucide-preact';
 
 import { AdminLoading } from './AdminLoading';
+import { MonthBars } from './MonthBars';
 import { useAdminSummary } from '../hooks/useAdminData';
 import type { Theme } from '../lib/theme';
 import { statusInk } from '../lib/theme';
 import { ADMIN_ROW } from '../lib/controlStyles';
-import { RECENT_DAYS, DORMANT_DAYS, monthLabel } from '../../shared/admin';
+import { RECENT_DAYS, DORMANT_DAYS } from '../../shared/admin';
 import type { AdminHouseholdFilter, AdminSummaryData } from '../../shared/types';
 
 /**
@@ -60,8 +59,38 @@ export function AdminOverview({
 				/>
 			</div>
 
+			{/* Both charts share the wide column and *Needs attention* keeps the
+			  * rail. It is a short card — three rows at worst, usually one —
+			  * so stacking the second chart under it would leave the rail with
+			  * a gap the width of a third of the screen. It also groups the two
+			  * shapes together against the one list of things to do. */}
 			<div class="grid gap-6 items-start grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
-				<HouseholdChart series={s.series} theme={theme} />
+				<div class="flex flex-col gap-6 min-w-0">
+					<div
+						class="rounded-[20px] px-5 pt-[18px] pb-4"
+						style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
+					>
+						<div class="flex items-baseline justify-between gap-3 mb-2">
+							<h2
+								class="font-disp text-[19px] font-semibold m-0"
+								style={{ color: theme.textStrong }}
+							>
+								New households
+							</h2>
+							<span class="text-[13.5px]" style={{ color: theme.textMuted }}>
+								last 12 months
+							</span>
+						</div>
+
+						<MonthBars
+							series={s.series}
+							lead="New households per month"
+							one="household" many="households"
+							theme={theme}
+						/>
+					</div>
+					<PantrySizes buckets={s.buckets} households={s.households} theme={theme} />
+				</div>
 				<NeedsAttention data={s} onSelect={onNeedsAttention} theme={theme} dark={dark} />
 			</div>
 		</div>
@@ -112,338 +141,6 @@ function StatCard({
 					</>
 				)}
 			</div>
-		</div>
-	);
-}
-
-/**
- * Households over twelve months, cumulative.
- *
- * The geometry comes from `@spacefast/zero/charts` — a platform module, so it
- * costs nothing against the client bundle — and every colour is overridden,
- * because `lineChartLayout` hands back its own categorical palette and the slot
- * blue is the one colour in this app that belongs to nothing.
- *
- * It scales by `viewBox` rather than re-laying out on resize. The alternative
- * is a `ResizeObserver` and a recompute per frame — and the observer is the
- * exact mechanism that shipped inert on row 2 for a month. **The tooltip did
- * not change that**: it measures the `<svg>` once per band the pointer enters,
- * which is at most twelve measurements and never one per frame.
- *
- * **The twelve values are in the `aria-label`, not behind the pointer.** The
- * tooltip is a convenience over data that has to be readable without one, and
- * the alternative — twelve focusable months — would put twelve tab stops
- * between the stat cards and *Needs attention*. So the label carries the whole
- * series and the tooltip is `aria-hidden`: it says nothing a screen reader is
- * not already told.
- */
-function HouseholdChart({
-	series, theme,
-}: {
-	series: AdminSummaryData['series'];
-	theme: Theme;
-}) {
-	const height = 200;
-	const boxRef = useRef<HTMLDivElement | null>(null);
-	const svgRef = useRef<SVGSVGElement | null>(null);
-	const [hovered, setHovered] = useState<Hovered | null>(null);
-	const layout = lineChartLayout({
-		data: series.map((p) => ({ label: p.label, households: p.value })),
-		x: 'label',
-		series: ['households'],
-		height,
-	});
-	const line = layout.series[0];
-	const points = line?.points ?? [];
-	const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
-	const floor = layout.plot.y + layout.plot.height;
-	// The area is the line closed down to the axis. Drawn under the stroke so
-	// the stroke keeps its full weight where the two meet.
-	const area = points.length
-		? `${path} L${points[points.length - 1].x} ${floor} L${points[0].x} ${floor} Z`
-		: '';
-	const latest = series[series.length - 1];
-
-	/*
-	 * **A band, not a dot.** The points are ~50 viewBox units apart and the
-	 * marker is 4 across, so hit-testing the dot would mean aiming at the one
-	 * part of the chart that moves as the data does. Each band runs from the
-	 * midpoint behind its point to the midpoint ahead of it, full plot height,
-	 * and the two on the ends run out to the plot's own edges — the whole
-	 * plot is covered and there is no gap between months where nothing happens.
-	 *
-	 * It is the rule the whole row is the checkbox already states, applied to
-	 * a chart.
-	 */
-	const bands = points.map((p, i) => {
-		const before = points[i - 1];
-		const after = points[i + 1];
-		const left = before ? (before.x + p.x) / 2 : layout.plot.x;
-		const right = after ? (p.x + after.x) / 2 : layout.plot.x + layout.plot.width;
-
-		return { left, width: Math.max(0, right - left) };
-	});
-
-	/**
-	 * Where a viewBox point sits inside the card, in pixels.
-	 *
-	 * **The scale has to be worked out rather than assumed**, and that is the
-	 * whole reason this function exists. The `<svg>` is `width: 100%` with a
-	 * fixed height, so its box and its `viewBox` rarely share an aspect ratio —
-	 * and the default `xMidYMid meet` then renders the chart at the *smaller*
-	 * of the two scales and centres the slack. A wide card leaves it centred
-	 * horizontally at natural size; a narrow one shrinks it and centres it
-	 * vertically. Treating either as "x over 640 of the width" puts the tooltip
-	 * beside the month it names.
-	 *
-	 * Measured on `pointerenter` and nowhere else, so a resize costs one stale
-	 * frame and never an observer.
-	 */
-	function place(x: number, y: number): Omit<Hovered, 'index'> | null {
-		const svg = svgRef.current;
-		const box = boxRef.current;
-
-		if (! svg || ! box) return null;
-
-		const s = svg.getBoundingClientRect();
-		const b = box.getBoundingClientRect();
-		const scale = Math.min(s.width / layout.width, s.height / (height + 24));
-
-		return {
-			left: s.left - b.left + (s.width - layout.width * scale) / 2 + x * scale,
-			top: s.top - b.top + (s.height - (height + 24) * scale) / 2 + y * scale,
-			// Taken here rather than read off the ref at render time, so the
-			// clamp and the position come from one measurement of one moment.
-			width: b.width,
-		};
-	}
-
-	return (
-		<div
-			ref={boxRef}
-			class="relative rounded-[20px] px-5 pt-[18px] pb-3.5"
-			style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
-		>
-			<div class="flex items-baseline gap-2.5 mb-1.5">
-				<h2 class="font-disp text-[19px] font-semibold m-0" style={{ color: theme.textStrong }}>
-					Households
-				</h2>
-				<span class="text-[13.5px]" style={{ color: theme.textMuted }}>last 12 months</span>
-			</div>
-
-			<svg
-				ref={svgRef}
-				viewBox={`0 0 ${layout.width} ${height + 24}`}
-				width="100%"
-				height={height + 24}
-				fill="none"
-				role="img"
-				/* The whole series, because the tooltip is `aria-hidden` and this
-				 * is where the twelve numbers have to be. `label` alone reads
-				 * `Mar` in the middle of the range, so the month key is spelled
-				 * out with its year — the same thing the tooltip shows, for the
-				 * same reason. */
-				aria-label={
-					`Households over the last twelve months, ending at ` +
-					`${latest ? latest.value.toLocaleString() : 0}. ` +
-					series
-						.map((p) => `${monthLabel(p.month, true)}, ${p.value.toLocaleString()}`)
-						.join('. ') + '.'
-				}
-				onPointerLeave={() => setHovered(null)}
-			>
-				{layout.ticks.map((t) => (
-					<g key={t.value}>
-						<line
-							x1={layout.plot.x} y1={t.y}
-							x2={layout.plot.x + layout.plot.width} y2={t.y}
-							stroke={t.value === 0 ? theme.border : theme.divider}
-							stroke-width="1"
-						/>
-						<text
-							x={layout.plot.x - 8} y={t.y + 3}
-							text-anchor="end" font-size="10" fill={theme.textFaint}
-						>
-							{t.value.toLocaleString()}
-						</text>
-					</g>
-				))}
-
-				{area && <path d={area} fill={theme.surfaceAlt} />}
-				{path && (
-					<path d={path} stroke={theme.textStrong} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
-				)}
-
-				{/* Five labels, not twelve: the axis reads `Sep 2025 · Dec · Mar ·
-				  * Jun · Aug 2026` on the boards, and twelve months of text
-				  * collides well before a 1440 column narrows. */}
-				{layout.xLabels.map((l, i) => (
-					(i % 3 === 0 || i === layout.xLabels.length - 1) && (
-						<text
-							key={l.text + i}
-							x={l.x} y={height + 16}
-							text-anchor={i === 0 ? 'start' : i === layout.xLabels.length - 1 ? 'end' : 'middle'}
-							font-size="10.5" fill={theme.textFaint}
-						>
-							{l.text}
-						</text>
-					)
-				))}
-
-				{/*
-				  * The rule and the dot, drawn **before** the bands so the bands
-				  * stay the only thing the pointer can reach.
-				  *
-				  * They are why the tooltip is allowed to be clamped away from
-				  * its month near the card's edges: the box says what the value
-				  * is and these two say which month it belongs to, so the one
-				  * that cannot always point is not the one carrying the answer.
-				  */}
-				{hovered && points[hovered.index] && (
-					<g aria-hidden="true" pointer-events="none">
-						<line
-							x1={points[hovered.index].x} y1={layout.plot.y}
-							x2={points[hovered.index].x} y2={floor}
-							stroke={theme.border} stroke-width="1"
-						/>
-						{/* A ring in the card's own fill, so the dot reads against
-						  * the area under it rather than dissolving into it. */}
-						<circle
-							cx={points[hovered.index].x} cy={points[hovered.index].y}
-							r="4.5" fill={theme.textStrong}
-							stroke={theme.surface} stroke-width="2"
-						/>
-					</g>
-				)}
-
-				{/*
-				  * A backdrop that clears, **under** the bands.
-				  *
-				  * `pointerleave` on the `<svg>` alone is not enough: the axis
-				  * strip below the plot is inside the element, and so is the
-				  * slack `xMidYMid meet` leaves when the card and the `viewBox`
-				  * disagree about aspect — which on a narrow card is tens of
-				  * pixels above and below the chart. Moving off a band into any
-				  * of that would have left the last month's tooltip up until the
-				  * pointer left the chart entirely.
-				  *
-				  * Siblings, not ancestors, so entering a band *leaves* this and
-				  * entering this leaves the band. One state change either way,
-				  * which is what a pair of `onPointerLeave`s on the bands could
-				  * not give — leave and enter are separate dispatches, so that
-				  * version renders a null between two months and flickers.
-				  */}
-				<rect
-					x="0" y="0" width={layout.width} height={height + 24}
-					fill="transparent"
-					onPointerEnter={() => setHovered(null)}
-				/>
-
-				{bands.map((b, i) => (
-					<rect
-						key={series[i].month}
-						x={b.left} y={layout.plot.y}
-						width={b.width} height={layout.plot.height}
-						fill="transparent"
-						/* `pointerenter` rather than a single `pointermove`
-						 * handler over the plot: it fires once per band the
-						 * pointer crosses, so the measurement in `place` runs at
-						 * most twelve times instead of once a frame. */
-						onPointerEnter={() => {
-							const at = place(points[i].x, points[i].y);
-
-							if (at) setHovered({ index: i, ...at });
-						}}
-					/>
-				))}
-			</svg>
-
-			{hovered && series[hovered.index] && (
-				<ChartTip
-					label={monthLabel(series[hovered.index].month, true)}
-					value={series[hovered.index].value}
-					left={hovered.left}
-					top={hovered.top}
-					width={hovered.width}
-				/>
-			)}
-		</div>
-	);
-}
-
-/** Which month the pointer is over, and where that month sits in the card. */
-type Hovered = { index: number; left: number; top: number; width: number };
-
-/**
- * The chart's tooltip.
- *
- * **It is the rail's `Tip` with two lines in it**, and that is the whole of the
- * surface decision — the app already had a tooltip, and it already borrows the
- * drawer's darkest layer. The design doc asks for exactly that and gives the
- * reason: transient chrome takes the drawer map, so this stays a near-black box
- * with cream text in **both** themes rather than inverting into a cream card
- * sitting on a dark chart. It is the toast's argument, one component over.
- *
- * **It is `aria-hidden` and `pointer-events-none`.** The twelve values are in
- * the `<svg>`'s own label, so announcing them again here would read the series
- * twice; and a tooltip that can be hovered is a tooltip that can be chased off
- * the band that opened it.
- *
- * **No transition.** Twelve bands a pointer sweeps across would restart a fade
- * on each one, which turns a steady read into a flicker — and the box is not
- * appearing and disappearing so much as moving between months.
- */
-function ChartTip({
-	label, value, left, top, width,
-}: {
-	label: string;
-	value: number;
-	left: number;
-	top: number;
-	/** The card's inner width, for the clamp. */
-	width: number;
-}) {
-	/*
-	 * **Clamped against an assumed half-width, and the marker is what makes
-	 * that honest.** Measuring the box would mean rendering it once to find out
-	 * how wide it is and again to place it; `Live invites` at four digits is
-	 * the widest this ever gets and it does not reach 130. When the clamp does
-	 * bite, the tooltip stops sitting over its own dot — and the vertical rule
-	 * and the marker are still on the month, which is the half of the answer
-	 * that has to be exact.
-	 */
-	const HALF = 65;
-	const x = width > HALF * 2 ? Math.min(Math.max(left, HALF), width - HALF) : left;
-	/*
-	 * Above the point, unless that would put the box outside the card — the
-	 * threshold is its own height plus its gap.
-	 *
-	 * Defensive rather than routine: the series is cumulative, so the highest
-	 * point is always the **last** one, and the last one is at the far right
-	 * where the header is not. It fires if the plot ever starts nearer the top
-	 * of the card than the box is tall.
-	 */
-	const below = top < 58;
-
-	return (
-		<div
-			role="tooltip"
-			aria-hidden="true"
-			class="absolute z-30 whitespace-nowrap px-2.5 py-1.5 rounded-lg bg-drawer-well border border-drawer-line shadow-lg pointer-events-none"
-			style={{
-				left: `${x}px`,
-				top: `${below ? top + 14 : top - 14}px`,
-				transform: below
-					? 'translateX(-50%)'
-					: 'translateX(-50%) translateY(-100%)',
-			}}
-		>
-			<span class="block text-[10.5px] uppercase tracking-[0.1em] text-on-dark-faint">
-				{label}
-			</span>
-			<span class="block text-[13.5px] font-semibold tabular-nums text-on-dark">
-				{value.toLocaleString()} {value === 1 ? 'household' : 'households'}
-			</span>
 		</div>
 	);
 }
@@ -523,6 +220,137 @@ function NeedsAttention({
 			>
 				{rows.length ? 'Nothing else needs you.' : 'Nothing needs you.'}
 			</div>
+		</div>
+	);
+}
+
+/**
+ * Households by how many items they hold — five bands, horizontal bars.
+ *
+ * **This is the adoption measure.** Overview counts households, people and
+ * items, and none of those three says whether anybody is really using the app:
+ * forty households averaging six items is a very different space from four
+ * holding three hundred, and the four cards read identically in both. D67 was
+ * built on the premise that twenty items is a sample dataset and a real pantry
+ * is two hundred; this is the only thing in the console that reports whether
+ * that wall was ever cleared.
+ *
+ * **No SVG, and that is the point of choosing this shape.** A horizontal bar is
+ * a `<div>` with a width, so it inherits none of the line chart's apparatus —
+ * no `viewBox`, no `preserveAspectRatio` scale to work out, no hit-test bands,
+ * no tooltip. The number is printed at the end of its own row, where a hover
+ * would have had to put it.
+ *
+ * **The bars scale to the largest band, not to the total.** Against the total,
+ * a space whose households are mostly empty draws four bands as slivers and
+ * says nothing about how they compare with each other; against the max, the
+ * shape is legible at any distribution and the counts carry the absolute
+ * figures. The card's meta line carries the denominator, since bars scaled to
+ * the max no longer reveal it.
+ *
+ * **Every band is neutral, including `0`.** Amber in this console means *needs
+ * attention* (D62), and the empty households are already saying exactly that in
+ * amber a few pixels to the right, on the same screen, about the same rows.
+ * Tinting one bar here would say it twice and turn a measurement into a verdict
+ * — and a distribution is a shape you read, not a judgment.
+ *
+ * **The bands are not controls.** Only one of the five has a filter behind it
+ * (`empty`, which *Needs attention* already routes to), so four would be dead —
+ * and one pressable bar in five reads as broken rather than as selective.
+ * Making them all work means four new `AdminHouseholdFilter` values and four
+ * new chips on the household list, invented on the way past a chart.
+ */
+function PantrySizes({
+	buckets, households, theme,
+}: {
+	buckets: AdminSummaryData['buckets'];
+	households: number;
+	theme: Theme;
+}) {
+	/*
+	 * A distribution of nothing is five empty tracks, which reads as a broken
+	 * card rather than as an empty one — so on a space with no households it is
+	 * absent, and the four stat cards say `0` on its behalf. That differs from
+	 * the line chart above it, deliberately: a flat line at zero is still a
+	 * line and still says *nothing has happened in twelve months*.
+	 */
+	if (! households) return null;
+
+	const most = Math.max(...buckets.map((b) => b.households), 0);
+
+	return (
+		<div
+			class="rounded-[20px] px-5 pt-[18px] pb-5"
+			style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
+			/*
+			 * The whole distribution in one sentence, and the rows hidden behind
+			 * it — the line chart's own rule, for the same reason. Each visible
+			 * row is a range and a numeral with nothing between them, so read in
+			 * sequence they are ten disconnected tokens rather than five facts.
+			 */
+			role="img"
+			aria-label={
+				`Households by pantry size, ${households.toLocaleString()} in total. ` +
+				buckets
+					.map((b) => (
+						`${b.label} items: ${b.households.toLocaleString()} ` +
+						`${b.households === 1 ? 'household' : 'households'}`
+					))
+					.join('. ') + '.'
+			}
+		>
+			<div class="flex items-baseline justify-between gap-3 mb-[18px]">
+				<h2 class="font-disp text-[19px] font-semibold m-0" style={{ color: theme.textStrong }}>
+					Pantry sizes
+				</h2>
+				<span class="text-[13.5px]" style={{ color: theme.textMuted }}>
+					{households.toLocaleString()} {households === 1 ? 'household' : 'households'}
+				</span>
+			</div>
+
+			<div class="flex flex-col gap-3">
+				{buckets.map((b) => (
+					<div key={b.floor} class="flex items-center gap-3">
+						{/* A fixed label column, so five tracks start on one
+						  * line rather than stepping in and out with the width
+						  * of `0` against `50–199`. */}
+						<span
+							class="shrink-0 w-[52px] text-right text-[12.5px] tabular-nums"
+							style={{ color: theme.textMuted }}
+						>
+							{b.label}
+						</span>
+
+						{/* The track is always full width and always visible, so
+						  * a band holding nothing reads as an empty band rather
+						  * than as a missing row. A gap in the middle of a
+						  * distribution is information. */}
+						<span
+							class="flex-1 min-w-0 h-2.5 rounded-full overflow-hidden"
+							style={{ background: theme.surfaceAlt }}
+						>
+							<span
+								class="block h-full rounded-full"
+								style={{
+									width: `${most ? (b.households / most) * 100 : 0}%`,
+									background: theme.textStrong,
+								}}
+							/>
+						</span>
+
+						<b
+							class="shrink-0 w-[46px] text-right text-[13.5px] font-semibold tabular-nums"
+							style={{ color: theme.textStrong }}
+						>
+							{b.households.toLocaleString()}
+						</b>
+					</div>
+				))}
+			</div>
+
+			<p class="m-0 mt-[15px] text-[12.5px]" style={{ color: theme.textMuted }}>
+				Items held, per household.
+			</p>
 		</div>
 	);
 }

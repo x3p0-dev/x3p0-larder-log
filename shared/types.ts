@@ -13,6 +13,7 @@ import type { Role } from './roles';
 import type { SourceKind } from './source';
 import type { Claim } from './claim';
 import type { AccountHousehold } from './accountDeletion';
+import type { AdminItemBucket } from './admin';
 
 export type TermKind = 'location' | 'type' | 'store';
 
@@ -429,6 +430,7 @@ export type AdminSeriesPoint = {
 	value: number;
 };
 
+
 /**
  * Overview's four cards and its *Needs attention* list.
  *
@@ -457,7 +459,23 @@ export type AdminSummaryData = {
 	dormant: number;
 	empty: number;
 
+	/**
+	 * Twelve months of *new households*, and **not a running total** — see
+	 * `countByMonth`. These bars sum to what arrived inside the window, never
+	 * to the `households` figure above them, which starts from everything that
+	 * already existed.
+	 */
 	series: AdminSeriesPoint[];
+
+	/**
+	 * Households by how many items they hold, in five bands.
+	 *
+	 * **`buckets[0].households` is `empty` by another name**, and the two are
+	 * computed from the same map in the same pass, so they cannot disagree.
+	 * The distribution is what the count alone cannot say: whether the
+	 * households that are not empty are samples or pantries.
+	 */
+	buckets: AdminItemBucket[];
 };
 
 export type AdminSummaryResult = AdminState<AdminSummaryData>;
@@ -571,6 +589,20 @@ export type AdminHouseholdDetailData = {
 	members: AdminMember[];
 	/** Live only — neither revoked nor expired. A dead invite is not a fact. */
 	invites: AdminInvite[];
+
+	/**
+	 * Items added to *this* household, per month, over twelve months.
+	 *
+	 * **Per month rather than a running total**, because the question this page
+	 * asks is whether the pantry is alive: a cumulative count only rises, so
+	 * every household's would read the same shape and an abandoned one would be
+	 * indistinguishable from a finished one. Empty columns say *when* it went
+	 * quiet, which is the fact `dormant` reduces to a flag.
+	 *
+	 * It counts arrivals and cannot see departures — nothing records a removed
+	 * item — so it does not sum to `holds.items` and is not meant to.
+	 */
+	series: AdminSeriesPoint[];
 };
 
 export type AdminHouseholdDetailResult =

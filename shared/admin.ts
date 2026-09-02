@@ -421,24 +421,109 @@ function formatUs(t: number, months: readonly string[], fallback: string): strin
 }
 
 /**
- * A running total across `months`, counting every stamp that had happened by
- * the end of each one.
+ * How many stamps fall *in* each month.
  *
- * **Cumulative, not per-month**, because the chart is labelled *Households* and
- * a household that existed in March still exists in April. A per-month bar of
- * signups is a different chart with a different label, and drawing one under
- * this one's axis is how a line that only ever rises comes to dip.
+ * **A stamp outside the window counts nowhere**, on either side of it. A bar
+ * labelled *March* must not absorb four years of history into its first column,
+ * which is what a running total would have to do instead — a line has to start
+ * from everything that already existed, and a bar does not.
  *
- * Stamps outside the window still count toward the earliest bucket — the app
- * did not begin twelve months ago, and a series that starts at zero would claim
- * it did.
+ * The consequence is worth stating where a reader will meet it: **these bars do
+ * not sum to the total printed beside them.** They sum to what arrived in the
+ * last twelve months, which is a different and smaller number. On a household
+ * page they undercount for a second reason as well: nothing records a removed
+ * item, so the columns count arrivals and can never fall.
  */
-export function cumulativeByMonth(stamps: readonly string[], months: readonly string[]): number[] {
-	return months.map((month) => stamps.filter((iso) => {
-		const key = monthKey(iso);
+export function countByMonth(stamps: readonly string[], months: readonly string[]): number[] {
+	const counts = new Map<string, number>();
 
-		// `''` and anything unparseable is excluded rather than bucketed at the
-		// start: a household with no stamp is not one that existed first.
-		return key.length === 7 && key <= month;
-	}).length);
+	for (const iso of stamps) {
+		counts.set(monthKey(iso), (counts.get(monthKey(iso)) ?? 0) + 1);
+	}
+
+	/*
+	 * **`''` and anything unparseable are excluded structurally, not by a
+	 * guard.** This asks for an exact month, so a key no month can equal is
+	 * never looked up. A version that compared `key <= month` — which is what a
+	 * running total needs — would want a real length check instead, because a
+	 * blank sorts below everything and would count toward every bucket.
+	 *
+	 * A guard was written here first and survived every mutation aimed at it,
+	 * which is the same thing that retired the `if (! userId)` in `isAdminId`:
+	 * a condition nothing can make false is documentation wearing a keyword.
+	 * The tests pin the behaviour rather than the mechanism, so a later change
+	 * to a range lookup would fail them.
+	 */
+	return months.map((month) => counts.get(month) ?? 0);
+}
+
+/**
+ * The floors of the pantry-size bands, ascending.
+ *
+ * **A floor, not a range**, and the labels below are derived from it — so a
+ * band and its own label cannot drift apart, which is the whole failure mode
+ * here: `10–49` printed over a rule that really admits 50 draws a chart that
+ * is plausible, stable and off by one for the life of the feature. Adding a
+ * boundary re-labels its neighbours on its own.
+ *
+ * The numbers are the app's own. `200` is `BULK_MAX` — the most one paste can
+ * add — so the top band is a household that got there in more than one sitting,
+ * and `10` is the line D67 was built against: twenty items is a sample dataset
+ * and a real pantry is two hundred.
+ */
+export const ITEM_BUCKET_FLOORS = [0, 1, 10, 50, 200] as const;
+
+/** One band of the pantry-size distribution. */
+export type AdminItemBucket = {
+	/** The axis label — `0`, `1–9`, `200+`. Derived, never written twice. */
+	label: string;
+	/** The band's inclusive floor, so a caller can say what it means. */
+	floor: number;
+	households: number;
+};
+
+/**
+ * How many households hold how many items, in five bands.
+ *
+ * **Takes one entry per household, zeros included.** Handing it the values of
+ * the server's `itemCount` map instead would drop every empty household on the
+ * floor and leave the `0` band permanently reading zero — a chart that draws
+ * correctly, sums to the wrong total, and says the opposite of what Overview's
+ * own *holding nothing* count says a few pixels to the right.
+ *
+ * Every household lands in exactly one band, so the bands sum to the input
+ * length. That is the property worth testing: a boundary written `>=` where a
+ * `>` belongs still returns five plausible numbers.
+ */
+export function itemBuckets(counts: readonly number[]): AdminItemBucket[] {
+	const floors = ITEM_BUCKET_FLOORS;
+	const buckets = floors.map((floor, i) => {
+		const next = floors[i + 1];
+
+		return {
+			// `0` rather than `0–0` when a band holds one number, and `200+`
+			// for the last, which has no ceiling to name.
+			label: next === undefined
+				? `${floor}+`
+				: next - floor === 1 ? `${floor}` : `${floor}–${next - 1}`,
+			floor,
+			households: 0,
+		};
+	});
+
+	for (const raw of counts) {
+		// A count is a length and cannot be negative or fractional, but this is
+		// the only place that assumption is load-bearing, so it is made true
+		// here rather than trusted. Anything unusable lands in the first band,
+		// which is where a household holding nothing readable belongs.
+		const n = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+
+		// From the top down, so the first floor at or below the count wins and
+		// no band needs to know its own ceiling.
+		for (let i = buckets.length - 1; i >= 0; i--) {
+			if (n >= buckets[i].floor) { buckets[i].households++; break; }
+		}
+	}
+
+	return buckets;
 }

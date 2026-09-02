@@ -6656,3 +6656,212 @@ saying where the switch really is.
   account**, so their households have no self-service exit at all. Handing each
   one over with *Transfer ownership* is the route, and nothing points at it from
   the sentence that refuses.
+
+---
+
+## D69. A cumulative total is a shape; a per-month count is a chart
+
+**Date:** 2026-09-02 · **Design:** none — this is a build decision, and it
+reverses part of D62's board 1.
+
+**Amends** D62, whose Overview draws one chart: households over twelve months,
+cumulative. That chart no longer exists.
+
+The console counts households, people and items, and **none of those three says
+whether anybody is using the app**. Forty households averaging six items and
+four holding three hundred read identically on the four cards. Two charts were
+added to answer questions the counts cannot, and adding them forced a third
+decision about the one that was already there.
+
+### Pantry sizes — the adoption measure
+
+Households by how many items they hold, in five bands: `0` · `1–9` · `10–49` ·
+`50–199` · `200+`. Horizontal bars, on Overview beneath the plot.
+
+D67 was built on the premise that **twenty items is a sample dataset and a real
+pantry is two hundred**, and nothing in the console reported whether that wall
+was ever cleared. Overview's *holding nothing* count is the first band of this
+chart already; the distribution is the part that was missing.
+
+**The labels are derived from the floors, never written beside them.**
+`ITEM_BUCKET_FLOORS` is the only place a boundary exists and `1–9` is computed
+from its own floor and its neighbour's. That is the failure mode this shape
+really has: `10–49` printed over a rule that admits 50 draws a chart that is
+plausible, stable and off by one for the life of the feature. Moving a floor
+re-labels its neighbours on its own, and `npm test` fails three assertions when
+it does.
+
+The numbers are the app's own. **`200` is `BULK_MAX`** — the most one paste can
+add — so the top band is a household that got there in more than one sitting.
+
+**`itemBuckets` takes one entry per household, zeros included**, and the server
+builds that list by walking `households` rather than the `itemCount` map. The
+map only holds households that *have* items, so its values alone drop every
+empty one and leave the first band reading zero forever — a chart that draws
+correctly and contradicts the *holding nothing* count a few pixels to its right.
+Driven against the real handler: the mutation reproduces exactly that.
+
+**The bands are not controls.** Only one of five has a filter behind it
+(`empty`, which *Needs attention* already routes to), so four would be dead —
+and one pressable bar in five reads as broken rather than as selective. Making
+them all work means four new `AdminHouseholdFilter` values and four new chips on
+the household list, invented on the way past a chart.
+
+**Every band is neutral, `0` included.** Amber in this console means *needs
+attention* (D62), and the empty households say exactly that in amber on the same
+screen about the same rows. Tinting one bar would say it twice and turn a
+measurement into a verdict.
+
+**Bars scale to the largest band, not the total** — against the total, a
+mostly-empty space draws four bands as slivers and says nothing about how they
+compare. The card's meta line carries the denominator, which scaling to the max
+no longer reveals.
+
+**The card is absent when there are no households**, because a distribution of
+nothing is five empty tracks and reads as broken. That differs from a line chart
+at zero, deliberately: a flat line is still a line and still says *nothing has
+happened in twelve months*.
+
+### Per month, not cumulative — and where each belongs
+
+The second chart is *new households per month*, and it took the slot the
+cumulative line had.
+
+**A running total only ever rises**, so the reading an overview most needs — *are
+we still growing* — arrives as a change in slope, which is the least legible
+thing a chart can be asked to say. Twelve columns say it outright: a quiet
+stretch is a row of empty months and there is nothing to interpret.
+
+That leaves the rule this decision is really about:
+
+| reading | form | why |
+|---|---|---|
+| a cumulative total | a **shape** — a sparkline, or nothing | it only rises; what it says is *steadily* or *in a rush* |
+| a per-month count | a **plot**, with an axis | two adjacent columns have to be comparable, which needs tick labels and room |
+
+**The sparkline half was built and rejected.** Three stat cards each got a
+twelve-month running total under the figure, at their own scales — which is the
+one thing a shared axis genuinely cannot do, since items outnumber households by
+two orders of magnitude. Justin's read on the built control was that the lines
+did not belong in those boxes, and they came out the same day. `StatCard` and
+its four call sites are byte-identical to what they were before.
+
+**What that costs is on the record**: nothing now reports a cumulative total at
+a past month. The card prints the figure now, the bars say when things arrived,
+and the value *at* March is gone. It was the least useful of the three readings
+and it is the one that went.
+
+`cumulativeByMonth` went with it — see *Dead code*, below.
+
+### `countByMonth`, and what it may not claim
+
+**A stamp outside the window counts nowhere**, on either side of it. A running
+total has to count everything that already existed toward its earliest point; a
+bar labelled *March* must not absorb four years of history into its first
+column.
+
+The consequence has to be said where a reader meets it: **the bars do not sum to
+the total printed beside them.** They sum to what arrived in the last twelve
+months. Both charts' hosts say so, and `npm test` pins the gap.
+
+### The same chart on a household page
+
+*Items added · last 12 months*, in the left column of a household's page. Same
+component, different rows.
+
+**Per month for the same reason, sharpened**: the page's question is whether the
+pantry is alive, and a cumulative count would make an abandoned household
+indistinguishable from a finished one. Empty columns say *when* it went quiet,
+which is the fact `dormant` reduces to a flag.
+
+**`addedAtOf`, never `changedAtOf`.** An item edited last week did not arrive
+last week, and a chart that said so would make every active household look like
+it was still filling up.
+
+**It counts arrivals and cannot see departures** — nothing records a removed
+item — so it does not sum to `holds.items` either, for a second reason on top of
+the window. The card's footer says so in its own words rather than in a tooltip,
+because it is a property of the chart and not of any one month.
+
+**`MonthBars` is one component in two hosts**, owning the plot and not the card:
+Overview draws its own heading, the household page uses that page's `Card` and
+`Label`. The console already paid for a component wired into one of two hosts,
+with the *Admin* row that was missing from the rail's account flyout.
+
+### What the platform's chart module does on degenerate data
+
+Two defects that only a numeric probe finds, and neither is visible to a
+typecheck, a class diff or an artifact read:
+
+- **`niceTicks` divides the range into five, and a household is not divisible.**
+  A space whose busiest month added one draws an axis reading
+  `0 · 0.25 · 0.5 · 0.75 · 1`. For a *cumulative* series that was rare; for a
+  per-month count it is the ordinary case. Ticks are filtered to whole numbers.
+- **A completely quiet twelve months returns five ticks all valued `0` with a
+  `null` `y`, and `NaN` bar heights.** Five gridlines collapse onto the top of
+  the plot, with a duplicate key. Ticks are deduped by value and fall back to the
+  plot floor; a bar draws only on a positive finite height, which covers the
+  empty month and the empty year in one condition.
+
+Both were exercised across five series shapes — max 0, 1, 2, 4 and 40.
+
+### `clip={false}` costs two things
+
+The household page's chart card cannot clip, because a tooltip inside
+`overflow-hidden` is cropped at the card's edge — the console's Members card,
+the bulk review table and the transfer menu each found that separately.
+
+**The second cost is the one that shipped wrong here**: with nothing clipping
+them, every painted full-bleed child has to round its own corners. The card's
+footer strip is exactly that, and its square corners sat on the card's curve
+until it took a `rounded-b-[19px]` — the card's 20 less its 1px border, which is
+where the inner edge is and the same number the Members card's last row uses.
+
+### Dead code, removed
+
+**`cumulativeByMonth` lost its only caller** when the sparklines came out, and it
+is gone. Two near-identical month-bucketing functions where one is unused is a
+real trap: pick the wrong one for a chart and it still returns twelve plausible
+numbers.
+
+**A guard inside `countByMonth` was written and removed the same day.** It
+excluded a blank stamp by length, and it survived every mutation aimed at it —
+the lookup is by exact month, so a key no month can equal is never asked for.
+That is the same finding that retired the `if (! userId)` in `isAdminId`: a
+condition nothing can make false is documentation wearing a keyword. The
+exclusion is structural, the tests pin the behaviour rather than the mechanism,
+and a later change to a range lookup fails them.
+
+### Rejected
+
+- **Sparklines in the stat cards.** Built whole, removed the same day. See
+  above; the argument for them was sound and the screen disagreed.
+- **A cumulative line and monthly bars in one plot.** Two y-scales — a total of
+  40 against a monthly 3 — is a dual-axis chart, which is hard to read on
+  purpose.
+- **A `Total` / `New` toggle on one card.** Keeps both readings and the designed
+  slot, and puts momentum behind a press. The argument for the bars is that a
+  stall should be *loud*, which a toggle undoes.
+- **A one-pixel stub for a month with nothing in it.** An empty column standing
+  on a visible axis reads as zero; a stub says a little of something happened.
+- **The platform's own `Sparkline`.** Fixed width in a fluid card, and it sets
+  `role="img"` with no `aria-label`, which announces as an unlabelled image.
+- **Making a bucket bar pressable.** See above.
+
+### Open
+
+- **Counting is still a scan.** Six of eight console queries read whole tables
+  and these two charts add arithmetic over rows already collected — no new scan,
+  and no new answer to D62's own note that this stops being fine in the low
+  thousands. The fix then is a denormalised counts row, not a smarter query.
+- **Nothing local can show either chart with real shape.** Everything created
+  under `sf dev` lands in the current month, so the bars draw one column, and
+  `?demo` fills one household rather than a space. Both were driven against real
+  handlers by backdating rows through a throwaway endpoint, which is not
+  something a person clicking the app can do.
+- **The household page's chart at 390** is inherited rather than designed, like
+  the rest of the console's mobile.
+- **Trends on a person**, and **activity volume over time** on the Activity
+  screen. The second is cheap and says almost nothing while the writes are held.
+- **Whether `EXTRA`-style bands would suit People** — accounts by household
+  count, which D33 built for and nothing measures.

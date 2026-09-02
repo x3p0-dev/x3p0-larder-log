@@ -8,6 +8,7 @@ import { DrawerAvatar } from './DrawerAvatar';
 import { EmptyState } from './EmptyState';
 import { HouseholdTile } from './HouseholdTile';
 import { RoleMenu } from './RoleMenu';
+import { MonthBars } from './MonthBars';
 import { useAdminHousehold, useAdminWrites, useAdminWritesHeld } from '../hooks/useAdminData';
 import type { Theme } from '../lib/theme';
 import { statusInk } from '../lib/theme';
@@ -107,7 +108,7 @@ export function AdminHousehold({
 		);
 	}
 
-	const { household: h, holds, members, invites, createdAt } = result.data;
+	const { household: h, holds, members, invites, createdAt, series } = result.data;
 	// Amber, not crimson: nothing is gone, a household is stuck (D36's rule).
 	const orphaned = h.noOwner && orphanSeen !== h.id;
 
@@ -265,6 +266,56 @@ export function AdminHousehold({
 								  * be the page apologising three times. */}
 								Permanent. Asks you to type the name.
 							</span>
+						</div>
+					</Card>
+
+					{/*
+					  * **`clip={false}`, and it is the fourth time this app has
+					  * paid for the default.** A popover inside `overflow-hidden`
+					  * is cropped at the card's edge — the console's own Members
+					  * card, the bulk review table and the transfer menu each
+					  * found that separately, and the tooltip below would be
+					  * cropped the same way.
+					  *
+					  * **The price is that the footer has to round its own two
+					  * corners**, which is the second thing `clip={false}` costs
+					  * and the one that is easy to miss: the strip is full-bleed
+					  * and painted, so with nothing clipping it, its square
+					  * corners sit on top of the card's curve. The Members card
+					  * learned this from a hover fill and pays it with a
+					  * `rounded-bl-[19px]` on its last row.
+					  */}
+					<Card clip={false} theme={theme}>
+						<Label theme={theme}>Items added · last 12 months</Label>
+
+						<div class="px-5 pb-4">
+							<MonthBars
+								series={series}
+								lead="Items added per month"
+								one="item" many="items"
+								height={160}
+								theme={theme}
+							/>
+						</div>
+
+						{/*
+						  * **Arrivals, and it says so.** Nothing records a removed
+						  * item, so these columns cannot fall and do not add up to
+						  * the `Items` figure two cards up. The sentence is here
+						  * rather than in a tooltip because it is a property of
+						  * the chart rather than of any one month.
+						  */}
+						<div
+							/* 19, not 20: the card's radius less its 1px border,
+							 * which is where the inner edge actually is. */
+							class="px-5 py-3 text-[12.5px] rounded-b-[19px]"
+							style={{
+								borderTop: `1px solid ${theme.divider}`,
+								background: theme.surfaceAlt,
+								color: theme.textMuted,
+							}}
+						>
+							When things arrived. Removals are not recorded, so this only counts what was added.
 						</div>
 					</Card>
 

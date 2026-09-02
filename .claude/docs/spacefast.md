@@ -5355,3 +5355,423 @@ Two distinct platform failures are now stacked: **the loader rejects every
 artifact delivered since ~15:37 today** (`zero_artifact_mode_invalid`), and
 **version creation times out** (`Runtime API request timed out after 10000ms`).
 The second has to clear before the first can even be tested.
+
+### Version creation recovered on its own — v25, 2026-09-01 22:14
+
+**One of the two stacked failures has cleared, with no action on our side and no
+change to the toolchain.** A single `sf publish --target preview` on the
+env-aside recipe created **v25** (`ver_9c37b4f267c4…`) in **31 seconds**, first
+try — the exact step that had timed out four times a few hours earlier,
+including on a control build. Nothing was retried and no loop was run.
+
+A read-only sweep taken immediately before it found **every external signal
+unchanged** from the evening entry, which is worth recording because none of
+them predicted the recovery:
+
+| check | answer |
+|---|---|
+| newer CLI on npm | **no** — `spacefast` and `@spacefast/zero` both still `0.2.2`, modified Aug 28 |
+| both error codes documented yet | **no** — `zero_artifact_mode_invalid` and `runtime_delivery_lock_timeout` still 404 at their own `type` URIs |
+| new `config_update` versions | **none** — the redelivery loop has stayed dead since 15:44 |
+| `sf doctor` | all green (as it was while broken — still not a signal) |
+| live health | v19, `/api/status` `ok`, anon `households` → `{"state":"guest"}` |
+
+**So `Runtime API request timed out after 10000ms` at `Creating version` is
+transient and self-clearing**, and nothing observable from the client side
+distinguishes "broken" from "recovered" except attempting it. That is the
+practical finding: **the only diagnostic for version creation is version
+creation.** A green doctor means nothing here.
+
+**The env-aside recipe held again, measured rather than assumed:**
+
+| | |
+|---|---|
+| `Synced N server variables` line | **absent** |
+| the four variables' `updatedAt` | all still `15:36:58–59` — untouched |
+| live channel | still `ver_28fb39a4…` at **16:25:38** — never moved |
+| live `/api/status` after the publish | `ok` |
+| `config_update` versions triggered | **zero**, re-checked a minute later |
+| files | 147 (25 uploaded — incremental) |
+
+**v25 carries D64–D68**: 14 tables, 15 queries, 31 mutations, `db.migrations`
+empty, `/api/status` still the only endpoint, built from `a33efbd` on a clean
+tree.
+
+**The second failure is untested and is the one that blocks shipping.** Whether
+the loader still rejects deliveries is unknown for v25: `https://v25--larderlog.view.fast/api/status`
+answers **403 "This space is private"** to an anonymous curl exactly as v24's
+did, with `x-spacefast-runtime: 1` and `x-spacefast-version: ver_9c37b4f2…`, so
+the request reaches the runtime edge and the gate sits in front of the capsule.
+**Still a browser-only check**, from the dashboard link that carries the signed
+`__=` token — the friction already logged above, now hit a second time on the
+one test that would authorize a promotion.
+
+**Do not promote v25 until that check answers `ok`.** v24 taught the cost: a
+promote applies the migration, the runtime 422s on every capsule call, and a
+signed-in user gets a permanent `Loading…` until somebody rolls back — and
+`sf rollback` is gated behind a person-approval prompt that an agent cannot
+clear, while `sf promote` is not. **The inconsistency is the hazard**: the
+destructive direction is one command and the recovery is not.
+
+**Also still true**: v25 declares the same single `GET /api/status` endpoint
+that the *"read handler cannot carry write-side capabilities"* theory implicates,
+so if v25 422s, the endpoint-less probe written up above is the next step and is
+still a two-line change.
+
+### v25 still 422s, and the endpoint-less probe is staged as v26 — 2026-09-01 22:20
+
+**The browser check on v25 came back 422**, byte-identical to v24's:
+
+```json
+{"code":"zero_artifact_mode_invalid","status":422,
+ "detail":"A read handler cannot carry write-side capabilities.",
+ "type":"https://spacefast.com/docs/errors/zero_artifact_mode_invalid"}
+```
+
+So the two failures are **independent**: version creation recovered on its own
+(v25, v26 both created in ~31s), and the **loader still rejects every delivery**.
+Six versions have now been delivered since ~15:37 and all six are invalid,
+across two different content sets and one byte-identical redelivery of v18.
+
+**The probe priced in the previous entry was therefore run.** Removing the
+`endpoints` block from `server/index.ts` and dropping `endpoint` and `text` from
+the import is a **1-insertion, 5-deletion** change. Typecheck clean, **947
+assertions** pass, and the compiled artifact was diffed leaf-by-leaf against the
+build that produced v25:
+
+| leaf | before | after |
+|---|---|---|
+| `server.endpoints` | `[{"method":"GET","path":"/api/status"}]` | **`[]`** |
+| `sourceManifest.files[103]` (`server/index.ts`) | 168836 B | 168723 B |
+
+**Nothing else moved**: 14 tables, 15 queries, 31 mutations, `db.migrations` `[]`,
+schema, bundles and `realtime` all identical. (The `sourceManifest.env` leaves
+also differ, but only because the v25 baseline was built with `.env.server`
+moved aside — that is the recipe, not the change.)
+
+**v26** = `ver_07fcdb087260…`, `git`, `ready`, unpromoted, 32 seconds, created on
+the env-aside recipe. Live channel still `ver_28fb39a4…` at **16:25:38**, all
+four variables still `15:36:58–59`, live `/api/status` `ok`, **zero**
+`config_update` versions triggered.
+
+**The discriminator has to change for v26, and this is the trap.** v26 declares
+no endpoints, so `/api/status` on its preview host **404s by design** — that is
+the probe working, not the artifact being rejected. The capsule call is the test:
+
+```js
+// devtools console, on the v26 preview origin
+await (await fetch('/__spacefast/zero/run', {method:'POST',
+  headers:{'content-type':'application/json'},
+  body:JSON.stringify({op:'query.run',name:'households',args:[]})})).text()
+```
+
+A real `query.result` envelope means **the artifact was accepted and the single
+`GET` endpoint was the whole cause** — publishing is unblocked without waiting
+for Spacefast, at the cost of the health check this project's publish checklist
+uses. A 422 means the rejected "mode" is something else entirely and nothing in
+our code can reach it.
+
+**Note the preview runs against the live database**, which the rollback returned
+to eleven tables, so `claims` will throw on v26 regardless — a permanent
+`Loading…` on the run list is expected there and is not evidence either way.
+The `households` call above is unaffected.
+
+### The probe answers: the endpoint was never the cause — 2026-09-01 22:2x
+
+**v26 declares zero endpoints and the capsule is still rejected.**
+
+```json
+POST https://v26--larderlog.view.fast/__spacefast/zero/run  → 422
+{"code":"zero_artifact_mode_invalid",
+ "detail":"Zero artifact mode does not match the invocation mode."}
+```
+
+**So the `endpoint()` write-side-context hypothesis is dead**, and the reasoning
+that produced it was led astray by the error text. Collecting every rejection
+today against how it was called:
+
+| version | endpoints declared | call | `detail` |
+|---|---|---|---|
+| v20–v23 (v18's exact bytes) | 1 | `GET /api/status` | *A read handler cannot carry write-side capabilities.* |
+| v20–v23 | 1 | `POST query.run` | *Zero artifact mode does not match the invocation mode.* |
+| v24, v25 | 1 | `GET /api/status` | *A read handler cannot carry write-side capabilities.* |
+| **v26** | **0** | `POST query.run` | *Zero artifact mode does not match the invocation mode.* |
+
+**The `detail` is a function of the invocation, not of the artifact.** A GET
+yields one sentence and a POST the other, on artifacts with an endpoint and on
+one without. The *"read handler cannot carry write-side capabilities"* wording
+is a generic message attached to a request classified as a read — it was never a
+report about our `endpoint()` handler, and reading it as one cost a probe.
+
+**The lesson, and it is the standing one in a new place**: the detail string
+looked like a claim about our code and was testable, so it got tested — which
+was right. What was missed is that the *same* string had already appeared
+against `GET` on **v18's byte-identical redelivery**, an artifact that had served
+correctly for a day. That alone ruled the endpoint out before the probe was
+built. **Evidence already in this log contradicted the hypothesis it was used to
+support.**
+
+**Where this leaves it**: the rejection is whole-artifact and lands before any
+handler dispatch, on six deliveries across two content sets and one redelivery of
+known-good bytes. **Nothing in the app can affect it, and there is no further
+experiment worth running from here.** The block is entirely Spacefast's loader,
+which changed between Aug 31 ~18:45 and Sep 1 ~15:37 and now rejects everything
+delivered since, while artifacts delivered before it keep serving — which is why
+`sf rollback` restores service and why v19 is still healthy.
+
+`server/index.ts` is restored to `a33efbd`; the endpoint and its imports are back
+and the tree is clean. **v25 and v26 remain staged, `ready` and unpromoted** —
+harmless, and both one `sf promote` from live if deliveries ever start
+validating, though by then a fresh publish would be preferable.
+
+#### For the report — the headline, revised
+
+`zero_artifact_mode_invalid` rejects **every** artifact delivered since ~15:37 on
+2026-09-01, including a byte-identical redelivery of a version that had served
+for a day, and including one with no endpoints at all. It is absent from the
+481-code error registry, its `type` URI 404s, `sf logs runtime` is empty because
+nothing runs, and the failing version's capsule metadata is not retrievable
+through the API (`sf versions get <id>` returns the **live** runtime's record
+whichever id is passed). Its two `detail` strings vary by request method rather
+than by cause, which actively misdirects. **A space cannot ship any version, and
+cannot learn why.**
+
+### What the browser console added — 2026-09-01 22:3x
+
+Loading v26 in a real browser produced more than the single `query.run` probe
+did. Each failing request was compared against **live (v19)**, which is the
+control this log has been missing:
+
+| request | live (v19) | v26 | reading |
+|---|---|---|---|
+| `GET /__spacefast_generated/theme.css` | **404** | 404 | **normal** — not a regression, not ours |
+| `GET /site.webmanifest` | 200 | 403 | the **preview privacy gate**, not the app |
+| `POST /__spacefast/comments/ticket` | n/a | 403 | same gate; a platform collab feature |
+| `POST /__zero/run` | **200** | **422** | the rejection |
+| `GET /__zero/realtime/events?limit=100` | **200** | **500** | the rejection, **untyped** |
+
+**Three things worth keeping.**
+
+1. **The client does not use the path this log has been curling.** The SDK calls
+   **`/__zero/run`**; `/__spacefast/zero/run` is the other spelling and both are
+   live-200. Any future check should drive `/__zero/run`, because that is the one
+   a user's browser actually hits.
+2. **The rejection spans subsystems and is not uniformly typed.** Realtime fails
+   with a bare **500**, not the 422 envelope — so a delivery failure can surface
+   with no code, no title and no `type` at all, on an endpoint that answers 200
+   on live in the same second.
+3. **Two suspicious-looking 404/403s are red herrings**, and only the live
+   comparison shows it. Worth doing that comparison first next time.
+
+#### The one `mode` in the artifact, and why it is not being chased
+
+The error is `zero_artifact_mode_invalid` and the artifact contains **exactly one
+`mode`** — `realtime.mode: "central"` (walked the whole JSON; nothing else
+matches). The vocabulary is
+`RUNTIME_REALTIME_MODES = ["central", "cast", "local"]`, and the CLI's own
+bundled default is **`"local"`**, so `central` arrives from the **space's runtime
+config** rather than from anything in this project — there is no `realtime` key
+in `sf.jsonc` and no compiler input for it.
+
+**This is not being treated as the cause, and the reason is the same fact that
+killed the endpoint theory**: v20–v23 were a **byte-identical redelivery of
+v18**, carrying `realtime.mode: "central"`, and v18 had served correctly for a
+day. So `central` is not an invalid value — it was accepted on Aug 31 and
+rejected on Sep 1. The wording is suggestive in the same way *"a read handler
+cannot carry write-side capabilities"* was, and the same counter-evidence
+applies. **Recording it as an observation, not acting on it.**
+
+Changing it would also mean a **settings** change, which mints a
+`config_update` version — the exact operation that triggered this morning's
+redelivery loop. Not worth it on a hypothesis this weak.
+
+#### The codes are absent from the pinned CLI too, not just the public docs
+
+Grepped `node_modules/spacefast/` and `node_modules/@spacefast/`: **neither
+`zero_artifact_mode_invalid` nor `runtime_delivery_lock_timeout` appears
+anywhere.** The CLI bundles its own error registry with recovery hints, and it
+knows exactly the same five as the public one:
+
+```
+zero_artifact_abi_mismatch   { retryable: false, recovery: "fix_input" }
+zero_artifact_invalid        { retryable: false, recovery: "fix_input" }
+zero_artifact_malformed      { retryable: false, recovery: "fix_input" }
+zero_artifact_path_invalid   { retryable: false, recovery: "fix_input" }
+zero_artifact_unreadable     { retryable: false, recovery: "fix_input" }
+```
+
+So the serving runtime mints codes that **neither its documentation nor its own
+pinned client library has ever heard of**. Note the sibling that does exist:
+**`zero_artifact_abi_mismatch`** is precisely the honest code for *"this artifact
+was built by a compiler older than this runtime accepts"*, which is what the
+evidence points at. Emitting an unregistered `mode_invalid` instead sent this
+investigation into two dead ends.
+
+### Docs review — nothing new, and two hypotheses killed properly — 2026-09-01 22:3x
+
+A full pass over the published documentation looking for anything that explains
+or unblocks the delivery failure. **Nothing does**, and the review is worth
+recording mostly for what it rules out.
+
+**The docs have a search API**, which beats crawling `llms.txt`:
+
+```bash
+curl "https://api.spacefast.com/v1/docs/search?q=rollback"
+```
+
+Results are under `data.results`. It found no page for either of our codes.
+
+| checked | result |
+|---|---|
+| npm toolchain | still `0.2.2` (Aug 28) — unmoved |
+| error reference | still *"There are 481 error codes"*; same five `zero_artifact_*`; **neither of our codes** |
+| `zero-runtime.md` (22.5 KB) | **zero occurrences of the word "mode"**, and no read/write handler vocabulary anywhere |
+| status page | **none** — `status.spacefast.com` does not resolve, `/status` 404s |
+| `api.spacefast.com/health` | `ok`, every dependency green, `commitSha ddb7ebd6d5a1…` |
+
+**The changelog is stale and its `.md` twin is broken.** `llms.txt` promises
+*"Add `.md` to any docs URL"* and names
+[`/docs/changelog`](https://spacefast.com/docs/changelog) as *"what shipped and
+when"* — but **`/docs/changelog.md` 404s** (25 KB of HTML, the standing trap),
+and the HTML page's newest entry is **0.0.25, August 21**. It does not list
+`0.2.2` at all. So the one page that would say *"the runtime loader changed on
+Sep 1"* is two weeks and several releases behind, and unreadable as Markdown.
+
+#### Both remaining hypotheses are now dead, on the platform's own data
+
+`sf versions get <id> --json` → `data.runtime.app.capsule.install` settles both:
+
+```json
+"binary": { "compatibilityTarget": { "profile": "linux-x86_64-gnu-v1", … } },
+"realtime": { "production": "central", "local": "foreground-cli-ws" },
+"mysql":    { "migrateAtFinalize": true, "blockIncompatibleRollback": true }
+```
+
+- **Not an ABI drift.** The live runtime targets `linux-x86_64-gnu-v1`, and the
+  pinned CLI hardcodes that exact string (66 occurrences). Both sides agree.
+- **`realtime.mode: "central"` is the platform's own production value**, not
+  ours and not wrong — `install.realtime.production` *is* `central`. The
+  hypothesis recorded above as "observed, not chased" is now positively
+  disproved. **Not chasing it saved a version.**
+
+Also newly visible: **`migrateAtFinalize: true`** (the schema applies at
+finalize, which matches v24 migrating on promote) and
+**`blockIncompatibleRollback: true`** — worth knowing before any future
+promote, though the v24 → v19 rollback across a 14→11 table difference was
+allowed, additive changes being compatible in that direction.
+
+#### The docs state the rule this investigation broke
+
+The error reference says it outright:
+
+> **Match on `code`, never on `detail`.**
+
+That is exactly the discipline the endpoint probe violated — the theory was
+built entirely on the `detail` sentence *"a read handler cannot carry write-side
+capabilities"*, which turned out to vary by HTTP method rather than by cause.
+**The platform documents the rule; we did not follow it.** Worth holding onto
+beyond this incident.
+
+#### And the closest documented code has an unavailable remedy
+
+`zero_artifact_abi_mismatch` — *"The Zero endpoint artifact was built for a
+different runner ABI"* — is the registered code whose **situation** matches
+ours. Its stated resolution:
+
+> Rebuild the Zero project with the current Spacefast CLI and runtime, then
+> publish it again.
+
+**We are on the current CLI.** `0.2.2` is the newest published release, the
+rebuild has been done four times, and the result is the same 422. So even the
+nearest documented failure mode offers a remedy that is already exhausted.
+
+**Conclusion: the docs contain nothing that explains, predicts or resolves this.**
+The serving runtime mints codes absent from its own registry and its own pinned
+client, describes a concept ("artifact mode") that appears nowhere in the runtime
+reference, and the changelog that would date the change stops two weeks short.
+Nothing further to learn from here — **this waits on Spacefast.**
+
+---
+
+## 2026-09-02 — `@spacefast/zero/charts` on small and degenerate data
+
+**bug / friction.** Three findings from building two counting charts against the
+platform's chart module. None is documented — the module is not in the runtime
+reference at all, so all of this is read off `dist/charts.js`.
+
+### 1. `niceTicks` produces fractional ticks for integer data — *bug*
+
+`barChartLayout` and `lineChartLayout` both divide the range into five. For a
+chart counting **things**, the small cases are unusable:
+
+| series max | ticks returned |
+|---|---|
+| 1 | `[0, 0.25, 0.5, 0.75, 1]` |
+| 2 | `[0, 0.5, 1, 1.5, 2]` |
+| 4 | `[0, 1, 2, 3, 4]` |
+
+A count of households is not divisible, so the first two axes read as nonsense.
+This is not an edge case for us: the chart is *new households per month*, and a
+max of one or two is the ordinary state of a small space.
+
+**Worked around** by filtering the returned ticks to whole numbers. That is the
+right answer for a count and the wrong one for a chart of money or averages, so
+the module cannot simply do it — but there is no way to *ask*. An
+`integer: true` input, or exposing `niceTicks`' step choice, would cover it.
+
+### 2. An all-zero series returns `null` coordinates and `NaN` geometry — *bug*
+
+Twelve months with nothing in them is a completely ordinary state for an
+admin chart, and `barChartLayout` does not survive it:
+
+```js
+barChartLayout({ data: Array.from({length: 12}, (_, i) => ({ label: 'M'+i, added: 0 })),
+                 x: 'label', series: ['added'], height: 200 })
+
+// ticks: [{value: 0, y: null}, {value: 0, y: null}, {value: 0, y: null},
+//         {value: 0, y: null}, {value: 0, y: null}]
+// groups[0].bars[0].height: NaN
+```
+
+Three problems in one return value: **five ticks all valued `0`** (so a
+`key={t.value}` collides), **`y: null` on every one** (SVG reads that as `0`, so
+they stack on the top of the plot rather than sitting on the axis), and
+**`NaN` bar heights**, from dividing by a top tick of zero.
+
+The cause is that `topTick` is `0`, and nothing guards it. A series that is all
+zero has a defensible layout — one tick at the floor and no bars — and returning
+it would save every consumer the same three fixes.
+
+**Worked around** by deduping ticks on value, falling back to the plot floor
+when `y` is not finite, and drawing a bar only when its height is a positive
+finite number. That last condition also covers a single zero month inside an
+otherwise busy year, which returns `height: 0` and is correct.
+
+### 3. `Sparkline` is fixed-width and announces as an unlabelled image — *friction*
+
+```js
+return h("svg", { viewBox: `0 0 ${width} ${height}`, width, height,
+                  class: "inline-block", role: "img" }, …)
+```
+
+Two things make it hard to use in a card:
+
+- **`width` is a hard attribute**, defaulting to 96, so it cannot fill a fluid
+  container without a CSS override reaching into the component's own `<svg>`.
+- **`role="img"` with no `aria-label` and no way to pass one.** An `img` role
+  with no accessible name is worse than no role at all — a screen reader
+  announces an unlabelled graphic rather than skipping it. `StatTile`'s `trend`
+  goes through the same component.
+
+A `label` prop and honouring `width: '100%'` would fix both. We hand-rolled a
+twelve-point path instead, which is about ten lines.
+
+### What worked
+
+`barChartLayout`'s `groups[].x` being the **band centre**, with bands of exactly
+`plot.width / data.length`, made hit-testing trivial — the columns tile the plot
+with no gaps by construction, which is better than the line layout, where the
+same thing has to be derived from midpoints between points.
+
+And the module genuinely costs nothing against the client bundle, as documented
+for platform modules.

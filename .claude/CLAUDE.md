@@ -40,6 +40,11 @@ control has its states now*, which also lists what is left in its *Gaps*.
 `shared/admin.ts`, refused server-side by `requireAdminWrite` and greyed out on
 both screens that hold them, so the first look at the console cannot delete
 anything. See *The writes are held, and the console is read-only*.
+**It gained two charts on 2026-09-02** (D69) — *Pantry sizes* on Overview and
+*Items added* on a household page — and **lost the cumulative line**, whose slot
+is *New households per month* now. No schema change; the sparklines that went
+into the stat cards with them were built and removed the same day. See *Two
+charts that say what the counts cannot*.
 
 **Built and unpublished: restock (D64), the list override (D65) and shared claims (D66).** A check on the run list is a **claim**
 now, and the count is written once, at the put-away — the trip bar's right half,
@@ -2759,6 +2764,113 @@ Unbuilt on purpose:
 - **Can a household see the Activity rows that touch it?** Still admin-only,
   still unasked.
 
+### Two charts that say what the counts cannot (D69) — 2026-09-02
+
+**Client, `shared/` and one query's return shape**: no schema change, no handler
+added — fourteen tables, fifteen queries, thirty-one mutations,
+`db.migrations` empty, `/api/status` still the only endpoint. `.docs/data-model.md`
+needs nothing; the schema did not move.
+
+**Overview counts households, people and items, and none of the three says
+whether anybody is using the app.** Forty households averaging six items and
+four holding three hundred read identically on the four cards.
+
+- **Pantry sizes** — households by items held, in five bands (`0` · `1–9` ·
+  `10–49` · `50–199` · `200+`), horizontal bars. **The adoption measure**: D67
+  was built because twenty items is a sample dataset and a real pantry is two
+  hundred, and nothing reported whether that wall was cleared. Overview's
+  *holding nothing* count is this chart's first band already.
+- **New households per month** replaced the cumulative line **in its own slot**.
+  A running total only rises, so *are we still growing* arrives as a change in
+  slope; twelve columns say it outright.
+- **Items added · last 12 months** on the household page, the same component
+  over that household's rows. Its question is whether the pantry is alive, which
+  a cumulative count cannot answer — every household's would look alike.
+
+**The rule D69 records: a cumulative total is a *shape*, a per-month count is a
+*chart*.** The sparkline half was built — three stat cards, three scales, which
+is the one thing a shared axis cannot do — and **removed the same day** on
+Justin's own look at it. `StatCard` and its four call sites are **byte-identical
+to what they were before**, checked against `HEAD` rather than assumed.
+
+- **The band labels are derived from the floors**, never written beside them.
+  `ITEM_BUCKET_FLOORS` is the only place a boundary exists; moving one re-labels
+  its neighbours and fails three assertions. `10–49` printed over a rule that
+  admits 50 is a chart that is plausible, stable and off by one forever.
+  **`200` is `BULK_MAX`**, so the top band is a household that took more than
+  one sitting to get there.
+- **`itemBuckets` takes one entry per household, zeros included.** The server
+  walks `households`, not the `itemCount` map — the map holds only households
+  that *have* items, so its values alone leave the first band reading zero
+  forever while *holding nothing* reads two, on one screen. **Reproduced by
+  mutation against the real handler.**
+- **The bands are not controls, and every one is neutral.** Only `empty` has a
+  filter behind it, and *Needs attention* already routes there; amber in this
+  console means *needs attention* and is already saying so about the same rows.
+- **`countByMonth` bars never sum to the total beside them**, because a stamp
+  outside the window counts nowhere. On a household page they undercount twice
+  over: nothing records a removed item, so the columns count arrivals and cannot
+  fall. Both hosts say so; **`addedAtOf`, never `changedAtOf`** — an item edited
+  last week did not arrive last week.
+- **`MonthBars` is one component in two hosts**, owning the plot and not the
+  card. The console already paid for a component wired into one of two hosts,
+  with the rail's missing *Admin* row.
+- **`cumulativeByMonth` is deleted** — the revert took its only caller, and two
+  near-identical month-bucketing functions where one is unused is a trap: the
+  wrong one still returns twelve plausible numbers. **A guard inside
+  `countByMonth` went the same way**, having survived every mutation aimed at
+  it — the lookup is by exact month, so the exclusion is structural. Same
+  finding as the `if (! userId)` in `isAdminId`.
+
+**The platform's chart module is degenerate on small and empty data, and only a
+numeric probe finds it.** `niceTicks` divides the range into five, so a space
+whose busiest month added one draws an axis reading `0 · 0.25 · 0.5 · 0.75 · 1` —
+rare for a cumulative series and **the ordinary case for a per-month count**.
+And a completely quiet twelve months hands back five ticks all valued `0` with a
+**`null` `y`** and **`NaN`** bar heights, so the gridlines collapse onto the top
+of the plot with a duplicate key. Ticks are now integers, deduped, floored; a bar
+draws only on a positive finite height, which covers the empty month and the
+empty year at once. Exercised across max 0, 1, 2, 4 and 40.
+
+**`clip={false}` costs two things and the second one shipped wrong.** The chart
+card cannot clip or the tooltip is cropped — the fourth time this app has met
+that, after the console's Members card, the bulk review table and the transfer
+menu. **The other half is that every painted full-bleed child then has to round
+its own corners**, and the card's footer strip sat square on the card's curve
+until it took `rounded-b-[19px]` — the card's 20 less its 1px border, the same
+number the Members card's last row uses. **Found by looking at it.**
+
+**Verified without a browser**: typecheck clean, **969 assertions**, and every
+rule proved by mutation — a `>` for `>=` on the band floors fails 10, moving a
+floor fails 3 *and re-labels the band*, labelling a single-number band as a range
+fails 1, trusting an unclamped count fails 2 (and showed `NaN` falling through
+every band), writing `countByMonth` as a running total fails 4, and clamping
+out-of-window stamps into the first column fails 3. The artifact is unchanged.
+**137 class literals across three files** diffed against the freshly built
+`.spacefast/zero/public/zero.css` by unescaping the sheet's own selectors —
+printed, never hand-written, and proved each round to catch an injected bogus
+class. The new code adds **no responsive variant**, so there is no byte-offset
+ordering to check.
+
+The **real handlers** were driven over `POST /__spacefast/zero/run` on throwaway
+`sf dev` servers, with a **throwaway endpoint added and removed** each time to
+backdate rows — the artifact's endpoint list printed to prove it went. Six
+households at 0 · 0 · 5 · 12 · 50 · 201 items put one row on each band boundary
+from both sides; six more spread across and *before* the window gave a line of
+`[2,2,2,2,2,4,4,4,4,4,4,6]` against bars of `[1,0,0,0,0,2,0,0,0,0,0,2]`, which
+is the whole argument for the swap measured rather than asserted, with the bars
+summing to 5 where the line ends at 6. A household seeded to
+`[3,0,0,0,5,2,0,0,0,0,0,3]` with one item dated 2023 proved the window
+excludes it and that the bars do not sum to `holds.items`; an empty household
+still returns twelve zeroed months. `adminSummary` and `adminHousehold` both
+still answer `denied` to an anonymous caller.
+
+**Nobody has clicked it**, and **nothing local can show either chart with real
+shape** — every row created under `sf dev` lands in the current month, so the
+bars draw one column, and `?demo` fills one household rather than a space. The
+backdating that made the verification possible is not something a person
+clicking the app can do.
+
 ### Autofill — the name field and search (D63) — 2026-08-31
 
 `.claude/docs/design/autofill.md`, drawn on
@@ -5041,7 +5153,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D67, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62** |
+| `.docs/decisions.md` | D1–D69, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62**; **D69 governs the console's charts — that a cumulative total is a *shape* and a per-month count is a *chart*, that the band labels are derived from their floors so a boundary and its label cannot drift apart, that a distribution's bands are neither controls nor coloured, and that per-month bars never sum to the total beside them — amending D62, whose Overview no longer draws a cumulative line** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |

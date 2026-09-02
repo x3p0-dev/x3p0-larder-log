@@ -27,7 +27,7 @@ import {
 } from '../shared/identity';
 import {
 	ADMIN_HELD_NOTE, ADMIN_HELD_REFUSAL, ADMIN_IDS_VAR, ADMIN_WRITES_HELD, adminWritesHeldFor,
-	cumulativeByMonth,
+	countByMonth, itemBuckets, ITEM_BUCKET_FLOORS,
 	ADMIN_UNDELETABLE_NOTE, ADMIN_UNDELETABLE_REFUSAL,
 	daysBetween, DORMANT_DAYS, isAdminId, isAdminUser, isDormant, isWithinDays, matchScore, monthKey,
 	monthKeysBack, monthLabel, parseAdminIds, SERIES_MONTHS, usDate, usDateFrom, usLongDate,
@@ -1533,26 +1533,83 @@ check('a January now walks back into the previous year', monthKeysBack('2026-01-
 check('a 31st does not skip February', monthKeysBack('2026-03-31T00:00:00.000Z', 2), ['2026-02', '2026-03']);
 check('an unparseable now gives no series at all', monthKeysBack('nonsense'), []);
 
-// Cumulative, not per-month: a household that existed in March still exists in
-// April, and a line labelled *Households* that dips would be a different chart.
+// --- how many arrived in each month ---
+
 const stamps = ['2026-06-02T00:00:00.000Z', '2026-07-11T00:00:00.000Z', '2026-07-30T00:00:00.000Z'];
+const window4 = ['2026-05', '2026-06', '2026-07', '2026-08'];
+check('a month counts only its own arrivals', countByMonth(stamps, window4), [0, 1, 2, 0]);
+check('a month with nothing in it is zero, not missing', countByMonth([], window4), [0, 0, 0, 0]);
+check('and the series is always as long as its months', countByMonth(stamps, window4).length, window4.length);
+
+// The rule that separates this from a running total, which has to count
+// everything that already existed toward its earliest point. A bar cannot: a
+// column labelled *May* that absorbed four years of history would report a
+// month that never happened.
 check(
-	'the series is a running total',
-	cumulativeByMonth(stamps, ['2026-05', '2026-06', '2026-07', '2026-08']),
-	[0, 1, 3, 3]
+	'a stamp from before the window counts toward no bar',
+	countByMonth(['2024-01-01T00:00:00.000Z'], window4),
+	[0, 0, 0, 0]
 );
-// Anything older than the window still counts toward the first bucket — the app
-// did not begin twelve months ago, and a series starting at zero would say so.
+check('and one from after it counts toward none either', countByMonth(['2027-02-01T00:00:00.000Z'], window4), [0, 0, 0, 0]);
+
+// So the bars sum to what arrived *inside* the window, which is smaller than
+// the total the chart sits under. That gap is the thing a reader has to be told
+// about rather than left to reconcile.
+const predating = ['2024-01-01T00:00:00.000Z', ...stamps];
 check(
-	'a stamp older than the window counts from the start',
-	cumulativeByMonth(['2024-01-01T00:00:00.000Z'], ['2026-07', '2026-08']),
-	[1, 1]
+	'the bars sum to arrivals in the window, not to every row',
+	[countByMonth(predating, window4).reduce((a, b) => a + b, 0), predating.length],
+	[3, 4]
 );
+
+check('a blank stamp counts toward no month', countByMonth(['', 'nonsense'], window4), [0, 0, 0, 0]);
+
+// --- pantry sizes: five bands, and every household in exactly one ---
+
+const bandLabels = itemBuckets([]).map((b) => b.label);
+// The labels are derived from the floors, so this is the assertion that stops a
+// band and its own label drifting apart — `10-49` printed over a rule that
+// really admits 50 draws a chart that is plausible and off by one forever.
+check('the labels are derived from the floors', bandLabels, ['0', '1\u20139', '10\u201349', '50\u2013199', '200+']);
+check('and there are as many bands as floors', bandLabels.length, ITEM_BUCKET_FLOORS.length);
+
+/** The five counts alone, which is all the chart draws. */
+function sizeBands(counts: readonly number[]): number[] {
+	return itemBuckets(counts).map((b) => b.households);
+}
+
+// Every boundary from both sides. A `>=` where a `>` belongs still returns five
+// plausible numbers, so the only way to see it is to stand on each edge.
+check('zero is its own band', sizeBands([0]), [1, 0, 0, 0, 0]);
+check('one opens the second', sizeBands([1]), [0, 1, 0, 0, 0]);
+check('nine closes it', sizeBands([9]), [0, 1, 0, 0, 0]);
+check('ten opens the third', sizeBands([10]), [0, 0, 1, 0, 0]);
+check('forty-nine closes it', sizeBands([49]), [0, 0, 1, 0, 0]);
+check('fifty opens the fourth', sizeBands([50]), [0, 0, 0, 1, 0]);
+check('a hundred and ninety-nine closes it', sizeBands([199]), [0, 0, 0, 1, 0]);
+check('two hundred opens the last', sizeBands([200]), [0, 0, 0, 0, 1]);
+check('and the last has no ceiling', sizeBands([50000]), [0, 0, 0, 0, 1]);
+
+// The property the boundaries are really for: nothing is dropped and nothing is
+// counted twice, whatever the distribution.
+const spread = [0, 0, 3, 9, 10, 22, 49, 50, 120, 199, 200, 640];
+check('every household lands in exactly one band', sizeBands(spread), [2, 2, 3, 3, 2]);
 check(
-	'a blank stamp counts nowhere',
-	cumulativeByMonth(['', 'nonsense'], ['2026-07', '2026-08']),
-	[0, 0]
+	'so the bands sum to the households handed in',
+	sizeBands(spread).reduce((a, b) => a + b, 0),
+	spread.length
 );
+
+// The first band is Overview's own *holding nothing* count by another name, and
+// the two sit on one screen. If they can disagree, one of them is lying.
+check('the first band is the empty count', sizeBands(spread)[0], spread.filter((n) => n === 0).length);
+
+// A count is a length, so none of this should ever arrive — but the assumption
+// is load-bearing exactly once, here, so it is made true rather than trusted.
+check('a negative count is not a band of its own', sizeBands([-4]), [1, 0, 0, 0, 0]);
+check('nor is a fractional one rounded up into the next', sizeBands([9.8]), [0, 1, 0, 0, 0]);
+check('and nothing unusable escapes the first band', sizeBands([NaN, Infinity]), [2, 0, 0, 0, 0]);
+check('no households at all is five empty bands', sizeBands([]), [0, 0, 0, 0, 0]);
 
 /** N whole days before an ISO stamp, for the dormancy boundaries above. */
 function daysAgoIso(nowIso: string, days: number): string {
