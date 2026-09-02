@@ -7196,3 +7196,191 @@ this trade for the two twelve-month series.
 - **Counting `trips` rows directly.** The table holds open trips only, so it
   would answer *how many shopping runs are in progress right now* — a real
   number, and not the one the chart is for.
+
+## D73. The run list's type sort is built, measured and reverted — the control is the unsolved half
+
+**Decided:** 2026-09-02
+
+From `.claude/docs/design/run-list-sorting.md`. **Built in full and reverted the
+same day. Nothing ships.** `client/`, `shared/` and `tests/` are byte-identical
+to what they were before the work, checked against `HEAD` rather than assumed —
+the removal is complete rather than hidden behind a flag, which is the trade
+`Save and add another` (D67) and D69's sparklines already made.
+
+**The rule was never the problem. The control was**, and two shapes of it were
+tried and both cost more than the feature was worth.
+
+### What the feature is, and what stays true about it
+
+A source card sorts its rows **out before low, then A–Z**. A–Z is not an order
+anybody chose; it is the order that is cheapest to compute. Every household has
+already told the app an order — the one its **Type** terms sit in — and the run
+list has never read it. Sorting by type inserts one term at the front of the
+sort the card already runs.
+
+Four things were settled by building it and are worth not re-deriving:
+
+- **The grouping is a *partition* of an already-ordered list, not a re-sort.**
+  `runBands` has already put the group out before low then A–Z, so walking it
+  once and appending preserves that inside each section: out-before-low is not
+  dropped, it **demotes from the card to the group**. A version that re-sorts
+  each section reads perfectly and puts the one row you look for first in the
+  wrong place.
+- **Source stays the card.** A trip is bounded by one place you go. A card per
+  type averages 2.4 rows over the sample household's nine types, two of the nine
+  hold one row, and every card mixes three shops so every row has to carry a
+  source dot and a source name. That is the grouping relocated, not removed.
+- **A multi-typed item places under the first of its types in the household's
+  order.** `itemTypes` is already a join table, so this has to be answered the
+  day any type grouping ships. The order already ranks them, so there is no
+  primary-type field and no second decision on the sheet. Drawing the row twice
+  is the version that loses: every count becomes a choice between items and
+  appearances, and a check is a claim about an *item* — you come home with two
+  bags of almonds.
+- **The subhead is `NOT YET` with a dot on it**, at `NOT YET`'s own 34px rather
+  than the design's 26 — two subheads of different heights a card apart is drift.
+  The dot is `themed().dot`, never the header's tint: the card header is the only
+  place a term's colour fills a whole band in this app.
+
+### What killed it: row 2 has no room, and that is measured
+
+At a **docked 1120** — the narrowest width the drawer docks at — the content
+column is **712px**. A three-band segment wearing its words spends **442** of
+it. What is left for everything else is **270**, and *Back to items* plus the
+trip clause plus the row's gaps were already **265**. **Row 2 in list mode has
+about five pixels spare, and it has had them since the segment moved onto it.**
+
+So **anything added to that row costs the segment its words at 1120**, and the
+only question is how much further up the widths the damage runs:
+
+| the row's fixed cost | segment keeps its words from | docked window |
+|---|---|---|
+| 265 — before this | 707 | 1115 |
+| 369 — a 44/86px toggle | 811 | 1219 |
+| 383 — the grid's `SortMenu` | 825 | 1233 |
+
+Both attempts also broke 390 before they were made to fit:
+
+- **The grid's `SortMenu` with two rows in it**, on the argument that a trigger
+  naming its own value is the control this app already has. It cost ~100px, and
+  paying for it meant stripping *Back to items* to a bare chevron — a control
+  losing its label so another control could keep a word you have to press it to
+  read. **Two options is a boolean and a menu is the wrong shape for one**,
+  which the argument for it (*a bare toggle would not name the state it is in*)
+  got backwards: that is true of a bare toggle and false of a pressed one, and
+  `RunListTrigger` is an `aria-pressed` toggle on this same row.
+- **A `Tag` toggle**, tinted `inkBg` when on — the rail's own glyph for the type
+  taxonomy, the console filter chips' own on-state, 44px at 390 and ~86 with its
+  word. It fit, once the exit was shortened to **`‹ Items`** at `compact`, which
+  hands back ~56px of the toggle's ~86 and leaves the segment ~207px of scroller
+  against the ~213 it had with no toggle at all.
+
+**That was the best version and it is still a control nobody asked for on the
+one row that cannot afford one.** Reverted on that judgement rather than on a
+measurement.
+
+### Where to start again
+
+- **The threshold question is live again, and it already has an answer.** The
+  design worked out a rule about *runs* (a subhead heads two or more rows; a card
+  with no runs draws none) and a row-count floor (`7+`), found they give the
+  **same three answers** on the real data, and then discarded both *because the
+  sort control made them unnecessary*. Without a control they are the cheapest
+  version of this feature that exists: Grocery's fourteen rows get their eight
+  clusters, Market's three rows are left alone, **no control, no state, no
+  schema, and nothing on row 2**. It is also the version that most needs an
+  authored term order to be worth having.
+- **Or take it off row 2 entirely.** Grouping is a fact about how a household
+  shops rather than about this device or this minute, which makes *Pantry
+  settings* — beside the low-at default, where scope is in the label — the honest
+  home for it. It costs a column (`households.runSort`) and D27 governs that, but
+  it spends none of the row.
+- **The order has to exist before either is worth much.** The design's own
+  *Where the order lives* is unsettled — the Filter tab's type row cannot
+  comfortably hold both a drag handle and its count at 340px — and it needs a
+  keyboard reorder path with an announcement per step, which nothing in this app
+  has. Until then any type grouping is A–Z, which is a plausible order nobody
+  chose.
+
+### Rejected
+
+- **Leaving `typeSections` in `shared/` with only its tests calling it.** D69
+  deleted `cumulativeByMonth` for exactly this: two near-identical grouping
+  functions where one is unused is a trap, because the wrong one still returns a
+  plausible answer. It is in the history if it is wanted back.
+- **Making the type grouping unconditional.** It would remove the control problem
+  by forcing an order on every household whose types are the untouched seed terms
+  in A–Z — the app guessing at a reason, which the design names as worse than
+  A–Z precisely because A–Z is predictable.
+- **Drawing a multi-typed row once per type**, and **an order per source** — both
+  argued out above and in the design, and both still wrong whatever the control
+  turns out to be.
+
+## D74. A run list card is A–Z, and nothing else
+
+**Decided:** 2026-09-02
+
+Amends **D41's store card** (*"rows out-before-low then A–Z"*) and the line D58
+carried forward with it. One comparator in `shared/runList.ts`; no schema
+change, no handler moved, and the artifact does not move.
+
+A source card sorted **out before low, then A–Z**. That was the *Needs
+restocking* sort reused rather than written twice — a good reason to have
+written it that way and not a reason to keep it.
+
+**A row's status is already on the row**, in a badge with a colour and a word.
+Sorting by it a second time spends the card's entire order restating something
+you can see without moving your eyes, and it pays for that by giving up the one
+property a list you are walking a shop with actually wants: **an order you can
+predict without reading anything.**
+
+Butter is where Butter was last time. It does not climb to the top of the card
+because somebody else took the last one, and it does not fall back down when a
+put-away lands. **Out-before-low makes a row's place depend on a number that
+moves while you are shopping**, which is the same objection the run list already
+answers about a checked row — *reordering a list under someone's thumb is the
+same failure the undo rule names* — applied to the status rather than to the
+tick.
+
+- **The card has one order now instead of two.** `NOT YET` has always been plain
+  A–Z, on the reasoning that nothing down there has a badge, so sorting on a
+  status would be sorting on something the row does not show. The rows above it
+  now agree with it, and one `byName` serves both.
+- **`putAwayRows` inherits it rather than restating it.** The sheet is *the
+  screen you just ticked, read back to you* and it makes good on that by walking
+  the bands, so it changed by not changing. `npm test` pins it there separately
+  anyway, because that is the assertion that would catch the two drifting apart.
+- **The comparator was deleted, not kept.** `RANK` and `byStatusThenName` went
+  with it — D69's rule about `cumulativeByMonth`: two near-identical orderings
+  where one is unused is a trap, because the wrong one still returns a plausible
+  card.
+- **`runList.ts` still belongs in `shared/`**, but not for the reason its
+  docblock gave. The reason was that out-before-low was one sentence the client
+  and the restock sort must not write twice; what keeps it there now is the
+  grouping — which band a row lands in, which sources claim it, and what counts
+  as being on the list at all are each invisible when wrong.
+
+**Nothing else moved.** The cards themselves are still A–Z with the storeless
+one last, the status badge is unchanged, and the three status pills — which
+count stock rather than shopping — never saw this ordering at all.
+
+### The test that did not exist
+
+**The change passed all 1006 assertions on the first run**, which was the
+finding rather than the reassurance: the fixture that pinned the row order was
+Costco's Bacon, Butter and Coffee, and Bacon is out *and* first alphabetically,
+so the two rules agreed on it. A rule nothing discriminates is a rule that can
+be reversed by accident.
+
+Two assertions were added with fixtures written to disagree — an out row whose
+name sorts last must stay last, on the card and on the put-away sheet — and both
+fail when out-before-low is put back.
+
+### Rejected
+
+- **Keeping out-before-low and adding a second sort.** That is D73, which was
+  built and reverted the same day: row 2 in list mode has about five pixels
+  spare at a docked 1120, so any control offering an ordering costs the run
+  segment its words.
+- **Sorting by status only within a type group.** There are no type groups —
+  D73 did not ship.

@@ -3419,8 +3419,8 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 							)}
 
 							{/*
-							  * The list has one fixed order — out before low, then A–Z —
-							  * so offering to change it would be a lie.
+							  * The list has one fixed order — A–Z inside each card
+							  * (D74) — so offering to change it would be a lie.
 							  *
 							  * Pulled to the edge so its padding does not read as a gap.
 							  */}

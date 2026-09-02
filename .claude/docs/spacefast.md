@@ -6097,3 +6097,21 @@ columns with defaults and nullability, indexes, queries, mutations, endpoints,
 and the pending migration list. It is the reason this was a twenty-minute
 detour rather than a production incident. More of the toolchain should point
 people at it.
+
+## 2026-09-02 — `sf publish --dry-run` works again, and the artifact reads cleanly
+
+**good.** The dry run had been refusing with `credential_expired` earlier the
+same day; it succeeded with no `sf login` in between, so whatever expired was
+refreshed on the platform's side. `Files 152`, `Mode website`, `SPA false`.
+
+The artifact confirmed what two entries were waiting on: `memberships.joinedAt`
+present as `string` / `default: ""`, all four `households` indexes present
+(`by_name`, `by_added`, `by_items`, `by_changed`), fifteen tables, fifteen
+queries, thirty-one mutations, `db.migrations: []`, and `/api/status` still the
+only endpoint.
+
+**friction, and it is the standing one.** `--dry-run` is still the only way to
+build `.spacefast/zero/public/zero.css` for a class-literal check, and it is not
+read-only — it rewrites the whole build directory. A `sf build` that produced the
+payload without touching the publish plan would make the cheapest verification
+this project has cheaper still.

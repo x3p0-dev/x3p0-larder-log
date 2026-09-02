@@ -765,8 +765,24 @@ const groups = shopsOnly[0].groups;
 check('groups run A-Z with no-store last', groups.map((g) => g.name), ['Aldi', 'Costco', '']);
 check('the storeless group is identified by a null id', groups[2].storeId, null);
 
-// Out before low, then A–Z. The same sentence the restock sort says.
-check('rows run out first, then A-Z', groups[1].items.map((i) => i.name), ['Bacon', 'Butter', 'Coffee']);
+// **A–Z, and nothing else** (D74).
+check('rows run A-Z', groups[1].items.map((i) => i.name), ['Bacon', 'Butter', 'Coffee']);
+
+/*
+ * Costco's three read the same under either rule — Bacon is out *and* first
+ * alphabetically — so the case that separates them is written out rather than
+ * left to a fixture that happens to agree. **An out row whose name sorts last
+ * stays last**: a status is already on the row in a coloured badge, and the
+ * order is the one thing a list you are walking a shop with wants to be able to
+ * predict without reading anything.
+ */
+const alphabetical = runBands([
+	item('Zucchini', '0', '2', ['s-costco']),   // out
+	item('Apples', '1', '2', ['s-costco']),     // low
+	item('Milk', '0', '1', ['s-costco']),       // out
+], STORES, JUNE)[0].groups[0];
+
+check('a card is A-Z whatever the statuses are', alphabetical.items.map((i) => i.name), ['Apples', 'Milk', 'Zucchini']);
 
 // An item you can buy at either shop belongs on both lists; picking one would
 // be guessing.
@@ -809,7 +825,7 @@ check('make holds one', bands[2].count, 1);
 
 // A band groups by source exactly as the whole list used to.
 check('harvest draws one card', bands[1].groups.map((g) => g.name), ['The Garden']);
-check('and sorts it out-before-low', bands[1].groups[0].items.map((i) => i.name), ['Basil', 'Tomatoes']);
+check('and sorts it A-Z', bands[1].groups[0].items.map((i) => i.name), ['Basil', 'Tomatoes']);
 
 // The storeless group is Buy's, and the test for it is against **every**
 // source: an item naming only The Garden has a source, so it must not also
@@ -2187,9 +2203,9 @@ check('an item above its threshold steps up, never down', restockPrefill('7', '2
 check('a zero threshold still means one on the shelf', restockPrefill('0', '0'), 1);
 check('unparseable counts read as zero, not NaN', restockPrefill('', 'abc'), 1);
 
-// Ordered as the list orders them — kind, then source, then out before low —
-// by walking the bands rather than sorting again. The sheet is the screen you
-// just ticked, read back to you.
+// Ordered as the list orders them — kind, then source, then A–Z — by walking
+// the bands rather than sorting again. The sheet is the screen you just ticked,
+// read back to you, so it inherits D74 rather than restating it.
 const TRIP = runBands(RUN, SOURCED, JUNE);
 const everything = putAwayRows(TRIP, new Set(RUN.map((i) => i.id)));
 
@@ -2199,7 +2215,7 @@ check(
 	['shop', 'shop', 'shop', 'shop', null, 'grow', 'grow', 'make']
 );
 check(
-	'and within a band, source A-Z then out before low',
+	'and within a band, source A-Z then row A-Z',
 	everything.map((r) => `${r.sourceName}:${r.item.name}`),
 	[
 		'Aldi:Coffee', 'Aldi:Frozen Corn',
@@ -2213,6 +2229,20 @@ check(
 // Only the ticked rows, and a row nobody ticked is simply not here.
 check('unticked rows are absent', putAwayRows(TRIP, new Set(['i-Basil'])).map((r) => r.item.name), ['Basil']);
 check('and nothing ticked is no sheet at all', putAwayRows(TRIP, new Set()), []);
+
+// The sheet reads back the card it was opened from, so a status must not
+// reorder it here either.
+check(
+	'the sheet is A-Z too',
+	putAwayRows(
+		runBands([
+			item('Zucchini', '0', '2', ['s-costco']),
+			item('Apples', '1', '2', ['s-costco']),
+		], STORES, JUNE),
+		new Set(['i-Zucchini', 'i-Apples'])
+	).map((r) => r.item.name),
+	['Apples', 'Zucchini']
+);
 
 // **One row per item, never per list row.** Coffee draws on two cards and is
 // one thing to put away; the first band and group to claim it names it, which

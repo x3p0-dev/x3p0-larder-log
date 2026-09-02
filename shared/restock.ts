@@ -82,10 +82,11 @@ const KIND_OF: Record<RunBand['kind'], SourceKind> = { buy: 'shop', harvest: 'gr
 /**
  * The checked rows of a run list, as the sheet draws them.
  *
- * **Ordered exactly as the list orders them** — kind, then source, then out
- * before low — by walking the bands rather than sorting again. The sheet is the
- * screen you just ticked read back to you, and a different order would make you
- * find each row twice.
+ * **Ordered exactly as the list orders them** — kind, then source, then A–Z —
+ * by walking the bands rather than sorting again. The sheet is the screen you
+ * just ticked read back to you, and a different order would make you find each
+ * row twice. It inherits D74 rather than restating it, which is the whole point
+ * of walking the bands.
  *
  * **One row per item, never per list row.** An item you buy at either of two
  * shops draws twice on the list and is one thing to put away, so the first band

@@ -13,10 +13,10 @@
  * rather than a table — there is no way for the list and the pantry to
  * disagree, because they are the same rows read twice.
  *
- * It lives in `shared/` because the ordering rules are domain rules, not
- * presentation: out before low is the same sentence the *Needs restocking* sort
- * says, and a second copy of it client-side would be a second thing to get
- * wrong.
+ * It lives in `shared/` because the grouping rules are domain rules, not
+ * presentation: which band a row lands in, which sources claim it, and what
+ * counts as being on the list at all are all invisible when wrong — a card that
+ * draws the wrong rows still draws a plausible card.
  */
 
 import { listRuleOf } from './listRule';
@@ -25,7 +25,6 @@ import { toSourceKind } from './source';
 import type { SourceKind } from './source';
 
 import { statusKeyFor } from './status';
-import type { StatusKey } from './status';
 import type { Item, Term } from './types';
 
 /**
@@ -61,9 +60,6 @@ export type ShoppingGroup = {
 	 */
 	notYet: Item[];
 };
-
-/** Out first, then low. The same ordering the restock sort uses. */
-const RANK: Record<StatusKey, number> = { out: 0, low: 1, ok: 2 };
 
 /**
  * The key the storeless group collects under.
@@ -285,10 +281,10 @@ export function runBands(
 		if (inBand.length === 0) continue;
 
 		for (const group of inBand) {
-			group.items.sort(byStatusThenName);
-			// The same order, minus the status: nothing here has a badge, so out
-			// before low would be sorting on something the row does not show.
-			group.notYet.sort((a, b) => a.name.localeCompare(b.name));
+			// One order for both halves of the card. `NOT YET` has never been
+			// anything but A–Z, and now the rows above it are not either.
+			group.items.sort(byName);
+			group.notYet.sort(byName);
 		}
 
 		bands.push({ kind, count: seen.get(kind)!.size, groups: inBand.sort(byNameStorelessLast) });
@@ -297,12 +293,27 @@ export function runBands(
 	return bands;
 }
 
-/** Out before low, then A–Z. The *Needs restocking* sort, reused not rewritten. */
-function byStatusThenName(a: Item, b: Item): number {
-	return (
-		RANK[statusKeyFor(a.qty, a.threshold)] - RANK[statusKeyFor(b.qty, b.threshold)]
-		|| a.name.localeCompare(b.name)
-	);
+/**
+ * A–Z, and nothing else (D74).
+ *
+ * **It was out before low, then A–Z** — the *Needs restocking* sort reused
+ * rather than written twice, which was a good reason to have written it and not
+ * a reason to keep it. A row's status is already on the row, in a badge with a
+ * colour; sorting by it a second time spends the card's whole order restating
+ * something you can see, and buys it by giving up the one property a list you
+ * are walking a shop with actually wants.
+ *
+ * **A–Z is the order you can predict without reading anything.** Butter is
+ * where Butter was last time, and it does not climb to the top of the card
+ * because somebody else took the last one. Out-before-low makes a row's place
+ * depend on a number that moves while you shop, which is the same objection
+ * *the whole row is the checkbox* answers about a checked row not moving.
+ *
+ * `NOT YET` has always sorted this way, so the card now has one order rather
+ * than two.
+ */
+function byName(a: Item, b: Item): number {
+	return a.name.localeCompare(b.name);
 }
 
 /** A–Z, with the storeless group last: it is the one you cannot walk into. */
