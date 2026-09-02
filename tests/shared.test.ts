@@ -49,8 +49,8 @@ import {
 } from '../shared/seed';
 import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
-import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
-import { COUNT_WIDTH, padCount, readCount } from '../shared/counts';
+import { TOUCH_GRANULARITY_MS, addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, shouldTouch, stampFrom } from '../shared/stamp';
+import { COUNT_WIDTH, isCounted, padCount, readCount } from '../shared/counts';
 import { ageInDays, isDeletionKind } from '../shared/lifecycle';
 import { needsBuying, runBands, runCount } from '../shared/runList';
 import { putAwayMeta, putAwayRows, restockEntry, restockPrefill } from '../shared/restock';
@@ -1225,6 +1225,71 @@ check('and so does a null one', readCount(null as unknown as string), 0);
 check('a padded count reads back as its number', readCount('000000000042'), 42);
 check('garbage reads as zero rather than NaN', readCount('lots'), 0);
 check('a round trip is the identity', readCount(padCount(1400)), 1400);
+
+// --- *not counted* is not *zero*, and the writer is what needs the difference ---
+//
+// `readCount` collapses the two because its callers are rendering a number.
+// `bumpHousehold` cannot: adding one to an uncounted column would store `1` for
+// a household holding forty and carry that forward through every later bump. So
+// the first write to an uncounted household recounts from its rows instead, and
+// this predicate is the entire trigger for that branch.
+//
+// It is also what stops Overview filing every unrepaired household as empty,
+// ownerless and dormant at once — three plausible wrong numbers on the one
+// screen that exists to flag those exact states.
+check('an unwritten column is not counted', isCounted(''), false);
+check('and neither is a null one', isCounted(null), false);
+check('nor an absent one', isCounted(undefined), false);
+check('a counted zero *is* counted', isCounted(padCount(0)), true);
+check('and so is any real count', isCounted(padCount(40)), true);
+
+// The pair that matters, stated as a pair: these two agree on the number and
+// disagree on whether there is one, which is the whole reason both exist.
+check('both read zero', [readCount(''), readCount(padCount(0))], [0, 0]);
+check(
+	'and only one of them has been counted',
+	[isCounted(''), isCounted(padCount(0))],
+	[false, true]
+);
+
+// --- a household's last-active stamp has a floor, so the stepper stays cheap ---
+//
+// `adjustQty` is the app's hottest write and D44 refuses to exempt it from
+// stamping. Once the household carries a maintained last-active column, ten
+// presses on one card would be ten writes to a second row — for a value whose
+// only consumers, `RECENT_DAYS` and `DORMANT_DAYS`, round it to days.
+
+const NOON = Date.parse('2026-09-02T12:00:00.000Z');
+
+check('an unset stamp is always worth writing', shouldTouch('', NOON), true);
+check('and so is a null one', shouldTouch(null, NOON), true);
+check('an unreadable stamp is rewritten', shouldTouch('whenever', NOON), true);
+check(
+	'a stamp from a second ago is not',
+	shouldTouch(new Date(NOON - 1000).toISOString(), NOON),
+	false
+);
+check(
+	'a stamp a minute old is',
+	shouldTouch(new Date(NOON - TOUCH_GRANULARITY_MS).toISOString(), NOON),
+	true
+);
+check(
+	'and one a second short of a minute is not',
+	shouldTouch(new Date(NOON - TOUCH_GRANULARITY_MS + 1000).toISOString(), NOON),
+	false
+);
+// A clock that has gone backwards would otherwise pin the household to the top
+// of *Last active* until real time caught up — `normalizeStamp`'s own argument,
+// one table over.
+check(
+	'a stamp in the future is rewritten rather than left alone',
+	shouldTouch(new Date(NOON + 60_000).toISOString(), NOON),
+	true
+);
+// The floor has to be smaller than the smallest window that reads the column,
+// or a household could cross into *Active* and the stamp not follow it.
+check('and the floor is far below the windows it protects', TOUCH_GRANULARITY_MS < DAY, true);
 
 // --- terms are A–Z, and that is the only order any of them appear in ---
 //

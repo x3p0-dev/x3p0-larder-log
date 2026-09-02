@@ -11,6 +11,7 @@ import {
 	PAGE_MENU_FIXED, PAGE_MENU_ROW, PAGE_MENU_ROW_DANGER, PAGE_SUNK_ON_ROW,
 	PAGE_SUNK_ON_ROW_UNSET,
 } from '../lib/controlStyles';
+import { andList, plural } from '../../shared/accountDeletion';
 import type { AdminOwnershipDecision, AdminPersonHousehold } from '../../shared/types';
 
 /** The menu's own width and height cap — the two numbers placement needs. */
@@ -64,11 +65,22 @@ export function AccountDeleteDialog({
 	const [chosen, setChosen] = useState<Record<string, string>>({});
 	const [menu, setMenu] = useState('');
 
-	const decide = useMemo(
-		() => households.filter((h) => h.soleOwner),
-		[households]
-	);
-	const rest = households.filter((h) => ! h.soleOwner);
+	/*
+	 * **Three groups, not two, and that is D68's rule reaching the console.**
+	 * This filtered on a `soleOwner` boolean and split the households in half:
+	 * the ones with a question, and *the rest*, which the tail line described as
+	 * *you simply leave them. Nothing to decide.* That sentence is false for a
+	 * household nobody else is in — it is destroyed — and the boolean could not
+	 * tell the two apart, so the console both asked about households it should
+	 * not have and then described the answer wrongly.
+	 *
+	 * `fate` comes off the DTO now, computed by the same `fateOf` the handler
+	 * requires its decisions from, so what this asks and what the server demands
+	 * cannot drift.
+	 */
+	const decide = useMemo(() => households.filter((h) => h.fate === 'decide'), [households]);
+	const goes = useMemo(() => households.filter((h) => h.fate === 'goes'), [households]);
+	const rest = useMemo(() => households.filter((h) => h.fate === 'leave'), [households]);
 
 	const armed = decide.every((h) => chosen[h.id] !== undefined);
 	const disc = statusColor('out', dark);
@@ -150,6 +162,30 @@ export function AccountDeleteDialog({
 						/>
 					))}
 				</div>
+			)}
+
+			{/*
+			  * **A household nobody else is in is destroyed, and it gets its own
+			  * sentence.** The app's own pre-flight draws these as a separate
+			  * group for the stated reason that one sentence covering both fates
+			  * flattens the first into the second — being deleted and being left
+			  * are not the same thing to say about somebody's pantry.
+			  *
+			  * It is a sentence rather than a row with a trigger, because there
+			  * is nothing to choose: nobody is in there to hand it to, which is
+			  * what makes it `goes` rather than `decide`. The item total is here
+			  * so the claim is checkable, which is the one thing this screen must
+			  * not print without.
+			  */}
+			{goes.length > 0 && (
+				<p class="m-0 mt-3 text-[13.5px] leading-[1.5]" style={{ color: theme.textMuted }}>
+					<b class="font-semibold" style={{ color: theme.textStrong }}>
+						{andList(goes.map((h) => h.name))}
+					</b>{' '}
+					{goes.length === 1 ? 'has' : 'have'} nobody else in {goes.length === 1 ? 'it' : 'them'},
+					so {goes.length === 1 ? 'it goes' : 'they go'} with the account —{' '}
+					{plural(goes.reduce((n, h) => n + h.items, 0), 'item')} permanently.
+				</p>
 			)}
 
 			{/*

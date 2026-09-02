@@ -2,10 +2,10 @@ import { ArrowUpRight, ChevronRight } from 'lucide-preact';
 
 import { AdminLoading } from './AdminLoading';
 import { MonthBars } from './MonthBars';
-import { useAdminSummary } from '../hooks/useAdminData';
+import { useAdminSummary, useRepairCounts } from '../hooks/useAdminData';
 import type { Theme } from '../lib/theme';
 import { statusInk } from '../lib/theme';
-import { ADMIN_ROW } from '../lib/controlStyles';
+import { ADMIN_ROW, PAGE_BUTTON_QUIET_SUNK, PAGE_FOCUS_ON_SUNK } from '../lib/controlStyles';
 import { RECENT_DAYS, DORMANT_DAYS } from '../../shared/admin';
 import type { AdminHouseholdFilter, AdminSummaryData } from '../../shared/types';
 
@@ -264,12 +264,93 @@ function NeedsAttention({
 				</button>
 			))}
 
-			<div
-				class="px-5 py-[15px] text-sm"
-				style={{ borderTop: `1px solid ${theme.divider}`, background: theme.surfaceAlt, color: theme.textMuted }}
+			{/*
+			  * **The one thing on this card that is about the console rather than
+			  * about a household.** A household whose rollup columns have never
+			  * been written is left out of every figure above — counting it would
+			  * file it as empty, ownerless and dormant at once, which is three
+			  * wrong numbers on the screen whose job is flagging exactly those
+			  * states. So it is said plainly here instead.
+			  *
+			  * It is not a row, because a row is a link into a filtered list and
+			  * there is no filter for *not counted* — the state is invisible to
+			  * the list on purpose. And it is not amber: amber here means a
+			  * household needs attention, and this is the console admitting it
+			  * does not know yet.
+			  *
+			  * **The control ships with the sentence, and that is the whole
+			  * lesson.** It went out once as copy alone — *Run the repair* with
+			  * nothing to press — which is an instruction pointing at a mutation
+			  * only a `curl` could reach. A sentence that names a fix has to be
+			  * beside the thing that performs it, or it is worse than saying
+			  * nothing: it tells somebody their console is broken and leaves them
+			  * without the one thing that would mend it.
+			  */}
+			{data.uncounted > 0
+				? <RepairStrip count={data.uncounted} theme={theme} />
+				: (
+					<div
+						class="px-5 py-[15px] text-sm"
+						style={{ borderTop: `1px solid ${theme.divider}`, background: theme.surfaceAlt, color: theme.textMuted }}
+					>
+						{rows.length ? 'Nothing else needs you.' : 'Nothing needs you.'}
+					</div>
+				)}
+		</div>
+	);
+}
+
+/**
+ * The uncounted households, and the button that fixes them.
+ *
+ * **Absent whenever the count is zero**, which is D30's rule and the reason this
+ * is not a permanently disabled control in Settings: the expected state of this
+ * strip is not existing at all. Every household created since D76 is counted at
+ * birth, so a non-zero count means either households that predate the columns —
+ * one publish, once — or drift, which is a bug rather than a routine.
+ *
+ * **It is not a confirm.** D36 governs things that go away and nothing here
+ * does: the repair recomputes columns from the rows that are already the truth,
+ * it is idempotent, and running it twice costs a walk. A dialog in front of it
+ * would be asking permission to make the screen correct.
+ *
+ * **No toast either.** The figures above are invalidated by the last page and
+ * simply appear — the most visible confirmation this app has, and the reason
+ * four other triggers already refuse one. What the button owes while it works is
+ * only that it is working, which is why the label changes rather than a spinner
+ * arriving.
+ */
+function RepairStrip({ count, theme }: { count: number; theme: Theme }) {
+	const repair = useRepairCounts();
+
+	return (
+		<div
+			class="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-[13px] text-sm"
+			style={{ borderTop: `1px solid ${theme.divider}`, background: theme.surfaceAlt, color: theme.textMuted }}
+		>
+			<span class="flex-1 min-w-[180px] leading-snug">
+				{repair.error || (
+					<>
+						<b class="font-semibold" style={{ color: theme.textStrong }}>
+							{count.toLocaleString()} {count === 1 ? 'household' : 'households'}
+						</b>{' '}
+						{count === 1 ? 'is' : 'are'} not counted yet, and left out of the figures above.
+					</>
+				)}
+			</span>
+
+			{/* `PAGE_BUTTON_QUIET_SUNK`, because this strip is painted
+			  * `surface-alt` and the ordinary quiet hover *is* that colour — away
+			  * from the ground means up on the lighter of the two (D45). The ring
+			  * offsets against the strip rather than the canvas behind it, which
+			  * is the half of the same rule the console shipped wrong twice. */}
+			<button
+				onClick={repair.run}
+				disabled={repair.busy}
+				class={`shrink-0 h-9 px-3.5 rounded-[10px] border text-[13.5px] font-semibold transition-colors active:translate-y-px ${PAGE_BUTTON_QUIET_SUNK} ${PAGE_FOCUS_ON_SUNK}`}
 			>
-				{rows.length ? 'Nothing else needs you.' : 'Nothing needs you.'}
-			</div>
+				{repair.busy ? 'Counting…' : 'Count them'}
+			</button>
 		</div>
 	);
 }

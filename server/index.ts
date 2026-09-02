@@ -2,7 +2,7 @@ import { capsule, query, mutation, endpoint, text, table, string, boolean, id } 
 
 import type { AuthContext, LogContext } from '@spacefast/zero/server';
 import type { ReadDb, WriteDb } from './schema';
-import { AccessError, administers, assertInHousehold, membershipState, requireAdminWrite, requireCapability, requireMembership, signedIn } from './auth';
+import { AccessError, administers, assertInHousehold, membershipState, requireAdmin, requireAdminWrite, requireCapability, requireMembership, signedIn } from './auth';
 
 import { toRole, canInviteRole } from '../shared/roles';
 import { wouldStrandHousehold } from '../shared/membership';
@@ -14,7 +14,8 @@ import { normalizeSize } from '../shared/size';
 import { BULK_MAX } from '../shared/bulkEntry';
 import type { AccountHousehold, HouseholdFate, OwnershipDecision } from '../shared/accountDeletion';
 import { fateOf } from '../shared/accountDeletion';
-import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
+import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, shouldTouch, stampFrom } from '../shared/stamp';
+import { isCounted, padCount, readCount } from '../shared/counts';
 import { ageInDays } from '../shared/lifecycle';
 import type { DeletionKind } from '../shared/lifecycle';
 import {
@@ -248,27 +249,46 @@ export const schema = {
 		ink: string().default(''),
 		addedAt: string().default(''),
 
-		// --- the rollup columns, declared now and not yet maintained ---
+		// --- the rollup columns ---
 		//
 		// D44 refused `households` a `changedAt` because "nothing orders
-		// households by recency". The console does, and computes it today by
-		// scanning four whole tables per load (`lastActiveByHousehold`), which
-		// is exactly what cannot happen at the scale this is being built for.
+		// households by recency". The console does, and it used to answer by
+		// scanning four whole tables on every load (`lastActiveByHousehold`,
+		// now deleted) — which is exactly what cannot happen at the scale this
+		// is being built for. One maintained column replaced that function.
 		//
-		// **Declared before they are written, on purpose.** Adding a column and
-		// an index to a table holding a handful of rows is free; at a million
-		// it is a table rewrite. Nothing reads either of these yet — the
-		// mutations that maintain them are the next stage — so **every row
-		// holds '' and a reader must treat that as "not counted", never as
-		// zero-items or never-active**. `readCount` in `shared/counts.ts` is
-		// that rule for the count; `changedAt` keeps `changedAtOf`'s habit of
-		// falling back rather than believing an empty string.
+		// **`bumpHousehold` is the only thing that may write any of these.**
+		// Thirty hand-written increments would disagree exactly once, and there
+		// is no aggregate to check a counter against, so a wrong one is wrong
+		// forever with nothing to detect it.
+		//
+		// **`''` is *not counted*, and it is never zero.** Every household that
+		// predates these columns holds it and nothing backfills (D44's standing
+		// rule), so a reader that treats it as zero reports those households as
+		// empty, ownerless and dormant at once. `isCounted` in
+		// `shared/counts.ts` is that distinction; `readCount` deliberately
+		// cannot make it, because its callers are rendering a number.
 		//
 		// `itemCount` is **zero-padded** and has to stay that way: text sorts
 		// lexicographically, so an unpadded count puts a 9-item household above
 		// a 10-item one. See `shared/counts.ts`, which owns the width.
+		//
+		// **All four are maintained now.** `bumpHousehold` is the single writer
+		// and it is the only thing that may touch them; `readCount` reads them
+		// and `isCounted` is what separates *this household holds nothing* from
+		// *nothing has counted this household yet*. The two are different facts
+		// and collapsing them reports every unrepaired household as empty.
+		//
+		// `ownerCount` exists rather than being derived from `memberCount`
+		// because *no owner* is one of the three things Overview flags, and
+		// answering it from the membership table is the scan this stage removes.
+		// It is padded like the others for consistency of format, not because
+		// anything sorts by it — a column whose encoding depends on whether
+		// somebody later adds an index is a column that will be got wrong.
 		changedAt: string().default(''),
 		itemCount: string().default(''),
+		memberCount: string().default(''),
+		ownerCount: string().default(''),
 	})
 		.index('by_name', ['name'])
 		.index('by_added', ['addedAt'])
@@ -1092,19 +1112,34 @@ export default capsule({
 		/**
 		 * Overview — four cards, twelve months, and what needs attention.
 		 *
-		 * **This scans the whole space, six tables of it**, and there is no
-		 * cheaper way: Zero's query builder is `collect` / `take` / `first` /
-		 * `paginate` with no aggregate at all, so a count is a scan and there is
-		 * nothing to push down. `by_creation` is what makes it possible without
-		 * a schema change — every table has one, including `households`, which
-		 * declares no index of its own.
+		 * **Four tables now, and it used to be seven.** Every *per-household*
+		 * question — how many items, how many members, is there an owner, when
+		 * was it last touched — is a column on the row this walk already has,
+		 * maintained by `bumpHousehold`. That deleted `lastActiveByHousehold`,
+		 * which read `items`, `locations`, `types` and `stores` **whole** on
+		 * every load; at eighteen seeded terms per household those three term
+		 * tables were the largest block of rows this query touched, and they are
+		 * gone rather than made cheaper.
 		 *
-		 * The cost is linear in the whole database and it is fine at the size
-		 * this app is: a few households, a few hundred items. **It stops being
-		 * fine somewhere in the low thousands**, and the fix when it does is a
-		 * denormalized counts row per household maintained by the mutations that
-		 * already invalidate, not a smarter query — there is no smarter query to
-		 * write. Recorded here rather than discovered later.
+		 * **What is still a scan, and why each one is still here:**
+		 *
+		 * - `households` — the walk itself. Removing it means driving the list
+		 *   off `by_name` / `by_items` / `by_changed` with `paginate`, which is
+		 *   a different piece of work: search becomes a prefix range and each
+		 *   chip becomes its own range read.
+		 * - `memberships` — *People* and *N new people* are counts of **distinct
+		 *   accounts across the space**, and there is no accounts table to ask.
+		 *   A per-household column cannot answer a question whose unit is not a
+		 *   household.
+		 * - `items` — `newItems` needs a per-row stamp inside a window. The
+		 *   total no longer needs the scan; the delta still does.
+		 * - `restocks` — the trips series, for the same reason.
+		 *
+		 * All three of those are month buckets and space totals — stages 3 and
+		 * 4 in `.claude/docs/design/scale.md`, and both are counters, which is
+		 * what the concurrency question gates. Stage 2 is the half that did not
+		 * have to wait for an answer, because these columns are written only by
+		 * the handful of people inside one household.
 		 */
 		adminSummary: query(async (ctx): Promise<AdminSummaryResult> => {
 			if (! administers(ctx)) return { state: 'denied' };
@@ -1142,39 +1177,52 @@ export default capsule({
 				if (! seen || joined < seen) memberFirstSeen.set(m.userId, joined);
 			}
 
-			const itemCount = new Map<string, number>();
-
-			for (const it of items) {
-				itemCount.set(it.householdId, (itemCount.get(it.householdId) ?? 0) + 1);
-			}
-
-			const lastActive = await lastActiveByHousehold(ctx.db, items);
-
-			let noOwner = 0, dormant = 0, empty = 0, active = 0;
-			// One entry per household, **zeros included** — the map only holds
-			// households that have items, so its values alone would drop every
-			// empty one and leave the first band reading zero forever.
+			let noOwner = 0, dormant = 0, empty = 0, active = 0, uncounted = 0;
+			// One entry per household, **zeros included** — a map keyed by the
+			// households that *have* items would drop every empty one and leave
+			// the first band reading zero forever.
 			const sizes: number[] = [];
 
 			// One entry per household here too, and for the same reason `sizes` is:
-			// a household with no memberships at all is an orphan, and reading its
-			// count off the map alone would drop it from the split rather than
-			// counting it as solo.
+			// a household with no memberships at all is an orphan, and counting
+			// only the ones that have some would drop it from the split rather
+			// than counting it as solo.
 			const members: number[] = [];
 
 			for (const h of households) {
-				const items = itemCount.get(h.id) ?? 0;
-				const seen = lastActive.get(h.id) ?? '';
+				/*
+				 * **Every per-household figure below now reads a column** — this
+				 * is the whole of what stage 2 buys. `lastActiveByHousehold` used
+				 * to answer the stamp by reading `items`, `locations`, `types`
+				 * and `stores` *whole*, which at eighteen seeded terms per
+				 * household is the largest single block of rows this query
+				 * touched. It is gone.
+				 *
+				 * `isCounted` rather than `readCount` for the guard, because the
+				 * two states this has to keep apart — *holds nothing* and *has
+				 * never been counted* — are the same number through `readCount`
+				 * and opposite facts on the screen. A household nobody has
+				 * repaired yet is excluded from all four tallies and from both
+				 * distributions, and reported separately, rather than being
+				 * silently filed as an empty, dormant, ownerless pantry.
+				 */
+				if (! isCounted(h.itemCount) || ! isCounted(h.memberCount) || ! isCounted(h.ownerCount)) {
+					uncounted++;
+					continue;
+				}
 
-				if (! owners.has(h.id)) noOwner++;
+				const held = readCount(h.itemCount);
+				const seen = h.changedAt || addedAtOf(h);
+
+				if (readCount(h.ownerCount) === 0) noOwner++;
 				if (isDormant(seen, nowIso)) dormant++;
 				// Not the complement of dormant: 30 days against 90, and an
 				// unmeasured household is neither.
 				if (isActive(seen, nowIso)) active++;
-				if (! items) empty++;
+				if (! held) empty++;
 
-				sizes.push(items);
-				members.push(memberCount.get(h.id) ?? 0);
+				sizes.push(held);
+				members.push(readCount(h.memberCount));
 			}
 
 			const sharing = sharingSplit(members);
@@ -1206,6 +1254,7 @@ export default capsule({
 				noOwner,
 				dormant,
 				empty,
+				uncounted,
 				series,
 				trips: tripsByMonth(restocks, months).map((value, i) => ({
 					month: months[i],
@@ -1246,10 +1295,17 @@ export default capsule({
 			if (! administers(ctx)) return { state: 'denied' };
 
 			const nowIso = new Date().toISOString();
-			const [households, memberships, items] = await Promise.all([
+			/*
+			 * **`items` is not read here any more, and neither are the three term
+			 * tables.** Both the item count and the last-active stamp are columns
+			 * on the row this walk already has, so what is left is the households
+			 * themselves and the memberships — and memberships stay only because
+			 * this list draws faces and searches member names, neither of which
+			 * is a count.
+			 */
+			const [households, memberships] = await Promise.all([
 				collectAll(() => ctx.db.households.withIndex('by_creation')),
 				collectAll(() => ctx.db.memberships.withIndex('by_creation')),
-				collectAll(() => ctx.db.items.withIndex('by_creation')),
 			]);
 
 			const byHousehold = new Map<string, typeof memberships>();
@@ -1260,19 +1316,22 @@ export default capsule({
 				if (list) list.push(m); else byHousehold.set(m.householdId, [m]);
 			}
 
-			const itemCount = new Map<string, number>();
-
-			for (const it of items) {
-				itemCount.set(it.householdId, (itemCount.get(it.householdId) ?? 0) + 1);
-			}
-
-			const lastActive = await lastActiveByHousehold(ctx.db, items);
-
 			const rows: AdminHouseholdRow[] = households.map((h) => {
 				const members = byHousehold.get(h.id) ?? [];
-				const active = lastActive.get(h.id) ?? '';
-				const count = itemCount.get(h.id) ?? 0;
+				const active = h.changedAt || addedAtOf(h);
+				const count = readCount(h.itemCount);
 
+				/*
+				 * **The list is more forgiving than Overview, deliberately.** A
+				 * summary that files an uncounted household as empty publishes a
+				 * wrong number; a *row* that does is one line an administrator is
+				 * looking straight at, beside the household's name, with the
+				 * repair one call away. So the row renders the count it has and
+				 * the flags fall out of it — but `noOwner` is read from the
+				 * memberships that are in hand rather than from `ownerCount`,
+				 * because that is the flag with a destructive fix attached and it
+				 * must never be raised by a column nobody has written.
+				 */
 				return {
 					id: h.id,
 					name: h.name,
@@ -1288,7 +1347,7 @@ export default capsule({
 					lastActive: active,
 					noOwner: ! members.some((m) => toRole(m.role) === 'owner'),
 					dormant: isDormant(active, nowIso),
-					empty: count === 0,
+					empty: isCounted(h.itemCount) && count === 0,
 				};
 			});
 
@@ -1420,8 +1479,11 @@ export default capsule({
 					value,
 				}));
 
-			// The same rule `lastActiveByHousehold` applies across the space, on
-			// one household's own rows: the newest stamp on anything it owns.
+			// The newest stamp on anything this household owns. It is computed
+			// rather than read off `changedAt` because this page has already
+			// paid for all four scoped reads — and because a page about one
+			// household is the right place for the answer to come from the rows
+			// rather than from a counter that could have drifted.
 			let lastActive = '';
 
 			for (const row of [...items, ...locations, ...types, ...stores]) {
@@ -1648,8 +1710,15 @@ export default capsule({
 					if (! household) return [];
 
 					const siblings = memberships.filter((x) => x.householdId === m.householdId);
-					const owners = siblings.filter((x) => toRole(x.role) === 'owner');
-					const soleOwner = toRole(m.role) === 'owner' && owners.length === 1;
+					const owners = siblings.filter((x) => toRole(x.role) === 'owner').length;
+
+					/*
+					 * **`fateOf`, so the dialog asks for exactly what the handler
+					 * requires.** It was `role === 'owner' && owners === 1`, which
+					 * is *only owner* rather than *needs a decision* and made a
+					 * household the person is alone in a question with one answer.
+					 */
+					const fate = fateOf(toRole(m.role), siblings.length, owners);
 
 					return [{
 						id: household.id,
@@ -1658,11 +1727,11 @@ export default capsule({
 						role: toRole(m.role),
 						members: siblings.length,
 						items: itemCount.get(household.id) ?? 0,
-						soleOwner,
+						fate,
 						// Only where the pre-flight will ask. A list of names per
 						// household per person is the whole membership table
 						// arriving to answer a question almost nobody asks.
-						candidates: soleOwner
+						candidates: fate === 'decide'
 							? siblings
 								.filter((x) => x.userId !== userId)
 								.map((x) => ({ id: x.id, name: x.displayName || 'Someone' }))
@@ -1933,6 +2002,21 @@ export default capsule({
 				createdBy: ctx.auth.userId,
 				defaultThreshold: '1',
 				addedAt: stampFrom(now),
+				// **The rollup is seeded here rather than bumped afterwards**,
+				// because this is the one moment all three counts are known
+				// without reading anything: a new household holds no items and
+				// exactly one member, who is its owner. Bumping instead would
+				// mean a read and a second write to reach the same values, and
+				// would send every new household through `bumpHousehold`'s
+				// self-heal on its first item for no reason.
+				//
+				// It is also what keeps the repair a bounded job forever: from
+				// today no household is ever born uncounted, so the set needing
+				// repair is the households that already existed and never grows.
+				changedAt: stampFrom(now),
+				itemCount: padCount(0),
+				memberCount: padCount(1),
+				ownerCount: padCount(1),
 				// Both creation surfaces arrive with one already picked — the first
 				// colour unused across the caller's households. An absent or bogus
 				// one stores '' and takes the id-derived default rather than
@@ -2014,7 +2098,9 @@ export default capsule({
 		updateHousehold: mutation(async (ctx, householdId: string, patch: { name?: string; defaultThreshold?: string; ink?: string }) => {
 			const membership = await requireCapability(ctx, householdId, 'household:settings');
 
-			const next: { name?: string; defaultThreshold?: string; ink?: string } = {};
+			const next: {
+				name?: string; defaultThreshold?: string; ink?: string; changedAt?: string;
+			} = {};
 
 			if (patch.name !== undefined) {
 				if (! isValidName(patch.name)) throw new AccessError('A household needs a name.');
@@ -2028,6 +2114,24 @@ export default capsule({
 			// Colour rides the same capability as the name: both are the one look
 			// every member of the household sees, so both are the owner's.
 			if (patch.ink !== undefined) next.ink = toHouseholdInk(patch.ink);
+
+			/*
+			 * **A deliberate widening of what *last active* means**, and it is
+			 * free. `lastActiveByHousehold` — the scan this column replaces —
+			 * read `items`, `locations`, `types` and `stores`, so renaming a
+			 * household or changing its threshold counted as nothing and a
+			 * household could be renamed weekly and still report as dormant.
+			 * This row is already being written; the stamp rides along.
+			 *
+			 * Written into the same patch rather than through `touchHousehold`
+			 * for exactly that reason — a second call would be a second read and
+			 * a second write of the row already open here.
+			 */
+			const now = Date.now();
+
+			if (shouldTouch((await ctx.db.households.get(membership.householdId))?.changedAt, now)) {
+				next.changedAt = stampFrom(now);
+			}
 
 			await ctx.db.households.update(membership.householdId, next);
 
@@ -2109,6 +2213,11 @@ export default capsule({
 				});
 
 				await syncJoins(ctx.db, membership.householdId, item.id, draft.typeIds ?? [], draft.storeIds ?? []);
+
+				// The maintained count and the last-active stamp, in one call
+				// that owns both. `now` rather than a second clock read, so the
+				// household's stamp and the item's cannot straddle a millisecond.
+				await bumpHousehold(ctx.db, membership.householdId, { items: 1 }, now);
 
 				// The switcher shows an item count, so adding or removing a row
 				// changes the list. `adjustQty` and `updateItem` do not, which is
@@ -2215,6 +2324,18 @@ export default capsule({
 					);
 				}
 
+				// **One bump for the whole batch, not one per row.** Twenty-two
+				// items are one act — the mutation's own premise — and twenty-two
+				// read-modify-writes against the same household row would be
+				// twenty-two chances for the counter to be the thing that goes
+				// wrong on the path built to make bulk entry survivable.
+				await bumpHousehold(
+					ctx.db,
+					membership.householdId,
+					{ items: resolved.length },
+					Date.parse(at)
+				);
+
 				// `households` because the switcher shows an item count — the same
 				// pair `addItem` invalidates, for the same reason.
 				ctx.invalidate('pantry', 'households');
@@ -2319,6 +2440,10 @@ export default capsule({
 					await syncJoins(ctx.db, membership.householdId, item.id, patch.typeIds, patch.storeIds);
 				}
 
+				// No count moved — editing an item is not adding one — and it is
+				// still exactly the activity `dormant` is asking about.
+				await touchHousehold(ctx.db, membership.householdId, Date.now());
+
 				ctx.invalidate('pantry');
 			}
 		),
@@ -2333,12 +2458,20 @@ export default capsule({
 			// and neither deserves to be honored.
 			const step = delta < 0 ? -1 : 1;
 
+			const now = Date.now();
+
 			// The hot path is not exempt: a quantity is information about the item,
 			// so `-1` on a card is a change like any other (D44).
 			await ctx.db.items.update(item.id, {
 				qty: fromInt(toInt(item.qty) + step),
-				changedAt: stampFrom(Date.now()),
+				changedAt: stampFrom(now),
 			});
+
+			// **The one call in the app where the granularity earns its keep.**
+			// `shouldTouch` makes a run of presses on one card a single write to
+			// the household rather than one per press, and the value it is
+			// protecting is only ever read as a number of days.
+			await touchHousehold(ctx.db, membership.householdId, now);
 
 			ctx.invalidate('pantry');
 		}),
@@ -2548,6 +2681,12 @@ export default capsule({
 				 */
 				await endTripsFor(ctx.db, membership.householdId, membership.userId);
 
+				// **The strongest activity signal in the app**, and the whole
+				// reason *Shopping trips* is on Overview: somebody stood in a
+				// kitchen and finished a run. It moves no count — a put-away sets
+				// quantities and adds no rows — so it is a touch.
+				await touchHousehold(ctx.db, membership.householdId, now);
+
 				ctx.invalidate('pantry', 'claims');
 
 				return { count: resolved.length };
@@ -2571,6 +2710,10 @@ export default capsule({
 			// the half of it that is not a question.
 			await clearClaimsForItem(ctx.db, item.id);
 			await ctx.db.items.delete(item.id);
+
+			// After the delete — `bumpHousehold`'s standing rule, and this is
+			// the direction that makes it obvious why.
+			await bumpHousehold(ctx.db, membership.householdId, { items: -1 }, Date.now());
 
 			ctx.invalidate('pantry', 'households', 'claims');
 		}),
@@ -2644,6 +2787,11 @@ export default capsule({
 						})
 						: await ctx.db[tableName].insert({ householdId: owner, name, ink, icon: '', ...stamps });
 
+				// A term is one of the four tables `lastActiveByHousehold` used to
+				// read, so the household's stamp has to move with it or the column
+				// would be a narrower answer than the scan it replaced.
+				await touchHousehold(ctx.db, membership.householdId, Date.now());
+
 				ctx.invalidate('pantry');
 
 				return { id: row.id };
@@ -2691,6 +2839,8 @@ export default capsule({
 
 				await ctx.db[tableName].update(term.id, next);
 
+				await touchHousehold(ctx.db, membership.householdId, Date.now());
+
 				ctx.invalidate('pantry');
 			}
 		),
@@ -2724,6 +2874,8 @@ export default capsule({
 			if (toSourceKind(store.kind) === kind) return;
 
 			await ctx.db.stores.update(store.id, { kind, changedAt: stampFrom(Date.now()) });
+
+			await touchHousehold(ctx.db, membership.householdId, Date.now());
 
 			ctx.invalidate('pantry');
 		}),
@@ -2792,6 +2944,8 @@ export default capsule({
 			if (blocked) throw new AccessError(blocked.body);
 
 			await ctx.db[tableName].delete(term.id);
+
+			await touchHousehold(ctx.db, membership.householdId, Date.now());
 
 			ctx.invalidate('pantry');
 		}),
@@ -2901,6 +3055,16 @@ export default capsule({
 				joinedAt: stampFrom(now),
 			});
 
+			// A joiner is a member, and an owner-role invite makes an owner —
+			// so `noOwner` has to move here too, or an ownerless household
+			// rescued by an invite would stay flagged.
+			await bumpHousehold(
+				ctx.db,
+				invite.householdId,
+				{ members: 1, owners: toRole(invite.role) === 'owner' ? 1 : 0 },
+				now
+			);
+
 			// **First redemption only**, and the guard is the whole point: an
 			// invite is not revoked on use, so a link shared with a family
 			// admits several people. Overwriting on each one would turn *how
@@ -2939,7 +3103,21 @@ export default capsule({
 				);
 			}
 
+			const wasOwner = toRole(target.role) === 'owner';
+
 			await ctx.db.memberships.update(target.id, { role });
+
+			// The member count cannot move here — the same person is still in
+			// the household — but the owner count can, in either direction.
+			// Passing `0` rather than omitting the key is deliberate: it keeps
+			// the column on the self-heal's list, so a household repaired by a
+			// role change comes back with all three counts true rather than one.
+			await bumpHousehold(
+				ctx.db,
+				membership.householdId,
+				{ owners: (role === 'owner' ? 1 : 0) - (wasOwner ? 1 : 0) },
+				Date.now()
+			);
 
 			// D21: a demotion must not leave the invites they minted working —
 			// an owner dropped to editor would otherwise keep minting editors.
@@ -2973,6 +3151,13 @@ export default capsule({
 			await endTripsFor(ctx.db, membership.householdId, target.userId);
 			await ctx.db.memberships.delete(target.id);
 
+			await bumpHousehold(
+				ctx.db,
+				membership.householdId,
+				{ members: -1, owners: toRole(target.role) === 'owner' ? -1 : 0 },
+				Date.now()
+			);
+
 			ctx.invalidate('households', 'household', 'claims', 'account');
 		}),
 
@@ -2996,6 +3181,13 @@ export default capsule({
 			// somebody else holds*) would otherwise make permanent.
 			await endTripsFor(ctx.db, membership.householdId, membership.userId);
 			await ctx.db.memberships.delete(membership.id);
+
+			await bumpHousehold(
+				ctx.db,
+				membership.householdId,
+				{ members: -1, owners: toRole(membership.role) === 'owner' ? -1 : 0 },
+				Date.now()
+			);
 
 			// The list is what the client falls back through: losing this row is
 			// how it learns to show one of the others, or the first-run screen.
@@ -3065,11 +3257,29 @@ export default capsule({
 				throw new AccessError('Choose someone else to hand this household to.');
 			}
 
-			if (toRole(target.role) !== 'owner') {
+			const promoted = toRole(target.role) !== 'owner';
+
+			if (promoted) {
 				await ctx.db.memberships.update(target.id, { role: 'owner' });
 			}
 
 			await ctx.db.memberships.update(membership.id, { role: 'editor' });
+
+			/*
+			 * **Net zero when the target was already an owner, and that is not a
+			 * reason to skip the call.** The caller is always an owner — that is
+			 * what `member:role` means — so the demotion is always `-1`, and the
+			 * promotion is `+1` only when it really happened. A household with
+			 * two owners handing over to the second one ends with one, which is
+			 * the arithmetic rather than an exception to it.
+			 */
+			await bumpHousehold(
+				ctx.db,
+				membership.householdId,
+				{ owners: (promoted ? 1 : 0) - 1 },
+				Date.now()
+			);
+
 			await revokeInvitesBy(ctx.db, membership.householdId, membership.userId);
 
 			ctx.invalidate('households', 'household', 'pantry', 'account');
@@ -3229,7 +3439,10 @@ export default capsule({
 				// re-read-before-you-write rule every other handler follows.
 				const target = members.find((x) => x.id === decision.toMembershipId);
 
-				if (target) await ctx.db.memberships.update(target.id, { role: 'owner' });
+				if (target && toRole(target.role) !== 'owner') {
+					await ctx.db.memberships.update(target.id, { role: 'owner' });
+					await bumpHousehold(ctx.db, householdId, { owners: 1 }, Date.now());
+				}
 			}
 
 			// Everything that is left. A household deleted above has had its
@@ -3248,6 +3461,20 @@ export default capsule({
 				 */
 				await endTripsFor(ctx.db, m.householdId, userId);
 				await ctx.db.memberships.delete(m.id);
+
+				/*
+				 * The household survives and is one member lighter. `m.role` is
+				 * the role this account held there — a sole owner cannot reach
+				 * this line, because a household they solely owned was either
+				 * deleted or transferred above, so the owner count only falls
+				 * where somebody else is still holding it.
+				 */
+				await bumpHousehold(
+					ctx.db,
+					m.householdId,
+					{ members: -1, owners: toRole(m.role) === 'owner' ? -1 : 0 },
+					Date.now()
+				);
 			}
 
 			// The profile's own stamp is the account's birthday as far as this
@@ -3330,6 +3557,18 @@ export default capsule({
 			const before = toRole(target.role);
 
 			await ctx.db.memberships.update(target.id, { role });
+
+			// An administrator is not exempt from the bookkeeping either — the
+			// console's whole purpose is fixing the ownerless households
+			// Overview flags, and a promotion that did not clear the flag would
+			// make the console argue with itself.
+			await bumpHousehold(
+				ctx.db,
+				householdId,
+				{ owners: (role === 'owner' ? 1 : 0) - (before === 'owner' ? 1 : 0) },
+				Date.now()
+			);
+
 			await revokeInvitesBy(ctx.db, householdId, target.userId);
 
 			await logActivity(ctx, {
@@ -3370,6 +3609,13 @@ export default capsule({
 			// somebody else holds*) would otherwise make permanent.
 			await endTripsFor(ctx.db, householdId, target.userId);
 			await ctx.db.memberships.delete(target.id);
+
+			await bumpHousehold(
+				ctx.db,
+				householdId,
+				{ members: -1, owners: toRole(target.role) === 'owner' ? -1 : 0 },
+				Date.now()
+			);
 
 			await logActivity(ctx, {
 				action: 'member.remove',
@@ -3499,7 +3745,9 @@ export default capsule({
 
 			// The promotion first, so there is never an instant with no owner —
 			// which is the state this exists to get a household *out* of.
-			if (toRole(target.role) !== 'owner') {
+			const wasOwner = toRole(target.role) === 'owner';
+
+			if (! wasOwner) {
 				await ctx.db.memberships.update(target.id, { role: 'owner' });
 			}
 
@@ -3515,6 +3763,20 @@ export default capsule({
 				// minting editors through a link already out.
 				await revokeInvitesBy(ctx.db, householdId, m.userId);
 			}
+
+			/*
+			 * **This one ends at exactly one owner, whatever it started at**, so
+			 * the delta is derived from the final state rather than accumulated
+			 * through the loop. A hand-over is not a promotion: every other owner
+			 * was just demoted, and the arithmetic has to say so in one place
+			 * rather than once per iteration.
+			 */
+			await bumpHousehold(
+				ctx.db,
+				householdId,
+				{ owners: 1 - (previousOwners.length + (wasOwner ? 1 : 0)) },
+				Date.now()
+			);
 
 			const household = await ctx.db.households.get(householdId);
 
@@ -3556,6 +3818,116 @@ export default capsule({
 		 * one transaction, but a thrown error partway through is still the worst
 		 * possible moment to discover the third row was malformed.
 		 */
+		/**
+		 * Recompute `households`' rollup columns from the rows that are the truth.
+		 *
+		 * **This is the backfill, and it is a mutation rather than an endpoint on
+		 * purpose.** An `endpoint` gets a full `ServerContext` and **no
+		 * `ctx.auth`** — the finding that stopped the console's own bootstrap
+		 * problem being solvable that way — so an endpoint could not tell an
+		 * administrator from a stranger, and this rewrites every household in the
+		 * space.
+		 *
+		 * **`requireAdmin`, not `requireAdminWrite`.** The hold exists so that the
+		 * first look at the console cannot delete somebody's pantry; a repair
+		 * destroys nothing, and holding it would mean the console's numbers could
+		 * not be made true until the hold came off — which is backwards, since
+		 * reading correct numbers is the whole of what the hold leaves you able to
+		 * do.
+		 *
+		 * **One page per call, with the cursor handed back.** A repair that walked
+		 * a million households inside one mutation would be one request holding
+		 * every row in memory, which is the failure this entire stage exists to
+		 * avoid; and there is no scheduler to hand it to. So the caller loops, and
+		 * `remaining` is deliberately *not* returned — nothing can know how many
+		 * rows are left without walking them, and a fabricated total is worse than
+		 * an honest cursor.
+		 *
+		 * It is idempotent: a household already holding true counts is written
+		 * again with the same values, and `checked` minus `repaired` says how many
+		 * were already right.
+		 */
+		adminRepairCounts: mutation(async (
+			ctx,
+			args: { cursor?: string | null; pageSize?: number } = {}
+		) => {
+			requireAdmin(ctx);
+
+			const pageSize = Math.min(Math.max(Math.floor(args.pageSize ?? REPAIR_PAGE), 1), REPAIR_PAGE);
+
+			const result = await ctx.db.households
+				.withIndex('by_creation')
+				.paginate({ cursor: args.cursor ?? null, numItems: pageSize });
+
+			let repaired = 0;
+
+			for (const household of result.page) {
+				const truth = await recountHousehold(ctx.db, household.id);
+
+				/*
+				 * **The stamp is repaired from the rows too, and it is the reason
+				 * `activityInHousehold` still exists.** A household nothing has
+				 * written since the column arrived has `changedAt` of `''`, and
+				 * reading that as *never active* would report every one of them
+				 * as dormant — the exact shape of wrong this stage is here to
+				 * stop. The expensive scan survives for the one caller that has
+				 * to produce a true answer from nothing.
+				 */
+				const found = await activityInHousehold(ctx.db, household.id);
+
+				const next: Record<string, string> = {
+					itemCount: padCount(truth.items),
+					memberCount: padCount(truth.members),
+					ownerCount: padCount(truth.owners),
+				};
+
+				/*
+				 * **The repair never moves this stamp backwards, and that is not
+				 * a nicety — it is the difference between a repair and a
+				 * regression.** `activityInHousehold` can only see rows that
+				 * still exist: items and the three taxonomies. It cannot see a
+				 * rename, a role change, somebody joining or leaving, or — the
+				 * sharpest case — an item that has been *deleted*, whose stamp
+				 * went with it. All of those move `changedAt` through
+				 * `bumpHousehold`, and every one of them is genuinely more
+				 * recent than anything the scan can find.
+				 *
+				 * Measured rather than reasoned about: a run of membership
+				 * changes left the three counts correct and this stamp the only
+				 * field the repair wanted to rewrite, backwards.
+				 *
+				 * So the rule is *the later of what is stored and what can be
+				 * found*, which still backfills an unset column from the rows —
+				 * the case the repair exists for — while leaving a maintained
+				 * stamp alone. A household with neither has its birth, the
+				 * `addedAtOf` fallback made concrete so nothing downstream has to
+				 * keep falling back.
+				 */
+				const stored = household.changedAt || '';
+
+				next.changedAt = (found > stored ? found : stored) || addedAtOf(household);
+
+				const wasRight =
+					household.itemCount === next.itemCount &&
+					household.memberCount === next.memberCount &&
+					household.ownerCount === next.ownerCount &&
+					household.changedAt === next.changedAt;
+
+				if (! wasRight) repaired += 1;
+
+				await ctx.db.households.update(household.id, next);
+			}
+
+			ctx.invalidate('adminSummary', 'adminHouseholds', 'adminHousehold', 'households');
+
+			return {
+				checked: result.page.length,
+				repaired,
+				cursor: result.isDone ? null : result.continueCursor,
+				done: result.isDone,
+			};
+		}),
+
 		adminDeleteAccount: mutation(async (
 			ctx,
 			userId: string,
@@ -3592,21 +3964,47 @@ export default capsule({
 				throw new AccessError('That account no longer exists.');
 			}
 
-			// Which households this account solely owns — the ones a decision is
-			// required for, recomputed here rather than trusted from the client.
-			const needed: { householdId: string; membershipId: string }[] = [];
+			/*
+			 * **What happens to each household, from `fateOf` — the same function
+			 * the app's own deletion reads, and the same one the dialog draws
+			 * from.** This handler used to carry its own classification, and it
+			 * was missing the `members <= 1` test that D68 names in so many
+			 * words: *tested before the role, and that ordering is the rule —
+			 * testing the role first makes a sole-member household a question,
+			 * which is a screen offering a choice with one answer.*
+			 *
+			 * So the console demanded a decision about a household the target was
+			 * **alone** in, where *transfer* has nobody to name and *delete* is
+			 * the only workable answer — while `deleteMyAccount`, on the very
+			 * same household, filed it as `goes` and destroyed it without asking.
+			 * Two descriptions of *which households are a question*, disagreeing
+			 * exactly once, over somebody's data. There is one now.
+			 */
+			const plan = new Map<string, { fate: HouseholdFate; membershipId: string }>();
 
 			for (const m of mine) {
+				const household = await ctx.db.households.get(m.householdId);
+
+				// A membership pointing at a household that is gone: delete the
+				// row below and decide nothing about a household nobody can reach.
+				if (! household) continue;
+
 				const members = await collectAll(() => ctx.db.memberships
 					.withIndex('by_household', (r) => r.eq('householdId', m.householdId))
 					);
 
-				const owners = members.filter((x) => toRole(x.role) === 'owner');
+				const owners = members.filter((x) => toRole(x.role) === 'owner').length;
 
-				if (toRole(m.role) === 'owner' && owners.length === 1) {
-					needed.push({ householdId: m.householdId, membershipId: m.id });
-				}
+				plan.set(m.householdId, {
+					fate: fateOf(toRole(m.role), members.length, owners),
+					membershipId: m.id,
+				});
 			}
+
+			/** The households that are a *question*, and only those. */
+			const needed = [...plan]
+				.filter(([, entry]) => entry.fate === 'decide')
+				.map(([householdId, entry]) => ({ householdId, membershipId: entry.membershipId }));
 
 			// --- validate everything, then write ---
 
@@ -3662,10 +4060,19 @@ export default capsule({
 			// the only surviving record that the account existed.
 			const goingName = await accountNameOf(ctx.db, userId, ctx.auth);
 
-			for (const [householdId, decision] of answered) {
+			for (const [householdId, entry] of plan) {
+				const decision = answered.get(householdId);
 				const household = await ctx.db.households.get(householdId);
 
-				if (decision.action === 'delete') {
+				/*
+				 * **`goes` is destroyed without being asked about**, and that is
+				 * the half of this fix that is not a refusal. Removing the last
+				 * membership and leaving the household standing manufactures a
+				 * pantry nobody can reach — the exact state D68 was written to
+				 * prevent, and the reason the requirement and the write had to
+				 * move together rather than one at a time.
+				 */
+				if (entry.fate === 'goes' || decision?.action === 'delete') {
 					// Counted before the cascade, and logged as its own entry: a
 					// household deleted this way is as gone as one deleted from its
 					// own page, and the log must not make the two look different.
@@ -3685,6 +4092,8 @@ export default capsule({
 					continue;
 				}
 
+				if (decision?.action !== 'transfer') continue;
+
 				const members = await collectAll(() => ctx.db.memberships
 					.withIndex('by_household', (r) => r.eq('householdId', householdId))
 					);
@@ -3694,7 +4103,13 @@ export default capsule({
 				// Re-found rather than carried from the validation pass: the same
 				// re-read-before-you-write rule every other handler follows.
 				if (target) {
+					const wasOwner = toRole(target.role) === 'owner';
+
 					await ctx.db.memberships.update(target.id, { role: 'owner' });
+
+					if (! wasOwner) {
+						await bumpHousehold(ctx.db, householdId, { owners: 1 }, Date.now());
+					}
 
 					await logActivity(ctx, {
 						action: 'household.transfer',
@@ -3729,6 +4144,17 @@ export default capsule({
 				 */
 				await endTripsFor(ctx.db, m.householdId, userId);
 				await ctx.db.memberships.delete(m.id);
+
+				// `deleteMyAccount`'s own arithmetic, on the console's copy of
+				// the flow. The two handlers are deliberately not one function
+				// (D68), so this is one of the places they have to be kept in
+				// step by hand.
+				await bumpHousehold(
+					ctx.db,
+					m.householdId,
+					{ members: -1, owners: toRole(m.role) === 'owner' ? -1 : 0 },
+					Date.now()
+				);
 			}
 
 			await recordDeletion(ctx.db, 'account', profile ? addedAtOf(profile) : '');
@@ -3992,6 +4418,186 @@ async function accountNameOf(db: ReadDb, userId: string, auth: AuthContext): Pro
 }
 
 /**
+ * The one writer of `households`' four rollup columns, and it has to stay the
+ * only one.
+ *
+ * **Thirty hand-written increments would disagree exactly once**, and a counter
+ * that is wrong is wrong forever with nothing to detect it — there is no
+ * aggregate to check it against, which is the whole reason the column exists.
+ * So the padding, the clamp, the self-heal and the `changedAt` bump live here
+ * and every caller passes a delta.
+ *
+ * **An uncounted column is recomputed rather than assumed to be zero, and that
+ * is the load-bearing line.** Every household on the published space predates
+ * these columns and nothing backfills (D44's standing rule), so the first write
+ * to one of them finds `''`. Adding one to that would store `1` for a household
+ * holding forty and carry the lie forward through every later bump. Instead the
+ * first write pays for a scoped read of that household's own rows and stores
+ * the truth — so the backfill is something the app does to itself as people use
+ * it, and `adminRepairCounts` is for drift and for the households nobody has
+ * touched, rather than a migration everything waits on.
+ *
+ * **The recount is bounded by one household, never by the space.** Three
+ * indexed reads of rows that household already owns, once, and only on the
+ * first write since the column arrived.
+ *
+ * **Call this after the write it is accounting for, never before.** The
+ * self-heal recounts from the rows, so it can only be right if the row in
+ * question is already in its final state; the incremental branch wants the same
+ * order for the mirror-image reason. One rule, and it is the same rule for both
+ * branches, which is why it is a rule rather than a per-caller judgement.
+ *
+ * A household that has been deleted is not an error: `deleteHouseholdRows`
+ * removes memberships and items on its way out, and each of those call sites
+ * would otherwise have to know whether the row above them still exists.
+ */
+async function bumpHousehold(
+	db: WriteDb,
+	householdId: string,
+	delta: { items?: number; members?: number; owners?: number },
+	nowMs: number
+): Promise<void> {
+	const row = await db.households.get(householdId);
+
+	if (! row) return;
+
+	const patch: Record<string, string> = {};
+
+	/*
+	 * `''` is *not counted* and `'000000000000'` is *counted, and zero*. The
+	 * two read identically through `readCount` on purpose — its callers are
+	 * rendering a number — so the writer asks `isCounted` instead, which is the
+	 * distinction this whole function turns on.
+	 */
+	const needsRecount =
+		(delta.items !== undefined && ! isCounted(row.itemCount)) ||
+		(delta.members !== undefined && ! isCounted(row.memberCount)) ||
+		(delta.owners !== undefined && ! isCounted(row.ownerCount));
+
+	if (needsRecount) {
+		const truth = await recountHousehold(db, householdId);
+
+		/*
+		 * **The delta is dropped here, and that is the rule every caller
+		 * depends on: bump *after* the write, never before.** A recount reads
+		 * the rows as they are now, and the row this call is about has already
+		 * been inserted or deleted — so the truth already contains the change
+		 * and applying the delta on top of it would count the same item twice,
+		 * in whichever direction the caller was moving.
+		 *
+		 * Written this way rather than as an ordering rule in ten docblocks,
+		 * because the incremental branch below needs the same ordering and gets
+		 * it for free: it reads the stored count, which was correct before this
+		 * mutation and is stale by exactly one delta either way.
+		 */
+		patch.itemCount = padCount(truth.items);
+		patch.memberCount = padCount(truth.members);
+		patch.ownerCount = padCount(truth.owners);
+	} else {
+		if (delta.items !== undefined) {
+			patch.itemCount = padCount(readCount(row.itemCount) + delta.items);
+		}
+
+		if (delta.members !== undefined) {
+			patch.memberCount = padCount(readCount(row.memberCount) + delta.members);
+		}
+
+		if (delta.owners !== undefined) {
+			patch.ownerCount = padCount(readCount(row.ownerCount) + delta.owners);
+		}
+	}
+
+	/*
+	 * Adding an item is activity. So the count and the stamp move together
+	 * rather than through two calls, which is also what stops a caller from
+	 * remembering one and forgetting the other.
+	 */
+	if (shouldTouch(row.changedAt, nowMs)) patch.changedAt = stampFrom(nowMs);
+
+	await db.households.update(householdId, patch);
+}
+
+/**
+ * *Something happened in here*, with no count attached.
+ *
+ * Editing an item, renaming a term or changing a role does not move any of the
+ * three counts and is still the activity `dormant` is asking about. This is the
+ * cheap half of `bumpHousehold`, and it is cheap in the way that matters:
+ * **`shouldTouch` makes the ordinary case a read and no write at all.**
+ *
+ * `adjustQty` is why that floor exists. It is the app's hottest write, D44
+ * refuses to exempt it from stamping, and without a granularity ten presses on
+ * one card would be ten writes to a second row to move a value whose only
+ * consumers round it to days.
+ */
+async function touchHousehold(db: WriteDb, householdId: string, nowMs: number): Promise<void> {
+	const row = await db.households.get(householdId);
+
+	if (! row || ! shouldTouch(row.changedAt, nowMs)) return;
+
+	await db.households.update(householdId, { changedAt: stampFrom(nowMs) });
+}
+
+/**
+ * A household's three counts, computed from the rows that are the truth.
+ *
+ * The self-heal inside `bumpHousehold` and the whole of `adminRepairCounts`
+ * both read this, so there is one description of what each count means. A
+ * second traversal somewhere else would drift by one definition — *is an owner
+ * also a member?* — and both answers would look right.
+ *
+ * **An owner is a member**, so `owners <= members` always, and `noOwner` is
+ * `owners === 0` rather than anything to do with `members`.
+ */
+async function recountHousehold(
+	db: WriteDb,
+	householdId: string
+): Promise<{ items: number; members: number; owners: number }> {
+	const [items, members] = await Promise.all([
+		collectAll(() => db.items.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.memberships.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+	]);
+
+	return {
+		items: items.length,
+		members: members.length,
+		owners: members.filter((m) => toRole(m.role) === 'owner').length,
+	};
+}
+
+/**
+ * The newest activity anywhere inside a household, computed the expensive way.
+ *
+ * **This is what `households.changedAt` replaced**, and it survives for exactly
+ * one caller: the repair, which has to be able to produce a true stamp for a
+ * household nothing has written since the column arrived. Overview no longer
+ * calls it, which is the point of the whole stage — it read four whole tables
+ * on every load.
+ *
+ * Scoped to one household rather than the space, so it is four indexed reads of
+ * rows that household owns. `lastActiveByHousehold`, which this replaces, took
+ * the same four tables *whole*.
+ */
+async function activityInHousehold(db: WriteDb, householdId: string): Promise<string> {
+	const [items, locations, types, stores] = await Promise.all([
+		collectAll(() => db.items.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.locations.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.types.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.stores.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+	]);
+
+	let newest = '';
+
+	for (const row of [...items, ...locations, ...types, ...stores]) {
+		const iso = changedAtOf(row);
+
+		if (iso && iso > newest) newest = iso;
+	}
+
+	return newest;
+}
+
+/**
  * What a household holds, for a deletion entry's own copy of it.
  *
  * Called **before** the cascade, because afterwards there is nothing left to
@@ -4194,6 +4800,17 @@ function memberNames(
 const ADMIN_PAGE_SIZE = 25;
 
 /**
+ * How many households one `adminRepairCounts` call may rewrite.
+ *
+ * **Smaller than it could be, because each one costs six indexed reads** —
+ * `recountHousehold`'s two and `activityInHousehold`'s four — so a page here is
+ * not a page of rows but a page of scoped scans. Fifty is a few hundred reads
+ * in one request, which is a bounded thing to ask of a runtime with a request
+ * timeout, and the caller loops on the cursor anyway.
+ */
+const REPAIR_PAGE = 50;
+
+/**
  * How many expired audit rows one write may clear.
  *
  * **The log prunes itself as it grows**, because this app has no schedule to
@@ -4219,52 +4836,6 @@ const PRUNE_PER_WRITE = 20;
  */
 const EXPORT_LIMIT = 2000;
 
-/**
- * When each household was last touched, as an ISO stamp.
- *
- * **There is no such column and there should not be one.** D44 gave `households`
- * an `addedAt` and deliberately no `changedAt`, on the grounds that nothing
- * orders households by recency and a rename is not an event anything reacts to.
- * That is still true of the *app*; the console is the first thing that wants an
- * answer, and it can compute one rather than make every mutation in the capsule
- * maintain a column for a screen almost nobody opens.
- *
- * So it is the newest stamp across everything the household owns: its items,
- * and its three taxonomies. `changedAtOf()` falls back through `addedAt` to the
- * platform's `createdAt`, which is what makes a pre-D44 row answer at all — and
- * why a household with rows always reports *something*, while an empty one
- * falls back to when it was created.
- *
- * `items` is passed in because both callers have already scanned it. The three
- * taxonomies are scanned here, once, for the same reason the items are: three
- * `by_creation` passes beat one indexed read per household.
- */
-async function lastActiveByHousehold(
-	db: ReadDb,
-	items: readonly { householdId: string; addedAt: string; changedAt: string; createdAt: string }[]
-): Promise<Map<string, string>> {
-	const newest = new Map<string, string>();
-
-	function note(householdId: string, iso: string) {
-		if (! iso) return;
-
-		const seen = newest.get(householdId);
-
-		if (! seen || iso > seen) newest.set(householdId, iso);
-	}
-
-	for (const it of items) note(it.householdId, changedAtOf(it));
-
-	const [locations, types, stores] = await Promise.all([
-		collectAll(() => db.locations.withIndex('by_creation')),
-		collectAll(() => db.types.withIndex('by_creation')),
-		collectAll(() => db.stores.withIndex('by_creation')),
-	]);
-
-	for (const row of [...locations, ...types, ...stores]) note(row.householdId, changedAtOf(row));
-
-	return newest;
-}
 
 /**
  * One term row as the client sees it.

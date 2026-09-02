@@ -68,6 +68,17 @@ export function AdminAccount({
 	const { person, households, invitesIssued, isSelf } = result.data;
 	const owned = households.filter((h) => h.role === 'owner').length;
 
+	/*
+	 * **The households the deletion will stop for**, and it is deliberately not
+	 * `person.soleOwnerOf`. That figure counts households this account is the
+	 * only *owner* of, which is a true statement and a different question: a
+	 * household nobody else is in has one owner and nothing to decide, because
+	 * *transfer* has nobody to name. The note below promises a screen that asks;
+	 * counting the wrong set made it promise one for households where the only
+	 * possible answer is *delete it*.
+	 */
+	const decideCount = households.filter((h) => h.fate === 'decide').length;
+
 	return (
 		<div class="flex flex-col gap-[22px]">
 			{error && (
@@ -237,11 +248,11 @@ export function AdminAccount({
 							  */}
 							{person.admin
 								? ADMIN_UNDELETABLE_NOTE
-								: person.soleOwnerOf > 0
+								: decideCount > 0
 									? `${isSelf ? 'You are' : 'They are'} the only owner of ` +
-										`${person.soleOwnerOf} ${person.soleOwnerOf === 1 ? 'household' : 'households'} ` +
+										`${decideCount} ${decideCount === 1 ? 'household' : 'households'} ` +
 										`other people use. Deleting asks what happens to ` +
-										`${person.soleOwnerOf === 1 ? 'it' : 'each'} before it goes ahead.`
+										`${decideCount === 1 ? 'it' : 'each'} before it goes ahead.`
 									: 'Removes every membership and the display name. It cannot remove the Spacefast account itself, and the audit log keeps its record of what they did.'}
 						</span>
 					</div>
@@ -299,7 +310,15 @@ function HouseholdRow({
 				</span>
 				<span class="truncate text-meta" style={{ color: theme.textMuted }}>
 					{household.members} {household.members === 1 ? 'member' : 'members'}
-					{household.soleOwner ? ' · the only owner' : ''}
+					{/*
+					  * **Only where being the only owner is the *reason* for
+					  * something**, which is `decide` — a household with other
+					  * people in it that this account alone owns, and therefore
+					  * the one the deletion will ask about. On a household nobody
+					  * else is in it is true and says nothing: `1 member` beside
+					  * it is already the whole story.
+					  */}
+					{household.fate === 'decide' ? ' · the only owner' : ''}
 				</span>
 			</span>
 			<span

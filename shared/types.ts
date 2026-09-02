@@ -12,7 +12,7 @@
 import type { Role } from './roles';
 import type { SourceKind } from './source';
 import type { Claim } from './claim';
-import type { AccountHousehold } from './accountDeletion';
+import type { AccountHousehold, HouseholdFate } from './accountDeletion';
 import type { AdminItemBucket } from './admin';
 
 export type TermKind = 'location' | 'type' | 'store';
@@ -485,6 +485,24 @@ export type AdminSummaryData = {
 	empty: number;
 
 	/**
+	 * Households whose rollup columns have never been written.
+	 *
+	 * **Nothing else on Overview counts them, which is why this exists.** Every
+	 * household created from stage 2 onward is counted at birth, and every one
+	 * that predates the columns holds `''` until `adminRepairCounts` reaches it
+	 * or somebody writes to it. `''` is *not counted*, and reading it as zero
+	 * would file those households as empty, ownerless and dormant all at once —
+	 * three numbers that are wrong, plausible, and on the screen that exists to
+	 * flag exactly those states.
+	 *
+	 * So they are excluded from the four tallies and from both distributions,
+	 * and reported here instead. **Zero is the expected value**, and Overview
+	 * says nothing at all when it is; a non-zero one is a sentence telling an
+	 * administrator to run the repair.
+	 */
+	uncounted: number;
+
+	/**
 	 * Twelve months of *new households*, and **not a running total** — see
 	 * `countByMonth`. These bars sum to what arrived inside the window, never
 	 * to the `households` figure above them, which starts from everything that
@@ -660,20 +678,28 @@ export type AdminPersonHousehold = {
 	members: number;
 	items: number;
 	/**
-	 * They are the only owner, so this household is one the pre-flight must ask
-	 * about before the account can go. It is D22's guard read one household at a
-	 * time — run against every household at once, that rule turns deleting an
-	 * account into a wall for exactly the people most likely to want it.
+	 * What happens to this household when the account goes — `fateOf`'s answer,
+	 * computed server-side from the memberships.
+	 *
+	 * **It replaced a `soleOwner` boolean, and the difference is a real bug.**
+	 * *Only owner* and *needs a decision* are not the same question: a household
+	 * the person is **alone** in has exactly one owner and nothing to decide,
+	 * because *transfer* has nobody to name. The console asked about those
+	 * anyway and refused the deletion until they were answered, while the app's
+	 * own flow filed the identical household as `goes` and destroyed it without
+	 * asking. D68 names that ordering — `members <= 1` before the role — and
+	 * this field is what makes both halves read it.
 	 */
-	soleOwner: boolean;
+	fate: HouseholdFate;
 	/**
 	 * Everyone **else** in that household, for the pre-flight's menu.
 	 *
-	 * Present only where it is needed — a solely-owned household — because it is
-	 * a list of names per household per person, and shipping it for every row
-	 * would be the whole membership table arriving to answer a question almost
-	 * nobody asks. Empty means nobody else is in there, which is a real state
-	 * and leaves *delete it* as the only answer.
+	 * Present only where it is needed — a household whose `fate` is `decide` —
+	 * because it is a list of names per household per person, and shipping it
+	 * for every row would be the whole membership table arriving to answer a
+	 * question almost nobody asks. It is never empty where it is present: a
+	 * `decide` household has other people in it by definition, which is what
+	 * separates it from `goes`.
 	 */
 	candidates: { id: string; name: string }[];
 };

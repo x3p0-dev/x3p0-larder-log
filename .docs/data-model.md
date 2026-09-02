@@ -76,8 +76,10 @@ households: table({
   defaultThreshold: string().default("1"), // numeric-as-string
   ink: string().default(""),              // colour token; "" means unset
   addedAt: string().default(""),          // ours, ISO 8601 UTC — D44
-  changedAt: string().default(""),        // last activity anywhere in it — D70
-  itemCount: string().default(""),        // zero-padded, 12 wide — D70
+  changedAt: string().default(""),        // last activity anywhere in it — D76
+  itemCount: string().default(""),        // zero-padded, 12 wide — D76
+  memberCount: string().default(""),      // ditto
+  ownerCount: string().default(""),       // ditto — drives noOwner with no membership scan
 })
   .index("by_name", ["name"])
   .index("by_added", ["addedAt"])
@@ -85,22 +87,31 @@ households: table({
   .index("by_changed", ["changedAt"])
 ```
 
-`changedAt` and `itemCount` are **declared and not yet maintained**
-([D70](decisions.md#d70-a-read-is-paginated-a-count-is-a-column-and-both-are-decided-before-the-rows-exist)).
-Every row holds `""`, and **`""` means *not counted*, never zero** — a reader
-that takes an empty `itemCount` for zero items reports every household as empty,
-and one that takes an empty `changedAt` for never-active reports every household
-as dormant. `readCount()` in `shared/counts.ts` is that rule, and it owns the
-padding: a count column that is *sorted* has to be zero-padded, because text
-sorts lexicographically and `"10" < "2"`.
+**The rollup** ([D76](decisions.md#d76-a-households-rollup-is-maintained-by-one-writer-and-an-uncounted-column-is-not-a-zero),
+completing the columns D70 declared). Four values maintained by
+`bumpHousehold()` in the capsule, which is the **only** thing permitted to write
+any of them: there is no aggregate to check a counter against, so a counter that
+drifts is wrong forever with nothing to detect it, and thirty hand-written
+increments would disagree exactly once.
 
-They exist now because the cost of adding a column or an index is paid against
-the row count at the time it is added — free on a small table, a rewrite at a
-million. `by_items` and `by_changed` are inert until their columns are written.
+**`""` means *not counted*, and it is never zero.** A reader that takes an empty
+`itemCount` for zero items reports every unrepaired household as empty; one that
+takes an empty `changedAt` for never-active reports every one as dormant.
+`isCounted()` in `shared/counts.ts` is that distinction and `readCount()`
+deliberately cannot make it — its callers are rendering a number. `padCount()`
+owns the width: a count column that is *sorted* has to be zero-padded, because
+text sorts lexicographically and `"10" < "2"`.
 
-**No `changedAt` here, deliberately.** Nothing orders households by recency and
-a rename is not an event anything in the app reacts to. Adding one later is
-additive, so it stays cheap to revisit.
+Every household created from D76 onward is counted at birth, in
+`createHousehold`'s own insert. Everything older is uncounted until either
+`adminRepairCounts` reaches it or a write to it triggers `bumpHousehold`'s
+self-heal, which recounts that household from its rows rather than assuming the
+column was zero. Overview leaves uncounted households out of every figure and
+reports them as `uncounted` instead.
+
+**`bumpHousehold` is called *after* the write it accounts for, never before** —
+the self-heal recounts from rows, so it is only right if the row in question is
+already in its final state.
 
 `ink` is a colour **token** (`color-7`), exactly as `terms.ink` is
 ([D32](decisions.md#d32-a-term-stores-a-color-token-not-a-color)). It was added
@@ -836,6 +847,7 @@ beneath them.
 | `adminDeleteHousehold` | mutation | The full cascade, plus the audit row that records what it held |
 | `adminTransferOwnership` | mutation | Promotes one member and demotes every other owner, in that order |
 | `adminDeleteAccount` | mutation | Every membership and the profile, after one decision per solely-owned household. **Refuses a target named in `LARDER_ADMIN_IDS`**, including the caller's own id and every peer's — the variable is set out of band, so the app deleting the rows would leave it naming an account that no longer exists |
+| `adminRepairCounts` | mutation | Recompute `households`' rollup columns from the rows, one page per call, cursor handed back. **`requireAdmin`, not `requireAdminWrite`** — it destroys nothing, and holding it would mean the console's numbers could not be made true until the hold came off. Idempotent; `checked - repaired` is how many were already right. Reached from Overview's *Needs attention* footer, which offers **Count them** whenever `uncounted` is not zero |
 
 **A console query answers `{ state: 'denied' }` and never throws**, for the
 reason every query here reports rather than throwing. A console *mutation*

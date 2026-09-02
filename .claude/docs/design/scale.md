@@ -236,13 +236,28 @@ Each stage is independently useful and independently publishable.
 |---|---|---|
 | **0** ✅ | `paginate` sweep — all 89 `collect()` calls are `collectAll()` | fixes silent wrong data today; costs nothing; no schema change |
 | **1** ✅ | `households` gains four indexes, plus `changedAt` and `itemCount` unmaintained, plus `shared/counts.ts` | **done before the rows exist.** Additive and cheap now; at 1M rows an index build is an outage |
-| **2** | `changedAt` + `itemCount` + the helper + the repair endpoint | deletes `lastActiveByHousehold`, makes two sorts real |
+| **2** ✅ | `changedAt` + `itemCount` + `memberCount` + `ownerCount`, `bumpHousehold`, `adminRepairCounts` | **done 2026-09-02 (D76).** Deleted `lastActiveByHousehold`; `adminSummary` 7 scans → 4, `adminHouseholds` 6 → 2 |
 | **3** | band and month counters | makes Overview O(1) |
 | **4** | space totals — whichever answer question 3 gets | last, because it is the one with a product decision in it |
 
-**Stage 2 is the next one, and it is blocked on question 1.** Every column it
-adds is a counter, and whether a counter survives concurrency in production is
-the thing local evidence cannot tell us.
+**Stage 2 shipped without an answer to question 1, and the reasoning is worth
+keeping.** Its columns are counters, but they are written **only by the handful
+of people inside one household** — a race needs two members of the same
+household mutating in the same instant, the cost is that household's count being
+off by one, and `adminRepairCounts` fixes it. That is not true of anything in
+stages 3 and 4: a band counter and a month bucket are single space-wide rows
+that every household increments, which at a million households is the steady
+state rather than an edge case.
+
+**So question 1 now gates stages 3 and 4 only**, and the answer-independent
+design for those is on the record: shard each bucket N ways and sum N on read,
+picking the shard by **`sha256` of the household id** — deterministic, so it
+needs no randomness (this runtime has none — D43), and it spreads for free
+because the whole point is that many different households are incrementing the
+same bucket. N is tunable rather than permanent, since a read sums every row
+under the key.
+
+**Stage 3 is the next one.**
 
 **Stage 1 was the one with a deadline** and it is done. Everything else can be built when it is
 needed. Indexes and stamps cannot: a column is permanent, nothing backfills, and

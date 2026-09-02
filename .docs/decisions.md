@@ -6694,6 +6694,36 @@ saying where the switch really is.
   one over with *Transfer ownership* is the route, and nothing points at it from
   the sentence that refuses.
 
+**Amended 2026-09-02 — the console did not read `fateOf`, and for a while
+nothing noticed.** `adminDeleteAccount` carried its own classification,
+`role === 'owner' && owners === 1`, which is *only owner* rather than *needs a
+decision*: the `members <= 1` test this decision names in so many words was
+missing. So the console demanded an answer about a household the target was
+**alone** in — where *transfer* has nobody to name — while `deleteMyAccount`, on
+the identical household, filed it as `goes` and destroyed it without asking.
+Two descriptions of which households are a question, disagreeing exactly once,
+over somebody's data. Both halves read `fateOf` now.
+
+**The fix could not be only the refusal.** A `goes` household has to be
+*destroyed* by the console too; deleting the last membership and leaving the
+household standing manufactures a pantry nobody can reach, which is the state
+this decision exists to prevent. Requirement and write phase moved together, and
+the deletion is logged as `household.delete` so it looks in the audit log
+exactly like one performed from the household's own page.
+
+**And the flag had leaked into the DTO**, where it was doing the same damage one
+layer up: `AdminPersonHousehold.soleOwner` is `fate: HouseholdFate` now, and the
+console's dialog draws the pre-flight's own three groups rather than *the ones
+with a question* and *the rest* — a tail line reading *you simply leave them.
+Nothing to decide* is false about a household that is about to be deleted.
+
+**`soleOwnerOf` was deliberately left alone.** It counts households an account
+is the only owner of, which is true of a solo household and is exactly what the
+People list's *Sole owner* chip claims. The bug there was the account page's
+note **using** that count to promise a screen that asks; it counts the `decide`
+households now, which is the claim it was already making.
+
+
 ---
 
 ## D69. A cumulative total is a shape; a per-month count is a chart
@@ -7490,3 +7520,163 @@ One rule, three rows with different room in them:
   filename already carries both, and an array is what every reader expects to
   find at the top of a file called `calfee-household-2026-09-01.json`.
 - **Offering CSV for *your data*.** See above — it is not a table.
+
+---
+
+## D76. A household's rollup is maintained by one writer, and an uncounted column is not a zero
+
+**Decided:** 2026-09-02
+
+Completes the columns [D70](#d70-a-read-is-paginated-a-count-is-a-column-and-both-are-decided-before-the-rows-exist)
+declared and left inert. `households` carries `itemCount`, `memberCount`,
+`ownerCount` and `changedAt`, all four maintained; `bumpHousehold` is the only
+thing that writes any of them; `adminRepairCounts` recomputes them from the rows.
+
+**This is stage 2 of [`scale.md`](../.claude/docs/design/scale.md), and it is
+the half that did not have to wait for an answer.** That document's blocking
+question — *does a read-modify-write survive concurrency in production?* — is
+still unasked and still unanswerable locally. It does not gate this stage,
+because **these rows are written only by the handful of people inside one
+household**. A race needs two members of the same household mutating in the same
+instant; the cost is that household's count being off by one; and the repair
+fixes it. The counters that genuinely need an answer are the space-wide ones —
+band counters, month buckets, space totals — and none of them is here.
+
+### What it buys, measured rather than claimed
+
+`lastActiveByHousehold` is **deleted**. It read `items`, `locations`, `types`
+and `stores` **whole** on every load of two console screens, and at eighteen
+seeded terms per household those three term tables were the largest block of
+rows either query touched.
+
+| query | before | after |
+|---|---|---|
+| `adminSummary` | 7 table scans | **4** — households, memberships, items, restocks |
+| `adminHouseholds` | 6 table scans | **2** — households, memberships |
+
+**The three that remain in `adminSummary` are not oversights and each has a
+named reason.** `memberships` answers *People* and *N new people*, which are
+counts of **distinct accounts across the space** — a per-household column cannot
+answer a question whose unit is not a household. `items` is read only for
+`newItems`, which needs a per-row stamp inside a window; the total is a column
+sum now. `restocks` is the trips series. All three are month buckets and space
+totals — stages 3 and 4, both counters, both gated on the concurrency question.
+
+`adminHouseholds` still walks `households` itself. Driving that off `by_name` /
+`by_items` / `by_changed` with `paginate` is a distinct piece of work: search
+becomes a prefix range and each chip becomes its own range read.
+
+### `''` is *not counted*, and it is never zero
+
+The load-bearing distinction, and the one that took two functions to state.
+`readCount` collapses `''`, `null` and `'000000000000'` to `0` because its
+callers are rendering a number and cannot act on the difference. **A writer can
+and must**: bumping an uncounted column by one stores `1` for a household
+holding forty, and every later bump carries that forward. `isCounted` is the
+predicate; `readCount` deliberately cannot be made to answer it.
+
+**A reader has to make the same distinction, for a sharper reason.** An
+unrepaired household read as zero is simultaneously empty, ownerless and dormant
+— three plausible wrong numbers on the one screen that exists to flag exactly
+those states. So Overview leaves uncounted households out of every tally and
+both distributions and reports `uncounted` separately, and says so in the
+*Needs attention* footer when it is not zero. **The household list is more
+forgiving on purpose**: a row renders the count it has, because that is one line
+an administrator is looking straight at rather than a published figure — but
+`noOwner` there is still read from the memberships in hand, because it is the
+flag with a destructive fix attached.
+
+### The sentence and the control ship together
+
+**Built wrong once, and the failure is worth keeping.** The uncounted state went
+out as *copy alone* — a footer reading *N households are not counted yet. Run the
+repair.* with nothing to press. `adminRepairCounts` existed and was reachable
+only by a `curl`, so the first person to open Overview on a space with unrepaired
+households got a screen whose figures had gone, an instruction naming a thing
+they had never heard of, and no way to act on it. Reported in exactly those
+words: *I don't know what the repair is.*
+
+Two things follow, and the second is the general one:
+
+- **The button lives beside the sentence**, in the *Needs attention* footer,
+  absent whenever the count is zero (D30). Not a confirm — the repair recomputes
+  columns from rows that are already the truth, and it is idempotent, so a dialog
+  would be asking permission to make the screen correct. No toast either: the
+  figures above are invalidated by the last page and simply appear.
+- **The word *repair* is internal and does not belong in the copy.** The sentence
+  says *not counted yet*; the button says **Count them**. `adminRepairCounts` is
+  the handler's name and it leaked into user-facing text, where it named a
+  concept the reader has no way to hold. **A control whose fix is described in
+  the app's own vocabulary needs no explanation; one named after its handler
+  needs a paragraph.**
+
+**The general rule: a sentence that names a fix is a promise the same screen has
+to keep.** It is worse than saying nothing — it tells somebody their console is
+wrong and leaves them without the one thing that would mend it.
+
+### The self-heal, so the backfill is not a migration everything waits on
+
+Every household created from here on is **counted at birth**, in
+`createHousehold`'s own insert: a new household holds no items and exactly one
+member, who is its owner, so all three are known without reading anything. That
+is also what keeps the repair a bounded job forever — the set needing it is the
+households that already existed and never grows.
+
+Everything older is uncounted until something touches it, and then
+`bumpHousehold` **recounts that household from its rows** rather than assuming
+the column was zero. Six indexed reads, once, bounded by one household. So the
+backfill is something the app does to itself as people use it, and
+`adminRepairCounts` is for drift and for the households nobody has touched.
+
+**`bumpHousehold` is called after the write it accounts for, never before**, and
+the recount drops the delta rather than applying it. Built the other way first:
+the recount added the delta on top of a truth that already contained it, and a
+five-item household reported six. Proved by mutation against the real handler —
+plausible, off by one, and permanent.
+
+### The repair never moves `changedAt` backwards
+
+**Found by measurement, not by reading.** A run of membership changes left all
+three counts correct and the stamp the only field the repair wanted to rewrite —
+backwards. `activityInHousehold` can only see rows that still exist, and a
+rename, a role change, somebody joining or leaving, and an item that has been
+*deleted* are all activity it cannot find. So the repair takes **the later of
+what is stored and what can be found**, which still backfills an unset column
+from the rows while leaving a maintained stamp alone.
+
+### The stepper has a floor, and that is what makes the hot path survivable
+
+`adjustQty` is the app's hottest write and D44 refuses to exempt it from
+stamping. Once the household carries a last-active column it has to move that
+too — so `shouldTouch` writes only when the stored stamp is at least
+`TOUCH_GRANULARITY_MS` (a minute) stale. `RECENT_DAYS` is 30 and `DORMANT_DAYS`
+is 90; a minute of staleness cannot move a household across either line, and ten
+presses on one card are one write rather than ten.
+
+**`updateHousehold` touches too, which widens what *last active* means.** The
+scan this replaced read four tables and none of them was `households`, so a
+household could be renamed weekly and still report as dormant. That row is
+already being written; the stamp rides along.
+
+### Rejected
+
+- **Deriving `ownerCount` from `memberCount`.** *No owner* is one of the three
+  things Overview flags and it is not a function of how many members there are.
+- **Leaving the counts unpadded.** They are not all sorted today, and a column
+  whose encoding depends on whether somebody later adds an index is a column
+  that will be got wrong. One format (D70's twelve digits) for all three.
+- **A repair endpoint.** An `endpoint` gets a full `ServerContext` and **no
+  `ctx.auth`**, so it could not tell an administrator from a stranger, and this
+  rewrites every household in the space.
+- **Putting the repair behind `requireAdminWrite`.** It destroys nothing, and
+  holding it would mean the console's numbers could not be made true until the
+  hold came off — backwards, since reading correct numbers is the whole of what
+  the hold leaves you able to do.
+- **Repairing the whole space in one call.** One request holding a million rows
+  is the failure this stage exists to avoid. One page, cursor handed back, and
+  `remaining` deliberately not returned: nothing can know how many rows are left
+  without walking them, and a fabricated total is worse than an honest cursor.
+- **Letting `bumpHousehold` write the household row from thirty call sites
+  directly.** There is no aggregate to check a counter against, so a wrong one
+  is wrong forever with nothing to detect it, and thirty hand-written increments
+  would disagree exactly once.

@@ -1,4 +1,4 @@
-import { useMemo } from 'preact/hooks';
+import { useCallback, useMemo, useState } from 'preact/hooks';
 import { useMutation, useQuery } from '@spacefast/zero/client';
 
 import type {
@@ -269,6 +269,80 @@ export type AdminWrites = {
 	transferOwnership: (householdId: string, toMembershipId: string) => Promise<string | null>;
 	deleteAccount: (userId: string, decisions: AdminOwnershipDecision[]) => Promise<string | null>;
 };
+
+/**
+ * Recompute the rollup columns for every household that has none.
+ *
+ * **This is a write the hold does not cover, deliberately** (D76). It destroys
+ * nothing, and `ADMIN_WRITES_HELD` exists so that the first look at the console
+ * cannot delete somebody's pantry — holding this one would mean the console's
+ * own numbers could not be made true until the hold came off, which is backwards
+ * when reading correct numbers is the whole of what the hold leaves you able to
+ * do. So it goes through `useMutation` like any other and is **not** part of
+ * `useAdminWrites`, whose six are the held ones.
+ *
+ * **The loop is here rather than in the handler**, because the handler is one
+ * page and hands its cursor back: a mutation that walked a million households in
+ * one request is the failure the whole rollup exists to avoid. The client is the
+ * only place that can hold the loop, and it is bounded by the space rather than
+ * unbounded — `RUNAWAY_PAGES` is the backstop for a cursor that stops advancing,
+ * which `collectAll` guards against on the read side for the same reason.
+ *
+ * There is no toast. Every figure on Overview is invalidated by the last call
+ * and simply appears, which is the most visible confirmation this app has and
+ * the reason four other triggers already refuse one.
+ */
+const RUNAWAY_PAGES = 500;
+
+export type RepairState = {
+	run: () => void;
+	/** Whether a walk is in flight — the control says so and cannot be pressed twice. */
+	busy: boolean;
+	/** The server's own sentence, or '' */
+	error: string;
+};
+
+export function useRepairCounts(): RepairState {
+	const repair = useMutation<
+		[{ cursor?: string | null; pageSize?: number }],
+		{ checked: number; repaired: number; cursor: string | null; done: boolean }
+	>('adminRepairCounts');
+
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+
+	const run = useCallback(() => {
+		if (busy) return;
+
+		setBusy(true);
+		setError('');
+
+		(async () => {
+			try {
+				let cursor: string | null = null;
+
+				for (let page = 0; page < RUNAWAY_PAGES; page++) {
+					const result = await repair({ cursor });
+
+					if (result.done) break;
+
+					// A cursor that has stopped advancing would otherwise walk the
+					// same page until the backstop, reporting progress and making
+					// none.
+					if (! result.cursor || result.cursor === cursor) break;
+
+					cursor = result.cursor;
+				}
+			} catch (err) {
+				setError(err instanceof Error && err.message ? err.message : 'That did not work. Try again.');
+			} finally {
+				setBusy(false);
+			}
+		})();
+	}, [busy, repair]);
+
+	return { run, busy, error };
+}
 
 export function useAdminWrites(): AdminWrites {
 	const setRole = useMutation<[string, string, Role], void>('adminSetRole');

@@ -18,9 +18,12 @@
  * diverge exactly once per undo, which is the whole point.
  *
  * **Every table this app orders by time carries its own pair** — `addedAt` and
- * `changedAt` on `items`, `locations`, `types` and `stores`, `addedAt` alone on
- * `households`, which nothing modifies in a way worth stamping, and `joinedAt`
- * alone on `memberships`, where the one moment worth recording is the join. The
+ * `changedAt` on `items`, `locations`, `types`, `stores` and now `households`,
+ * and `joinedAt` alone on `memberships`, where the one moment worth recording
+ * is the join. `households.changedAt` is the newest and the odd one out: it is
+ * not a stamp of when that row was edited but of when anything *inside* the
+ * household was, which is why `touchHousehold` in the capsule writes it from
+ * ten other mutations and `shouldTouch` below decides when it is worth doing. The
  * platform's `createdAt` survives only as the fallback for rows written before
  * the columns existed, and `updatedAt` is not used at all: it is managed the
  * same way `createdAt` is, so it cannot survive an undo either.
@@ -99,4 +102,43 @@ export function changedAtOf(row: { changedAt: string; addedAt: string; createdAt
  */
 export function joinedAtOf(row: { joinedAt: string; createdAt: string }): string {
 	return row.joinedAt || row.createdAt;
+}
+
+/**
+ * How stale `households.changedAt` is allowed to get before a write is worth it.
+ *
+ * **A minute, because the only question that column answers is measured in
+ * days.** `RECENT_DAYS` is 30 and `DORMANT_DAYS` is 90; a last-active stamp
+ * that is up to sixty seconds behind cannot move a household across either
+ * line, and pretending otherwise would be precision nobody reads.
+ */
+export const TOUCH_GRANULARITY_MS = 60_000;
+
+/**
+ * Whether a household's `changedAt` is stale enough to rewrite.
+ *
+ * **This exists to keep the stepper cheap.** `adjustQty` is the app's hottest
+ * write and D44 refuses to exempt it — a quantity is information about the
+ * item, so it moves the item's own `changedAt`, and once the household carries
+ * a maintained last-active stamp it has to move that too. Without a floor,
+ * ten presses on one card are ten writes to a second row for a value whose
+ * consumers round it to days.
+ *
+ * An unset or unreadable stored stamp is always worth writing: that is the
+ * uncounted case, and it is the one where the column is not merely stale but
+ * absent.
+ *
+ * A stored stamp **ahead** of now is rewritten too rather than left alone. It
+ * can only be a clock that has gone backwards or a value nothing should have
+ * written, and leaving it would pin the household at the top of *Last active*
+ * until it drifted back — `normalizeStamp`'s own argument, one table over.
+ */
+export function shouldTouch(stored: string | null | undefined, nowMs: number): boolean {
+	if (! stored) return true;
+
+	const parsed = Date.parse(stored);
+
+	if (Number.isNaN(parsed)) return true;
+
+	return parsed > nowMs || nowMs - parsed >= TOUCH_GRANULARITY_MS;
 }

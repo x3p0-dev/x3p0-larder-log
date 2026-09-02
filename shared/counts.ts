@@ -44,3 +44,21 @@ export function readCount(stored: string | null | undefined): number {
 
 	return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
+
+/**
+ * Whether anything has ever counted this row.
+ *
+ * **`readCount` deliberately cannot answer this and must not be made to.** It
+ * collapses *nobody has counted this* into `0` because its callers are
+ * rendering a number and cannot act on the difference. A *writer* can and must:
+ * bumping an uncounted column by one would store `1` for a household holding
+ * forty, and every later bump would carry that lie forward.
+ *
+ * So the two questions get two functions. `''` and `null` are both uncounted —
+ * a column added after rows exist reads back `null` while the generated row
+ * type still says `string`, which is the finding that left `useAvatarSync`
+ * inert for as long as `memberships.picture` has existed.
+ */
+export function isCounted(stored: string | null | undefined): boolean {
+	return typeof stored === 'string' && stored !== '';
+}
