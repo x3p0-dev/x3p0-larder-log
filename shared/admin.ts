@@ -318,6 +318,42 @@ export function isWithinDays(iso: string, nowIso: string, days: number): boolean
 }
 
 /**
+ * Whether a household has been touched inside the recent window.
+ *
+ * **Not the complement of `isDormant`, and the gap between them is deliberate.**
+ * Dormant is 90 days, active is 30, and an *unknown* last-active is neither —
+ * every row written before D44's stamps holds `''`, and a household that has
+ * simply never been measured is not evidence either way. So active + dormant is
+ * less than the total, and the Overview card says *of N* rather than implying
+ * the rest are idle.
+ */
+export function isActive(lastActiveIso: string, nowIso: string): boolean {
+	return isWithinDays(lastActiveIso, nowIso, RECENT_DAYS);
+}
+
+/**
+ * Households split by whether more than one person is in them.
+ *
+ * **The question is whether the sharing this app was built around is actually
+ * used.** Households, memberships and people are three counts that all rise
+ * when one person makes five pantries; this is the one that does not.
+ *
+ * `>= 2`, and the boundary is the whole function: `> 2` counts only households
+ * of three or more and reads as a plausible, quieter number that nothing on
+ * screen contradicts.
+ */
+export function sharingSplit(memberCounts: readonly number[]): { solo: number; shared: number } {
+	let solo = 0;
+	let shared = 0;
+
+	for (const n of memberCounts) {
+		if (n >= 2) shared++; else solo++;
+	}
+
+	return { solo, shared };
+}
+
+/**
  * Whether a household counts as dormant.
  *
  * **An unknown last-active is not dormant.** Every pre-D44 row holds `''`, so
@@ -434,6 +470,44 @@ function formatUs(t: number, months: readonly string[], fallback: string): strin
  * page they undercount for a second reason as well: nothing records a removed
  * item, so the columns count arrivals and can never fall.
  */
+/**
+ * Completed shopping trips per month, counted as **trips** and not as rows.
+ *
+ * **The record of a finished trip is in `restocks`, not `trips`.** A put-away
+ * ends the trip and deletes it (`endTripsFor`), so the `trips` table holds only
+ * what is still open; what survives is one restock row per item, all sharing a
+ * `tripId` and a single `at`. Counting those rows would answer *how many things
+ * were put away*, which is a bigger and different number.
+ *
+ * **`tripId || at` is the key**, because `tripId` defaults to `''`: a row that
+ * predates server-resolved trip ids still groups correctly, since every row of
+ * one put-away carries the same stamp. Falling back to the row id instead would
+ * silently turn one trip of twelve items into twelve trips.
+ *
+ * **These bars erode.** A restock row dies with its item (D64), so a month's
+ * count falls as items are removed — it is a floor on what happened, never an
+ * exact history, and the card that draws it says so.
+ */
+export function tripsByMonth(
+	rows: readonly { tripId: string; at: string }[],
+	months: readonly string[]
+): number[] {
+	const seen = new Map<string, Set<string>>();
+
+	for (const row of rows) {
+		const month = monthKey(row.at);
+
+		if (! months.includes(month)) continue;
+
+		const trip = row.tripId || row.at;
+		const bucket = seen.get(month);
+
+		if (bucket) bucket.add(trip); else seen.set(month, new Set([trip]));
+	}
+
+	return months.map((m) => seen.get(m)?.size ?? 0);
+}
+
 export function countByMonth(stamps: readonly string[], months: readonly string[]): number[] {
 	const counts = new Map<string, number>();
 

@@ -10,18 +10,26 @@ import { RECENT_DAYS, DORMANT_DAYS } from '../../shared/admin';
 import type { AdminHouseholdFilter, AdminSummaryData } from '../../shared/types';
 
 /**
- * Board 1 — four cards, twelve months, and what needs attention.
+ * Board 1 — four cards, three charts, and what needs attention.
  *
  * **Storage is not one of the four.** The boards draw `2.4 GB`; a Zero handler
  * is given `{auth, content, db, env, gravatar, log, spam}` and there is no
  * storage handle on it in either direction, so there is no figure to read and
- * no later stage that adds one. *Live invites* takes the fourth slot — real,
- * administrative, and it keeps the row four across rather than leaving a gap
- * that reads as a bug.
+ * no later stage that adds one.
+ *
+ * ***Active* takes the fourth slot, and it used to be *Live invites*.** Every
+ * other figure on this screen counts something that *exists*; a space of 115
+ * households created and abandoned reads identically to 115 used weekly. Live
+ * invites was a small piece of state nobody acts on, and swapping it dropped a
+ * whole table scan as well as a weak card. *Shopping trips* and *Sharing* are
+ * the same correction in chart form — the first counts somebody standing in a
+ * kitchen finishing a run, the second is the only figure here that does not
+ * rise when one person makes five pantries.
  *
  * **The deltas say *new*, not `+`.** They count what arrived in the window and
- * cannot count what left, because nothing records a deletion until the Activity
- * log exists. `+34` would be a claim about the net; `34 new` is what is true.
+ * cannot count what left. `deletions` (D71) records departures now, but as
+ * space-wide rows with no household on them, so it can say *how many left* and
+ * never *which of these did* — a net figure per card is still not available.
  */
 export function AdminOverview({
 	onNeedsAttention, theme, dark,
@@ -49,12 +57,13 @@ export function AdminOverview({
 				<StatCard label="People" value={s.people} delta={s.newPeople} theme={theme} />
 				<StatCard label="Items tracked" value={s.items} delta={s.newItems} theme={theme} />
 				<StatCard
-					label="Live invites"
-					value={s.invites}
-					/* No delta: an invite that expired did not go anywhere, it just
-					 * stopped counting, so *N new* would be measuring the wrong
-					 * edge of a number that falls on its own. */
-					note="Neither revoked nor expired"
+					label="Active"
+					value={s.active}
+					/* No delta, because this figure *is* a window — *N new in the
+					 * last 30 days* beside a number that already means the last
+					 * 30 days would be measuring the same span twice. The note
+					 * says what the numeral counts instead. */
+					note={`Touched in the last ${RECENT_DAYS} days`}
 					theme={theme}
 				/>
 			</div>
@@ -89,9 +98,50 @@ export function AdminOverview({
 							theme={theme}
 						/>
 					</div>
+					{/* Under *New households* rather than beside it: the two are
+					  * the same shape asking opposite questions — how many
+					  * arrived, and how many of them came back — and stacking
+					  * them puts one twelve-month axis directly above another. */}
+					<div
+						class="rounded-[20px] px-5 pt-[18px] pb-4"
+						style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
+					>
+						<div class="flex items-baseline justify-between gap-3 mb-2">
+							<h2
+								class="font-disp text-[19px] font-semibold m-0"
+								style={{ color: theme.textStrong }}
+							>
+								Shopping trips
+							</h2>
+							<span class="text-[13.5px]" style={{ color: theme.textMuted }}>
+								last 12 months
+							</span>
+						</div>
+
+						<MonthBars
+							series={s.trips}
+							lead="Completed shopping trips per month"
+							one="trip" many="trips"
+							theme={theme}
+						/>
+
+						{/* Stated on the card's own face, the way the deletion
+						  * entry's denormalised counts are. A restock row dies
+						  * with its item (D64), so a past month falls as things
+						  * are removed — the bars are a floor, not a history. */}
+						<p class="m-0 mt-3 text-[12.5px] leading-snug" style={{ color: theme.textMuted }}>
+							A trip is one put-away, however many items it held. Past months can fall as
+							items are removed.
+						</p>
+					</div>
+
 					<PantrySizes buckets={s.buckets} households={s.households} theme={theme} />
 				</div>
-				<NeedsAttention data={s} onSelect={onNeedsAttention} theme={theme} dark={dark} />
+
+				<div class="flex flex-col gap-6 min-w-0">
+					<NeedsAttention data={s} onSelect={onNeedsAttention} theme={theme} dark={dark} />
+					<Sharing solo={s.solo} shared={s.shared} theme={theme} />
+				</div>
 			</div>
 		</div>
 	);
@@ -225,106 +275,75 @@ function NeedsAttention({
 }
 
 /**
- * Households by how many items they hold — five bands, horizontal bars.
+ * A distribution of households, as labelled tracks.
  *
- * **This is the adoption measure.** Overview counts households, people and
- * items, and none of those three says whether anybody is really using the app:
- * forty households averaging six items is a very different space from four
- * holding three hundred, and the four cards read identically in both. D67 was
- * built on the premise that twenty items is a sample dataset and a real pantry
- * is two hundred; this is the only thing in the console that reports whether
- * that wall was ever cleared.
+ * **One component, two questions.** *Pantry sizes* asks how full households are
+ * and *Sharing* asks how many people are in them; they are the same shape, and
+ * drawing the bars twice would be two places to keep a rounding, a track colour
+ * and an `aria-label` in step. `MonthBars` already made this trade for the two
+ * twelve-month series.
  *
- * **No SVG, and that is the point of choosing this shape.** A horizontal bar is
- * a `<div>` with a width, so it inherits none of the line chart's apparatus —
- * no `viewBox`, no `preserveAspectRatio` scale to work out, no hit-test bands,
- * no tooltip. The number is printed at the end of its own row, where a hover
- * would have had to put it.
- *
- * **The bars scale to the largest band, not to the total.** Against the total,
- * a space whose households are mostly empty draws four bands as slivers and
- * says nothing about how they compare with each other; against the max, the
- * shape is legible at any distribution and the counts carry the absolute
- * figures. The card's meta line carries the denominator, since bars scaled to
- * the max no longer reveal it.
- *
- * **Every band is neutral, including `0`.** Amber in this console means *needs
- * attention* (D62), and the empty households are already saying exactly that in
- * amber a few pixels to the right, on the same screen, about the same rows.
- * Tinting one bar here would say it twice and turn a measurement into a verdict
- * — and a distribution is a shape you read, not a judgment.
- *
- * **The bands are not controls.** Only one of the five has a filter behind it
- * (`empty`, which *Needs attention* already routes to), so four would be dead —
- * and one pressable bar in five reads as broken rather than as selective.
- * Making them all work means four new `AdminHouseholdFilter` values and four
- * new chips on the household list, invented on the way past a chart.
+ * **The whole distribution goes in one `aria-label` and the rows are hidden**,
+ * the line chart's own rule: each visible row is a label and a numeral with
+ * nothing between them, so read in sequence they are disconnected tokens rather
+ * than facts.
  */
-function PantrySizes({
-	buckets, households, theme,
+function Distribution({
+	title, rows, total, noun, labelWidth, caption, theme,
 }: {
-	buckets: AdminSummaryData['buckets'];
-	households: number;
+	title: string;
+	rows: { key: string; label: string; count: number; describe: string }[];
+	total: number;
+	noun: string;
+	/** The label column is fixed so the tracks start on one line rather than stepping in and out with the width of `0` against `50–199`. */
+	labelWidth: number;
+	caption: string;
 	theme: Theme;
 }) {
 	/*
-	 * A distribution of nothing is five empty tracks, which reads as a broken
-	 * card rather than as an empty one — so on a space with no households it is
-	 * absent, and the four stat cards say `0` on its behalf. That differs from
-	 * the line chart above it, deliberately: a flat line at zero is still a
-	 * line and still says *nothing has happened in twelve months*.
+	 * A distribution of nothing is a set of empty tracks, which reads as a
+	 * broken card rather than as an empty one — so on a space with no households
+	 * it is absent, and the stat cards say `0` on its behalf. That differs from
+	 * the month charts deliberately: a flat line at zero is still a line, and
+	 * still says *nothing has happened in twelve months*.
 	 */
-	if (! households) return null;
+	if (! total) return null;
 
-	const most = Math.max(...buckets.map((b) => b.households), 0);
+	const most = Math.max(...rows.map((r) => r.count), 0);
 
 	return (
 		<div
 			class="rounded-[20px] px-5 pt-[18px] pb-5"
 			style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
-			/*
-			 * The whole distribution in one sentence, and the rows hidden behind
-			 * it — the line chart's own rule, for the same reason. Each visible
-			 * row is a range and a numeral with nothing between them, so read in
-			 * sequence they are ten disconnected tokens rather than five facts.
-			 */
 			role="img"
 			aria-label={
-				`Households by pantry size, ${households.toLocaleString()} in total. ` +
-				buckets
-					.map((b) => (
-						`${b.label} items: ${b.households.toLocaleString()} ` +
-						`${b.households === 1 ? 'household' : 'households'}`
-					))
-					.join('. ') + '.'
+				`${title}, ${total.toLocaleString()} ${total === 1 ? noun : noun + 's'} in total. ` +
+				rows.map((r) => `${r.describe}: ${r.count.toLocaleString()}`).join('. ') + '.'
 			}
 		>
 			<div class="flex items-baseline justify-between gap-3 mb-[18px]">
 				<h2 class="font-disp text-[19px] font-semibold m-0" style={{ color: theme.textStrong }}>
-					Pantry sizes
+					{title}
 				</h2>
 				<span class="text-[13.5px]" style={{ color: theme.textMuted }}>
-					{households.toLocaleString()} {households === 1 ? 'household' : 'households'}
+					{total.toLocaleString()} {total === 1 ? noun : `${noun}s`}
 				</span>
 			</div>
 
 			<div class="flex flex-col gap-3">
-				{buckets.map((b) => (
-					<div key={b.floor} class="flex items-center gap-3">
-						{/* A fixed label column, so five tracks start on one
-						  * line rather than stepping in and out with the width
-						  * of `0` against `50–199`. */}
+				{rows.map((r) => (
+					<div key={r.key} class="flex items-center gap-3">
 						<span
-							class="shrink-0 w-[52px] text-right text-[12.5px] tabular-nums"
-							style={{ color: theme.textMuted }}
+							class="shrink-0 text-right text-[12.5px] tabular-nums"
+							style={{ color: theme.textMuted, width: `${labelWidth}px` }}
 						>
-							{b.label}
+							{r.label}
 						</span>
 
-						{/* The track is always full width and always visible, so
-						  * a band holding nothing reads as an empty band rather
-						  * than as a missing row. A gap in the middle of a
-						  * distribution is information. */}
+						{/* The track is always full width and always visible, so a
+						  * band holding nothing reads as an empty band rather than
+						  * as a missing row. A gap in a distribution is
+						  * information. */}
 						<span
 							class="flex-1 min-w-0 h-2.5 rounded-full overflow-hidden"
 							style={{ background: theme.surfaceAlt }}
@@ -332,7 +351,7 @@ function PantrySizes({
 							<span
 								class="block h-full rounded-full"
 								style={{
-									width: `${most ? (b.households / most) * 100 : 0}%`,
+									width: `${most ? (r.count / most) * 100 : 0}%`,
 									background: theme.textStrong,
 								}}
 							/>
@@ -342,15 +361,78 @@ function PantrySizes({
 							class="shrink-0 w-[46px] text-right text-[13.5px] font-semibold tabular-nums"
 							style={{ color: theme.textStrong }}
 						>
-							{b.households.toLocaleString()}
+							{r.count.toLocaleString()}
 						</b>
 					</div>
 				))}
 			</div>
 
 			<p class="m-0 mt-[15px] text-[12.5px]" style={{ color: theme.textMuted }}>
-				Items held, per household.
+				{caption}
 			</p>
 		</div>
+	);
+}
+
+/** Households by how many items they hold, in D69's five bands. */
+function PantrySizes({
+	buckets, households, theme,
+}: {
+	buckets: AdminSummaryData['buckets'];
+	households: number;
+	theme: Theme;
+}) {
+	return (
+		<Distribution
+			title="Pantry sizes"
+			total={households}
+			noun="household"
+			labelWidth={52}
+			caption="Items held, per household."
+			rows={buckets.map((b) => ({
+				key: String(b.floor),
+				label: b.label,
+				count: b.households,
+				describe: `${b.label} items`,
+			}))}
+			theme={theme}
+		/>
+	);
+}
+
+/**
+ * Whether the sharing this app was built around is actually used.
+ *
+ * **Households, people and items all rise when one person makes five pantries.**
+ * This is the only figure on Overview that does not — and it is the measure of
+ * two features, D33's several-households-per-person and D66's shared claims,
+ * neither of which has ever been able to report whether it landed.
+ *
+ * A wider label column than *Pantry sizes*: these are words rather than ranges.
+ */
+function Sharing({
+	solo, shared, theme,
+}: {
+	solo: number;
+	shared: number;
+	theme: Theme;
+}) {
+	return (
+		<Distribution
+			title="Sharing"
+			total={solo + shared}
+			noun="household"
+			labelWidth={66}
+			caption="Households with more than one member."
+			rows={[
+				// Counts of people, phrased as the bands above are — *On their
+				// own* is warmer and measures 12 characters against a 66px
+				// column beside a 172px track, which is a wrap waiting for a
+				// narrower rail.
+				{ key: 'shared', label: '2 or more', count: shared, describe: 'Shared with somebody' },
+				{ key: 'solo', label: 'Just one', count: solo, describe: 'One person only' },
+			]}
+			theme={theme}
+		/>
 	);
 }

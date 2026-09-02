@@ -6023,3 +6023,77 @@ zero_dev_endpoint_failed — "Zero DB row limit was exceeded."
 That is the right behaviour and a clear message. The friction is only that
 nothing says the number in advance, so the way you learn your load-test is too
 big is by running it. Worth a line in the *Limits* section beside the read cap.
+
+---
+
+## 2026-09-02 — The schema parser is a regex, and two ordinary comments defeat it
+
+Context: adding four indexes to a table that had none. Everything passed —
+`tsc --noEmit` clean, `sf dev` compiled and served, every handler worked against
+a real database — and the artifact reported `indexes: []`. The indexes did not
+exist. Caught only by reading `artifact.json`.
+
+### 🐛 A comment between `})` and `.index(...)` silently drops every index
+
+The capsule's schema is extracted with one regex,
+`@spacefast/zero-compile/dist/analyze.js`:
+
+```js
+const TABLE_PATTERN =
+  /([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*table\s*\(\s*\{([\s\S]*?)\}\s*\)((?:\s*\.index\s*\(\s*["'][A-Za-z_$][A-Za-z0-9_$]*["']\s*,\s*\[[^\]]*\]\s*\))*)/g;
+```
+
+The index chain must follow the closing `})` separated only by `\s*`. A comment
+is not whitespace, so this:
+
+```ts
+households: table({
+  name: string(),
+})
+  // Why these four exist.
+  .index('by_name', ['name'])
+  .index('by_added', ['addedAt'])
+```
+
+compiles, typechecks, runs — and produces a table with **no indexes at all**.
+The chain is not reported as malformed; the group simply matches zero times.
+
+### 🐛 And a comment containing `})` truncates the table's columns
+
+Moving that comment *inside* the braces hits the other end of the same regex.
+The body is non-greedy, `\{([\s\S]*?)\}\s*\)`, so it ends at the first brace
+followed by a paren **anywhere in the body, including inside a comment**. A
+comment that mentions the token — as one warning about the first bug naturally
+does — cuts the column list short at that point and takes the index chain with
+it.
+
+Both failures are silent, both survive `typecheck`, and both survive a full
+`sf dev` run against real data, because the dev harness reads the same truncated
+schema consistently. **The only signal is the artifact.**
+
+### 👎 Why this is worth more than a doc note
+
+The compiler already knows a table's real shape well enough to reject
+`crypto`-adjacent globals and to enforce a denylist. Parsing the schema with a
+regex over source text means the *declaration* and the *artifact* can disagree
+with nothing to reconcile them. Three cheap fixes, in order of preference:
+
+1. **Parse the module, don't scan it.** The information is in the AST.
+2. **Warn on a near miss.** If a `table({…})` is followed within a few lines by
+   `.index(`, and the chain did not attach, that is a certain bug — say so.
+3. **Document the constraint.** `zero-runtime.md`'s schema section shows the
+   chain attached and never says it has to be.
+
+This is the second time this project has been bitten by the regex extractor —
+[D27](https://github.com/…) exists because a *whole table* can vanish from the
+artifact while typechecking perfectly. That decision's standing rule, *"read the
+artifact after any schema edit"*, is what caught this one too. It should not
+have to be a rule.
+
+### 👍 The artifact itself is excellent for exactly this
+
+`.spacefast/zero/artifact.json` is complete, stable and easy to diff — schema,
+columns with defaults and nullability, indexes, queries, mutations, endpoints,
+and the pending migration list. It is the reason this was a twenty-minute
+detour rather than a production incident. More of the toolchain should point
+people at it.

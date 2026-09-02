@@ -6902,3 +6902,297 @@ and a later change to a range lookup fails them.
   screen. The second is cheap and says almost nothing while the writes are held.
 - **Whether `EXTRA`-style bands would suit People** — accounts by household
   count, which D33 built for and nothing measures.
+
+---
+
+## D70. A read is paginated, a count is a column, and both are decided before the rows exist
+
+**Decided:** 2026-09-02
+
+The target for this app is **tens of thousands of households, possibly a
+million**. Two things follow, and neither is a performance optimisation — the
+first is a correctness bug and the second is a deadline.
+
+### `collect()` truncates at 1,000 rows and does not say so
+
+Measured, not inferred. `collect()` returns at most 1,000 rows from **any single
+result set**, with or without a range predicate, silently: a space holding 3,045
+items answers `1000`, and a household really holding 1,200 answers `1000` to a
+scoped read. It is `MAX_LOCAL_QUERY_ROWS` in the CLI's own bundle, applied as
+`results.slice(0, maxRows)` **whether or not a `limit()` was asked for**.
+
+That is the worst shape a limit can take. A truncated read is not an error, not
+a slow page and not a warning — it is a number that is quietly too small, and
+everything computed from it inherits the lie. The console reported a **40-item**
+household as the biggest pantry in a space containing a 1,200-item one.
+
+**So every full read goes through `collectAll()`**, which paginates until done.
+`paginate()`'s `numItems` is clamped to the same 1,000 but its cursor advances —
+3,245 rows in 4 pages, measured. **For any result under the cap it is a single
+call with `isDone` already true**, which is exactly what `collect()` was, so it
+is a strict improvement at every one of the 89 call sites rather than a trade.
+
+It **takes a thunk rather than a builder**, because a builder resets its state
+once read and reusing one across pages would look like an early stop. It
+**cannot throw**, because a query that throws never emits and the client cannot
+tell that apart from loading (see `QueryState`); a cursor that fails to advance
+ends the walk instead.
+
+**This was not only the console's problem.** `pantry` reads a household's items
+and both join tables the same way, and the join tables cross 1,000 *first* — an
+item may name several types and several sources, so store chips would have begun
+vanishing from cards at roughly 600–700 items while the item list still looked
+complete.
+
+### A count that is sorted is a zero-padded string
+
+Zero has no numeric type, so a maintained count is text, and text sorts
+lexicographically: `'10' < '2'`. An unpadded count column stores the right
+number, reads back the right number, and produces an order that is wrong in a
+way that looks plausible — a *biggest pantries* list led by the household
+holding nine.
+
+`shared/counts.ts` owns the format: **twelve digits, zero-padded**, so the
+database's own index order *is* numeric order. **The width is permanent** — it
+is a storage format, not a display choice, and changing it sorts every row
+written under the old width into the wrong place with no error and no migration
+short of a table rewrite (D27).
+
+`readCount` treats `''` **and `null`** as *nobody has counted this*, which is the
+`joinedAtOf` rule again: a column added after rows exist reads back `null` while
+the generated row type still says `string`.
+
+### `households` gained four indexes and two columns before it needed them
+
+`households` declared **no index at all**, so every read walked `by_creation` —
+no sort, no filter, no search that was not a full table scan. It now declares
+`by_name`, `by_added`, `by_items` and `by_changed`, and carries `changedAt` and
+`itemCount`.
+
+**They were written, typechecked, exercised, and absent from the artifact.** The
+compiler extracts a table with one regex whose index chain has to follow `})`
+separated only by whitespace — and there was a comment in the gap, so
+`households` compiled with `indexes: []` while every handler ran correctly
+against a real database. Moving the comment inside the braces then truncated the
+**columns**, because the body match stops at the first brace-then-paren pair
+anywhere in it, *including inside a comment quoting the very hazard*. The
+explanation lives above the table declaration now. **D27's rule — read the
+artifact after any schema edit — is what caught it, and it reaches indexes as
+well as tables.**
+
+**Two of those four are inert today**, because nothing maintains their columns
+yet, and that is the decision rather than an oversight. **The cost of adding an
+index or a column is paid against the row count at the time it is added**:
+free on a table holding a handful of rows, a table rewrite at a million. Every
+household created between now and the day the console needs these is a row that
+would otherwise have to be special-cased forever.
+
+**`changedAt` reverses D44 deliberately.** That decision refused `households` a
+`changedAt` because *"nothing orders households by recency, and a rename is not
+an event anything in the app reacts to."* The console orders by exactly that,
+and computes it today by scanning four whole tables per load
+(`lastActiveByHousehold`). One maintained column deletes that function.
+
+**Until they are maintained, `''` means *not counted*, never zero.** A reader
+that treats an empty `itemCount` as zero items reports every household as empty;
+one that treats an empty `changedAt` as never-active reports every household as
+dormant. `readCount` is that rule for the count.
+
+### Rejected
+
+- **Leaving `collect()` and documenting the cap.** The failure is silent and
+  compounding, and `collectAll` costs nothing below the cap. There is no version
+  of this where the truncation is the better default.
+- **A `limit`-aware `collect()` that throws past the cap.** A query that throws
+  never emits, so the client would see a permanent loading state rather than an
+  error — worse than the truncation it replaces.
+- **Denormalised counters in the same change.** They are the next stage and they
+  turn on a question this project cannot answer for itself: whether a
+  read-modify-write survives concurrency in production. Twenty concurrent
+  increments against `sf dev` lost nothing, and that measurement is worthless —
+  the same run took 1.05s for 20 × 50ms spins, so the dev runtime serialised
+  them and there was never a race. **That is the dev-guest trap exactly.** The
+  indexes and the storage format are the half that can be settled without the
+  answer, so they went first.
+- **An unpadded count with sorting done in the handler.** Sorting in the handler
+  is what the whole design is trying to stop: it requires reading every row.
+
+The full analysis, the remaining stages and the three open questions are in
+[`.claude/docs/design/scale.md`](../.claude/docs/design/scale.md).
+
+---
+
+## D71. Record what is thrown away, and nothing else
+
+**Decided:** 2026-09-02
+
+Larder Log is being built for a scale where product questions get answered from
+data rather than from intuition. Working out which data that needs produced a
+much smaller answer than expected, and the reason is worth stating first.
+
+**Almost everything is already recorded or reconstructable.** `trips`, `claims`,
+`restocks` and `activity` all carry timestamps, so *shopping trips completed per
+month* — the strongest signal that the app is used rather than merely filled —
+needs no new data at all, only a chart. Counts, distributions, retention and
+active-household rates are all derivable from rows that exist; they are speed
+and display problems, and a counter that is wrong can be recomputed at any time.
+
+**So the only thing that could not wait is what the app was throwing away.**
+There were exactly two.
+
+### Invites recorded nothing about themselves
+
+`invites` carried `code`, `role`, `expiresAt`, `createdBy` and `revoked` — no
+creation date, and no sign of whether the link was ever used. Redemption wrote a
+membership and never touched the row that caused it. So *how many invites get
+sent* and *what fraction turn into a person* — the whole growth loop — were
+unanswerable, and unanswerable **retroactively**, which is the property that
+made this urgent rather than merely desirable.
+
+`addedAt`, `redeemedAt` and `redeemedBy`, written by `createInvite` and
+`redeemInvite`. The mint stamp is **the same clock reading the expiry is derived
+from**, so the two cannot disagree about when the link began.
+
+**First redemption only, and the guard is the point.** Nothing revokes an invite
+on use, so one link shared with a family admits several people. Overwriting on
+each would turn *how long did this take to convert* into *when did the last
+person wander in*. Driven for real: two accounts redeemed one link and the row
+names the first.
+
+### Nothing recorded a household or an account ending
+
+You could see how many households existed and never how many left.
+`deleteHousehold` and `deleteMyAccount` removed their rows and wrote nothing —
+deliberately, because [D62](#d62-the-admin-console-is-a-pane-in-the-drawer) draws
+the line that the audit log records *administration*, never what a person does to
+their own things. That rule is right, and its cost is that net growth is the only
+growth measurable: 500 households next month could be 500 arrivals or 900
+arrivals and 400 departures.
+
+The `deletions` table is the smallest thing that closes the gap without breaking
+the rule. **No id, no name, no household, no account — nothing joinable back to a
+person.** A row says a thing of some kind ended, when, and how old it was. An
+export of the table is a list of dates, which is what keeps the account-deletion
+copy true.
+
+**`ageDays` is the half a bare count cannot answer.** *Forty households left this
+month* is a number; *and half were under a week old* is a finding — the
+difference between people bouncing off the app and people using it for a year and
+moving on. It is knowable only at the moment of deletion, because the row
+carrying the birth date is the row being removed. `''` rather than `0` for a
+household predating D44's stamps: calling those zero days old would put a spike
+on day zero that is the app's own history.
+
+**Append-only rather than a monthly counter.** A counter would be one row and
+O(1) to read, but incrementing it is a read-modify-write, and whether that
+survives concurrency on this platform is open (see
+`.claude/docs/design/scale.md`). An insert has no such question. Deletions are
+rare, and rows roll up into counters later — the reverse does not.
+
+**`recordDeletion` never throws.** Somebody asking for their household to go must
+not be refused because a statistics row could not be written.
+
+### And the cascade became one list
+
+`deleteHousehold` carried its own copy of `deleteHouseholdRows`' delete order,
+byte-identical. Two identical lists is how two lists start, and the second is the
+one that misses the next table added. It calls the helper now — which is also the
+single place a household's `deletions` row is written, so a path that forgot to
+record itself would have to forget to delete anything too.
+
+### Rejected
+
+- **Recording item removals.** Every `removeItem` would update a counter on a hot
+  path, for a signal that pantry size already shows directly. D69's note that the
+  *Items added* chart can only rise stands, unresolved and knowingly so.
+- **A durable row per deletion carrying the household name.** More useful for
+  support, and it keeps data about someone after they asked to be removed —
+  which the account-deletion copy promises it does not.
+- **Building the counters and the Overview charts in the same change.** Nothing
+  is lost by waiting: every one of them is recoverable from rows that exist. Only
+  the two above were being discarded.
+
+Verified against the real handlers on a throwaway `sf dev`: an invite minted and
+redeemed **twice**, with the row naming the first redeemer; a household deleted
+from its own page and another through the console, recording ages of `0` and
+`439` days; and an account deleted both self-serve and through the console,
+each writing its own row plus one for the household that went with it. Three
+`ageDays` rules were proved by mutation — treating a missing stamp as zero fails
+one assertion, dropping the floor fails two, dropping the clamp fails one.
+
+---
+
+## D72. Overview measures what people do, not only what exists
+
+**Decided:** 2026-09-02
+
+Every figure on the admin Overview counted a thing that **existed** — households,
+people, items, live invites. None counted a thing somebody **did**. A space of
+115 households created and abandoned read identically to 115 used every week,
+and at the scale this app is being built for that is the difference between
+knowing whether it works and guessing.
+
+Three changes, and the first makes the screen cheaper.
+
+### *Active* replaces *Live invites*
+
+Live invites counted a small piece of state nobody acts on. *Active* counts
+households touched inside `RECENT_DAYS`, which is the one card that falls when
+nobody comes back. **Dropping the old card dropped a whole table scan with it** —
+`adminSummary` no longer reads `invites`.
+
+**`isActive` is not `! isDormant`.** Dormant is 90 days, active is 30, and an
+*unmeasured* household is neither: every row written before D44's stamps holds
+`''`, and a household that has never been measured is not evidence either way.
+So `active + dormant` is deliberately less than the total, and the card says
+*touched in the last 30 days* rather than implying the remainder is idle.
+
+### *Shopping trips*, counted as trips
+
+**The record of a completed trip is in `restocks`, not `trips`.** A put-away ends
+its trip and deletes it (`endTripsFor`), so `trips` holds only what is still
+open; what survives is one restock row per item, all sharing a `tripId` and a
+single `at`. Counting those rows answers *how many things were put away* — a
+bigger number that looks exactly as plausible on a chart.
+
+**`tripId || at` is the grouping key.** `tripId` defaults to `''`, so a row
+predating server-resolved ids still groups correctly on the stamp every row of
+one put-away shares. Falling back to the row id would turn one trip of twelve
+items into twelve trips.
+
+**The bars erode and the card says so.** A restock row dies with its item (D64),
+so a past month's count falls as items are removed. It is a floor on what
+happened, never a history — stated on the card's face, the way a deletion
+entry's denormalised counts are.
+
+### *Sharing*
+
+Households, people and items all rise when one person makes five pantries and
+fills them once. **This is the only figure on the screen that does not**, and it
+is the measure of two features — D33's several-households-per-person and D66's
+shared claims — neither of which has ever been able to report whether it landed.
+
+`>= 2`, and the boundary is the whole function: `> 2` counts households of three
+or more and reads as a plausible, quieter number that nothing on screen
+contradicts. **`solo + shared === households` exactly**, because both are counted
+by walking `households` rather than the membership map — a household with no
+memberships is an orphan, and the map alone would drop it from the split rather
+than count it as solo. That is D69's rule about `sizes`, applied again.
+
+### One distribution, two callers
+
+`PantrySizes` became `Distribution`. *Sharing* is the same shape asking a
+different question, and drawing the bars twice would be two places to keep a
+rounding, a track colour and an `aria-label` in step. `MonthBars` already made
+this trade for the two twelve-month series.
+
+### Rejected
+
+- **Keeping *Live invites* and going to five cards.** Five does not divide the
+  `grid-cols-2 xl:grid-cols-4` row, and the card was the weakest of the four on
+  its own merits.
+- **A single *engagement* score.** Three honest numbers beat one composite whose
+  formula nobody can remember and whose movement nobody can attribute.
+- **Counting `trips` rows directly.** The table holds open trips only, so it
+  would answer *how many shopping runs are in progress right now* — a real
+  number, and not the one the chart is for.

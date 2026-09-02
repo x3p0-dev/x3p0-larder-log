@@ -29,7 +29,8 @@ import {
 	ADMIN_HELD_NOTE, ADMIN_HELD_REFUSAL, ADMIN_IDS_VAR, ADMIN_WRITES_HELD, adminWritesHeldFor,
 	countByMonth, itemBuckets, ITEM_BUCKET_FLOORS,
 	ADMIN_UNDELETABLE_NOTE, ADMIN_UNDELETABLE_REFUSAL,
-	daysBetween, DORMANT_DAYS, isAdminId, isAdminUser, isDormant, isWithinDays, matchScore, monthKey,
+	daysBetween, DORMANT_DAYS, isAdminId, isAdminUser, isActive, isDormant, isWithinDays, matchScore, monthKey,
+	sharingSplit, tripsByMonth,
 	monthKeysBack, monthLabel, parseAdminIds, SERIES_MONTHS, usDate, usDateFrom, usLongDate,
 } from '../shared/admin';
 import { COLOR_SLOTS, COLOR_SLOT_COUNT, isColorSlot } from '../shared/palette';
@@ -49,6 +50,8 @@ import {
 import { DEMO_ITEMS, resolveDemoItems } from '../shared/demoItems';
 import { digitsOnly, fromInt, isQty, MAX_QTY_DIGITS, toInt } from '../shared/qty';
 import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
+import { COUNT_WIDTH, padCount, readCount } from '../shared/counts';
+import { ageInDays, isDeletionKind } from '../shared/lifecycle';
 import { needsBuying, runBands, runCount } from '../shared/runList';
 import { putAwayMeta, putAwayRows, restockEntry, restockPrefill } from '../shared/restock';
 import { isExtra, listNameFor, listRuleHint, listRuleLabel, listRuleOf, toListRule } from '../shared/listRule';
@@ -1090,6 +1093,122 @@ check(
 	[...joins].sort((a, b) => joinedAtOf(b).localeCompare(joinedAtOf(a))).map((r) => r.createdAt),
 	['2026-08-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '2026-04-01T00:00:00.000Z']
 );
+
+// --- what Overview measures that a count cannot ---
+
+// **Trips, not rows.** A put-away writes one restock row per item, all sharing a
+// trip id and a stamp — counting rows answers *how many things were put away*,
+// which is a bigger number that looks just as plausible on a chart.
+const TRIP_MONTHS = ['2026-07', '2026-08', '2026-09'];
+const RESTOCKS = [
+	{ tripId: 't1', at: '2026-08-04T10:00:00.000Z' },
+	{ tripId: 't1', at: '2026-08-04T10:00:00.000Z' },
+	{ tripId: 't1', at: '2026-08-04T10:00:00.000Z' },
+	{ tripId: 't2', at: '2026-08-19T18:00:00.000Z' },
+	{ tripId: 't3', at: '2026-09-01T09:00:00.000Z' },
+];
+check('a twelve-item trip is one trip', tripsByMonth(RESTOCKS, TRIP_MONTHS), [0, 2, 1]);
+check('rows would have said otherwise', RESTOCKS.length, 5);
+// `tripId` defaults to '', so a row predating server-resolved ids must still
+// group by the stamp every row of one put-away shares.
+check(
+	'rows with no trip id group by their shared stamp',
+	tripsByMonth([
+		{ tripId: '', at: '2026-08-04T10:00:00.000Z' },
+		{ tripId: '', at: '2026-08-04T10:00:00.000Z' },
+		{ tripId: '', at: '2026-08-20T10:00:00.000Z' },
+	], TRIP_MONTHS),
+	[0, 2, 0]
+);
+check('a stamp outside the window counts nowhere',
+	tripsByMonth([{ tripId: 'old', at: '2025-01-04T10:00:00.000Z' }], TRIP_MONTHS), [0, 0, 0]);
+check('and an empty month is zero rather than missing',
+	tripsByMonth([], TRIP_MONTHS), [0, 0, 0]);
+
+// **Sharing is the one count that does not rise when one person makes five
+// pantries.** The boundary is the whole function: `> 2` counts households of
+// three or more and reads as a plausible, quieter number.
+check('two people is shared', sharingSplit([1, 2, 3, 1, 5]), { solo: 2, shared: 3 });
+check('a household of one is not', sharingSplit([1, 1, 1]), { solo: 3, shared: 0 });
+check('an empty space splits into nothing', sharingSplit([]), { solo: 0, shared: 0 });
+// A household with no memberships at all is an orphan, not a shared one.
+check('zero members counts as solo rather than shared', sharingSplit([0]), { solo: 1, shared: 0 });
+
+// **Active is not the complement of dormant.** 30 days against 90, and an
+// unknown last-active is neither — so the two need not add up to the total, and
+// the card must not imply that whatever is not active is idle.
+const NOW_ISO = '2026-09-02T12:00:00.000Z';
+check('touched last week is active', isActive('2026-08-27T12:00:00.000Z', NOW_ISO), true);
+check('touched two months ago is not', isActive('2026-07-02T12:00:00.000Z', NOW_ISO), false);
+check('and it is not dormant either', isDormant('2026-07-02T12:00:00.000Z', NOW_ISO), false);
+check('an unmeasured household is neither', [
+	isActive('', NOW_ISO), isDormant('', NOW_ISO),
+], [false, false]);
+
+// --- what a deletion records, and what it must never record ---
+//
+// The privacy claim is the assertion here, not a comment: the account-deletion
+// copy tells people their data goes, so a churn row that could be joined back
+// to a household or a person would make that copy false. `ageDays` is the one
+// derived value, and it is knowable only at the moment of deletion.
+
+check('a household deleted the day it was made is zero days old',
+	ageInDays('2026-09-02T09:00:00.000Z', Date.parse('2026-09-02T21:00:00.000Z')), '0');
+check('a fortnight reads as whole days',
+	ageInDays('2026-08-19T09:00:00.000Z', Date.parse('2026-09-02T09:00:00.000Z')), '14');
+check('a partial day floors rather than rounding',
+	ageInDays('2026-08-19T09:00:00.000Z', Date.parse('2026-09-02T08:59:00.000Z')), '13');
+// **'' rather than '0', and the difference matters.** Every household created
+// before D44 carries no birth stamp; calling those zero days old would put a
+// spike on day zero that is the app's own history rather than anybody churning.
+check('a household from before the stamps has no age, not age zero',
+	ageInDays('', Date.parse('2026-09-02T09:00:00.000Z')), '');
+check('and neither does an unreadable one',
+	ageInDays('last tuesday', Date.parse('2026-09-02T09:00:00.000Z')), '');
+// A clock that disagrees with itself must not produce a negative age.
+check('a future birth stamp clamps to zero',
+	ageInDays('2027-01-01T00:00:00.000Z', Date.parse('2026-09-02T09:00:00.000Z')), '0');
+
+check('the two kinds are the only two', [
+	isDeletionKind('household'), isDeletionKind('account'),
+	isDeletionKind('item'), isDeletionKind(''), isDeletionKind(null),
+], [true, true, false, false, false]);
+
+// --- a count in a column is a padded string, or it sorts wrong ---
+//
+// **This is invisible when wrong in the worst way**: an unpadded count column
+// still stores the right number, still reads back the right number, and only
+// betrays itself in the *order* — a "biggest pantries" list led by the one
+// holding 9. The width is a storage format and therefore permanent (D27), so
+// it is pinned here rather than trusted to a call site.
+
+check('a count is padded to a fixed width', padCount(7), '000000000007');
+check('and the width is the constant', padCount(7).length, COUNT_WIDTH);
+check('a big count still fits', padCount(999999999999), '999999999999');
+// The whole reason for the padding, as an assertion rather than a comment.
+check(
+	'padded counts sort numerically as text; unpadded ones do not',
+	[9, 10, 200, 1].map(padCount).sort(),
+	[padCount(1), padCount(9), padCount(10), padCount(200)]
+);
+check(
+	'the bug it prevents, spelled out',
+	[9, 10, 200, 1].map(String).sort(),
+	['1', '10', '200', '9']
+);
+// A drifted counter is a bug to repair, not a reason to make the row unreadable.
+check('a negative count clamps rather than storing a minus sign', padCount(-3), '000000000000');
+check('a fractional one floors', padCount(4.9), '000000000004');
+check('and NaN is nothing counted', padCount(Number.NaN), '000000000000');
+
+// Reading back. Every household that exists today holds '' in these columns,
+// and a column added after rows exist reads back `null` while the row type
+// still says `string` — so both have to mean *nobody has counted this*.
+check('an uncounted row reads zero', readCount(''), 0);
+check('and so does a null one', readCount(null as unknown as string), 0);
+check('a padded count reads back as its number', readCount('000000000042'), 42);
+check('garbage reads as zero rather than NaN', readCount('lots'), 0);
+check('a round trip is the identity', readCount(padCount(1400)), 1400);
 
 // --- terms are A–Z, and that is the only order any of them appear in ---
 //

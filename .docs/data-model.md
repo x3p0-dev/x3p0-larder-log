@@ -76,8 +76,27 @@ households: table({
   defaultThreshold: string().default("1"), // numeric-as-string
   ink: string().default(""),              // colour token; "" means unset
   addedAt: string().default(""),          // ours, ISO 8601 UTC — D44
+  changedAt: string().default(""),        // last activity anywhere in it — D70
+  itemCount: string().default(""),        // zero-padded, 12 wide — D70
 })
+  .index("by_name", ["name"])
+  .index("by_added", ["addedAt"])
+  .index("by_items", ["itemCount"])
+  .index("by_changed", ["changedAt"])
 ```
+
+`changedAt` and `itemCount` are **declared and not yet maintained**
+([D70](decisions.md#d70-a-read-is-paginated-a-count-is-a-column-and-both-are-decided-before-the-rows-exist)).
+Every row holds `""`, and **`""` means *not counted*, never zero** — a reader
+that takes an empty `itemCount` for zero items reports every household as empty,
+and one that takes an empty `changedAt` for never-active reports every household
+as dormant. `readCount()` in `shared/counts.ts` is that rule, and it owns the
+padding: a count column that is *sorted* has to be zero-padded, because text
+sorts lexicographically and `"10" < "2"`.
+
+They exist now because the cost of adding a column or an index is paid against
+the row count at the time it is added — free on a small table, a rewrite at a
+million. `by_items` and `by_changed` are inert until their columns are written.
 
 **No `changedAt` here, deliberately.** Nothing orders households by recency and
 a rename is not an event anything in the app reacts to. Adding one later is
@@ -179,6 +198,9 @@ invites: table({
   expiresAt: string(),                   // ISO 8601 UTC; "" means never
   createdBy: string(),
   revoked: boolean().default(false),
+  addedAt: string().default(""),      // when the link was minted — D71
+  redeemedAt: string().default(""),   // first conversion, not the latest
+  redeemedBy: string().default(""),   // the account that first used it
 })
   .index("by_code", ["code"])
   .index("by_household", ["householdId"])
@@ -516,6 +538,43 @@ this is data rather than an audit log — but it grows without bound, at roughly
 780 rows a year for a household restocking fifteen items a week, and nothing has
 a plan for it.
 
+### `deletions`
+
+Churn. Without it, only *net* growth is measurable — 500 households next month
+could be 500 arrivals, or 900 arrivals and 400 departures, and nothing tells
+them apart.
+
+```ts
+deletions: table({
+  kind: string(),                     // "household" | "account"
+  at: string(),                       // ISO 8601 UTC
+  ageDays: string().default(""),      // whole days; "" when the birth stamp predates D44
+})
+  .index("by_at", ["at"])
+```
+
+**No id, no name, no household, no account — nothing joinable back to a
+person.** That is what lets churn be counted without keeping data about somebody
+who asked to be removed, and it is why this does not breach
+[D62](decisions.md#d62-the-admin-console-is-a-pane-in-the-drawer)'s rule that the
+app never logs what a person does to their own things. An export of this table
+is a list of dates.
+
+`ageDays` is the half a bare count cannot answer: *forty households left this
+month* is a number, *and half were under a week old* is a finding. It is
+knowable only at the moment of deletion, because the row carrying the birth date
+is the row being removed.
+
+**Append-only rather than a monthly counter**, deliberately: an insert has no
+read-modify-write, so it sidesteps the open question about whether counters
+survive concurrency on this platform. Rows can be rolled up into counters later;
+the reverse cannot.
+
+Written by `recordDeletion`, from all four destruction paths —
+`deleteHousehold`, `adminDeleteHousehold`, `deleteMyAccount` and
+`adminDeleteAccount`. It never throws: somebody asking for their household to go
+must not be refused because a statistics row could not be written.
+
 ### `activity`
 
 The admin console's audit log
@@ -670,8 +729,15 @@ dependents, in this order:
 | `location` | — | **refused** if any item references it; see [D16](decisions.md#d16-deleting-a-location-is-blocked-while-items-reference-it) |
 | `member` (demote or remove) | **their `trips` in that household, and its `claims`** | revoke the `invites` they created ([D21](decisions.md#d21-invites-carry-the-role-they-grant)) |
 | `trip` (put away, abandoned, or cleared) | its `claims`, then the trip | pruned at the next write, filtered on every read |
-| `household` | everything scoped to it, `memberships` and `invites` included | last, after all children. **Its `activity` rows survive** |
-| `account` (console only) | every `membership` it holds, its `profiles` row, **and its live `trips` everywhere** | its solely-owned households are transferred or deleted first, one decision each. **Its `activity` rows survive** |
+| `household` | everything scoped to it, `memberships` and `invites` included | last, after all children. **Its `activity` rows survive**, and a `deletions` row is written first |
+| `account` (self-serve or console) | every `membership` it holds, its `profiles` row, **and its live `trips` everywhere** | its solely-owned households are transferred or deleted first, one decision each. **Its `activity` rows survive**, and a `deletions` row is written first |
+
+**One funnel, and it is `deleteHouseholdRows`.** `deleteHousehold` used to carry
+its own byte-identical copy of the cascade list; two identical lists is how two
+lists start, and the second one is the one that misses the next table added. It
+calls the helper now, which is also the single place a household's `deletions`
+row is written — so a destruction path that forgets to record itself would have
+to forget to delete anything either.
 
 The location case is not a cascade at all. Zero has no nullable fields, so an
 item cannot be left without a location; `deleteTerm` refuses to delete a

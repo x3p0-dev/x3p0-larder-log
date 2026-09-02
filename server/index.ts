@@ -15,11 +15,13 @@ import { BULK_MAX } from '../shared/bulkEntry';
 import type { AccountHousehold, HouseholdFate, OwnershipDecision } from '../shared/accountDeletion';
 import { fateOf } from '../shared/accountDeletion';
 import { addedAtOf, changedAtOf, joinedAtOf, normalizeStamp, stampFrom } from '../shared/stamp';
+import { ageInDays } from '../shared/lifecycle';
+import type { DeletionKind } from '../shared/lifecycle';
 import {
 	ADMIN_IDS_VAR, ADMIN_UNDELETABLE_REFUSAL, adminWritesHeldFor, isAdminId,
-	countByMonth, isDormant, isWithinDays, itemBuckets, matchScore, monthKeysBack, monthLabel,
+	countByMonth, isActive, isDormant, isWithinDays, itemBuckets, matchScore, monthKeysBack, monthLabel,
 	parseAdminIds,
-	RECENT_DAYS,
+	RECENT_DAYS, sharingSplit, tripsByMonth,
 } from '../shared/admin';
 import {
 	encodeHeld, retentionCutoff, RETENTION_VAR, toRetentionMonths,
@@ -125,9 +127,9 @@ async function accountName(ctx: { auth: AuthContext; db: ReadDb | WriteDb }): Pr
 
 	if (profile) return pickDisplayName(profile.displayName, ctx.auth.displayName);
 
-	const memberships = await ctx.db.memberships
+	const memberships = await collectAll(() => ctx.db.memberships
 		.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-		.collect();
+		);
 
 	return pickDisplayName(...memberships.map((m) => m.displayName), ctx.auth.displayName);
 }
@@ -216,16 +218,62 @@ export const schema = {
 	// `ink` is the household's colour token (D42) — the tile on the rail, in the
 	// switcher and on the invite card. Added after the fact, so a row from before
 	// it holds '' and `householdInk()` resolves that to a stable default.
+	// **Nothing may sit between this table's closing brace and its `.index(...)`
+	// chain, and no comment inside it may contain a brace followed by a paren.**
+	// That is the compiler's parser, not a style rule. It finds a table with one
+	// regex whose body is non-greedy up to the first such pair, and whose index
+	// chain has to follow immediately. A comment in the gap drops **every**
+	// index; a comment quoting that pair truncates the **columns**. Both
+	// typecheck, both run under `sf dev`, and both surface only as a wrong
+	// artifact — which is D27's rule reaching indexes as well as tables, and is
+	// how the four below were found missing after they were written.
+	//
+	// `households` declared no index at all until 2026-09-02, so every read of
+	// it walked `by_creation` — no sort, no filter and no search that was not a
+	// full table scan. These four let the console ask its questions as ranges:
+	//
+	//   by_name    A–Z, and prefix search via gte(name, q) + lt(name, q + '\uffff')
+	//   by_added   *Newest*, and the twelve month buckets as twelve ranges
+	//   by_items   *Biggest pantry*, and each pantry-size band as one range
+	//   by_changed *Last active*, and `dormant` as one range against a cutoff
+	//
+	// The last two are inert until their columns are maintained. They are here
+	// now because the cost of adding an index is paid against the row count at
+	// the time it is added — free today, a table rewrite at a million.
 	households: table({
 		name: string(),
 		// Provenance only. Ownership is memberships.role — see D22.
 		createdBy: string(),
 		defaultThreshold: string().default('1'),
 		ink: string().default(''),
-		// No `changedAt` here, deliberately (D44): nothing orders households by
-		// recency, and a rename is not an event anything in the app reacts to.
 		addedAt: string().default(''),
-	}),
+
+		// --- the rollup columns, declared now and not yet maintained ---
+		//
+		// D44 refused `households` a `changedAt` because "nothing orders
+		// households by recency". The console does, and computes it today by
+		// scanning four whole tables per load (`lastActiveByHousehold`), which
+		// is exactly what cannot happen at the scale this is being built for.
+		//
+		// **Declared before they are written, on purpose.** Adding a column and
+		// an index to a table holding a handful of rows is free; at a million
+		// it is a table rewrite. Nothing reads either of these yet — the
+		// mutations that maintain them are the next stage — so **every row
+		// holds '' and a reader must treat that as "not counted", never as
+		// zero-items or never-active**. `readCount` in `shared/counts.ts` is
+		// that rule for the count; `changedAt` keeps `changedAtOf`'s habit of
+		// falling back rather than believing an empty string.
+		//
+		// `itemCount` is **zero-padded** and has to stay that way: text sorts
+		// lexicographically, so an unpadded count puts a 9-item household above
+		// a 10-item one. See `shared/counts.ts`, which owns the width.
+		changedAt: string().default(''),
+		itemCount: string().default(''),
+	})
+		.index('by_name', ['name'])
+		.index('by_added', ['addedAt'])
+		.index('by_items', ['itemCount'])
+		.index('by_changed', ['changedAt']),
 
 	memberships: table({
 		householdId: id('households'),
@@ -258,6 +306,18 @@ export const schema = {
 		expiresAt: string(),
 		createdBy: string(),
 		revoked: boolean().default(false),
+		// When the link was minted, and whether it ever turned into a person.
+		// The invite is the whole growth loop and none of it was recorded: a
+		// redemption wrote a membership and never touched the row that caused
+		// it, so *how many links convert* was unanswerable in both directions.
+		//
+		// **First redemption only.** Nothing revokes an invite on use, so one
+		// link can admit several people; what these answer is *did this
+		// convert, and how long did it take*, which is the question a
+		// conversion rate is made of.
+		addedAt: string().default(''),
+		redeemedAt: string().default(''),
+		redeemedBy: string().default(''),
 	})
 		.index('by_code', ['code'])
 		.index('by_household', ['householdId'])
@@ -499,6 +559,18 @@ export const schema = {
 	// No `changedAt`: an audit row is never edited. `at` is ours rather than the
 	// platform's `createdAt` for D44's reason — a stamp this app sorts by is a
 	// stamp this app writes.
+	// See `shared/lifecycle.ts` for what this deliberately does not hold. No id,
+	// no name, no household, no account — a row says only that a thing of some
+	// kind ended, when, and how old it was, which is what lets churn be measured
+	// without keeping data about somebody who asked to be forgotten.
+	deletions: table({
+		kind: string(),
+		at: string(),
+		// Whole days, decimal, '' when the birth stamp predates D44.
+		ageDays: string().default(''),
+	})
+		.index('by_at', ['at']),
+
 	activity: table({
 		at: string(),
 		// '' for an actor that is not a person. See `ACTOR_KINDS`.
@@ -555,9 +627,9 @@ export default capsule({
 
 			if (row) return { state: 'ready', displayName: row.displayName, needsName: false };
 
-			const memberships = await ctx.db.memberships
+			const memberships = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-				.collect();
+				);
 
 			const inherited = pickDisplayName(...memberships.map((m) => m.displayName));
 
@@ -578,9 +650,9 @@ export default capsule({
 		households: query(async (ctx): Promise<HouseholdListResult> => {
 			if (! signedIn(ctx)) return { state: 'guest' };
 
-			const rows = await ctx.db.memberships
+			const rows = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-				.collect();
+				);
 
 			if (rows.length === 0) return { state: 'no-household' };
 
@@ -593,9 +665,9 @@ export default capsule({
 				// reported: there is nothing to switch to and nothing to fix.
 				if (! household) continue;
 
-				const items = await ctx.db.items
+				const items = await collectAll(() => ctx.db.items
 					.withIndex('by_household', (r) => r.eq('householdId', row.householdId))
-					.collect();
+					);
 
 				summaries.push({
 					id: household.id,
@@ -642,17 +714,17 @@ export default capsule({
 
 			const userId = ctx.auth.userId;
 
-			const mine = await ctx.db.memberships
+			const mine = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', userId))
-				.collect();
+				);
 
 			const households: AccountHousehold[] = [];
 			const invites: AccountInvite[] = [];
 			const now = Date.now();
 
-			const minted = await ctx.db.invites
+			const minted = await collectAll(() => ctx.db.invites
 				.withIndex('by_creator', (r) => r.eq('createdBy', userId))
-				.collect();
+				);
 
 			for (const row of mine) {
 				const household = await ctx.db.households.get(row.householdId);
@@ -664,11 +736,11 @@ export default capsule({
 				if (! household) continue;
 
 				const [members, items, locations, stores, types] = await Promise.all([
-					ctx.db.memberships.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
-					ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
-					ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
-					ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
-					ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', household.id)).collect(),
+					collectAll(() => ctx.db.memberships.withIndex('by_household', (r) => r.eq('householdId', household.id))),
+					collectAll(() => ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', household.id))),
+					collectAll(() => ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', household.id))),
+					collectAll(() => ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', household.id))),
+					collectAll(() => ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', household.id))),
 				]);
 
 				households.push({
@@ -773,9 +845,9 @@ export default capsule({
 			const live = await liveTripsIn(ctx.db, membership.householdId, Date.now());
 			const byTrip = new Set(live.map((t) => t.id));
 
-			const rows = await ctx.db.claims
+			const rows = await collectAll(() => ctx.db.claims
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-				.collect();
+				);
 
 			return {
 				state: 'ready',
@@ -801,13 +873,13 @@ export default capsule({
 			// client's point of view: offer to start a new one.
 			if (! household) return { state: 'no-household' };
 
-			const members = await ctx.db.memberships
+			const members = await collectAll(() => ctx.db.memberships
 				.withIndex('by_household', (range) => range.eq('householdId', membership.householdId))
-				.collect();
+				);
 
-			const invites = await ctx.db.invites
+			const invites = await collectAll(() => ctx.db.invites
 				.withIndex('by_household', (range) => range.eq('householdId', membership.householdId))
-				.collect();
+				);
 
 			const now = Date.now();
 
@@ -864,12 +936,12 @@ export default capsule({
 			const resolvedId = state.membership.householdId;
 
 			const [items, itemTypes, itemStores, locations, types, stores] = await Promise.all([
-				ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
-				ctx.db.itemTypes.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
-				ctx.db.itemStores.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
-				ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
-				ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
-				ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', resolvedId)).collect(),
+				collectAll(() => ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', resolvedId))),
+				collectAll(() => ctx.db.itemTypes.withIndex('by_household', (r) => r.eq('householdId', resolvedId))),
+				collectAll(() => ctx.db.itemStores.withIndex('by_household', (r) => r.eq('householdId', resolvedId))),
+				collectAll(() => ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', resolvedId))),
+				collectAll(() => ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', resolvedId))),
+				collectAll(() => ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', resolvedId))),
 			]);
 
 			// Joined here rather than in the client so the payload is
@@ -961,9 +1033,9 @@ export default capsule({
 			// explain, so it is the same dead link as a revoked one.
 			if (! row) return { state: 'invalid' };
 
-			const members = await ctx.db.memberships
+			const members = await collectAll(() => ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', invite.householdId))
-				.collect();
+				);
 
 			// The household's own colour now, not its first location's — which is
 			// what this stood in for until `households.ink` existed (D42). The
@@ -1038,11 +1110,15 @@ export default capsule({
 			if (! administers(ctx)) return { state: 'denied' };
 
 			const nowIso = new Date().toISOString();
-			const [households, memberships, items, invites] = await Promise.all([
-				ctx.db.households.withIndex('by_creation').collect(),
-				ctx.db.memberships.withIndex('by_creation').collect(),
-				ctx.db.items.withIndex('by_creation').collect(),
-				ctx.db.invites.withIndex('by_creation').collect(),
+			// `invites` is no longer read: *Live invites* was the weakest of the
+			// four cards — a small state number — and its slot went to *Active*,
+			// which answers whether anybody is using the app. Dropping the card
+			// dropped a whole table scan with it.
+			const [households, memberships, items, restocks] = await Promise.all([
+				collectAll(() => ctx.db.households.withIndex('by_creation')),
+				collectAll(() => ctx.db.memberships.withIndex('by_creation')),
+				collectAll(() => ctx.db.items.withIndex('by_creation')),
+				collectAll(() => ctx.db.restocks.withIndex('by_creation')),
 			]);
 
 			// One pass each, keyed by household, so the per-household questions
@@ -1050,11 +1126,13 @@ export default capsule({
 			const owners = new Set<string>();
 			const people = new Set<string>();
 			const memberFirstSeen = new Map<string, string>();
+			const memberCount = new Map<string, number>();
 
 			for (const m of memberships) {
 				if (toRole(m.role) === 'owner') owners.add(m.householdId);
 
 				people.add(m.userId);
+				memberCount.set(m.householdId, (memberCount.get(m.householdId) ?? 0) + 1);
 
 				// The earliest membership an account holds is the closest thing
 				// to when it joined — there is no accounts table to ask.
@@ -1072,21 +1150,34 @@ export default capsule({
 
 			const lastActive = await lastActiveByHousehold(ctx.db, items);
 
-			let noOwner = 0, dormant = 0, empty = 0;
+			let noOwner = 0, dormant = 0, empty = 0, active = 0;
 			// One entry per household, **zeros included** — the map only holds
 			// households that have items, so its values alone would drop every
 			// empty one and leave the first band reading zero forever.
 			const sizes: number[] = [];
 
+			// One entry per household here too, and for the same reason `sizes` is:
+			// a household with no memberships at all is an orphan, and reading its
+			// count off the map alone would drop it from the split rather than
+			// counting it as solo.
+			const members: number[] = [];
+
 			for (const h of households) {
 				const items = itemCount.get(h.id) ?? 0;
+				const seen = lastActive.get(h.id) ?? '';
 
 				if (! owners.has(h.id)) noOwner++;
-				if (isDormant(lastActive.get(h.id) ?? '', nowIso)) dormant++;
+				if (isDormant(seen, nowIso)) dormant++;
+				// Not the complement of dormant: 30 days against 90, and an
+				// unmeasured household is neither.
+				if (isActive(seen, nowIso)) active++;
 				if (! items) empty++;
 
 				sizes.push(items);
+				members.push(memberCount.get(h.id) ?? 0);
 			}
+
+			const sharing = sharingSplit(members);
 
 			const months = monthKeysBack(nowIso);
 			// Per month, and therefore not a running total: these bars sum to
@@ -1105,9 +1196,9 @@ export default capsule({
 				households: households.length,
 				people: people.size,
 				items: items.length,
-				// Live means neither revoked nor expired — the number an
-				// administrator could act on, not the number of rows.
-				invites: invites.filter((i) => ! i.revoked && ! isExpired(i.expiresAt, Date.now())).length,
+				active,
+				solo: sharing.solo,
+				shared: sharing.shared,
 				newHouseholds: households.filter((h) => isWithinDays(addedAtOf(h), nowIso, RECENT_DAYS)).length,
 				newPeople: [...memberFirstSeen.values()]
 					.filter((iso) => isWithinDays(iso, nowIso, RECENT_DAYS)).length,
@@ -1116,6 +1207,11 @@ export default capsule({
 				dormant,
 				empty,
 				series,
+				trips: tripsByMonth(restocks, months).map((value, i) => ({
+					month: months[i],
+					label: monthLabel(months[i], i === 0 || i === months.length - 1),
+					value,
+				})),
 				buckets: itemBuckets(sizes),
 			};
 		}),
@@ -1151,9 +1247,9 @@ export default capsule({
 
 			const nowIso = new Date().toISOString();
 			const [households, memberships, items] = await Promise.all([
-				ctx.db.households.withIndex('by_creation').collect(),
-				ctx.db.memberships.withIndex('by_creation').collect(),
-				ctx.db.items.withIndex('by_creation').collect(),
+				collectAll(() => ctx.db.households.withIndex('by_creation')),
+				collectAll(() => ctx.db.memberships.withIndex('by_creation')),
+				collectAll(() => ctx.db.items.withIndex('by_creation')),
 			]);
 
 			const byHousehold = new Map<string, typeof memberships>();
@@ -1300,12 +1396,12 @@ export default capsule({
 
 			const id = household.id;
 			const [memberships, items, locations, types, stores, invites] = await Promise.all([
-				ctx.db.memberships.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
-				ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
-				ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
-				ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
-				ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
-				ctx.db.invites.withIndex('by_household', (r) => r.eq('householdId', id)).collect(),
+				collectAll(() => ctx.db.memberships.withIndex('by_household', (r) => r.eq('householdId', id))),
+				collectAll(() => ctx.db.items.withIndex('by_household', (r) => r.eq('householdId', id))),
+				collectAll(() => ctx.db.locations.withIndex('by_household', (r) => r.eq('householdId', id))),
+				collectAll(() => ctx.db.types.withIndex('by_household', (r) => r.eq('householdId', id))),
+				collectAll(() => ctx.db.stores.withIndex('by_household', (r) => r.eq('householdId', id))),
+				collectAll(() => ctx.db.invites.withIndex('by_household', (r) => r.eq('householdId', id))),
 			]);
 
 			const nowIso = new Date().toISOString();
@@ -1427,9 +1523,9 @@ export default capsule({
 
 			const adminIds = parseAdminIds(ctx.env[ADMIN_IDS_VAR]);
 			const [households, memberships, profiles] = await Promise.all([
-				ctx.db.households.withIndex('by_creation').collect(),
-				ctx.db.memberships.withIndex('by_creation').collect(),
-				ctx.db.profiles.withIndex('by_creation').collect(),
+				collectAll(() => ctx.db.households.withIndex('by_creation')),
+				collectAll(() => ctx.db.memberships.withIndex('by_creation')),
+				collectAll(() => ctx.db.profiles.withIndex('by_creation')),
 			]);
 
 			const rows = buildPeople(households, memberships, profiles, adminIds, ctx.auth);
@@ -1516,10 +1612,10 @@ export default capsule({
 
 			const adminIds = parseAdminIds(ctx.env[ADMIN_IDS_VAR]);
 			const [households, memberships, profiles, invites] = await Promise.all([
-				ctx.db.households.withIndex('by_creation').collect(),
-				ctx.db.memberships.withIndex('by_creation').collect(),
-				ctx.db.profiles.withIndex('by_creation').collect(),
-				ctx.db.invites.withIndex('by_creator', (r) => r.eq('createdBy', userId)).collect(),
+				collectAll(() => ctx.db.households.withIndex('by_creation')),
+				collectAll(() => ctx.db.memberships.withIndex('by_creation')),
+				collectAll(() => ctx.db.profiles.withIndex('by_creation')),
+				collectAll(() => ctx.db.invites.withIndex('by_creator', (r) => r.eq('createdBy', userId))),
 			]);
 
 			const person = buildPeople(households, memberships, profiles, adminIds, ctx.auth)
@@ -1529,7 +1625,7 @@ export default capsule({
 			// reason every query here is — a throw never emits at all.
 			if (! person) return { state: 'missing' };
 
-			const items = await ctx.db.items.withIndex('by_creation').collect();
+			const items = await collectAll(() => ctx.db.items.withIndex('by_creation'));
 			const itemCount = new Map<string, number>();
 
 			for (const it of items) {
@@ -1603,7 +1699,7 @@ export default capsule({
 		): Promise<AdminActivityResult> => {
 			if (! administers(ctx)) return { state: 'denied' };
 
-			const all = await ctx.db.activity.withIndex('by_at').order('desc').collect();
+			const all = await collectAll(() => ctx.db.activity.withIndex('by_at').order('desc'));
 			const pageSize = Math.min(Math.max(Math.floor(args.pageSize ?? ADMIN_PAGE_SIZE), 1), 100);
 			const offset = Math.max(0, Math.min(Math.floor(args.offset ?? 0), Math.max(0, all.length - 1)));
 			const page = all.slice(offset, offset + pageSize);
@@ -1755,9 +1851,9 @@ export default capsule({
 				});
 			}
 
-			const memberships = await ctx.db.memberships
+			const memberships = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-				.collect();
+				);
 
 			for (const row of memberships) {
 				// Skipped rather than rewritten when it already agrees: a rename
@@ -1798,9 +1894,9 @@ export default capsule({
 
 			const picture = accountAvatar(ctx);
 
-			const memberships = await ctx.db.memberships
+			const memberships = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-				.collect();
+				);
 
 			let changed = false;
 
@@ -2521,9 +2617,8 @@ export default capsule({
 
 				if (! isValidName(draft.name)) throw new AccessError('A name is required.');
 
-				const existing = await ctx.db[tableName]
-					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-					.collect();
+				const existing = await collectAll<{ id: string; name: string }>(() => ctx.db[tableName]
+					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId)));
 
 				const key = termKey(draft.name);
 
@@ -2577,9 +2672,8 @@ export default capsule({
 				if (patch.name !== undefined) {
 					if (! isValidName(patch.name)) throw new AccessError('A name is required.');
 
-					const siblings = await ctx.db[tableName]
-						.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-						.collect();
+					const siblings = await collectAll<{ id: string; name: string }>(() => ctx.db[tableName]
+						.withIndex('by_household', (r) => r.eq('householdId', membership.householdId)));
 
 					const key = termKey(patch.name);
 
@@ -2664,13 +2758,13 @@ export default capsule({
 			 * table — the id is a column on the item — so that one still scans.
 			 */
 			const used = kind === 'location'
-				? (await ctx.db.items
+				? (await collectAll(() => ctx.db.items
 					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-					.collect()
+					)
 				).filter((i) => i.locationId === termId).length
 				: kind === 'type'
-					? (await ctx.db.itemTypes.withIndex('by_type', (r) => r.eq('typeId', termId)).collect()).length
-					: (await ctx.db.itemStores.withIndex('by_store', (r) => r.eq('storeId', termId)).collect()).length;
+					? (await collectAll(() => ctx.db.itemTypes.withIndex('by_type', (r) => r.eq('typeId', termId)))).length
+					: (await collectAll(() => ctx.db.itemStores.withIndex('by_store', (r) => r.eq('storeId', termId)))).length;
 
 			/*
 			 * The client draws its blocked dialog from this same call, so the
@@ -2681,9 +2775,9 @@ export default capsule({
 			 * rarest path in the handler.
 			 */
 			const sources = kind === 'store'
-				? await ctx.db.stores
+				? await collectAll(() => ctx.db.stores
 					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-					.collect()
+					)
 				: [];
 
 			const blocked = termBlock(
@@ -2719,13 +2813,17 @@ export default capsule({
 			// Two writes, because the fallback entropy source *is* the row id and
 			// so cannot be known before the insert. The transaction means a
 			// caller never observes the placeholder.
+			const mintedAt = Date.now();
 			const minted = await ctx.transaction(async () => {
 				const invite = await ctx.db.invites.insert({
 					householdId: membership.householdId,
 					code: PENDING_CODE,
 					role: granted,
-					expiresAt: expiryFrom(Date.now()),
+					expiresAt: expiryFrom(mintedAt),
 					createdBy: membership.userId,
+					// The same clock reading the expiry is derived from, so the
+					// two cannot disagree about when this link began.
+					addedAt: stampFrom(mintedAt),
 					// `revoked` is deliberately omitted rather than written as `false`.
 					// It is the schema's only boolean column and this is its only
 					// insert, which makes it the prime suspect for the hosted runtime's
@@ -2783,9 +2881,9 @@ export default capsule({
 			// household the code is for. The check has to stay in some form: a
 			// code must never change a current member's role, in either
 			// direction, and a duplicate row would do exactly that.
-			const existing = await ctx.db.memberships
+			const existing = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', ctx.auth.userId))
-				.collect();
+				);
 
 			if (existing.some((row) => row.householdId === invite.householdId)) {
 				throw new AccessError('You are already a member of that household.');
@@ -2803,6 +2901,18 @@ export default capsule({
 				joinedAt: stampFrom(now),
 			});
 
+			// **First redemption only**, and the guard is the whole point: an
+			// invite is not revoked on use, so a link shared with a family
+			// admits several people. Overwriting on each one would turn *how
+			// long did this take to convert* into *when did the last person
+			// wander in*.
+			if (! invite.redeemedAt) {
+				await ctx.db.invites.update(invite.id, {
+					redeemedAt: stampFrom(now),
+					redeemedBy: ctx.auth.userId,
+				});
+			}
+
 			ctx.invalidate('households', 'household', 'pantry', 'invitePreview', 'account');
 
 			return { householdId: invite.householdId };
@@ -2811,9 +2921,9 @@ export default capsule({
 		changeRole: mutation(async (ctx, householdId: string, membershipId: string, nextRole: string) => {
 			const membership = await requireCapability(ctx, householdId, 'member:role');
 
-			const members = await ctx.db.memberships
+			const members = await collectAll(() => ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-				.collect();
+				);
 
 			const target = members.find((m) => m.id === membershipId);
 
@@ -2841,9 +2951,9 @@ export default capsule({
 		removeMember: mutation(async (ctx, householdId: string, membershipId: string) => {
 			const membership = await requireCapability(ctx, householdId, 'member:remove');
 
-			const members = await ctx.db.memberships
+			const members = await collectAll(() => ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-				.collect();
+				);
 
 			const target = members.find((m) => m.id === membershipId);
 
@@ -2869,9 +2979,9 @@ export default capsule({
 		leaveHousehold: mutation(async (ctx, householdId: string) => {
 			const membership = await requireMembership(ctx, householdId);
 
-			const members = await ctx.db.memberships
+			const members = await collectAll(() => ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-				.collect();
+				);
 
 			if (wouldStrandHousehold(members, membership.id)) {
 				throw new AccessError(
@@ -2896,29 +3006,10 @@ export default capsule({
 		deleteHousehold: mutation(async (ctx, householdId: string) => {
 			const membership = await requireCapability(ctx, householdId, 'household:delete');
 
-			// Order matters: join rows, then what they point at, then the
-			// household itself. Zero has no cascading deletes.
-			for (const name of [
-				'itemTypes',
-				'itemStores',
-				'restocks',
-				'claims',
-				'trips',
-				'items',
-				'locations',
-				'types',
-				'stores',
-				'invites',
-				'memberships',
-			] as const) {
-				const rows = await ctx.db[name]
-					.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-					.collect();
-
-				for (const row of rows) await ctx.db[name].delete(row.id);
-			}
-
-			await ctx.db.households.delete(membership.householdId);
+			// The cascade lived here as a second copy of `deleteHouseholdRows`'
+			// list — identical, and identical is how two lists start. One funnel
+			// now, which is also the one place a deletion gets recorded.
+			await deleteHouseholdRows(ctx.db, membership.householdId);
 
 			ctx.invalidate('households', 'household', 'pantry', 'claims', 'account');
 		}),
@@ -2959,9 +3050,9 @@ export default capsule({
 		transferOwnership: mutation(async (ctx, householdId: string, toMembershipId: string) => {
 			const membership = await requireCapability(ctx, householdId, 'member:role');
 
-			const members = await ctx.db.memberships
+			const members = await collectAll(() => ctx.db.memberships
 				.withIndex('by_household', (r) => r.eq('householdId', membership.householdId))
-				.collect();
+				);
 
 			const target = members.find((m) => m.id === toMembershipId);
 
@@ -3034,9 +3125,9 @@ export default capsule({
 				throw new AccessError(ADMIN_UNDELETABLE_REFUSAL);
 			}
 
-			const mine = await ctx.db.memberships
+			const mine = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', userId))
-				.collect();
+				);
 
 			const profile = await ctx.db.profiles
 				.withIndex('by_user', (r) => r.eq('userId', userId))
@@ -3054,9 +3145,9 @@ export default capsule({
 				// row below and decide nothing about a household nobody can reach.
 				if (! household) continue;
 
-				const members = await ctx.db.memberships
+				const members = await collectAll(() => ctx.db.memberships
 					.withIndex('by_household', (r) => r.eq('householdId', m.householdId))
-					.collect();
+					);
 
 				const owners = members.filter((x) => toRole(x.role) === 'owner').length;
 
@@ -3084,9 +3175,9 @@ export default capsule({
 				}
 
 				if (decision.action === 'transfer') {
-					const members = await ctx.db.memberships
+					const members = await collectAll(() => ctx.db.memberships
 						.withIndex('by_household', (r) => r.eq('householdId', decision.householdId))
-						.collect();
+						);
 
 					const target = members.find((x) => x.id === decision.toMembershipId);
 
@@ -3130,9 +3221,9 @@ export default capsule({
 
 				if (decision?.action !== 'transfer') continue;
 
-				const members = await ctx.db.memberships
+				const members = await collectAll(() => ctx.db.memberships
 					.withIndex('by_household', (r) => r.eq('householdId', householdId))
-					.collect();
+					);
 
 				// Re-found rather than carried from the validation pass — the same
 				// re-read-before-you-write rule every other handler follows.
@@ -3158,6 +3249,10 @@ export default capsule({
 				await endTripsFor(ctx.db, m.householdId, userId);
 				await ctx.db.memberships.delete(m.id);
 			}
+
+			// The profile's own stamp is the account's birthday as far as this
+			// app is concerned, and it is about to be unreadable.
+			await recordDeletion(ctx.db, 'account', profile ? addedAtOf(profile) : '');
 
 			if (profile) await ctx.db.profiles.delete(profile.id);
 
@@ -3485,9 +3580,9 @@ export default capsule({
 				throw new AccessError(ADMIN_UNDELETABLE_REFUSAL);
 			}
 
-			const mine = await ctx.db.memberships
+			const mine = await collectAll(() => ctx.db.memberships
 				.withIndex('by_user', (r) => r.eq('userId', userId))
-				.collect();
+				);
 
 			const profile = await ctx.db.profiles
 				.withIndex('by_user', (r) => r.eq('userId', userId))
@@ -3502,9 +3597,9 @@ export default capsule({
 			const needed: { householdId: string; membershipId: string }[] = [];
 
 			for (const m of mine) {
-				const members = await ctx.db.memberships
+				const members = await collectAll(() => ctx.db.memberships
 					.withIndex('by_household', (r) => r.eq('householdId', m.householdId))
-					.collect();
+					);
 
 				const owners = members.filter((x) => toRole(x.role) === 'owner');
 
@@ -3532,9 +3627,9 @@ export default capsule({
 				}
 
 				if (d.action === 'transfer') {
-					const members = await ctx.db.memberships
+					const members = await collectAll(() => ctx.db.memberships
 						.withIndex('by_household', (r) => r.eq('householdId', d.householdId))
-						.collect();
+						);
 
 					const target = members.find((x) => x.id === d.toMembershipId);
 
@@ -3590,9 +3685,9 @@ export default capsule({
 					continue;
 				}
 
-				const members = await ctx.db.memberships
+				const members = await collectAll(() => ctx.db.memberships
 					.withIndex('by_household', (r) => r.eq('householdId', householdId))
-					.collect();
+					);
 
 				const target = members.find((x) => x.id === decision.toMembershipId);
 
@@ -3636,6 +3731,8 @@ export default capsule({
 				await ctx.db.memberships.delete(m.id);
 			}
 
+			await recordDeletion(ctx.db, 'account', profile ? addedAtOf(profile) : '');
+
 			if (profile) await ctx.db.profiles.delete(profile.id);
 
 			await logActivity(ctx, {
@@ -3661,6 +3758,63 @@ export default capsule({
 // --- helpers ---
 
 /**
+ * Read every row a query matches, rather than the first thousand of them.
+ *
+ * **`collect()` silently truncates at 1,000 rows.** Not a table limit, not a
+ * write limit, and not specific to an index — any single result set, with or
+ * without a range predicate. Measured on 2026-09-02: a space holding 3,045
+ * items answered `1000` to one `collect()`, and a household really holding
+ * 1,200 answered `1000` to a scoped one. It is `MAX_LOCAL_QUERY_ROWS` in the
+ * CLI's own bundle, applied as `results.slice(0, maxRows)` **whether or not a
+ * `limit()` was asked for**, so the caller cannot tell a complete answer from a
+ * cut one.
+ *
+ * That is the worst shape a limit can have. A truncated read is not an error,
+ * not a slow page and not a warning — it is a number that is quietly too small,
+ * and everything computed from it inherits the lie. It is why the console
+ * reported a 40-item household as the biggest pantry in a space containing a
+ * 1,200-item one.
+ *
+ * **`paginate()` walks past it and costs nothing to use.** `numItems` is
+ * clamped to the same 1,000, but the cursor advances — measured at 3,245 rows
+ * in 4 pages. For any result *under* the cap it is a single call with `isDone`
+ * already true, which is exactly what `collect()` was, so this is a strict
+ * improvement at every call site rather than a trade.
+ *
+ * **Takes a thunk, not a builder.** A builder resets its own state once it has
+ * been read, so reusing one across pages is a bug that would look like an
+ * early stop. Opening a fresh one per page is correct however the SDK behaves.
+ *
+ * **It cannot throw**, because a query that throws never emits and the client
+ * cannot tell that apart from loading. A cursor that fails to advance ends the
+ * walk instead — a short answer beats a hung subscription.
+ */
+type PageableQuery<T> = {
+	paginate(options: { cursor: string | null; numItems: number }): Promise<{
+		continueCursor: string | null;
+		isDone: boolean;
+		page: T[];
+	}>;
+};
+
+async function collectAll<T>(open: () => PageableQuery<T>): Promise<T[]> {
+	const rows: T[] = [];
+	let cursor: string | null = null;
+
+	for (;;) {
+		const result = await open().paginate({ cursor, numItems: 1000 });
+
+		rows.push(...result.page);
+
+		if (result.isDone || ! result.continueCursor || result.continueCursor === cursor) break;
+
+		cursor = result.continueCursor;
+	}
+
+	return rows;
+}
+
+/**
  * A household's members, for an admin write, or a refusal if it is gone.
  *
  * The console's equivalent of `requireCapability`'s return value: the app's
@@ -3675,9 +3829,9 @@ async function adminMembersOf(db: WriteDb, householdId: string) {
 
 	if (! household) throw new AccessError('That household no longer exists.');
 
-	return db.memberships
+	return collectAll(() => db.memberships
 		.withIndex('by_household', (r) => r.eq('householdId', household.id))
-		.collect();
+		);
 }
 
 /**
@@ -3826,9 +3980,9 @@ async function accountNameOf(db: ReadDb, userId: string, auth: AuthContext): Pro
 		.withIndex('by_user', (r) => r.eq('userId', userId))
 		.first();
 
-	const memberships = await db.memberships
+	const memberships = await collectAll(() => db.memberships
 		.withIndex('by_user', (r) => r.eq('userId', userId))
-		.collect();
+		);
 
 	return pickDisplayName(
 		profile?.displayName ?? '',
@@ -3846,11 +4000,11 @@ async function accountNameOf(db: ReadDb, userId: string, auth: AuthContext): Pro
  */
 async function countHousehold(db: WriteDb, householdId: string): Promise<Held> {
 	const [items, locations, stores, types, members] = await Promise.all([
-		db.items.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-		db.locations.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-		db.stores.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-		db.types.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
-		db.memberships.withIndex('by_household', (r) => r.eq('householdId', householdId)).collect(),
+		collectAll(() => db.items.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.locations.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.stores.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.types.withIndex('by_household', (r) => r.eq('householdId', householdId))),
+		collectAll(() => db.memberships.withIndex('by_household', (r) => r.eq('householdId', householdId))),
 	]);
 
 	return {
@@ -3863,6 +4017,30 @@ async function countHousehold(db: WriteDb, householdId: string): Promise<Held> {
 }
 
 /**
+ * One line in the churn record. See `shared/lifecycle.ts` for what it holds and,
+ * more importantly, what it does not.
+ *
+ * **It never throws and never blocks the deletion.** Somebody asking for their
+ * household or their account to go must not be refused because a statistics row
+ * could not be written — the deletion is the thing they asked for and this is
+ * bookkeeping about it.
+ */
+async function recordDeletion(db: WriteDb, kind: DeletionKind, bornIso: string): Promise<void> {
+	const now = Date.now();
+
+	try {
+		await db.deletions.insert({
+			kind,
+			at: stampFrom(now),
+			ageDays: ageInDays(bornIso, now),
+		});
+	} catch {
+		// Deliberately silent. There is no user-facing consequence and nothing
+		// to retry against.
+	}
+}
+
+/**
  * Every row a household owns, then the household — children first.
  *
  * Zero has **no cascading deletes**, so this list is the only thing standing
@@ -3872,6 +4050,13 @@ async function countHousehold(db: WriteDb, householdId: string): Promise<Held> {
  * next time a table is added.
  */
 async function deleteHouseholdRows(db: WriteDb, householdId: string): Promise<void> {
+	// Read the birth stamp *before* the row carrying it goes. This is the only
+	// moment a household's age is knowable, which is the whole argument for
+	// recording it here rather than deriving it later from something.
+	const household = await db.households.get(householdId) as { addedAt?: string } | null;
+
+	await recordDeletion(db, 'household', household?.addedAt ?? '');
+
 	for (const name of [
 		'itemTypes',
 		'itemStores',
@@ -3885,9 +4070,8 @@ async function deleteHouseholdRows(db: WriteDb, householdId: string): Promise<vo
 		'invites',
 		'memberships',
 	] as const) {
-		const rows = await db[name]
-			.withIndex('by_household', (r) => r.eq('householdId', householdId))
-			.collect();
+		const rows = await collectAll<{ id: string }>(() => db[name]
+			.withIndex('by_household', (r) => r.eq('householdId', householdId)));
 
 		for (const row of rows) await db[name].delete(row.id);
 	}
@@ -4072,9 +4256,9 @@ async function lastActiveByHousehold(
 	for (const it of items) note(it.householdId, changedAtOf(it));
 
 	const [locations, types, stores] = await Promise.all([
-		db.locations.withIndex('by_creation').collect(),
-		db.types.withIndex('by_creation').collect(),
-		db.stores.withIndex('by_creation').collect(),
+		collectAll(() => db.locations.withIndex('by_creation')),
+		collectAll(() => db.types.withIndex('by_creation')),
+		collectAll(() => db.stores.withIndex('by_creation')),
 	]);
 
 	for (const row of [...locations, ...types, ...stores]) note(row.householdId, changedAtOf(row));
@@ -4180,7 +4364,7 @@ async function syncJoins(
 	if (typeIds !== undefined) {
 		const valid = await keepOwned(db.types, householdId, typeIds);
 
-		const existing = await db.itemTypes.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+		const existing = await collectAll(() => db.itemTypes.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 		for (const row of existing) {
 			if (! valid.has(row.typeId)) await db.itemTypes.delete(row.id);
@@ -4196,7 +4380,7 @@ async function syncJoins(
 	if (storeIds !== undefined) {
 		const valid = await keepOwned(db.stores, householdId, storeIds);
 
-		const existing = await db.itemStores.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+		const existing = await collectAll(() => db.itemStores.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 		for (const row of existing) {
 			if (! valid.has(row.storeId)) await db.itemStores.delete(row.id);
@@ -4240,9 +4424,9 @@ const TRIP_MS = 24 * 60 * 60 * 1000;
 
 /** A household's trips that have not been abandoned. */
 async function liveTripsIn(db: ReadDb, householdId: string, now: number) {
-	const trips = await db.trips
+	const trips = await collectAll(() => db.trips
 		.withIndex('by_household', (r) => r.eq('householdId', householdId))
-		.collect();
+		);
 
 	return trips.filter((t) => now - Date.parse(t.at) <= TRIP_MS);
 }
@@ -4250,7 +4434,7 @@ async function liveTripsIn(db: ReadDb, householdId: string, now: number) {
 /** Whoever currently holds this row, or nothing. */
 async function liveClaimOn(db: ReadDb, itemId: string, live: readonly { id: string }[]) {
 	const ids = new Set(live.map((t) => t.id));
-	const rows = await db.claims.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+	const rows = await collectAll(() => db.claims.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 	return rows.find((row) => ids.has(row.tripId));
 }
@@ -4260,9 +4444,9 @@ async function myClaimsIn(db: ReadDb, householdId: string, userId: string, now: 
 	const live = await liveTripsIn(db, householdId, now);
 	const ids = new Set(live.filter((t) => t.userId === userId).map((t) => t.id));
 
-	const rows = await db.claims
+	const rows = await collectAll(() => db.claims
 		.withIndex('by_household', (r) => r.eq('householdId', householdId))
-		.collect();
+		);
 
 	return rows.filter((row) => ids.has(row.tripId));
 }
@@ -4307,9 +4491,9 @@ async function pruneTrips(
 ): Promise<void> {
 	void now;
 
-	const all = await db.trips
+	const all = await collectAll(() => db.trips
 		.withIndex('by_household', (r) => r.eq('householdId', householdId))
-		.collect();
+		);
 
 	const keep = new Set(live.map((t) => t.id));
 
@@ -4327,7 +4511,7 @@ async function pruneTrips(
  * trip is gone is invisible to every read, which is worse than absent.
  */
 async function endTrip(db: WriteDb, tripId: string): Promise<void> {
-	const claims = await db.claims.withIndex('by_trip', (r) => r.eq('tripId', tripId)).collect();
+	const claims = await collectAll(() => db.claims.withIndex('by_trip', (r) => r.eq('tripId', tripId)));
 
 	for (const claim of claims) await db.claims.delete(claim.id);
 
@@ -4336,7 +4520,7 @@ async function endTrip(db: WriteDb, tripId: string): Promise<void> {
 
 /** Every claim on an item, whatever trip it belongs to — the item's cascade. */
 async function clearClaimsForItem(db: WriteDb, itemId: string): Promise<void> {
-	const rows = await db.claims.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+	const rows = await collectAll(() => db.claims.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 	for (const row of rows) await db.claims.delete(row.id);
 }
@@ -4350,9 +4534,9 @@ async function clearClaimsForItem(db: WriteDb, itemId: string): Promise<void> {
  * clear.
  */
 async function endTripsFor(db: WriteDb, householdId: string, userId: string): Promise<void> {
-	const trips = await db.trips
+	const trips = await collectAll(() => db.trips
 		.withIndex('by_household', (r) => r.eq('householdId', householdId))
-		.collect();
+		);
 
 	for (const trip of trips) {
 		if (trip.userId === userId) await endTrip(db, trip.id);
@@ -4361,11 +4545,11 @@ async function endTripsFor(db: WriteDb, householdId: string, userId: string): Pr
 
 /** Deletes every join row belonging to an item. */
 async function clearJoinsForItem(db: WriteDb, itemId: string): Promise<void> {
-	const types = await db.itemTypes.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+	const types = await collectAll(() => db.itemTypes.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 	for (const row of types) await db.itemTypes.delete(row.id);
 
-	const stores = await db.itemStores.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+	const stores = await collectAll(() => db.itemStores.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 	for (const row of stores) await db.itemStores.delete(row.id);
 }
@@ -4381,7 +4565,7 @@ async function clearJoinsForItem(db: WriteDb, itemId: string): Promise<void> {
  * often you restock an item that no longer exists.
  */
 async function clearRestocksForItem(db: WriteDb, itemId: string): Promise<void> {
-	const rows = await db.restocks.withIndex('by_item', (r) => r.eq('itemId', itemId)).collect();
+	const rows = await collectAll(() => db.restocks.withIndex('by_item', (r) => r.eq('itemId', itemId)));
 
 	for (const row of rows) await db.restocks.delete(row.id);
 }
@@ -4394,7 +4578,7 @@ async function clearRestocksForItem(db: WriteDb, itemId: string): Promise<void> 
  * grant the level they just lost (D21).
  */
 async function revokeInvitesBy(db: WriteDb, householdId: string, userId: string): Promise<void> {
-	const minted = await db.invites.withIndex('by_creator', (r) => r.eq('createdBy', userId)).collect();
+	const minted = await collectAll(() => db.invites.withIndex('by_creator', (r) => r.eq('createdBy', userId)));
 
 	for (const invite of minted) {
 		if (invite.householdId === householdId && ! invite.revoked) {

@@ -449,7 +449,32 @@ export type AdminSummaryData = {
 	households: number;
 	people: number;
 	items: number;
-	invites: number;
+
+	/**
+	 * Households touched inside `RECENT_DAYS`.
+	 *
+	 * **The card the other three cannot be.** Households, people and items all
+	 * rise when one person makes five pantries and fills them once; this is the
+	 * only one that falls when nobody comes back. It replaced *Live invites*,
+	 * which counted a small piece of state nobody acts on.
+	 *
+	 * **`active + dormant` is less than `households`, on purpose.** Dormant is
+	 * 90 days and this is 30, and a household whose last activity is unknown is
+	 * neither — so the card reads *of N* rather than implying the remainder is
+	 * idle.
+	 */
+	active: number;
+
+	/**
+	 * Households by whether more than one person is in them.
+	 *
+	 * `solo + shared === households` exactly, because both are counted by
+	 * walking `households` rather than the membership map — a household with no
+	 * memberships at all is an orphan, and reading the map alone would drop it
+	 * from the split rather than counting it as solo.
+	 */
+	solo: number;
+	shared: number;
 
 	newHouseholds: number;
 	newPeople: number;
@@ -476,6 +501,20 @@ export type AdminSummaryData = {
 	 * households that are not empty are samples or pantries.
 	 */
 	buckets: AdminItemBucket[];
+
+	/**
+	 * Twelve months of **completed shopping trips** — the one series here that
+	 * measures somebody *doing* something rather than something existing.
+	 *
+	 * Counted from `restocks` and not from `trips`: a put-away ends its trip and
+	 * deletes it, so what survives is one row per item sharing a `tripId` and a
+	 * stamp. See `tripsByMonth`.
+	 *
+	 * **These bars erode.** A restock row dies with its item (D64), so a past
+	 * month's count falls as items are removed. It is a floor on what happened,
+	 * never an exact history, and the card says so.
+	 */
+	trips: AdminSeriesPoint[];
 };
 
 export type AdminSummaryResult = AdminState<AdminSummaryData>;

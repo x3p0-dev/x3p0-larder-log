@@ -2871,6 +2871,239 @@ bars draw one column, and `?demo` fills one household rather than a space. The
 backdating that made the verification possible is not something a person
 clicking the app can do.
 
+### Overview measures behaviour now, not just inventory (D72) — 2026-09-02
+
+**Client and one query's return shape**: no schema change — fifteen tables,
+fifteen queries, thirty-one mutations, `db.migrations` empty, `/api/status` the
+only endpoint. The artifact is byte-for-byte what D71 left.
+
+**Every figure on Overview counted something that *existed*.** 115 households
+created and abandoned read identically to 115 used weekly. Three changes fix
+that, and one of them makes the screen cheaper rather than dearer.
+
+- ***Active* replaced *Live invites* in the fourth card.** Live invites was a
+  small piece of state nobody acts on; *Active* is households touched inside
+  `RECENT_DAYS`. **Dropping the card dropped a whole table scan** — `adminSummary`
+  no longer reads `invites` at all.
+- **`isActive` is not the complement of `isDormant`, deliberately.** 30 days
+  against 90, and an **unmeasured** household is neither — so `active + dormant`
+  is less than the total and the card says *touched in the last 30 days* rather
+  than implying the remainder is idle. A mutation making it `! isDormant(…)`
+  fails two assertions.
+- ***Shopping trips*, and it counts trips rather than rows.** The record of a
+  finished trip is in **`restocks`, not `trips`** — a put-away ends its trip and
+  deletes it, so what survives is one row per item sharing a `tripId` and one
+  `at`. Counting rows would answer *how many things were put away*, a bigger
+  number that looks just as plausible on a chart; the mutation that does so
+  fails two assertions. **`tripId || at` is the key**, because `tripId` defaults
+  to `''` and every row of one put-away shares its stamp.
+- **The trips bars erode, and the card says so.** A restock row dies with its
+  item (D64), so a past month falls as items are removed — a floor on what
+  happened, never a history. Stated on the card's own face, as the deletion
+  entry's denormalised counts are.
+- ***Sharing* is the only figure here that does not rise when one person makes
+  five pantries.** Households, people and items all do. It measures D33 and D66
+  — neither of which has ever been able to report whether it landed. `>= 2`, and
+  the boundary is the whole function: `> 2` counts households of three or more
+  and reads as a plausible, quieter number nothing contradicts.
+- **`solo + shared === households` exactly**, because both are counted by walking
+  `households` rather than the membership map — a household with no memberships
+  is an orphan, and the map alone would drop it rather than count it solo. The
+  same reason `sizes` is built that way (D69).
+- **`PantrySizes` became `Distribution` with two callers.** *Sharing* is the same
+  shape asking a different question, and drawing the bars twice is two places to
+  keep a rounding, a track colour and an `aria-label` in step. `MonthBars`
+  already made this trade for the two twelve-month series.
+
+**Verified**: typecheck clean, **1006 assertions** (13 new), all three rules
+proved by mutation, the artifact unchanged, and **60 class literals diffed
+against the freshly built `zero.css`** by unescaping the sheet's own selectors —
+0 missing, and proved to find a real class and refuse a bogus one. The extractor
+**strips comments before reading source**, which is the trap that has cost this
+project six rounds.
+
+Driven against the real handler on the seeded local space: 115 households, **80
+active**, **85 shared + 30 solo summing exactly to 115**, and twelve months of
+trips reading `[13, 10, 6, 24, 13, 18, 15, 22, 19, 30, 44, 11]` after ~240
+put-aways were seeded — the first time either chart has had shape locally.
+`invites` is gone from the payload.
+
+**Nobody has clicked it.** The rail now holds two cards where it held one, and
+*Sharing*'s label column is 66px against a 172px track — both want a real
+screen, and the 390 layout is inherited rather than designed, as the rest of
+Overview's is.
+
+### The two things the app was throwing away (D71) — 2026-09-02
+
+**The twelfth additive schema change since Phase 2**: `invites.addedAt`,
+`.redeemedAt`, `.redeemedBy`, and **`deletions`, the fifteenth table**. Fifteen
+queries and thirty-one mutations still — no handler was added, only writes
+inside four that already existed. `db.migrations` empty, `/api/status` the only
+endpoint.
+
+**Working out what data the product questions need produced a much smaller
+answer than expected.** `trips`, `claims`, `restocks` and `activity` all already
+carry timestamps, so *trips completed per month* — the strongest available signal
+that the app is **used** rather than merely filled — needs no new data, only a
+chart. Counts, distributions, retention and active-household rates are all
+derivable from rows that exist. **So the only thing that could not wait was what
+the app was discarding**, and there were exactly two.
+
+- **Invites recorded nothing about themselves.** No creation date, and redemption
+  wrote a membership without touching the row that caused it — so the entire
+  growth loop was unanswerable, and unanswerable **retroactively**, which is what
+  made it urgent. The mint stamp is **the same clock reading the expiry comes
+  from**, and the redemption is **first-only**: nothing revokes an invite on use,
+  so one family link admits several people, and overwriting would turn *how long
+  did this take to convert* into *when did the last person wander in*.
+- **`deletions` is churn without a person in it.** No id, no name, no household,
+  no account — a row says a thing of some kind ended, when, and how old it was,
+  so an export of the table is a list of dates. That is what lets churn be
+  counted without breaking D62's rule that the app never logs what somebody does
+  to their own things. **`ageDays` is the half a bare count cannot answer** —
+  *forty left this month* is a number, *half were under a week old* is a finding —
+  and it is knowable only at the moment of deletion. **Append-only rather than a
+  monthly counter**, which sidesteps the open concurrency question entirely.
+- **`deleteHousehold` stopped carrying its own copy of the cascade.** It was
+  byte-identical to `deleteHouseholdRows`', and identical is how two lists start.
+  One funnel now, which is also the single place a household's deletion is
+  recorded.
+- **Item removals are knowingly not recorded** — every `removeItem` on a hot path
+  for a signal pantry size already shows. D69's note that *Items added* can only
+  rise stands, unresolved on purpose.
+
+**Verified against the real handlers** on a throwaway `sf dev`: an invite minted
+and redeemed **twice**, the row naming the first redeemer; a household deleted
+from its own page and another through the console, recording `0` and `439` days;
+an account deleted **both** self-serve and through the console, each writing its
+own row plus one for the household that went with it. **993 assertions**, three
+`ageDays` rules proved by mutation, the artifact read (fifteen tables,
+`db.migrations: []`) and **`.docs/data-model.md` diffed against it with zero
+gaps**.
+
+**And it turned up a real bug in code nobody has clicked — not fixed, see
+below.**
+
+#### `adminDeleteAccount` asks a question D68 says it must not
+
+**`fateOf` is supposed to be the one classification both deletion paths read**,
+and the console does not read it. `adminDeleteAccount` computes its own:
+
+```ts
+if (toRole(m.role) === 'owner' && owners.length === 1) needed.push(…)
+```
+
+**The `members <= 1` test is missing**, and D68 names that exact omission: *"tested
+before the role, and that ordering is the rule: testing the role first makes a
+sole-member household a question, which is a screen offering a choice with one
+answer."*
+
+So the console demands a decision about a household the target is **alone** in,
+where *transfer* has nobody to name and *delete* is the only workable answer —
+while `deleteMyAccount`, on the same household, files it as `goes` and destroys
+it without asking. Measured: deleting a one-person account through the console
+refuses with *"Decide what happens to Bob Solo first."*
+
+**Not fixed here, deliberately.** The change is small but it alters
+account-deletion semantics, and the write phase would have to destroy those
+households too — otherwise removing the last membership manufactures a pantry
+nobody can reach, the state D68 was written to prevent. That wants its own pass
+rather than a drive-by inside a data change. The console's writes are held and
+nobody has clicked this path, so nothing is at risk meanwhile.
+
+### Stages 0 and 1 of the scale work are built (D70) — 2026-09-02
+
+**The eleventh additive schema change since Phase 2**, and the first that is
+about the shape of the app rather than a feature: `households.changedAt` and
+`households.itemCount`, plus **four indexes on a table that declared none**.
+Counts unmoved — fourteen tables, fifteen queries, thirty-one mutations.
+
+- **All 89 `collect()` calls are `collectAll()`.** It paginates until done, and
+  **below the cap it is one call with `isDone` already true** — identical cost to
+  what it replaced, which is why it went everywhere rather than only where the
+  console reads. It **takes a thunk, not a builder** (a builder resets its state
+  once read, so reusing one across pages would look like an early stop) and it
+  **cannot throw** (a query that throws never emits, so the client would sit on a
+  permanent loading state); a cursor that fails to advance ends the walk.
+- **`pantry` was affected too, and worse than the console.** It reads a
+  household's items and both join tables the same way, and **the join tables
+  cross 1,000 first** — an item may name several types and several sources, so
+  store chips would have started vanishing from cards at roughly 600–700 items
+  while the item list still looked complete.
+- **`shared/counts.ts` pins the storage format**: twelve digits, zero-padded,
+  **permanent**. Text sorts lexicographically, so an unpadded count column stores
+  the right number, reads back the right number, and orders a *biggest pantries*
+  list behind the household holding nine. `readCount` treats `''` **and `null`**
+  as *not counted* — `joinedAtOf`'s rule, one file over.
+- **Two of the four indexes are inert**, because nothing maintains their columns
+  yet, and that is the decision. **An index costs what the table holds when you
+  add it**: free now, a rewrite at a million. `''` in either column means **not
+  counted, never zero** — read it as zero and every household reports empty; read
+  an empty `changedAt` as never-active and every household reports dormant.
+- **`changedAt` reverses D44 on purpose.** That decision refused it because
+  *"nothing orders households by recency"*; the console does, and computes it by
+  scanning **four whole tables per load**. One maintained column deletes
+  `lastActiveByHousehold`.
+
+**Verified against the real handlers** on a throwaway `sf dev` with a fresh
+database: a household seeded to **1,400 items** where `pantry` used to stop at
+1,000 now returns all 1,400 **with every item past 1,000 still carrying its type
+chip** — the join-table truncation, reproduced and then gone. `adminSummary`
+reports 1,400 rather than 1,000, the pantry-size band lands on `200+`, and
+`adminHouseholds` names the right biggest pantry. **`paginate()` honours
+`.order('desc')`** — checked because `adminActivity` depends on it, and the audit
+log still reads newest-first. Then the whole flow re-run on the new schema from
+an empty database: create, add, and all four console and account queries correct.
+986 assertions, typecheck clean, one throwaway endpoint added and removed.
+
+**The artifact is read and correct** — fourteen tables, fifteen queries,
+thirty-one mutations, `db.migrations: []`, `/api/status` the only endpoint,
+`memberships.joinedAt` and `households.changedAt` / `.itemCount` all
+`string` / `default: ""`, all four new indexes present, every other table's
+indexes intact, and **`.docs/data-model.md` diffed against it with zero gaps**
+across tables, columns, indexes, queries and mutations.
+
+**It took two goes, and the first is the reason the check exists.** The four
+indexes were written correctly, typechecked, and ran — and the artifact reported
+`households` with **`indexes: []`**. The compiler's schema regex requires the
+`.index(...)` chain to follow `})` separated only by whitespace, and there was a
+comment in the gap. Moving that comment *inside* the braces then hit the other
+end of the same regex — it quoted `})`, which is exactly the pair the non-greedy
+body match stops at, so the **column list** truncated instead. **A comment
+warning about the first bug caused the second.** The explanation now sits above
+the table declaration, where neither can happen. See the verification section's
+D27 note, which is widened to cover both.
+
+**Stage 2 is next and is blocked on one question**: whether a read-modify-write
+counter survives concurrency in production. See below — the local measurement
+looks like an answer and is not one.
+
+### The target is 1,000,000+ households, and that is a design constraint now — 2026-09-02
+
+Stated on 2026-09-02: tens of thousands of households, **possibly a million**.
+Almost nothing in the app proper is wrong at that scale and almost everything in
+the console is. The whole analysis is
+[`.claude/docs/design/scale.md`](docs/design/scale.md) — **read it before
+touching a console query or adding a column**. The three things it turns on:
+
+- **A count is a scan, a scan stops at 1,000, and nothing says so.** See the
+  entry below.
+- **There is no numeric type, so a maintained count is a string** — and any
+  count the console *sorts* by has to be **zero-padded to a fixed width**, which
+  is a storage format and therefore permanent (D27).
+- **`households` declares no index at all.** Every read walks `by_creation`.
+  That is the single largest schema gap and **the one item with a deadline**: an
+  index is additive and free today and an outage at a million rows.
+
+**And the load-bearing unknown is concurrency.** Every number in that design is
+a counter, and a counter here is a read-modify-write on a string. `ctx.transaction`
+is documented only as *commit both or neither* — nothing says it takes a row
+lock. Twenty concurrent increments against `sf dev` lost nothing, and **that
+measurement is worthless**: the same run took 1.05s for 20 × 50ms spins, so the
+dev runtime serialised them and there was never a race. **This is the dev-guest
+trap exactly** — local evidence that looks like an answer. It has to be asked of
+Spacefast, not measured here.
+
 ### `memberships` carries its own join stamp (D44, amended) — 2026-09-02
 
 **The tenth additive schema change since Phase 2**: `memberships.joinedAt`,
@@ -5263,7 +5496,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D69, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62**; **D69 governs the console's charts — that a cumulative total is a *shape* and a per-month count is a *chart*, that the band labels are derived from their floors so a boundary and its label cannot drift apart, that a distribution's bands are neither controls nor coloured, and that per-month bars never sum to the total beside them — amending D62, whose Overview no longer draws a cumulative line** |
+| `.docs/decisions.md` | D1–D69, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62**; **D69 governs the console's charts — that a cumulative total is a *shape* and a per-month count is a *chart*, that the band labels are derived from their floors so a boundary and its label cannot drift apart, that a distribution's bands are neither controls nor coloured, and that per-month bars never sum to the total beside them — amending D62, whose Overview no longer draws a cumulative line**; **D70 governs how a read and a count are shaped for scale — that `collect()` truncates at 1,000 rows silently so every full read goes through `collectAll`, that a count in a column is a zero-padded string because text sorts lexicographically, and that indexes and columns are added while the table is small because the cost is paid against the row count at the time**; **D71 governs what is recorded when something is destroyed — that invites now carry when they were sent and whether they converted, that a deletion writes a row holding no id, name, household or account, and that item removals are knowingly not recorded**; **D72 governs what Overview measures — that *Active* replaced *Live invites*, that a completed trip is counted from `restocks` rather than `trips` and as trips rather than rows, and that *Sharing* is the only figure there that does not rise when one person makes five pantries** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -5284,6 +5517,7 @@ most of it is already decided.
 | `.claude/docs/design/larderlogbulkentrydesign.html` | **The 11 boards for it** — seven on *The flow*, one at 390, three explorations. Light theme only. **Board 6's review rows draw filled `Type` chips on pasted lines**, which both the design's prose and its own board note contradict — the note wins. **Board 3's 390 panel draws the split beside search**, which the build does not do. **Board 4 is `Save and add another`, which is not built.** The Explorations page is explicitly not a spec |
 | `.claude/docs/design/delete-account.md` | **Delete account** (1 Sep) — where deletion lives, the pre-flight the sole-owner rule forces, the ownership transfer that forces, one typed confirmation and the card it leaves you on, and export. Its own doc for the reason `add-edit-item.md` is. **Built, all of it** (D68), **with five knowing departures**: the card's button says *Back to Larder Log* rather than naming a domain the app does not have; *what goes permanently* names the **sources** too, as the app's own *Delete household* confirm always has; the account export carries **no invite codes** (D39) and **no join date** (`memberships` has no stamp — D44); and the sole-member households answer themselves rather than being sent as decisions. **Its two contradictions with `admin-console.md` are real and this doc wins** — there is no hold, so neither *awaiting deletion* nor the log's `Automatic` actor describes a state that exists |
 | `.claude/docs/design/larderlogdeleteaccountboards.html` | **The 6 boards for it** — where it lives (with the crimson menu row that lost), the pre-flight in two states, ownership transfer, the confirmation and the card, export, and 390. Light theme, desktop except board 6. **Board 1's menu draws an *Announcements* row**, which is a different doc's feature and is not built — the menu here is the door, Admin, and Sign out. **Board 4's hold cards are the thing that was cut**, and the board says so. **Board 5's CSV sample uses the pre-D50 type names** (*Protein*, *Condiment*) and a `store` column the build spells `sources`, because an item may name several |
+| `.claude/docs/design/scale.md` | **Building for a million households** (2 Sep) — the platform's real read/count/index limits as measured, the four-layer rollup design that follows, what it costs every mutation, and the three questions that have to be answered before any of it is built. **Nothing is built.** Its *Staging* table is the order to do it in, and **stage 1 — four indexes on `households` — is the one with a deadline**, because an index is cheap now and an outage at 1M rows |
 | `.claude/docs/design/admin-console.md` | **The admin console** (29 Aug) — the console as a pushed drawer pane, the metadata-only rule, the deletion flows, the Activity log, and *seeing inside a household*. Its own doc for the reason `add-edit-item.md` is. **It supersedes *future-ideas → The administrator page*** — the console shares the whole drawer, not "tokens and nothing else". **Built, except board 10.** Where it and the build differ, D62 says why: three fields the platform cannot give (every email, storage, last-seen), an invite code the console refuses to print, retention that is an environment variable rather than a control, and *Sole owner* in place of *Awaiting deletion* |
 | `.claude/docs/design/larderlogadminconsoleboards.html` | **The 26 boards for it** — twelve screens on a **Light** page and again on **Dark**, plus two at 390 on **Mobile**. All built except board 10. **Board 10 draws both answers to *seeing inside a household* side by side and settles neither — D62 settles it, against.** Board 8's 403 is drawn beside the 404 and is explicitly the one that does not ship; in the event the platform answers `/admin` before the app is reached, so neither ships. Its sample data has three known inconsistencies, listed at the foot of the design doc, and its member rows draw emails this app has never held |
 | `.claude/docs/design/beta-badge.md` | **The beta badge** (28 Aug) — the pill, its one construction, and the surfaces it skips. Its own doc for the reason `add-edit-item.md` is. **Its central rule — *the wordmark never appears without it* — was built and rejected; D57 narrows the badge to the marketing page**, so its *Where it appears* table describes a build that does not exist |
@@ -5447,6 +5681,18 @@ Cheapest first:
   ([D27](../.docs/decisions.md#d27-the-schema-has-to-be-a-literal-in-the-server-entry)).
   Note that `--dry-run` is not read-only: it rewrites the build under
   `.spacefast/zero/`.
+
+  **It is not only whole tables — two ordinary comments defeat the same regex,
+  found on 2026-09-02 and both silent.** A comment **between `})` and
+  `.index(`** drops **every index on that table**: the chain has to follow the
+  closing brace separated only by `\s*`, and a comment is not whitespace. A
+  comment **inside the braces containing a brace-then-paren pair** truncates the
+  **column list** at that point, because the body is matched non-greedily to the
+  first such pair anywhere — *including inside a comment*, so a note warning
+  about the first bug causes the second. Both typecheck, both run correctly
+  under `sf dev` against a real database, and **the artifact is the only place
+  either shows**. Explanatory comments go **above** `name: table({`, never in
+  the gap, and never quote that pair.
 
   **The schema is at `server.schema`, keyed by table name — not `db.tables`,
   not `server.schema.tables`.** `db` holds only `{ backend, migrations }`. Both
