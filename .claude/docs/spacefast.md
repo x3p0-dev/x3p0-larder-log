@@ -6115,3 +6115,172 @@ build `.spacefast/zero/public/zero.css` for a class-literal check, and it is not
 read-only — it rewrites the whole build directory. A `sf build` that produced the
 payload without touching the publish plan would make the cheapest verification
 this project has cheaper still.
+
+---
+
+## 2026-09-02 — the blockade is into its second day, and every external signal is frozen
+
+A read-only sweep plus the browser check, run to answer one question: **can we
+get the current code live?** No. Nothing has moved in ~30 hours.
+
+| signal | 2026-09-01 evening | 2026-09-02 | moved? |
+|---|---|---|---|
+| `spacefast` / `@spacefast/zero` on npm | `0.2.2` (Aug 28) | `0.2.2` (Aug 28) | **no** |
+| `@spacefast/zero-compile`, `@spacefast/common` | `0.2.2` | `0.2.2` | **no** |
+| npm dist-tags (any prerelease lane) | `latest` only | `latest` only | **no** |
+| error registry | 481 codes, ours absent | 481 codes, ours absent | **no** |
+| live `/api/status` (v19) | `ok` | `ok` | no — healthy |
+| **staged preview `/api/status`** | **422** | **422** | **no** |
+
+**The preview check is the one that matters and it was run in a browser** — the
+`vN--` hostnames still answer **403** to an anonymous curl, to a Bearer CLI API
+key, and to that key as a cookie, so this cannot be automated. A staged, `ready`
+version still refuses to serve. **The serving runtime is still enforcing the
+content-program `mode` contract, and no released toolchain emits it.**
+
+*Friction, restated because a second day of it makes the cost concrete*: the
+only non-destructive way to validate a staged version is behind a signed `__=`
+token that the API redacts from its own responses, so the check that gates every
+publish decision is the one thing an agent cannot perform. `sf versions open`,
+a `--preview-url` flag, or an API-key-scoped preview grant would each fix it.
+
+**And there is no way to watch this.** No status page (`status.spacefast.com`
+does not resolve), a changelog stale since 0.0.25 on Aug 21 whose `.md` twin
+404s, and neither of our error codes in the registry. The only poll available is
+`npm view spacefast version` — which would miss a **server-side** fix entirely,
+and the enforcement itself arrived server-side. So the watch signal is known to
+be incomplete, and the real check stays manual.
+
+### What is left to try, and it is one experiment
+
+Everything has been tested *within* our own space. The untried question is
+whether **any** Zero space can publish today: scaffold `sf init --runtime zero`,
+publish the hello-world, hit its `/api/status`.
+
+- **422** → the contract failure is platform-wide and reproducible in ~20 lines.
+  That is a far stronger bug report than a 15-table app failing, and it removes
+  our capsule from the discussion entirely.
+- **`ok`** → the diagnosis is wrong, something in *our* artifact trips it, and
+  there is a bisect path from hello-world toward `server/index.ts`.
+
+Decisive either way, which is the property this investigation has lacked since
+Sep 1. Not run yet — it creates a throwaway space.
+
+### Where the app stands meanwhile
+
+Unchanged and unblocked locally: typecheck clean, **1008 assertions**, working
+tree clean at `df74272`. Live is **v19 at eleven tables**; the artifact is at
+**fifteen** — `restocks`, `trips`, `claims`, `deletions`, plus `items.listRule`,
+`memberships.joinedAt`, `households.changedAt` / `.itemCount`, three `invites`
+columns and four `households` indexes. All additive, `db.migrations: []`.
+
+**So the first successful publish will be the largest migration this project has
+run**, and `migrateAtFinalize: true` means it lands at *promotion*. Worth
+sequencing deliberately when the platform returns: preview first with
+`.env.server` moved aside, browser-check, then promote.
+
+### The minimal repro is built and published — and the privacy gate blocks it too — 2026-09-02
+
+The experiment above was run. `sf init --runtime zero` → `npm install` →
+`sf publish`, in a scratch directory, on a **new throwaway space**
+(`zeroprobe`, `spc_474a0b6be4ce4de3a9db13eef30dd56c`). Larderlog was never
+touched.
+
+**The scaffold is an ideal control.** 38 lines: one table with one index, one
+query, two mutations, and — usefully — **the same `GET /api/status` endpoint**
+our app has, so the endpoint-mode `detail` string applies identically. It pins
+`@spacefast/zero@0.2.2`, the toolchain under suspicion, and its artifact is the
+same shape as ours: `format: "stattic.zero.capsule.v1"`, endpoint entry
+`{"method":"GET","path":"/api/status"}` with **no `mode` field**.
+
+**It published cleanly**: space created, version created, 19 files uploaded,
+finalized `v1 (ready)`, **9.2 seconds, first try**. So *version creation and
+finalize are not broken* — which was never the failing step for us either.
+
+**And then the same wall, one layer out.** `https://zeroprobe.view.fast/api/status`
+answers **403 "This space is private"** — byte-identical to the `vN--` gate:
+
+```
+HTTP/2 403   content-type: text/html
+x-spacefast-runtime: 1
+x-spacefast-version: ver_755fdc73a1fe47e8ae17b203c98494cf
+```
+
+The runtime edge is reached and routing to the probe's own version; the gate
+sits **in front of the capsule**, so this 403 says nothing about whether the
+capsule would serve. `--show-secret` reveals no token — it prints the plain URL
+— so unlike the `vN--` case there is not even a signed link to be redacted.
+
+**👎 A new space is private by default and the CLI cannot make it public.**
+`sf spaces update` exposes `--name`, `--mode`, `--slug` and viewer metadata, and
+**nothing for visibility**; the space record carries no `private`/`visibility`
+field at all (both spaces read `anonymous: false`, `status: active`,
+`hasRuntime: true` — they differ only in `settingsDigest`, so the flag lives in
+settings the CLI does not surface). The whole top-level command list is
+`publish, status, versions, rollback, spaces claim, login, init, docs`.
+
+**So the same friction has now blocked the same check twice, by two different
+gates**, and that is the sharper version of the complaint: *a CLI-authenticated
+API key can create a space, publish to it and read its management record — and
+cannot fetch one byte it just served.* Anonymous curl, `Bearer`, and the key as
+a cookie all fail. A `--public` flag on `spaces update`, an `sf open`, or an
+API-key-scoped read grant would each close it.
+
+**The experiment is one browser click from an answer**, and it is worth more
+than the v25 check it replaces:
+
+- **422** → the mode-contract failure is platform-wide, reproducible from
+  `sf init` in under a minute, and our 15-table capsule leaves the discussion.
+- **`ok`** → the diagnosis is wrong: something in *our* artifact trips it, and
+  there is a bisect path from a 38-line capsule toward `server/index.ts`.
+
+### The hello-world cannot serve a single call — the block is total and platform-wide — 2026-09-02
+
+The browser check ran on the throwaway space, and the answer arrived in two
+steps because the first reading of it was wrong.
+
+**`GET /api/status` on the 38-line scaffold returns the same 422:**
+
+```json
+{"code":"zero_artifact_mode_invalid",
+ "detail":"A read handler cannot carry write-side capabilities.",
+ "status":422,
+ "title":"Zero artifact mode invalid",
+ "type":"https://spacefast.com/docs/errors/zero_artifact_mode_invalid"}
+```
+
+**And so does everything else.** The client shell renders — it is static files
+off the edge and would paint regardless — but adding a todo fails:
+
+```
+POST https://zeroprobe.view.fast/__zero/run  →  422 (Unprocessable Content)
+```
+
+So on a brand-new space, from a capsule nobody wrote, **no query and no mutation
+can execute.** *(Note the path: the client calls `/__zero/run`, not the
+`/__spacefast/zero/run` this log has used for CLI-side probes.)*
+
+**This confirms the Sep 1 finding rather than overturning it.** For about ten
+minutes it looked like the opposite — "the app works" was read as *its queries
+serve*, which would have scoped the failure to endpoint invocations alone and
+opened a route to shipping without `/api/status`. It does not: a rendered shell
+is not a served query, and the interaction test is what separates them. **The
+rejection is whole-artifact and lands before any handler dispatch**, exactly as
+recorded yesterday.
+
+**What the repro adds is scope.** Yesterday's evidence was six deliveries of our
+own content plus one redelivery of known-good bytes. Now: a **new space**, a
+**new capsule**, 38 scaffolded lines, published in 9.2 seconds — and it cannot
+answer one call. Nothing about larderlog is implicated in any way, and the
+report no longer has to describe a 15-table app at all.
+
+**The two `detail` strings still vary by invocation** — the `GET` yields *"a
+read handler cannot carry write-side capabilities"*, the `POST` the other
+sentence — on an artifact where both handler kinds are equally dead. That
+remains the most misleading part of the failure, and it cost a hypothesis on Sep
+1 and another today.
+
+**No route to shipping exists.** Removing our `/api/status` block would change
+nothing: the scaffold's queries and mutations fail with the endpoint present,
+and v26 already proved they fail with no endpoints declared. The block is
+Spacefast's loader, it is total, and it waits on their fix.
