@@ -1,5 +1,6 @@
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { ChevronDown, ChevronLeft, ChevronRight, Download } from 'lucide-preact';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Download } from 'lucide-preact';
 
 import { AdminLoading } from './AdminLoading';
 import { DrawerAvatar } from './DrawerAvatar';
@@ -11,13 +12,14 @@ import {
 	ADMIN_ROW, PAGE_BUTTON_OUTLINE, PAGE_BUTTON_OUTLINE_ON, PAGE_MENU, PAGE_MENU_ROW,
 } from '../lib/controlStyles';
 import { useDismiss } from '../hooks/useDismiss';
-import { activityCsv, exportFilename } from '../lib/activityCsv';
-import { downloadCsv } from '../lib/download';
+import { activityFile, exportFilename } from '../lib/activityExport';
+import { downloadExport } from '../lib/download';
 import {
 	actionPhrase, actionTitle, decodeHeld, heldPhrase, isDestructive, toActorKind,
 } from '../../shared/activity';
 import { monthLabel, usDateFrom } from '../../shared/admin';
 import type { AdminActivityRow } from '../../shared/types';
+import type { ExportFormat } from '../../shared/exportData';
 
 /**
  * Board 9 — the audit log.
@@ -133,12 +135,29 @@ export function AdminActivity({ theme, dark }: { theme: Theme; dark: boolean }) 
 }
 
 /**
- * Export — a range, never everything.
+ * Export — a range, never everything, in one of two formats.
  *
  * **A button that hands over all 2,904 rows invites the habit of handing over
  * all of them**, so the menu offers ranges and no *everything* row. The default
  * is the month on screen, which is the design's own default and the only one
  * that needs no thought.
+ *
+ * **Format and range are two different kinds of row and the menu says so.** A
+ * format is a *modifier* — pressing one changes what the next press will hand
+ * over and the menu stays open, marked with the sort menu's check — and a range
+ * is the *act*, which downloads and closes. A micro-label and a hairline are
+ * what keep a reader from taking `CSV` for a seventh range; the transfer menu
+ * earned that header for the same reason.
+ *
+ * **One label, not two.** A second one over the months was built and dropped:
+ * in a 220px menu two headers are heavier than the thing they organise, and
+ * once the top pair is named and ruled off, six month names are self-evidently
+ * the other kind of row. It is also four lines of height back on a menu that
+ * grew by five, which matters on the one console screen with no 390 board.
+ *
+ * **CSV first, and it is not remembered.** Somebody opening the audit log in a
+ * spreadsheet is the ordinary case, and a format that persisted would be a
+ * fourth thing in `useViewState` answering a question asked once a quarter.
  *
  * The download is armed in two steps because a live query cannot be *called*:
  * choosing a range opens a subscription, and an effect fires the download when
@@ -147,12 +166,20 @@ export function AdminActivity({ theme, dark }: { theme: Theme; dark: boolean }) 
  */
 function ExportMenu({ theme }: { theme: Theme }) {
 	const [open, setOpen] = useState(false);
+	const [format, setFormat] = useState<ExportFormat>('csv');
 	const [range, setRange] = useState<{ from: string; to: string } | null>(null);
 	const [armed, setArmed] = useState(false);
 	const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
 
 	const result = useAdminActivityExport(range?.from ?? '', range?.to ?? '');
 
+	/*
+	 * **`format` is read here and is deliberately not a dependency.** It cannot
+	 * change between the press that arms the download and the round trip that
+	 * fires it — the menu closes on the range row — and listing it would rerun
+	 * the effect on a format press while a subscription from an earlier range is
+	 * still open, which is a second file nobody asked for.
+	 */
 	useEffect(() => {
 		if (! armed || result.state !== 'ready' || ! range) return;
 
@@ -160,9 +187,10 @@ function ExportMenu({ theme }: { theme: Theme }) {
 
 		if (result.data.rows.length === 0) return;
 
-		downloadCsv(
-			exportFilename(result.data.from, result.data.to),
-			activityCsv(result.data.rows)
+		downloadExport(
+			exportFilename(result.data.from, result.data.to, format),
+			activityFile(format, result.data.rows),
+			format
 		);
 	}, [armed, result.state, range]);
 
@@ -174,6 +202,7 @@ function ExportMenu({ theme }: { theme: Theme }) {
 				onClick={() => setOpen((v) => ! v)}
 				aria-haspopup="menu"
 				aria-expanded={open}
+				aria-label={`Export the log as ${format.toUpperCase()}`}
 				/* Open is a state, and this trigger had none — an
 				  * `aria-expanded` that a screen reader could hear and nobody
 				  * could see. It borrows the sort trigger's open fill, which is
@@ -182,6 +211,13 @@ function ExportMenu({ theme }: { theme: Theme }) {
 				class={`flex items-center gap-1.5 h-11 md:h-[34px] px-3 rounded-[10px] text-[13.5px] font-semibold ${open ? PAGE_BUTTON_OUTLINE_ON : PAGE_BUTTON_OUTLINE}`}
 			>
 				<Download size={14} /> Export
+				{/* A chevron says it opens — the sort trigger's rule, and this
+				  * trigger was the one control in the export family without one. */}
+				<ChevronDown
+					size={13}
+					class="shrink-0"
+					style={{ color: theme.textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+				/>
 			</button>
 
 			{open && (
@@ -190,6 +226,29 @@ function ExportMenu({ theme }: { theme: Theme }) {
 					class={`${PAGE_MENU} right-0 top-full mt-1.5 w-[220px]`}
 					style={{ boxShadow: theme.liftShadow }}
 				>
+					<MenuLabel theme={theme}>Format</MenuLabel>
+
+					{FORMATS.map((f) => {
+						const on = format === f.key;
+
+						return (
+							<button
+								key={f.key}
+								role="menuitemradio"
+								aria-checked={on}
+								onClick={() => setFormat(f.key)}
+								class={PAGE_MENU_ROW}
+								style={{ color: on ? theme.textStrong : theme.text, fontWeight: on ? 600 : 400 }}
+							>
+								<span class="flex-1 min-w-0 truncate">{f.label}</span>
+								{/* A check, not a fill — so hover still reads on the chosen row. */}
+								{on && <Check size={15} strokeWidth={2.4} style={{ color: '#BE3346' }} />}
+							</button>
+						);
+					})}
+
+					<span class="block h-px mx-2.5 my-[5px]" style={{ background: theme.border }} />
+
 					{options.map((o) => (
 						<button
 							key={o.label}
@@ -224,6 +283,26 @@ function ExportMenu({ theme }: { theme: Theme }) {
 				</p>
 			)}
 		</div>
+	);
+}
+
+const FORMATS: { key: ExportFormat; label: string }[] = [
+	// **`CSV` and `JSON`, not *Spreadsheet* and *Data*.** Anybody who has an
+	// opinion about this knows both words, and anybody who does not is served by
+	// the first row being the one that opens in a spreadsheet.
+	{ key: 'csv', label: 'CSV' },
+	{ key: 'json', label: 'JSON' },
+];
+
+/** The menu's own micro-label — the transfer menu's header, one surface over. */
+function MenuLabel({ children, theme }: { children: ComponentChildren; theme: Theme }) {
+	return (
+		<p
+			class="m-0 px-2.5 pt-1.5 pb-1 text-label font-bold uppercase tracking-[0.15em]"
+			style={{ color: theme.textMuted }}
+		>
+			{children}
+		</p>
 	);
 }
 

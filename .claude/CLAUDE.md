@@ -84,7 +84,9 @@ fourteen tables, **fifteen** queries, **thirty-one** mutations — `account`,
 `transferOwnership` and `deleteMyAccount` — and `db.migrations` empty. The
 account menu's identity row is a **door** now rather than a display, and the
 display name moved with it into a pushed *Your account* pane. **Export arrived
-with it and is two features**, in two places. See *Delete account — leaving every
+with it and is two features**, in two places. **Both exports that describe
+rows offer CSV or JSON** as of 2026-09-02, which reverses its *one file, no
+picker* — see *An export is CSV or JSON* (D75). See *Delete account — leaving every
 household at once (D68)* below.
 
 **Built and unpublished: bulk entry (D67).** The adoption wall — twenty items is
@@ -2884,6 +2886,109 @@ bars draw one column, and `?demo` fills one household rather than a space. The
 backdating that made the verification possible is not something a person
 clicking the app can do.
 
+### An export is CSV or JSON, and the button has a chevron (D75) — 2026-09-02
+
+**Client and `shared/` only**: no schema change, no handler moved — fifteen
+tables, fifteen queries, thirty-one mutations, `db.migrations` empty,
+`/api/status` the only endpoint, and the artifact byte-for-byte what D71 left.
+The capsule does not import `shared/exportData.ts` at all.
+
+**The two exports that describe rows now offer both formats**, and *Your data*
+is unchanged. **This reverses D68's *one file, no picker*** — a line that was
+right about the cost of a picker and wrong that there is only one answer.
+
+- **CSV is losing something the data has, in both of them.** An item names
+  several sources and several types (D4 — there are no array columns), so a CSV
+  cell flattens each into one string with a `; ` in it; and a deletion entry's
+  `held` is a set of counts denormalised at the cascade, which a cell can only
+  take as the sentence `12 items · 3 types`. **JSON is where those stay what
+  they are**, and that is the whole argument for offering it.
+- **The choice is made at the press and remembered nowhere** — not in
+  `useViewState` (D51), not anywhere. A format is a property of what you are
+  about to do with the file, not of the device; a remembered one is a setting
+  somebody has to find before they can trust what the button hands over.
+  **CSV is first everywhere**, because it is the deliverable.
+- **One reading, two renderings.** `pantryRows()` resolves the household once —
+  names not ids, A–Z — and both files are built from it, with the CSV's own
+  column names as the JSON keys. A JSON file assembled by its own second
+  traversal would drift a column at a time and every file would still open. Same
+  arrangement in `activityExport.ts`, where `fieldsOf()` is the shared half and
+  `held` is the one field that differs.
+- **Counts stay strings in JSON too.** `on_hand` and `low_at` are decimal
+  strings all the way down (D1), and a `Number()` at the export boundary would
+  invent a precision the database never held and hand back `null` for the empty
+  ones.
+- **`client/lib/activityCsv.ts` is `client/lib/activityExport.ts`**, `git mv`'d
+  so history follows — a filename claiming one format on a module that offers
+  two is the kind of thing that is still true-looking a year later.
+
+**The control is a different shape in each of the three places, because the
+rooms are different.**
+
+- **Settings → Pantry settings is a split — the app's second after *Add item***,
+  and this is what Justin asked for on looking at the first build. **Two buttons
+  side by side were built and replaced**: a pair reads as two features, and a
+  split reads as one control with a default, which is what an export is. The
+  label says `CSV` rather than *Export* — the row's label already says what the
+  control is for, so the button's word is free to say *which file*, which is the
+  sort trigger's rule about naming the current choice. The menu is **one row**,
+  because `AddMenu`'s rule keeps the default out of it and there is exactly one
+  alternative. `DrawerMenu`, opening **upward**: the export row is the last thing
+  in the pane.
+- **`DRAWER_SPLIT` is `PAGE_SPLIT` with both halves of its ring moved** —
+  `ring-ink` is the page's near-black and nearly invisible on the drawer, and
+  `ring-offset-canvas` names a fill nowhere near this control. **D45's rule on
+  its sixth component.** `PAGE_SPLIT_HALF` needs no twin: it paints through
+  `--split-hover` / `--split-press`, which the caller derives from the fill it
+  has — and **the drawer is dark in both themes**, so that derivation has one
+  direction where `AddMenu`'s needs two.
+- **The audit log gets a group in the menu it already has.** Format is a
+  *modifier* — the menu stays open and the sort menu's crimson check marks it —
+  and a range is the *act*, which downloads and closes. A micro-label and a
+  hairline stop `CSV` reading as a seventh range. **One label, not two**: a
+  second header over the months was built and dropped, because in a 220px menu
+  two headers are heavier than the thing they organise, and it is four lines of
+  height back on a menu that grew by five — which matters on the one console
+  screen with no 390 board. **Its trigger gained a chevron**, which it had never
+  had.
+- **The pre-flight's *Export it first* is a menu.** That row already holds a
+  tile, a name, a consequence line and the decision trigger, and a format loose
+  in it would be a fifth thing competing with the one control that has to be
+  pressed. **The label is the instruction and has to survive** — a bare `CSV`
+  beside `Delete it` says nothing. `useFixedMenu`, because the dialog card is
+  `overflow-y-auto max-h-[90vh]` and a scroll container clips absolutely
+  positioned descendants at its padding box.
+
+**Verified without a browser**: typecheck clean, **1022 assertions** (14 new),
+and every new rule **proved by mutation** — flattening the JSON arrays like CSV
+fails 2, pinning the extension to `.csv` fails 1, `Number()`-ing the counts
+fails 1, making `pantryFile` ignore its format fails 1, dropping the shared A–Z
+sort fails 7, and drifting one JSON key from its CSV column fails 2. Joining the
+arrays inside the *shared* reading does not fail an assertion — it throws inside
+`pantryCsv`, which is the single-reading arrangement refusing to let one format
+be got wrong on its own. The artifact is unchanged, and **384 class literals
+across five files** were diffed against the freshly built
+`.spacefast/zero/public/zero.css` by unescaping the sheet's own selectors —
+printed, never hand-written, and proved each round to find a real class and
+refuse a bogus neighbour (`my-[8px]`, `w-71`, `w-[185px]`). The built
+`/client.js` carries `As a JSON file`, `Export as JSON` and
+`application/json;charset=utf-8`, and no longer carries `as a spreadsheet`.
+
+**One trap the checker walked into again, and it is the eighth round of the same
+lesson.** The class-literal extractor read `${...}` interpolations inside
+template literals as class names, so every ternary in a `class={`…`}` reported
+its `?`, its `:` and both quoted operands as missing — 17 false positives on the
+first run, four of them in files nothing had touched. **Strip the expressions
+before splitting**, exactly as comments have to be stripped before reading
+source. A check that reports a missing class is worth nothing until it has been
+shown to find one that is really there and refuse one that is really absent.
+
+**Nobody has clicked it.** All of it is press-time: the split's two halves and
+its upward menu, `↓` opening that menu from the label, Escape handing focus
+back, the format check in the console's menu, and the pre-flight's chevron.
+**To see it locally**: Settings → Pantry settings, or `?admin` → Activity →
+Export.
+
 ### A run list card is A–Z, and nothing else (D74) — 2026-09-02
 
 **One comparator in `shared/runList.ts`**: no schema change, no handler moved,
@@ -5607,7 +5712,7 @@ most of it is already decided.
 | `.docs/architecture.md` | Zero's shape, project layout, data flow, auth, constraints |
 | `.docs/data-model.md` | Schema, indexes, ownership rules, cascade deletes, query surface |
 | `.docs/roadmap.md` | Phases 0–5 in dependency order, each with a "done when" |
-| `.docs/decisions.md` | D1–D74, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62**; **D69 governs the console's charts — that a cumulative total is a *shape* and a per-month count is a *chart*, that the band labels are derived from their floors so a boundary and its label cannot drift apart, that a distribution's bands are neither controls nor coloured, and that per-month bars never sum to the total beside them — amending D62, whose Overview no longer draws a cumulative line**; **D70 governs how a read and a count are shaped for scale — that `collect()` truncates at 1,000 rows silently so every full read goes through `collectAll`, that a count in a column is a zero-padded string because text sorts lexicographically, and that indexes and columns are added while the table is small because the cost is paid against the row count at the time**; **D71 governs what is recorded when something is destroyed — that invites now carry when they were sent and whether they converted, that a deletion writes a row holding no id, name, household or account, and that item removals are knowingly not recorded**; **D72 governs what Overview measures — that *Active* replaced *Live invites*, that a completed trip is counted from `restocks` rather than `trips` and as trips rather than rows, and that *Sharing* is the only figure there that does not rise when one person makes five pantries**; **D74 governs a run list card's row order — A–Z and nothing else, because the status is already on the row in a badge and the order is the one thing a list you walk a shop with should be able to predict; amending D41 and D58**; **D73 records the run list's type sort as built, measured and reverted — what stays true (source is the card, the sections are a partition of an already-ordered list, a multi-typed item places under the first of its types in the household's order) and what stopped it (row 2 in list mode has about five pixels spare at a docked 1120, so any control added to it costs the segment its words). Nothing ships; D41's *the list has one fixed order* still stands** |
+| `.docs/decisions.md` | D1–D75, with reasoning and rejected alternatives. **D27 governs every schema edit**; **D32 governs term colors**; **D35 and D44 govern row timestamps**; **D36 governs destructive actions**; **D41 governs the shopping list**; **D42 governs the household colour**; **D43 governs invite codes**; **D45 governs the applied filter bar**; **D46 governs the account's display name**, amended by **D48, which forbids prefilling either name**; **D47 governs the sign-in copy**; **D49 governs the Settings pane, the Members pane and both drawer menus**; **D50 governs the seeded types, amended on 2026-08-31 by the fifteenth, `Dry Goods`**; **D51 governs what the view restores on load**; **D52 governs an item's size**; **D53 governs keeping an item off the shopping list, retired by D60**; **D54 governs the offer to install**; **D55 governs a member's avatar**; **D56 governs the account row and its outbound link**; **D57 governs the beta badge, and narrows the spec that describes it**; **D58 governs a source's kind, the group's own name, the run list's bands, an item's season and the item card's glyphs, and amends D36's editing row and D53's checkbox**; **D59 governs which way a reference may point once recipes and plantings exist, and is why no ingredient panel is being built on an item**; **D60 retires D53's off-list checkbox while keeping its column and its behaviour**; **D61 governs what first run asks and what each answer seeds, and retires D58's line that a new household is a `STORE` household on day one**; **D62 governs the admin console — that it is a drawer pane rather than a surface, that an administrator is a name in `LARDER_ADMIN_IDS` and nothing in the UI grants it, that the console never prints an invite code, that retention is set out of band, and that *seeing inside a household* is decided against**; **D63 governs the two suggestion menus — that a suggestion menu answers the question its field asks, that a match is a prefix of any word and the grid matches the same way, that adding fills everything the row knows while editing fills only the name, and that nothing in either menu leaves the screen you are on**; **D64 governs restock — that a check is a claim rather than a write, that the count is set once at the put-away and set rather than added, that the prefill is `max(low at + 1, on hand + 1)`, that a whole trip is one mutation which resolves every row before writing any, that the `restocks` log records no `userId`, and that a trip now survives a household switch — amending D41; **D65 governs the list override — that it is a tri-state living where *low at* is set, that the retired `offShoppingList` folds into `never` and drains on the first edit, that `always` outranks the count and never the season, and that a pinned row with nothing wrong with it says `EXTRA` where its status would be**; **D66 governs shared claims — that a claim says whose and that is what stops the double-buy, that a trip is a row so the day runs from the last tick, that neither table stores a name, and that a claimed row's face goes in the tick column rather than leaving it empty**; **D67 governs bulk entry — that paste and the checklist are two *sources* feeding one review, that nothing is written until Add, that the way in is a split on the primary rather than anything inside the Add sheet, that the parse reads a line end-first and guesses no shelf, shop or type, that a duplicate arrives unchecked and is never written however it is ticked, and that a bulk commit gets a plain toast and no undo**; **D68 governs deleting your own account — that it is *leave household* run against every household at once, that one blocked dialog is a step and five is a wall, that `fateOf` is the one classification both halves read, that promoting somebody is not handing a household over, that the icon-disc ramp is picked by **finality** rather than by data loss, that deleting is immediate and there is no hold, and that export is two features because the pantry was never yours — amending D49, D36 and D22, and contradicting two lines of D62**; **D69 governs the console's charts — that a cumulative total is a *shape* and a per-month count is a *chart*, that the band labels are derived from their floors so a boundary and its label cannot drift apart, that a distribution's bands are neither controls nor coloured, and that per-month bars never sum to the total beside them — amending D62, whose Overview no longer draws a cumulative line**; **D70 governs how a read and a count are shaped for scale — that `collect()` truncates at 1,000 rows silently so every full read goes through `collectAll`, that a count in a column is a zero-padded string because text sorts lexicographically, and that indexes and columns are added while the table is small because the cost is paid against the row count at the time**; **D71 governs what is recorded when something is destroyed — that invites now carry when they were sent and whether they converted, that a deletion writes a row holding no id, name, household or account, and that item removals are knowingly not recorded**; **D72 governs what Overview measures — that *Active* replaced *Live invites*, that a completed trip is counted from `restocks` rather than `trips` and as trips rather than rows, and that *Sharing* is the only figure there that does not rise when one person makes five pantries**; **D74 governs a run list card's row order — A–Z and nothing else, because the status is already on the row in a badge and the order is the one thing a list you walk a shop with should be able to predict; amending D41 and D58**; **D75 governs the two exports that describe rows — that each offers CSV or JSON, that the choice is made at the press and remembered nowhere, that one reading of the data renders both files so they cannot drift, and that `held` and an item's sources are the counts and the arrays they really are in JSON where CSV can only flatten them; amending D68's *one file, no picker***; **D73 records the run list's type sort as built, measured and reverted — what stays true (source is the card, the sections are a partition of an already-ordered list, a multi-typed item places under the first of its types in the household's order) and what stopped it (row 2 in list mode has about five pixels spare at a docked 1120, so any control added to it costs the segment its words). Nothing ships; D41's *the list has one fixed order* still stands** |
 | `.docs/notes.md` | Open platform questions, and what the v2 publish and Phase 3 answered |
 | `.claude/docs/design/ui-directions.md` | **The current design spec** (Aug 2026, "Cellar") — palette, type, structure. **Its *Order inside a card* is stale**: *out before low, then A–Z* was dropped for plain A–Z by **D74** |
 | `.claude/docs/design/larderlogdesigns-4.html` | The rendered final mockup that spec describes |
@@ -5627,7 +5732,7 @@ most of it is already decided.
 | `.claude/docs/design/bulk-entry.md` | **Bulk entry — the adoption wall** (31 Aug) — the split primary, the paste dialog, the review table, the common-items checklist, and what the empty larder does. Its own doc for the reason `add-edit-item.md` is. **It says of itself that it is a sketch, not a spec**, and about half of it was undecided — read *Open questions* before treating any of it as settled. **Built** (D67), **with five knowing departures**: the 390 chevron moved to the pinned bottom bar rather than row 1 (the board's premise — *the primary is already a 52px square at this width* — is false of the build); the bulk commit gets a **plain toast and no undo**, which answers its own first open question; the checklist **omits what the household already holds**; the paste fills no type, which is its prose over its boards; and **`Save and add another` was built and removed** for a cramped footer, so its board 4 describes a build that does not exist |
 | `.claude/docs/design/larderlogbulkentrydesign.html` | **The 11 boards for it** — seven on *The flow*, one at 390, three explorations. Light theme only. **Board 6's review rows draw filled `Type` chips on pasted lines**, which both the design's prose and its own board note contradict — the note wins. **Board 3's 390 panel draws the split beside search**, which the build does not do. **Board 4 is `Save and add another`, which is not built.** The Explorations page is explicitly not a spec |
 | `.claude/docs/design/delete-account.md` | **Delete account** (1 Sep) — where deletion lives, the pre-flight the sole-owner rule forces, the ownership transfer that forces, one typed confirmation and the card it leaves you on, and export. Its own doc for the reason `add-edit-item.md` is. **Built, all of it** (D68), **with five knowing departures**: the card's button says *Back to Larder Log* rather than naming a domain the app does not have; *what goes permanently* names the **sources** too, as the app's own *Delete household* confirm always has; the account export carries **no invite codes** (D39) and **no join date** (`memberships` has no stamp — D44); and the sole-member households answer themselves rather than being sent as decisions. **Its two contradictions with `admin-console.md` are real and this doc wins** — there is no hold, so neither *awaiting deletion* nor the log's `Automatic` actor describes a state that exists |
-| `.claude/docs/design/larderlogdeleteaccountboards.html` | **The 6 boards for it** — where it lives (with the crimson menu row that lost), the pre-flight in two states, ownership transfer, the confirmation and the card, export, and 390. Light theme, desktop except board 6. **Board 1's menu draws an *Announcements* row**, which is a different doc's feature and is not built — the menu here is the door, Admin, and Sign out. **Board 4's hold cards are the thing that was cut**, and the board says so. **Board 5's CSV sample uses the pre-D50 type names** (*Protein*, *Condiment*) and a `store` column the build spells `sources`, because an item may name several |
+| `.claude/docs/design/larderlogdeleteaccountboards.html` | **The 6 boards for it** — where it lives (with the crimson menu row that lost), the pre-flight in two states, ownership transfer, the confirmation and the card, export, and 390. Light theme, desktop except board 6. **Board 1's menu draws an *Announcements* row**, which is a different doc's feature and is not built — the menu here is the door, Admin, and Sign out. **Board 4's hold cards are the thing that was cut**, and the board says so. **Board 5's CSV sample uses the pre-D50 type names** (*Protein*, *Condiment*) and a `store` column the build spells `sources`, because an item may name several. **Its *one file, no picker* is reversed by D75** — the pantry export is a split offering CSV or JSON, and the audit log's menu offers both too |
 | `.claude/docs/design/run-list-sorting.md` | **Run list sorting** (2 Sep) — the sort control, the type subhead, where a term order would live, and one item with several types. Its own doc for the reason `add-edit-item.md` is; it amends *Shopping list → The store card*, *Shopping list → Entry and exit*, *Garden and Kitchen → The run list* and *Sort menu*. **Built in full and reverted the same day; nothing is implemented** (D73). What the build settled is in D73 rather than here — the partition rule, the multi-type placing rule, and the measurement that stopped it: **row 2 in list mode has about five pixels spare at a docked 1120**, so the sort control is the unsolved half. Its own *Where the order lives* leaves the drag handle unsettled (the row cannot hold both a handle and a count at 340px), and **the threshold rule it works out and discards under *Every card takes it* is the cheapest way back in** — the sort control is what made it unnecessary. The build drew the subhead at **34px, not the doc's 26**: that is what `NOT YET` already is. **Its premise moved underneath it**: *today a source card sorts out before low, then A–Z* was true when it was written and **D74** made the card plain A–Z, so its *By source* column now describes what already ships |
 | `.claude/docs/design/runlistsortingmockups.html` | **The 6 plates for it** — the whole list at each sort, the menu open, and the three bands scoped. Desktop 1440, light theme only; **dark and mobile are not drawn**. **Its segment reads `All 29` against `Buy 22 · Harvest 3 · Make 4`** where the build reads `All 28` — the doc flags the disagreement and settles it against neither, so **neither number is spec** |
 | `.claude/docs/design/scale.md` | **Building for a million households** (2 Sep) — the platform's real read/count/index limits as measured, the four-layer rollup design that follows, what it costs every mutation, and the three questions that have to be answered before any of it is built. **Nothing is built.** Its *Staging* table is the order to do it in, and **stage 1 — four indexes on `households` — is the one with a deadline**, because an index is cheap now and an outage at 1M rows |

@@ -1166,3 +1166,19 @@ export const PAGE_SPLIT_HALF =
  */
 export const PAGE_SPLIT =
 	'relative flex items-stretch overflow-hidden focus-within:outline-none focus-within:ring-2 focus-within:ring-ink focus-within:ring-offset-2 focus-within:ring-offset-canvas';
+
+/**
+ * The same box on a **raised drawer card** — the pantry export (D75).
+ *
+ * `PAGE_SPLIT` character for character apart from the ring, and both halves of
+ * that had to move: `ring-ink` is the page's near-black, which is most of the
+ * way to invisible against the drawer, and `ring-offset-canvas` names a fill
+ * that is nowhere near this control. `DRAWER_PRIMARY_ON_CARD` already settled
+ * both for the button this grew out of — the fourth time D45's rule has cost
+ * this app a control whose state was written against the wrong ground.
+ *
+ * `PAGE_SPLIT_HALF` needs no twin: it paints through `--split-hover` and
+ * `--split-press`, which the caller derives from the fill it actually has.
+ */
+export const DRAWER_SPLIT =
+	'relative flex items-stretch overflow-hidden focus-within:outline-none focus-within:ring-2 focus-within:ring-focus-dark focus-within:ring-offset-2 focus-within:ring-offset-drawer-raised';

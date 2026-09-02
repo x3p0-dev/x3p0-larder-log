@@ -51,7 +51,7 @@ import { devItemsEnabled, runDemoSeed } from './lib/devItems';
 import { useAvatarSync } from './hooks/useAvatarSync';
 import { useAdminAccess } from './hooks/useAdminData';
 import { useAccountWrites } from './hooks/useAccountData';
-import { downloadCsv } from './lib/download';
+import { downloadExport } from './lib/download';
 import { AdminConsole } from './components/AdminConsole';
 import type { AdminSection } from './components/AdminPane';
 import { adminDeepLink } from './lib/adminEntry';
@@ -86,7 +86,8 @@ import type { ClaimOwner } from '../shared/claim';
 import type { PutAwayRow } from '../shared/restock';
 import type { AccountHousehold, RecapRow } from '../shared/accountDeletion';
 import { decisionsFrom, needsPreflight, recapRows, transferBody, transferTitle } from '../shared/accountDeletion';
-import { pantryCsv, pantryFilename } from '../shared/exportData';
+import type { ExportFormat } from '../shared/exportData';
+import { pantryFile, pantryFilename } from '../shared/exportData';
 import { monthOf } from '../shared/season';
 import type { RunTab } from './components/RunSegment';
 import { countTermFilters, matchesTermFilters, pruneTermFilter, toggleTermFilter } from '../shared/filter';
@@ -670,8 +671,15 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 	const [deleteChosen, setDeleteChosen] = useState<Record<string, string>>({});
 	const [deleteBusy, setDeleteBusy] = useState(false);
 	const [deleteError, setDeleteError] = useState('');
-	/** The household `ExportPantry` is fetching, or null. See *Export it first*. */
-	const [exporting, setExporting] = useState<AccountHousehold | null>(null);
+	/**
+	 * The household `ExportPantry` is fetching and the format asked for, or
+	 * null. See *Export it first*.
+	 *
+	 * One piece of state rather than two, because the format is a property of
+	 * *this* fetch: two states could be set a render apart and hand over the
+	 * previous household in the new format.
+	 */
+	const [exporting, setExporting] = useState<{ household: AccountHousehold; format: ExportFormat } | null>(null);
 	/* Stable: `ExportPantry`'s effect depends on it, and a fresh closure every
 	 * render would re-run the effect that hands over the file. */
 	const clearExport = useCallback(() => setExporting(null), []);
@@ -2847,9 +2855,10 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 					 * in, and the file is that answer written down. Nothing is
 					 * fetched and nothing is asked of the server.
 					 */
-					onExportPantry: () => downloadCsv(
-						pantryFilename(householdName, new Date().toISOString()),
-						pantryCsv(items, locations, stores, types)
+					onExportPantry: (format) => downloadExport(
+						pantryFilename(householdName, new Date().toISOString(), format),
+						pantryFile(format, items, locations, stores, types),
+						format
 					),
 					onLeaveHousehold: requestLeave,
 					leaveLabel: members.length <= 1 ? 'Delete household' : 'Leave household',
@@ -3871,7 +3880,7 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 						 * closing the pre-flight to hand over a copy would throw away
 						 * every other answer on the screen.
 						 */
-						onExport={setExporting}
+						onExport={(household, format) => setExporting({ household, format })}
 						onContinue={() => setDeleteStep('confirm')}
 						onCancel={() => setDeleting(null)}
 						dark={dark}
@@ -3898,8 +3907,9 @@ export function Pantry({ userId, displayName, email, picture, onSignOut }: Props
 			  * subscriptions. */}
 			{exporting && (
 				<ExportPantry
-					householdId={exporting.id}
-					householdName={exporting.name}
+					householdId={exporting.household.id}
+					householdName={exporting.household.name}
+					format={exporting.format}
 					onDone={clearExport}
 				/>
 			)}

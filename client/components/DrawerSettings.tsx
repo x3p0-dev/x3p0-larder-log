@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ChevronRight, Download, LogOut, Minus, Pencil, Plus } from 'lucide-preact';
+import { ChevronRight, LogOut, Minus, Pencil, Plus } from 'lucide-preact';
 
 import { DrawerAvatar } from './DrawerAvatar';
+import { ExportSplit } from './ExportSplit';
 import { HouseholdIdentity } from './HouseholdIdentity';
 import { InstallRow } from './InstallRow';
 import { MembersPane } from './MembersPane';
@@ -10,10 +11,10 @@ import { TermPanel } from './TermPanel';
 import type { Theme } from '../lib/theme';
 import { drawerTheme } from '../lib/theme';
 import {
-	DRAWER_CARD_ROW, DRAWER_GHOST_DANGER, DRAWER_PRIMARY_ON_CARD, DRAWER_SEGMENT_ON,
-	DRAWER_STEPPER, DRAWER_SUNK,
+	DRAWER_CARD_ROW, DRAWER_GHOST_DANGER, DRAWER_SEGMENT_ON, DRAWER_STEPPER, DRAWER_SUNK,
 } from '../lib/controlStyles';
 import type { Invite, Member, ThemeOverride } from '../../shared/types';
+import type { ExportFormat } from '../../shared/exportData';
 import type { Role } from '../../shared/roles';
 import { can } from '../../shared/roles';
 import { fromInt, toInt } from '../../shared/qty';
@@ -45,8 +46,8 @@ type Props = {
 	onRemoveMember: (membershipId: string) => void;
 	/** Hands the household over — owner only, and never on your own row (D68). */
 	onTransferOwnership: (membershipId: string) => void;
-	/** Hands over the household's rows as a CSV. Owners and editors (D68). */
-	onExportPantry: () => void;
+	/** Hands over the household's rows, in the format pressed. Owners and editors (D68). */
+	onExportPantry: (format: ExportFormat) => void;
 	/**
 	 * Asks to leave. Which of the three cases you are in — leave, blocked on
 	 * being the last owner, or delete because you are the last member — is
@@ -408,10 +409,20 @@ export function DrawerSettings({
 				  * place in the app where reading and exporting come apart. Absent
 				  * rather than disabled, per D30.
 				  *
-				  * **One file, no picker.** A format choice is a question nobody has
-				  * an opinion about. **And it is not a backup**, because nothing
-				  * imports one back — saying so is cheap, and the alternative is
-				  * somebody deleting a household they thought they had saved.
+				  * **A split, not a pair**, which is what reverses D68's *one file,
+				  * no picker*. That line was right that a format is not worth a
+				  * *question* — a menu, a default, a state to remember — and wrong
+				  * that there is only one answer: an item names several sources and
+				  * several types, and CSV can only flatten those into a cell with a
+				  * separator in it. So the default is on the button, the other file
+				  * is behind the chevron, and there is still nothing to set and
+				  * nothing to undo. It is the app's second split control after
+				  * *Add item*, and the same shape means the same thing in both
+				  * places: **this is what the press does, and there is another way.**
+				  *
+				  * **It is not a backup**, in either format, because nothing imports
+				  * one back — saying so is cheap, and the alternative is somebody
+				  * deleting a household they thought they had saved.
 				  */}
 				{mayExport && (
 					<>
@@ -421,16 +432,10 @@ export function DrawerSettings({
 							<span class="flex-1 min-w-0 flex flex-col gap-px">
 								<span class="text-[14.5px]" style={{ color: d.inkMuted }}>Export the pantry</span>
 								<span class="text-[12.5px]" style={{ color: inner.textFaint }}>
-									{itemCount === 1 ? '1 item' : `${itemCount} items`}, as a spreadsheet. Not a backup
+									{itemCount === 1 ? '1 item' : `${itemCount} items`}. Not a backup
 								</span>
 							</span>
-							<button
-								onClick={onExportPantry}
-								class={`shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-[10px] text-[13.5px] font-semibold ${DRAWER_PRIMARY_ON_CARD}`}
-								style={{ background: d.ink, color: '#241E17' }}
-							>
-								<Download size={14} /> CSV
-							</button>
+							<ExportSplit onExport={onExportPantry} theme={theme} />
 						</div>
 					</>
 				)}

@@ -10,16 +10,21 @@
  * | | Where | What it is |
  * |---|---|---|
  * | **Your data** | The account pane | Four fields, because there is nothing else. A legal obligation, not a feature |
- * | **The pantry** | Settings → Pantry settings | The household's rows as CSV. The one anybody wants |
+ * | **The pantry** | Settings → Pantry settings | The household's rows. The one anybody wants |
  *
  * **Neither is a backup, because nothing imports one back.** Saying so is
  * cheap; the alternative is somebody deleting a household they thought they had
  * saved.
  *
+ * **The two exports that describe rows offer CSV or JSON** — the pantry here,
+ * and the audit log in `client/lib/activityExport.ts`. *Your data* does not:
+ * it is four fields, two of which are lists of objects, and a CSV of that is a
+ * file with two shapes in it.
+ *
  * The *shape* of a file is domain logic and lives here. Handing one to a
  * browser is not — that reaches `Blob`, `URL` and `document`, three of the
  * identifiers the capsule compiler's denylist rejects outright — so the
- * download itself stays in `client/lib/activityCsv.ts` beside the app's first
+ * download itself stays in `client/lib/download.ts` beside the app's first
  * one.
  */
 
@@ -46,15 +51,51 @@ export function csvFile(columns: readonly string[], rows: readonly (readonly str
 }
 
 /**
+ * Which file you get.
+ *
+ * **Both, because the two readers want different things.** CSV is what a
+ * spreadsheet opens and what somebody auditing a household actually double
+ * clicks; JSON is what survives the shapes CSV cannot hold — an item names
+ * several sources and several types (there are no array columns, D4), and a CSV
+ * cell can only flatten those into one string with a separator in it.
+ *
+ * **The choice is made at the press and remembered nowhere.** It is a property
+ * of what you are about to do with the file, not of the device or the
+ * household, so there is no preference to set and none to find later.
+ */
+export type ExportFormat = 'csv' | 'json';
+
+export function isExportFormat(value: string): value is ExportFormat {
+	return value === 'csv' || value === 'json';
+}
+
+/**
+ * A whole JSON file, ending in a newline.
+ *
+ * Two-space indent, as the account export already uses: these files are read by
+ * a person about as often as by anything else, and an indent costs bytes nobody
+ * is counting.
+ */
+export function jsonFile(value: unknown): string {
+	return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+/**
  * The pantry's columns.
  *
  * **Names, never ids**, so the file is readable on its own — and an item's
  * missing source is an empty cell, exactly as `NO STORE` is a real state rather
  * than a gap to apologise for.
  *
- * `sources` and `types` are plural and semicolon-joined because both are
- * many-to-many (there are no array columns — D4), and a comma inside a CSV cell
- * is a quoting problem nobody reading the file should have to think about.
+ * `sources` and `types` are plural because both are many-to-many (there are no
+ * array columns — D4). **In CSV they are semicolon-joined and in JSON they are
+ * real arrays**, which is the clearest example of why the format is worth
+ * offering at all: a comma inside a CSV cell is a quoting problem nobody
+ * reading the file should have to think about, and a separator inside a value
+ * is a thing the reader has to be told about. JSON has to tell nobody.
+ *
+ * The keys are the same in both files, so the two describe one thing in two
+ * shapes rather than being two exports.
  */
 export const PANTRY_COLUMNS = [
 	'name', 'size', 'on_hand', 'low_at', 'location', 'sources', 'types', 'notes',
@@ -62,40 +103,104 @@ export const PANTRY_COLUMNS = [
 
 const JOIN = '; ';
 
+/**
+ * One row per item, resolved and ordered — the one reading of the pantry both
+ * files are built from.
+ *
+ * **A–Z, and sorted here** rather than taken in whatever order the query
+ * collected them. An export is opened by something that is not this app, and
+ * the order a row happens to have been inserted in is not an order.
+ *
+ * **`on_hand` and `low_at` stay strings, in JSON too.** They are decimal
+ * strings all the way down (there is no numeric column type — D1), and a
+ * `Number()` here would be this file inventing a precision the database never
+ * held, then handing back `null` for the empty ones.
+ */
+export type PantryRow = {
+	name: string;
+	size: string;
+	on_hand: string;
+	low_at: string;
+	location: string;
+	sources: string[];
+	types: string[];
+	notes: string;
+};
+
+export function pantryRows(
+	items: readonly Item[],
+	locations: readonly Term[],
+	sources: readonly Source[],
+	types: readonly Term[]
+): PantryRow[] {
+	const nameOf = new Map<string, string>();
+
+	for (const t of [...locations, ...sources, ...types]) nameOf.set(t.id, t.name);
+
+	const named = (ids: readonly string[]) =>
+		ids.map((id) => nameOf.get(id) ?? '').filter(Boolean);
+
+	return [...items]
+		.sort((a, b) => a.name.localeCompare(b.name))
+		.map((item) => ({
+			name: item.name,
+			size: formatSize(item.size, item.unit),
+			on_hand: item.qty,
+			low_at: item.threshold,
+			location: nameOf.get(item.locationId) ?? '',
+			sources: named(item.storeIds),
+			types: named(item.typeIds),
+			notes: item.notes,
+		}));
+}
+
 export function pantryCsv(
 	items: readonly Item[],
 	locations: readonly Term[],
 	sources: readonly Source[],
 	types: readonly Term[]
 ): string {
-	const nameOf = new Map<string, string>();
-
-	for (const t of [...locations, ...sources, ...types]) nameOf.set(t.id, t.name);
-
-	/*
-	 * A–Z, and sorted here rather than taken in whatever order the query
-	 * collected them. An export is opened by something that is not this app, and
-	 * the order a row happens to have been inserted in is not an order.
-	 */
-	const rows = [...items]
-		.sort((a, b) => a.name.localeCompare(b.name))
-		.map((item) => [
-			item.name,
-			formatSize(item.size, item.unit),
-			item.qty,
-			item.threshold,
-			nameOf.get(item.locationId) ?? '',
-			item.storeIds.map((id) => nameOf.get(id) ?? '').filter(Boolean).join(JOIN),
-			item.typeIds.map((id) => nameOf.get(id) ?? '').filter(Boolean).join(JOIN),
-			item.notes,
-		]);
+	const rows = pantryRows(items, locations, sources, types).map((r) => [
+		r.name, r.size, r.on_hand, r.low_at, r.location,
+		r.sources.join(JOIN), r.types.join(JOIN), r.notes,
+	]);
 
 	return csvFile(PANTRY_COLUMNS, rows);
 }
 
-/** `calfee-household-2026-09-01.csv` — the household and the day it was taken. */
-export function pantryFilename(householdName: string, isoDay: string): string {
-	return `${slug(householdName) || 'pantry'}-${isoDay.slice(0, 10)}.csv`;
+/**
+ * The same rows, as a bare array.
+ *
+ * **No envelope.** A wrapper naming the household and the day was drawn and
+ * dropped: the filename already carries both, and an array is the thing every
+ * reader — `jq`, a script, a person — expects to find at the top of a file
+ * called `calfee-household-2026-09-01.json`.
+ */
+export function pantryJson(
+	items: readonly Item[],
+	locations: readonly Term[],
+	sources: readonly Source[],
+	types: readonly Term[]
+): string {
+	return jsonFile(pantryRows(items, locations, sources, types));
+}
+
+/** Whichever of the two was asked for. */
+export function pantryFile(
+	format: ExportFormat,
+	items: readonly Item[],
+	locations: readonly Term[],
+	sources: readonly Source[],
+	types: readonly Term[]
+): string {
+	return format === 'json'
+		? pantryJson(items, locations, sources, types)
+		: pantryCsv(items, locations, sources, types);
+}
+
+/** `calfee-household-2026-09-01.csv` — the household, the day, and the format. */
+export function pantryFilename(householdName: string, isoDay: string, format: ExportFormat): string {
+	return `${slug(householdName) || 'pantry'}-${isoDay.slice(0, 10)}.${format}`;
 }
 
 /**
@@ -127,9 +232,7 @@ export type AccountData = {
 };
 
 export function accountDataJson(data: AccountData): string {
-	// Two-space indent and a trailing newline: this one is read by a person as
-	// often as by anything else, and it is four fields long.
-	return `${JSON.stringify(data, null, 2)}\n`;
+	return jsonFile(data);
 }
 
 /** `larder-log-account-2026-09-01.json`. */

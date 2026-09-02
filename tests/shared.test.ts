@@ -71,8 +71,8 @@ import {
 	transferTitle, unanswered,
 } from '../shared/accountDeletion';
 import {
-	accountDataFilename, accountDataJson, csvCell, csvFile, PANTRY_COLUMNS, pantryCsv,
-	pantryFilename,
+	accountDataFilename, accountDataJson, csvCell, csvFile, isExportFormat, jsonFile,
+	PANTRY_COLUMNS, pantryCsv, pantryFile, pantryFilename, pantryJson, pantryRows,
 } from '../shared/exportData';
 import {
 	MONTHS, hasSeason, isInSeason, monthName, monthNumber, monthOf, normalizeSeason, readyPhrase,
@@ -3128,8 +3128,40 @@ check('the pantry export leads with its columns', CSV[0], PANTRY_COLUMNS.join(',
 check('and is A–Z rather than insertion order', CSV[1], '"Baking Soda","","0","1","Pantry","","",""');
 check('terms come out as names, never as ids', CSV[2], '"Butter","1 lb","2","1","Freezer","Publix","Baking","salted"');
 check('an item with no source is an empty cell', CSV[1].split(',')[5], '""');
-check('the filename is the household and the day', pantryFilename('Calfee Household', '2026-09-01T10:00:00Z'), 'calfee-household-2026-09-01.csv');
-check('a nameless household still gets a file', pantryFilename('   ', '2026-09-01T10:00:00Z'), 'pantry-2026-09-01.csv');
+check('the filename is the household and the day', pantryFilename('Calfee Household', '2026-09-01T10:00:00Z', 'csv'), 'calfee-household-2026-09-01.csv');
+check('a nameless household still gets a file', pantryFilename('   ', '2026-09-01T10:00:00Z', 'csv'), 'pantry-2026-09-01.csv');
+
+// --- Either file: CSV or JSON ---
+//
+// **The formats are two renderings of one reading**, so `pantryRows` is what
+// both are asserted against: a JSON file built from a second traversal would
+// drift from the CSV one column at a time and every file would still open.
+
+const ROWS = pantryRows(XITEMS, XLOC, XSRC, XTYPE);
+check('both files are built from one reading, A–Z', ROWS.map((r) => r.name), ['Baking Soda', 'Butter']);
+
+const JSON_ROWS = JSON.parse(pantryJson(XITEMS, XLOC, XSRC, XTYPE));
+check('the JSON file is a bare array, no envelope', Array.isArray(JSON_ROWS), true);
+check('and its keys are the CSV\u2019s columns', Object.keys(JSON_ROWS[0]), [...PANTRY_COLUMNS]);
+// **The reason the format is worth offering at all.** CSV can only flatten a
+// many-to-many into one cell with a separator in it; JSON does not have to.
+check('many-to-many is a real array in JSON', JSON_ROWS[1].types, ['Baking']);
+check('and a semicolon-joined cell in CSV', CSV[2].split(',')[6], '"Baking"');
+check('an item with no source is an empty array, not an empty string', JSON_ROWS[0].sources, []);
+// **Strings, in JSON too.** There is no numeric column type (D1) — a `Number()`
+// here would invent a precision the database never held.
+check('counts stay strings rather than becoming numbers', typeof JSON_ROWS[1].on_hand, 'string');
+
+check('pantryFile hands over whichever was asked for', pantryFile('csv', XITEMS, XLOC, XSRC, XTYPE), pantryCsv(XITEMS, XLOC, XSRC, XTYPE));
+check('and the other one too', pantryFile('json', XITEMS, XLOC, XSRC, XTYPE), pantryJson(XITEMS, XLOC, XSRC, XTYPE));
+// The extension is the format and nothing else — a mismatch here is a JSON file
+// a spreadsheet opens as one long column.
+check('the extension follows the format', pantryFilename('Calfee Household', '2026-09-01T10:00:00Z', 'json'), 'calfee-household-2026-09-01.json');
+
+check('a JSON file ends in a newline', jsonFile([1]).endsWith('\n'), true);
+check('csv is a format', isExportFormat('csv'), true);
+check('json is a format', isExportFormat('json'), true);
+check('and nothing else is', isExportFormat('xlsx'), false);
 
 const ACCOUNT = accountDataJson({
 	display_name: 'Justin Tadlock',

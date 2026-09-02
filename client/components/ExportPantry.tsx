@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'preact/hooks';
 
 import { usePantryOf } from '../hooks/usePantryData';
-import { pantryCsv, pantryFilename } from '../../shared/exportData';
-import { downloadCsv } from '../lib/download';
+import type { ExportFormat } from '../../shared/exportData';
+import { pantryFile, pantryFilename } from '../../shared/exportData';
+import { downloadExport } from '../lib/download';
 
 /**
  * Takes a copy of a household you are not currently in, then gets out of the
@@ -26,10 +27,12 @@ import { downloadCsv } from '../lib/download';
  * household changes, and an unguarded effect would hand somebody a second file
  * because a member ticked a row while they were reading the dialog.
  */
-export function ExportPantry({ householdId, householdName, onDone }: {
+export function ExportPantry({ householdId, householdName, format, onDone }: {
 	householdId: string;
 	/** For the filename. The pantry query does not carry the household's name. */
 	householdName: string;
+	/** Which file — chosen at the press, and fixed for the life of this mount. */
+	format: ExportFormat;
 	/** Fired once the file is handed over, so the caller can unmount this. */
 	onDone: () => void;
 }) {
@@ -41,13 +44,14 @@ export function ExportPantry({ householdId, householdName, onDone }: {
 
 		sent.current = true;
 
-		downloadCsv(
-			pantryFilename(householdName, new Date().toISOString()),
-			pantryCsv(pantry.items, pantry.locations, pantry.stores, pantry.types)
+		downloadExport(
+			pantryFilename(householdName, new Date().toISOString(), format),
+			pantryFile(format, pantry.items, pantry.locations, pantry.stores, pantry.types),
+			format
 		);
 
 		onDone();
-	}, [pantry, householdName, onDone]);
+	}, [pantry, householdName, format, onDone]);
 
 	return null;
 }

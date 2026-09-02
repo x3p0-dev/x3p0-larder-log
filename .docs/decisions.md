@@ -7384,3 +7384,109 @@ fail when out-before-low is put back.
   segment its words.
 - **Sorting by status only within a type group.** There are no type groups —
   D73 did not ship.
+
+## D75. An export that describes rows offers CSV or JSON, and the choice is made at the press
+
+**Amends [D68](#d68-deleting-your-account-is-leaving-every-household-at-once),
+which says of the pantry export: *one file, no picker. A format choice is a
+question nobody has an opinion about.***
+
+That line was right about the *cost* of a picker and wrong that there is only
+one answer. A menu, a default and a state to remember really are more than a
+format is worth — but the app has two exports that describe rows, and in both
+of them **CSV is losing something the data actually has**:
+
+| | what CSV cannot hold |
+|---|---|
+| **The pantry** | An item names several sources and several types (there are no array columns — D4), so both collapse into one cell with a `; ` in it — a separator the reader has to be told about |
+| **The audit log** | A deletion entry's `held` is a set of counts, denormalised at the cascade because nothing else in the space remembers them, and a cell can only take the sentence `12 items · 3 types` |
+
+So both offer **CSV or JSON**, and the whole of the cost D68 was avoiding is
+avoided anyway: **the choice is made at the press and remembered nowhere.**
+
+- **Nothing is stored, in `useViewState` (D51) or anywhere else.** A format is a
+  property of what you are about to do with the file — open it in Numbers, or
+  pipe it through `jq` — and not of the device, the account or the household. A
+  remembered format is a fourth thing in that record answering a question asked
+  once a quarter, and it is a setting somebody has to find before they can trust
+  what the button will hand them.
+- **CSV is first everywhere.** It is the deliverable: an export exists to be
+  opened by something that is not this app, and that is usually a spreadsheet.
+  JSON is the better *shape* and the worse default.
+- **One reading, two renderings.** `pantryRows()` resolves the household once —
+  names not ids, A–Z — and both files are built from it. A JSON file assembled
+  by its own second traversal would drift from the CSV one column at a time and
+  every file would still open. The keys are the CSV's own column names, so the
+  two describe one thing in two shapes rather than being two exports.
+- **`held` is the counts in JSON and the phrase in CSV**, which is the same rule
+  in its sharpest form: handing over `12 items · 3 types` and making the reader
+  parse an interpunct back into numbers is the export losing the one thing it
+  was keeping.
+- **Counts stay strings, in JSON too.** `on_hand` and `low_at` are decimal
+  strings all the way down (D1 — there is no numeric column type), and a
+  `Number()` at the export boundary would be this file inventing a precision the
+  database never held, then handing back `null` for the empty ones.
+- ***Your data* is unchanged and stays JSON alone.** It is four fields, two of
+  which are lists of objects; a CSV of that is one file with two shapes in it,
+  and nobody opens their own account record in a spreadsheet.
+
+### The control is not the same shape in all three places
+
+One rule, three rows with different room in them:
+
+- **Settings → Pantry settings: a split, the app's second after *Add item*.**
+  The label hands over a CSV, the chevron opens the one other file it can be.
+  **Two buttons side by side were built first and lost**: a pair reads as two
+  features, and a split reads as one control with a default — which is what an
+  export is. The same shape means the same thing in both places it appears:
+  *this is what the press does, and there is another way.*
+  - **The label names the format**, `CSV` rather than *Export* — the row's own
+    label a few pixels left already says what the control is for, so the
+    button's word is free to say *which file*, and the state is then readable
+    without opening the thing that changes it (the sort trigger's rule).
+  - **The default is absent from the menu**, which is `AddMenu`'s own rule, so
+    the menu is one row. That is thin and it is honest: there is exactly one
+    alternative, and a row for the thing you can already press would only make
+    it look like two.
+  - **`DrawerMenu`, and it opens upward.** A cream popover over the darkest
+    panel in the app is the mistake that component records; and the export row
+    is the last thing in the Settings pane, so a menu dropping below it would
+    open past the foot of the drawer.
+  - **`DRAWER_SPLIT` is `PAGE_SPLIT` with both halves of its ring moved** —
+    `ring-ink` is the page's near-black and most of the way to invisible here,
+    and `ring-offset-canvas` names a fill nowhere near this control.
+    `PAGE_SPLIT_HALF` needs no twin: it paints through `--split-hover` and
+    `--split-press`, which the caller derives from the fill it actually has, and
+    the drawer is dark in both themes so that derivation has only one direction
+    to go where `AddMenu`'s has two.
+- **The audit log: a group in the menu that already exists.** Format is a
+  *modifier* — pressing one changes what the next press hands over, the menu
+  stays open, and the sort menu's crimson check marks it — and a range is the
+  *act*, which downloads and closes. A micro-label and a hairline are what stop
+  `CSV` reading as a seventh range. **One label, not two**: a second header over
+  the months was built and dropped, because in a 220px menu two headers are
+  heavier than the thing they organise, and it is four lines of height back on a
+  menu that grew by five.
+- **The pre-flight's *Export it first*: a menu.** That row already holds a tile,
+  a name, a consequence line and the decision trigger, and a format sitting
+  loose in it would be a fifth thing competing with the one control that has to
+  be pressed. **The label is the instruction and has to survive** — `Export it
+  first` says why the control is there, where a bare `CSV` beside `Delete it`
+  says nothing at all. `useFixedMenu`, because the dialog card is
+  `overflow-y-auto max-h-[90vh]` and a scroll container clips absolutely
+  positioned descendants at its padding box.
+
+### Rejected
+
+- **Two buttons in Settings.** Built, and replaced by the split above. It works
+  and it says the wrong thing: an export has a default, and a pair says it does
+  not.
+- **A remembered preference, per device.** One line in `useViewState`'s record
+  and the cheapest thing to build. It moves the choice away from the press to a
+  settings row nobody opens, and then every button in the app hands over a
+  format somebody chose months ago in another screen.
+- **Switching the exports to JSON outright.** CSV is what gets double-clicked.
+- **An envelope on the pantry JSON**, naming the household and the day. The
+  filename already carries both, and an array is what every reader expects to
+  find at the top of a file called `calfee-household-2026-09-01.json`.
+- **Offering CSV for *your data*.** See above — it is not a table.

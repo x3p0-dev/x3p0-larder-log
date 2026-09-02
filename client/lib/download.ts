@@ -1,3 +1,5 @@
+import type { ExportFormat } from '../../shared/exportData';
+
 /**
  * Handing a file to the browser.
  *
@@ -32,4 +34,16 @@ export function downloadCsv(filename: string, csv: string): void {
 
 export function downloadJson(filename: string, json: string): void {
 	downloadFile(filename, json, 'application/json;charset=utf-8');
+}
+
+/**
+ * Whichever the press asked for.
+ *
+ * The mime type is the one thing a caller must not be left to pair up itself:
+ * a JSON file served as `text/csv` opens in a spreadsheet as one long column,
+ * and nothing about the call site would look wrong.
+ */
+export function downloadExport(filename: string, contents: string, format: ExportFormat): void {
+	if (format === 'json') downloadJson(filename, contents);
+	else downloadCsv(filename, contents);
 }

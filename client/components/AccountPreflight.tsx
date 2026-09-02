@@ -14,6 +14,7 @@ import {
 	PAGE_SUNK_ON_ROW, PAGE_SUNK_ON_ROW_UNSET,
 } from '../lib/controlStyles';
 import type { AccountHousehold } from '../../shared/accountDeletion';
+import type { ExportFormat } from '../../shared/exportData';
 import {
 	andList, deleteConsequence, goesLine, householdMeta, leavingLine, preflightGroups,
 	preflightLede, transferConsequence, unanswered,
@@ -21,6 +22,20 @@ import {
 
 /** The transfer menu's own width and height cap — what placement needs. */
 const MENU_SIZE = { width: 284, maxHeight: 280 };
+
+/** The export menu's. Two rows, so the cap is the height rather than a limit. */
+const EXPORT_MENU_SIZE = { width: 184, maxHeight: 104 };
+
+/**
+ * The words on the two rows.
+ *
+ * **The format is named and the file is not** — *Download as CSV* would repeat
+ * the verb already standing in the trigger above it.
+ */
+const EXPORT_FORMATS: { key: ExportFormat; label: string }[] = [
+	{ key: 'csv', label: 'As a CSV file' },
+	{ key: 'json', label: 'As a JSON file' },
+];
 
 /**
  * Deleting your account — the pre-flight (D68).
@@ -59,7 +74,7 @@ export function AccountPreflight({
 	chosen: Readonly<Record<string, string>>;
 	onChoose: (householdId: string, value: string) => void;
 	/** Takes a CSV of the household about to be destroyed. Row set to delete only. */
-	onExport: (household: AccountHousehold) => void;
+	onExport: (household: AccountHousehold, format: ExportFormat) => void;
 	onContinue: () => void;
 	onCancel: () => void;
 	dark: boolean;
@@ -133,7 +148,7 @@ export function AccountPreflight({
 							menuOpen={menu === h.id}
 							setMenuOpen={(o) => setMenu(o ? h.id : '')}
 							onChoose={(value) => { onChoose(h.id, value); setMenu(''); }}
-							onExport={() => onExport(h)}
+							onExport={(format) => onExport(h, format)}
 							dark={dark}
 							theme={theme}
 						/>
@@ -268,7 +283,7 @@ function Decision({
 	menuOpen: boolean;
 	setMenuOpen: (open: boolean) => void;
 	onChoose: (value: string) => void;
-	onExport: () => void;
+	onExport: (format: ExportFormat) => void;
 	dark: boolean;
 	theme: Theme;
 }) {
@@ -307,15 +322,16 @@ function Decision({
 				  * app where a pantry is about to stop existing and somebody is
 				  * looking straight at it. A row set to transfer does not get it:
 				  * that household keeps its own copy and its own export row.
+				  *
+				  * **A menu rather than the pair of buttons Settings uses**, and the
+				  * row is what decides it: a tile, a name, a consequence line and a
+				  * decision trigger are already in it, and a second format sitting
+				  * loose in that line would be a fifth thing competing with the one
+				  * control that has to be pressed. The label is the instruction and
+				  * has to survive — `Export it first` says why the control is there,
+				  * where a bare `CSV` beside `Delete it` says nothing at all.
 				  */}
-				{chosen === '' && (
-					<button
-						onClick={onExport}
-						class={`shrink-0 h-8 px-2 rounded-[9px] text-[13px] font-semibold ${LIST_GHOST_ON_CARD}`}
-					>
-						Export it first
-					</button>
-				)}
+				{chosen === '' && <ExportControl onExport={onExport} theme={theme} />}
 
 				<div class="relative shrink-0" ref={ref}>
 					<button
@@ -357,6 +373,78 @@ function Decision({
 				</div>
 			</div>
 		</>
+	);
+}
+
+/**
+ * *Export it first*, and which file.
+ *
+ * **Two rows, and the trigger keeps the sentence.** The formats are what
+ * `shared/exportData.ts` offers everywhere; the difference here is only that
+ * there is no room in this row to draw them side by side, so they go where a
+ * short list of alternatives goes in this app.
+ *
+ * **A press downloads and closes**, unlike the audit log's format rows: there
+ * the format is a modifier on a range you have still to pick, and here it *is*
+ * the act. Nothing is marked as current, for the transfer menu's own reason one
+ * component up — neither row has happened yet, so there is no incumbent to
+ * check.
+ *
+ * `useFixedMenu`, because the dialog card is `overflow-y-auto max-h-[90vh]` and
+ * a scroll container clips absolutely-positioned descendants at its padding
+ * box. Same cap, same fix, same reason as the transfer menu.
+ */
+function ExportControl({ onExport, theme }: {
+	onExport: (format: ExportFormat) => void;
+	theme: Theme;
+}) {
+	const [open, setOpen] = useState(false);
+	const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
+	const close = useCallback(() => setOpen(false), []);
+	const seat = useFixedMenu(open, ref, EXPORT_MENU_SIZE, close);
+
+	return (
+		<div class="relative shrink-0" ref={ref}>
+			<button
+				onClick={() => setOpen(! open)}
+				aria-haspopup="menu"
+				aria-expanded={open}
+				class={`flex items-center gap-1 h-8 pl-2 pr-1.5 rounded-[9px] text-[13px] font-semibold ${LIST_GHOST_ON_CARD}`}
+			>
+				Export it first
+				<ChevronDown
+					size={13}
+					class="shrink-0"
+					style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+				/>
+			</button>
+
+			{open && seat && (
+				<div
+					role="menu"
+					aria-label="Export this pantry"
+					class={`${PAGE_MENU_FIXED} w-[184px]`}
+					style={{
+						top: `${seat.top}px`,
+						left: `${seat.left}px`,
+						maxHeight: `${seat.maxHeight}px`,
+						boxShadow: theme.liftShadow,
+					}}
+				>
+					{EXPORT_FORMATS.map((f) => (
+						<button
+							key={f.key}
+							role="menuitem"
+							onClick={() => { onExport(f.key); setOpen(false); }}
+							class={PAGE_MENU_ROW}
+							style={{ color: theme.text }}
+						>
+							{f.label}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
 	);
 }
 
