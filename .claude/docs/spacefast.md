@@ -5775,3 +5775,135 @@ same thing has to be derived from midpoints between points.
 
 And the module genuinely costs nothing against the client bundle, as documented
 for platform modules.
+
+---
+
+## 2026-09-02 — read-only sweep: the platform deployed, and nothing else moved
+
+**Question**: is the delivery block (`zero_artifact_mode_invalid`, rejecting
+every artifact delivered since Sep 1 ~15:37) still standing? No publishing was
+done — this sweep is read-only.
+
+**One thing changed: the platform deployed new code.**
+`api.spacefast.com/health` now reports `commitSha f74dce6b3d5d…`, where the
+Sep 1 ~22:30 sweep recorded `ddb7ebd6d5a1…`. That is a deploy of the management
+API between then and now — whether it touches the runtime loader is unknowable
+from outside, but it is the first movement of any kind since the block began.
+
+**Everything else is byte-for-byte where last night left it:**
+
+| check | answer |
+|---|---|
+| npm toolchain | still `0.2.2` (Aug 28) on both `spacefast` and `@spacefast/zero` |
+| error registry | still *"481 error codes"*, same five `zero_artifact_*`; `zero_artifact_mode_invalid` still absent, its docs URL still 404, docs search returns 0 for it |
+| channel history | nothing since the 16:25:38 rollback to v19 — no new `config_update` redeliveries |
+| live | v19, `/api/status` `ok`, anon `households` over `/__zero/run` → `{"state":"guest"}` |
+| v25 / v26 previews | still 403 "This space is private" to curl — the check is still browser-only |
+| `sf versions get` | staged v25 still `ready` / no diagnostics; `runtime.app` still describes the **live** runtime whichever id is passed; `pendingApp` null |
+
+**New field noticed on the version record: `immutableUrl`.** It is just the
+`vN--` preview hostname (`https://v25--larderlog.view.fast/`,
+`immutableUrlStatus: ready`) — no signed token, so it does not open the gate the
+CLI key cannot pass. The one non-destructive validation of a staged version
+remains reachable only from the dashboard's version link.
+
+**The decisive test after the deploy, and it costs nothing**: open v25 from the
+dashboard (the link carries the `__=` token) and append `/api/status`. `ok`
+means deliveries validate again; the 422 means the loader is still rejecting.
+v26's twin check is the `/__zero/run` `households` probe from its devtools
+console, since v26 declares no endpoints.
+
+**Standing hazard until that answers `ok`: do not touch space settings in the
+dashboard and do not run `sf apply`.** Either mints a `config_update` redelivery
+of the **live** runtime, and a redelivery that lands invalid is promoted anyway —
+that is precisely the Sep 1 morning outage. The live space stays healthy only
+because nothing has redelivered it.
+
+### The browser check ran: v25 still 422s after the platform deploy — 2026-09-02
+
+Justin opened v25's preview from the dashboard and hit `/api/status`:
+
+```json
+{"code":"zero_artifact_mode_invalid","status":422,
+ "detail":"A read handler cannot carry write-side capabilities.",
+ "type":"https://spacefast.com/docs/errors/zero_artifact_mode_invalid"}
+```
+
+Byte-identical to Sep 1's rejections. **So the `f74dce6b…` deploy did not touch
+the loader** — or did and the block is deliberate. The count is now **seven
+rejected deliveries** across two content sets and one byte-identical redelivery
+of known-good bytes, spanning two platform deploys. Everything in the Sep 1
+conclusion stands: no version of this app can ship, the failure is entirely
+Spacefast's, and the only recovery for an accidental promotion is `sf rollback`
+to v19. Still waiting on Spacefast; the settings/`sf apply` hazard above still
+applies.
+
+### Found: the "mode" contract exists — as schemas in our own toolchain, with no emitter — 2026-09-02
+
+Justin's push to re-check "surely we must update our own code" produced the
+mechanism yesterday's investigation could not find, and it was sitting in two
+places nobody had looked: **`finalize.json`** (only `artifact.json` was ever
+diffed) and **`@spacefast/common`'s contract files**.
+
+**1. The finalize payload encodes per-handler capabilities, hardcoded by kind.**
+`.spacefast/zero/finalize.json` carries a `runSources[]` entry per query and
+mutation and an `endpointSources[]` entry per endpoint, each with a
+`capabilities` object. `zero-compile/dist/compile.js` (lines ~597 and ~630)
+writes them as a **pure function of handler kind** — every query gets
+`{realtime: false, email: false, spam: true, gravatar: true, content: true, db: true, …}`,
+every mutation the same with `realtime`/`email` true, and **every endpoint gets
+the full write-side set regardless of method** (matching `endpoint()`'s
+`ServerContext` in the SDK types). Nothing a handler's code does or does not use
+changes a flag — all 15 of our queries are identical, all 31 mutations are
+identical. **So no edit to `server/index.ts` can alter what the loader sees.**
+
+**2. The "artifact mode" vocabulary is a real contract, and our own pinned
+`@spacefast/common` ships it — schemas only.**
+`dist/contracts/content-program.js` defines a **content program** release
+format (`spacefast.compiled-program` v1) in which every ability carries
+`kind` + **`mode`**: `query → mode: "read"`, `mutation → mode: "write"`,
+`endpoint → mode: read|write`, with rules like *"write SDK operations cannot be
+cached"*. Executables are per-operation quickjs artifacts referenced by sha256.
+This is exactly the noun pair in both `detail` strings — a per-operation
+read/write **mode**, matched against the **invocation** (a `query.run` or a
+`GET` is a read invocation).
+
+**3. Nothing in the released toolchain emits it.** Grepping all of
+`node_modules/spacefast` and `node_modules/@spacefast/*`: the format appears
+**only** in `@spacefast/common`'s contract schemas and a fixture. The compiler
+still emits `format: "stattic.zero.capsule.v1"` with **no `mode` field
+anywhere**, and the publish path never references the content-program contract.
+
+**The complete picture, restated:** the serving runtime began enforcing the
+content-program mode contract on deliveries at ~15:37 on Sep 1. The newest
+published toolchain (0.2.2, Aug 28 — no prerelease dist-tags) contains the
+contract's *schemas* but no *emitter*, so **every artifact any Zero space can
+produce today fails the validation**. Redelivered old bytes fail too because
+finalize/derivation runs server-side under the new rules; runtimes installed
+before the change keep serving, which is why v19 works and why `sf rollback`
+works. This also retires the endpoint hypothesis's residue cleanly: the GET
+endpoint carrying write-side capabilities *is* a true statement about the
+finalize encoding — it is just compiler-emitted and kind-determined, so v26
+(no endpoints) still failed on its queries' side of the same contract.
+
+**Answer to "do we need to update our own code": no — we need a toolchain that
+does not exist yet.** The fix arrives as the next `spacefast` /
+`@spacefast/zero` npm release. Writing the emitter ourselves from schemas alone
+(five interlinked sha256-digested artifacts, ability descriptors, schema refs,
+an undocumented finalize integration) is not a shim, it is reimplementing an
+unreleased compiler against a guessed contract — not viable.
+
+**The watch signal changes accordingly**: `npm view spacefast version` moving
+past `0.2.2` is now the thing to poll, ahead of re-checking the v25 preview.
+When it moves: upgrade both packages together, **diff the artifact across the
+toolchain change** (the standing rule), publish with the env-aside recipe to
+preview, browser-check, then promote.
+
+**For the report — the sharpest sentence we can hand Spacefast**: *your serving
+runtime enforces the content-program read/write mode contract
+(`spacefast.compiled-program`, per-operation `mode`) on Zero deliveries as of
+Sep 1 ~15:37 UTC, but the newest published CLI (0.2.2) only carries that
+contract as schemas in `@spacefast/common` and still emits
+`stattic.zero.capsule.v1` with no mode metadata — so every Zero space that
+publishes today is rejected with an error code (`zero_artifact_mode_invalid`)
+that is absent from your 481-code registry.*
